@@ -364,7 +364,7 @@ pub mod prelude {
         ScrollNotificationObserver, ScrollNotificationSubscription, ScrollNotificationType,
         ScrollPhysics, ScrollViewKeyboardDismissBehavior, SelectableRegion, Semantics,
         SensitiveContent, SensitiveContentHost, ShapeBorder, ShapeDecoration, SharedAppData,
-        SharedAppDataKey, SharedAppDataStore, ShortcutActivator, ShortcutKey, ShortcutTrigger,
+        SharedAppDataKey, SharedAppDataStore, ShortcutActivator, ShortcutKey, ShortcutScope, ShortcutTrigger,
         Shortcuts, ShrinkWrappingViewport, SingleActivator, SingleChildLayoutDelegate,
         SingleChildScrollView, SizeChangedLayoutNotification, SizeChangedLayoutNotifier,
         SizeTransition, SizedBox, SizedOverflowBox, SlideTransition, Sliver, SliverAnimatedGrid,

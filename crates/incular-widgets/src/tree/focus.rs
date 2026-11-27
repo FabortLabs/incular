@@ -1097,6 +1097,30 @@ impl WidgetTree {
             .map(|_| incular_gestures::ActionResult::Handled)
     }
 
+    fn dispatch_shortcut_action(
+        &self,
+        focused: ElementId,
+        intent: &incular_gestures::ErasedIntent,
+    ) -> KeyEventResult {
+        let mut current = Some(focused);
+        while let Some(id) = current {
+            let Some(entry) = self.elements.get(id.0) else {
+                return KeyEventResult::Ignored;
+            };
+            if let WidgetKind::Gesture { callbacks, .. } = entry.widget.kind()
+                && let Some(result) = callbacks.action_scope.as_ref().and_then(|scope| {
+                    // Unlike direct Actions.invoke, Shortcuts gets the
+                    // dispatcher from the original focused context.
+                    scope.invoke_shortcut(intent, || self.action_dispatcher_at(focused))
+                })
+            {
+                return result;
+            }
+            current = entry.parent;
+        }
+        KeyEventResult::Ignored
+    }
+
     /// Routes keyboard input while preserving a Focus handler's request
     /// to stop framework handling without consuming the native event.
     #[must_use]
@@ -1172,6 +1196,24 @@ impl WidgetTree {
                 && callbacks.has_keyboard_listener()
                 && serve(callbacks)
             {
+                if callbacks.on_shortcut.is_none()
+                    && callbacks.on_shortcut_with_lock_modes.is_none()
+                    && let Some(matched) = callbacks.shortcut_scope.as_ref().and_then(|s| s.find(event.clone()))
+                {
+                    use incular_gestures::ShortcutMatch;
+                    let result = match matched {
+                        ShortcutMatch::Callback(callback) => {
+                            callback();
+                            KeyEventResult::Handled
+                        }
+                        ShortcutMatch::Intent(intent) => focused.map_or(KeyEventResult::Ignored, |focused| {
+                            self.dispatch_shortcut_action(focused, &intent)
+                        }),
+                    };
+                    if result != KeyEventResult::Ignored {
+                        return result;
+                    }
+                }
                 let result = callbacks.route_keyboard_with_raw_payload(event.clone(), lock_modes, raw_delivery);
                 if result != KeyEventResult::Ignored {
                     return result;

@@ -105,6 +105,7 @@ impl GestureCallbacks {
             || self.on_key_up.is_some()
             || self.on_shortcut.is_some()
             || self.on_shortcut_with_lock_modes.is_some()
+            || self.shortcut_scope.is_some()
             || self.focus_node.is_some()
     }
 
@@ -427,6 +428,7 @@ pub struct Action<C: CommandId = Command> {
     intent: Intent<C>,
     enabled: Rc<Cell<bool>>,
     enabled_when: Option<Rc<dyn Fn() -> bool>>,
+    consumes_key: bool,
     callback: ActionCallback<C>,
     listeners: Rc<ActionListenerState>,
     invocation_listeners: Rc<ActionInvocationListenerState>,
@@ -465,6 +467,7 @@ impl<C: CommandId> Action<C> {
             intent: command.into(),
             enabled: Rc::new(Cell::new(true)),
             enabled_when: None,
+            consumes_key: true,
             callback: Rc::new(move |intent| callback(intent).into()),
             listeners: Rc::new(ActionListenerState {
                 listeners: RefCell::new(Vec::new()),
@@ -613,6 +616,29 @@ impl<C: CommandId> Action<C> {
             .filter_map(Weak::upgrade)
             .filter(|listener| listener.active.get())
             .count()
+    }
+
+    /// Controls whether a shortcut invocation consumes the native key.
+    /// When false, Incular stops its key handlers but lets the OS see it.
+    #[must_use]
+    pub const fn with_key_consumption(mut self, consumes: bool) -> Self {
+        self.consumes_key = consumes;
+        self
+    }
+
+    #[must_use]
+    pub const fn consumes_key(&self, _intent: &Intent<C>) -> bool {
+        self.consumes_key
+    }
+
+    /// Converts a successfully invoked shortcut action to its key result.
+    #[must_use]
+    pub fn to_key_event_result(&self, intent: &Intent<C>) -> KeyEventResult {
+        if self.consumes_key(intent) {
+            KeyEventResult::Handled
+        } else {
+            KeyEventResult::SkipRemainingHandlers
+        }
     }
 
     /// Invokes this action for an intent.
@@ -795,6 +821,11 @@ impl ActionDispatcher {
 trait ActionRegistry {
     fn action_for(&self, command: &dyn std::any::Any) -> Option<&dyn std::any::Any>;
     fn invoke(&self, erased: &ErasedIntent, dispatcher: &DispatcherLookup<'_>) -> Option<ActionResult>;
+    fn invoke_shortcut(
+        &self,
+        erased: &ErasedIntent,
+        dispatcher: &DispatcherLookup<'_>,
+    ) -> Option<KeyEventResult>;
 }
 
 impl<C: CommandId> ActionRegistry for Actions<C> {
@@ -808,6 +839,21 @@ impl<C: CommandId> ActionRegistry for Actions<C> {
         let action = self.action_ref(command)?;
         let intent: Intent<C> = Intent::new(command.clone());
         Some(dispatch_bound_action(action, &intent, erased, dispatcher))
+    }
+
+    fn invoke_shortcut(
+        &self,
+        erased: &ErasedIntent,
+        dispatcher: &DispatcherLookup<'_>,
+    ) -> Option<KeyEventResult> {
+        let command = erased.downcast_command::<C>()?;
+        let action = self.action_ref(command)?;
+        let intent: Intent<C> = Intent::new(command.clone());
+        let result = dispatch_bound_action(action, &intent, erased, dispatcher);
+        Some(match result {
+            ActionResult::Handled => action.to_key_event_result(&intent),
+            ActionResult::Ignored => KeyEventResult::Ignored,
+        })
     }
 }
 
@@ -855,6 +901,16 @@ impl ErasedActionScope {
         find: impl Fn() -> Option<Rc<ScopedActionDispatcher>>,
     ) -> Option<ActionResult> {
         self.registry.invoke(intent, &find)
+    }
+
+    /// Routes a shortcut through the action mapping and its key consumption policy.
+    #[must_use]
+    pub fn invoke_shortcut(
+        &self,
+        intent: &ErasedIntent,
+        find: impl Fn() -> Option<Rc<ScopedActionDispatcher>>,
+    ) -> Option<KeyEventResult> {
+        self.registry.invoke_shortcut(intent, &find)
     }
 }
 

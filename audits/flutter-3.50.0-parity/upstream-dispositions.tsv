@@ -3087,3 +3087,4 @@ packages/flutter/test/widgets/actions_test.dart	1010	FocusableActionDetector can
 packages/flutter/test/widgets/actions_test.dart	1065	FocusableActionDetector can exclude Focus semantics	paired-match	upstream-action-dispatchers.md#focusable-action-detector
 packages/flutter/test/widgets/actions_test.dart	1115	CallbackAction passes correct intent when invoked.	paired-match	upstream-action-dispatchers.md#direct-callback-adapters
 packages/flutter/test/widgets/actions_test.dart	1128	VoidCallbackAction	paired-match	upstream-action-dispatchers.md#direct-callback-adapters
+packages/flutter/test/widgets/actions_test.dart	1139	Base Action class default toKeyEventResult delegates to consumesKey	paired-match	upstream-action-dispatchers.md#keyboard-dispatch-and-key-consumption

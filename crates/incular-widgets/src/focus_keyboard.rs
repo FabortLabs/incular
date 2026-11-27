@@ -65,6 +65,34 @@ impl From<ActionScope> for Widget {
     }
 }
 
+/// Installs key-to-command bindings without supplying actions or claiming focus.
+/// The actions and dispatcher are looked up from the focused descendant.
+#[derive(Clone)]
+pub struct ShortcutScope {
+    shortcuts: Rc<incular_gestures::ErasedShortcutScope>,
+    child: Widget,
+}
+
+impl ShortcutScope {
+    #[must_use]
+    pub fn new<C: CommandId>(shortcuts: Rc<Shortcuts<C>>, child: impl Into<Widget>) -> Self {
+        Self { shortcuts: shortcuts.erased_scope(), child: child.into() }
+    }
+}
+
+impl From<ShortcutScope> for Widget {
+    fn from(scope: ShortcutScope) -> Self {
+        Widget::from_kind(WidgetKind::Gesture {
+            behavior: crate::gestures::HitTestBehavior::DeferToChild,
+            callbacks: Box::new(incular_gestures::GestureCallbacks {
+                shortcut_scope: Some(scope.shortcuts),
+                ..Default::default()
+            }),
+            child: scope.child,
+        })
+    }
+}
+
 /// A widget that manages keyboard focus for a subtree.
 #[derive(Clone)]
 pub struct Focus {
@@ -1055,29 +1083,9 @@ impl From<FocusableActionDetector> for Widget {
             value.on_show_focus_highlight.clone(),
             value.on_show_hover_highlight.clone(),
         );
-        let shortcut_scope = value.shortcuts.clone();
-        let action_scope = value.actions.clone();
-        let action_scope_for_shortcut = action_scope.clone();
         let callbacks = incular_gestures::GestureCallbacks {
-            on_shortcut: shortcut_scope.clone().map(|scope| {
-                let action_scope = action_scope_for_shortcut;
-                Rc::new(move |event| {
-                    scope.find(event).is_some_and(|matched| match matched {
-                        incular_gestures::ShortcutMatch::Callback(callback) => {
-                            callback();
-                            true
-                        }
-                        incular_gestures::ShortcutMatch::Intent(intent) => action_scope
-                            .as_ref()
-                            .and_then(|scope| scope.invoke(&intent))
-                            .is_some_and(|result| {
-                                result == incular_gestures::ActionResult::Handled
-                            }),
-                    })
-                }) as Rc<dyn Fn(incular_core::KeyboardEvent) -> bool>
-            }),
-            shortcut_scope,
-            action_scope,
+            shortcut_scope: value.shortcuts.filter(|_| value.enabled),
+            action_scope: value.actions,
             focus_node: Some(value.focus_node),
             focus_behavior: Some(behavior),
             autofocus: value.autofocus,

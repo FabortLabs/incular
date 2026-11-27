@@ -67,3 +67,20 @@ callback's result. Its optional binding into a Rust command registry
 still uses an explicit command key. VoidCallbackAction invokes the
 callback carried on the supplied intent and returns no value. All 11
 focused native callback and dispatcher tests passed.
+
+## Keyboard dispatch and key consumption
+
+The pinned base-action conversion original passed. Successfully
+invoked actions now distinguish a handled native key from a key that
+should bypass the remaining framework handlers without consuming
+the native event. The latter is not the same as declining the action.
+
+An authored pinned probe confirmed that a shortcut reads the action
+from the focused element's ancestor chain but uses the dispatch
+policy at the focused caller. Direct programmatic invocation still
+uses the action owner's dispatcher. Native cases check both paths,
+including the returned consumed status and the untouched outer
+fallback handler. The passive shortcut scope supplies bindings only
+and does not take focus. Only the one original conversion registration
+adds paired credit. All 32 focused native tests and the renderer-neutral
+facade check passed.
