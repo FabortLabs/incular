@@ -74,3 +74,20 @@ changes, and schedules one real layout after Center is set. The
 same render object survives, the painted glyphs move to the
 center, and subsequent identical layouts are quiet. All nine
 focused alignment controls passed.
+
+## Default input semantics and single-line geometry
+
+Pinned `rendering/editable_test.dart:144,159` pass in both engines.
+An unfocused, undecorated editor advertises a text input type without
+an explicit keyboard or semantic override. With the pinned Ahem font at
+10 px, the default single-line viewport measures exactly 10 px even
+when the controller holds ten newline-terminated lines.
+
+Two nearby pinned originals passed but remain partial. For :125,
+Incular measures a uniform 100 px line as 100 px, but this raw editor
+fixture cannot supply a 100 px child span under a 10 px parent span.
+For :200, the exposed collapsed handle moves from (0, 20) to (100, 220)
+when the editor's origin moves by (100, 200); this is actual retained
+selection geometry, not Flutter's pair of internal LeaderLayers.
+All four direct native tests and two adjacent handle-reveal tests
+passed with the pinned font, including the repository-checkout fallback.

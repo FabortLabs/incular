@@ -3452,3 +3452,7 @@ packages/flutter/test/widgets/focus_traversal_test.dart	4115	When there is no fo
 packages/flutter/test/widgets/focus_scope_test.dart	265	Setting first focus requests focus for the scope properly.	paired-match	upstream-focus-scope-interaction.md#preferred-mounted-focus-scope
 packages/flutter/test/widgets/focus_scope_test.dart	668	Removing pinned focused scope doesn't move focus to focused widget within next FocusScope	paired-match	upstream-focus-scope-interaction.md#focus-when-parked-keyed-elements-are-removed-or-moved
 packages/flutter/test/widgets/focus_scope_test.dart	743	Removing unpinned focused scope doesn't move focus to focused widget within next FocusScope	paired-match	upstream-focus-scope-interaction.md#focus-when-parked-keyed-elements-are-removed-or-moved
+packages/flutter/test/rendering/editable_test.dart	125	Reports the real height when maxLines is 1	partial-match	upstream-editable-defaults.md#default-input-semantics-and-single-line-geometry
+packages/flutter/test/rendering/editable_test.dart	144	has default semantics input type	paired-match	upstream-editable-defaults.md#default-input-semantics-and-single-line-geometry
+packages/flutter/test/rendering/editable_test.dart	159	Reports the height of the first line when maxLines is 1	paired-match	upstream-editable-defaults.md#default-input-semantics-and-single-line-geometry
+packages/flutter/test/rendering/editable_test.dart	200	RenderEditable.paint respects offset argument	partial-match	upstream-editable-defaults.md#default-input-semantics-and-single-line-geometry
