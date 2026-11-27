@@ -44,3 +44,19 @@ Hosts already supplying logical events still derive deltas as before.
 Five delivery and ten adjacent boundary-metadata, raw-scale and
 touch-resampling tests passed. Queued cancellation and raw pan/zoom
 listener delivery are separate from these four comparisons.
+
+## Cancel queued from an input callback
+
+The pinned :254 “Can cancel pointers” registration passed. A mounted
+native global route requests cancel while handling the down from a
+two-record down/up packet. The request does not reenter the listener.
+Cancel reaches the captured listener before the queued up, which is
+discarded, and a later contact with the same identity taps normally.
+An out-of-band cancellation is deferred to the driver's input
+checkpoint; duplicates, unknown contacts, and handles whose view
+has been dropped are harmless. Incular retains the contact's device
+and last position so cancellation does not masquerade as a new
+mouse location. This comparison uses immediate packet delivery;
+cancellation requested from an opted-in resampled touch callback is
+a separate clock-path case. Seven delivery and nine adjacent native
+tests passed.

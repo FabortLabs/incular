@@ -77,6 +77,7 @@ pub use focus_keys::FocusKeySubscription;
 pub use frame::{
     EditingDiagnostics, EventTarget, FocusDiagnostics, FrameStats, HardwareKeyHandlerError,
     KeyMessage, KeyMessageHandlerError, MouseCursorUpdate, Runtime,
+    PointerPacketCancellation,
 };
 pub use global_shortcuts::{
     GlobalShortcutCompletionStatus, GlobalShortcutRegistration, GlobalShortcutRegistrationRequest,

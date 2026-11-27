@@ -89,6 +89,28 @@ pub struct EventTarget {
     pub element: ElementId,
     pub action: Option<ActionId>,
 }
+type PacketContactKey = (u64, u64);
+type PendingPacketCancels = RefCell<Vec<PacketContactKey>>;
+
+/// A view-scoped handle for canceling a physical packet contact from an input
+/// callback. Cancellation is queued rather than dispatching recursively.
+#[derive(Clone)]
+pub struct PointerPacketCancellation {
+    queue: Weak<PendingPacketCancels>,
+}
+
+impl PointerPacketCancellation {
+    /// Queue a cancel ahead of the next packet event. Returns false if the
+    /// owning view has been dropped.
+    pub fn cancel(&self, device: u64, pointer: u64) -> bool {
+        let Some(queue) = self.queue.upgrade() else {
+            return false;
+        };
+        queue.borrow_mut().push((device, pointer));
+        true
+    }
+}
+
 /// Debug-facing focus state without exposing native event-loop details.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FocusDiagnostics {
@@ -269,7 +291,8 @@ pub struct Runtime {
     /// The contact currently allowed to drive single-contact controls. Other
     /// contacts still reach retained gesture regions for scale/pan input.
     pub(crate) legacy_pointer: Option<(u64, u64)>,
-    packet_buttons: HashMap<(u64, u64), u32>,
+    packet_contacts: HashMap<PacketContactKey, RawPointerEvent>,
+    pending_packet_cancels: Option<Rc<PendingPacketCancels>>,
     pub(crate) last_pointer: Offset,
     hover_devices: hover_devices::HoverDevices,
     hover_press_hit: Option<HoverPressHit>,
@@ -542,7 +565,8 @@ impl Runtime {
             hovered_button: None,
             pressed_button: None,
             legacy_pointer: None,
-            packet_buttons: HashMap::new(),
+            packet_contacts: HashMap::new(),
+            pending_packet_cancels: None,
             last_pointer: Offset::ZERO,
             hover_devices: hover_devices::HoverDevices::default(),
             hover_press_hit: None,
@@ -1949,45 +1973,43 @@ impl Runtime {
         let converted = PointerEventConverter::expand(records, |id| {
             (id == view_id).then_some(device_pixel_ratio)
         });
+        self.flush_pointer_packet_cancellations();
         for event in converted {
             self.handle_converted_pointer_event(event);
+            self.flush_pointer_packet_cancellations();
+        }
+    }
+
+    /// A handle suitable for capture by a listener or recognizer. Drivers
+    /// should flush after an out-of-band cancellation at their next input
+    /// microtask; packet dispatch automatically flushes between its records.
+    pub fn pointer_packet_cancellation(&mut self) -> PointerPacketCancellation {
+        let queue = self.pending_packet_cancels.get_or_insert_with(Rc::default);
+        PointerPacketCancellation { queue: Rc::downgrade(queue) }
+    }
+
+    /// Dispatch queued cancellations at a host input checkpoint. Requests
+    /// for a contact that has already ended are ignored.
+    pub fn flush_pointer_packet_cancellations(&mut self) {
+        while let Some(key) = self
+            .pending_packet_cancels
+            .as_ref()
+            .and_then(|queue| queue.borrow_mut().pop())
+        {
+            let Some(previous) = self.packet_contacts.get(&key).copied() else {
+                continue;
+            };
+            let cancel = RawPointerEvent::new(
+                previous.pointer, previous.device, previous.kind, 0,
+                previous.position, PointerPhase::Cancel, previous.time,
+            );
+            self.dispatch_packet_contact(cancel);
         }
     }
 
     fn handle_converted_pointer_event(&mut self, input: ConvertedPointerEvent) {
         match input.kind {
-            ConvertedPointerKind::Contact { mut event, .. } => {
-                let key = (event.device, event.pointer);
-                match event.phase {
-                    PointerPhase::Down => {
-                        let previous = self.packet_buttons.insert(key, event.buttons).unwrap_or(0);
-                        let pressed = event.buttons & !previous;
-                        event.button = (pressed.count_ones() == 1).then_some(pressed);
-                    }
-                    PointerPhase::Up => {
-                        let Some(previous) = self.packet_buttons.remove(&key) else {
-                            return;
-                        };
-                        let released = previous & !event.buttons;
-                        event.button = (released.count_ones() == 1).then_some(released);
-                        if event.buttons != 0 {
-                            self.packet_buttons.insert(key, event.buttons);
-                        }
-                    }
-                    PointerPhase::Cancel => {
-                        if self.packet_buttons.remove(&key).is_none() {
-                            return;
-                        }
-                    }
-                    PointerPhase::Move if event.down && !self.packet_buttons.contains_key(&key) => {
-                        return;
-                    }
-                    _ => {}
-                }
-                if !self.enqueue_touch_sample(event) {
-                    let _ = self.dispatch_raw_pointer_immediately(event, true);
-                }
-            }
+            ConvertedPointerKind::Contact { event, .. } => self.dispatch_packet_contact(event),
             ConvertedPointerKind::Scroll(event) => {
                 let _ = self.handle_input_at(
                     InputEvent::ScrollAt { position: event.position, delta: event.scroll_delta },
@@ -2000,6 +2022,46 @@ impl Runtime {
             // The retained window does not yet consume these signal kinds;
             // direct embedders can still observe them from the converter.
             ConvertedPointerKind::ScrollInertiaCancel(_) | ConvertedPointerKind::Scale { .. } => {}
+        }
+    }
+
+    fn dispatch_packet_contact(&mut self, mut event: RawPointerEvent) {
+        let key = (event.device, event.pointer);
+        match event.phase {
+            PointerPhase::Down => {
+                let previous = self.packet_contacts.get(&key).map_or(0, |old| old.buttons);
+                let pressed = event.buttons & !previous;
+                event.button = (pressed.count_ones() == 1).then_some(pressed);
+                self.packet_contacts.insert(key, event);
+            }
+            PointerPhase::Up => {
+                let Some(previous) = self.packet_contacts.remove(&key) else {
+                    return;
+                };
+                let released = previous.buttons & !event.buttons;
+                event.button = (released.count_ones() == 1).then_some(released);
+                if event.buttons != 0 {
+                    self.packet_contacts.insert(key, event);
+                }
+            }
+            PointerPhase::Cancel => {
+                if self.packet_contacts.remove(&key).is_none() {
+                    return;
+                }
+            }
+            PointerPhase::Move if event.down => {
+                let Some(previous) = self.packet_contacts.get_mut(&key) else {
+                    return;
+                };
+                // Button motion may cause a gesture to withdraw, but the
+                // last transition mask still identifies which button lifts.
+                previous.position = event.position;
+                previous.time = event.time;
+            }
+            _ => {}
+        }
+        if !self.enqueue_touch_sample(event) {
+            let _ = self.dispatch_raw_pointer_immediately(event, true);
         }
     }
 

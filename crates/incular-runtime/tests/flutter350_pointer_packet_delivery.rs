@@ -216,3 +216,43 @@ fn an_untracked_contact_move_is_not_mistaken_for_hover_and_other_views_are_ignor
     assert!(f.hit_phases().is_empty());
     assert!(f.routed_phases().is_empty());
 }
+
+#[test]
+fn cancelling_from_the_down_callback_is_deferred_but_preempts_the_queued_up() {
+    let mut f = Fixture::new();
+    let canceller = f.runtime.pointer_packet_cancellation();
+    let observed = f.hits.clone();
+    let hook = f
+        .runtime
+        .pointer_router()
+        .add_global_route(None, move |sample| {
+            if sample.event.phase == PointerPhase::Down {
+                assert!(canceller.cancel(sample.event.device, sample.event.pointer));
+                assert_eq!(observed.borrow().last().unwrap().phase, PointerPhase::Down);
+            }
+        });
+    f.packet(&[Data::Down, Data::Up]);
+    assert_eq!(f.hit_phases(), [PointerPhase::Down, PointerPhase::Cancel]);
+    assert_eq!(f.routed_phases(), f.hit_phases());
+    assert!(f.taps.borrow().is_empty());
+    assert!(f.runtime.pointer_router().remove_global_route(hook));
+    f.packet(&[Data::Down, Data::Up]);
+    assert_eq!(*f.taps.borrow(), ["tap"]);
+}
+
+#[test]
+fn a_host_checkpoint_drains_only_live_cancellations_and_a_dropped_view_cannot_enqueue() {
+    let mut f = Fixture::new();
+    let canceller = f.runtime.pointer_packet_cancellation();
+    f.packet(&[Data::Down]);
+    assert!(canceller.cancel(24, 900));
+    assert!(canceller.cancel(24, 7));
+    assert!(canceller.cancel(24, 7));
+    assert_eq!(f.hit_phases(), [PointerPhase::Down]);
+    f.runtime.flush_pointer_packet_cancellations();
+    assert_eq!(f.hit_phases(), [PointerPhase::Down, PointerPhase::Cancel]);
+    f.runtime.flush_pointer_packet_cancellations();
+    assert_eq!(f.routed_phases(), f.hit_phases());
+    drop(f);
+    assert!(!canceller.cancel(24, 7));
+}

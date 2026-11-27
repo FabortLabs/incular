@@ -3515,3 +3515,4 @@ packages/flutter/test/gestures/gesture_binding_test.dart	165	Pointer tap events	
 packages/flutter/test/gestures/gesture_binding_test.dart	182	Pointer move events	paired-match	upstream-pointer-packet-converter.md#delivery-through-a-retained-view
 packages/flutter/test/gestures/gesture_binding_test.dart	201	Pointer hover events	paired-match	upstream-pointer-packet-converter.md#delivery-through-a-retained-view
 packages/flutter/test/gestures/gesture_binding_test.dart	237	Pointer cancel events	paired-match	upstream-pointer-packet-converter.md#delivery-through-a-retained-view
+packages/flutter/test/gestures/gesture_binding_test.dart	254	Can cancel pointers	paired-match	upstream-pointer-packet-converter.md#cancel-queued-from-an-input-callback
