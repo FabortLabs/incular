@@ -20,6 +20,12 @@ The checked adapter publishes nothing on rejection, and a successful
 snapshot only includes attached nodes. The normal incremental widget
 bridge is unchanged: widgets already merge their semantic descendants
 during collection. Sixteen direct semantics tests, eight accessibility
-forest tests, and 24 mounted parity controls passed. An adjacent
-widget descriptor test reported a focus flag expectation that is
-tracked separately; it does not exercise the new validation path.
+forest tests, and 24 mounted parity controls passed.
+
+A nearby focus descriptor test failed on the prior committed baseline
+as well. It was checking a published focus flag before mounting the
+description. The corrected test checks the declaration first, then
+mounts a real checkbox and verifies its published focus and checked
+state. The declaration does not create a keyboard target or runnable
+focus action. All ten focused descriptor and focus annotation tests
+passed; no coverage credit was added for this control.

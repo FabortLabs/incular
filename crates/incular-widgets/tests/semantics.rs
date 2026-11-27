@@ -10,7 +10,7 @@ use incular_widgets::{
 
 #[test]
 fn semantic_state_and_explicit_actions_survive_widget_conversion() {
-    let semantics = Semantics::new(SizedBox::shrink())
+    let semantics = Semantics::new(SizedBox::square(12.))
         .role(SemanticRole::Checkbox)
         .label("Remember me")
         .value("on")
@@ -32,12 +32,29 @@ fn semantic_state_and_explicit_actions_survive_widget_conversion() {
     assert!(explicit.state.enabled);
     assert!(explicit.state.selected);
     assert_eq!(explicit.state.checked, Some(true.into()));
-    assert!(explicit.state.focused);
+    // An unmounted descriptor carries a declaration, not the focus state
+    // produced by a retained semantics pass.
+    assert_eq!(explicit.state.declared_focused, Some(true));
+    assert_eq!(explicit.state.declared_input_focusable(), Some(true));
     assert!(explicit.state.read_only);
     assert!(explicit.state.multiline);
     assert_eq!(
         explicit.actions,
         vec![SemanticActionKind::Focus, SemanticActionKind::Activate]
+    );
+
+    let mut tree = WidgetTree::new();
+    tree.mount(semantics.into()).unwrap();
+    tree.layout(Constraints::loose(Size::new(200., 100.))).unwrap();
+    tree.update_semantics();
+    let root = tree.semantics().root().unwrap();
+    let retained = tree.semantics().node(root).unwrap();
+    assert_eq!(retained.state.input_focus_state(), Some(true));
+    assert!(retained.state.focusable);
+    assert_eq!(retained.state.checked, Some(true.into()));
+    assert!(
+        !retained.actions.contains(&SemanticActionKind::Focus),
+        "a declaration alone does not install a keyboard focus target",
     );
 }
 
