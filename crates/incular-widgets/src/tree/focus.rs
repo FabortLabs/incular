@@ -1316,13 +1316,17 @@ impl WidgetTree {
                 && callbacks.has_keyboard_listener()
                 && serve(callbacks)
             {
-                if callbacks.on_shortcut.is_none()
+                let find_shortcut = || {
+                    callbacks
+                        .shortcut_scope
+                        .as_ref()
+                        .and_then(|scope| scope.find_with_keyboard(&event, keyboard))
+                };
+                let retained_match = (callbacks.on_shortcut.is_none()
                     && callbacks.on_shortcut_with_lock_modes.is_none()
-                    && callbacks.on_shortcut_with_keyboard_state.is_none()
-                    && let Some(matched) = callbacks.shortcut_scope.as_ref().and_then(|scope| {
-                        scope.find_with_keyboard(&event, keyboard)
-                    })
-                {
+                    && callbacks.on_shortcut_with_keyboard_state.is_none())
+                    .then(find_shortcut);
+                if let Some(Some(matched)) = &retained_match {
                     use incular_gestures::ShortcutMatch;
                     let result = match matched {
                         ShortcutMatch::Callback(callback) => {
@@ -1330,7 +1334,7 @@ impl WidgetTree {
                             KeyEventResult::Handled
                         }
                         ShortcutMatch::Intent(intent) => focused.map_or(KeyEventResult::Ignored, |focused| {
-                            self.dispatch_shortcut_action(focused, &intent)
+                            self.dispatch_shortcut_action(focused, intent)
                         }),
                     };
                     if result != KeyEventResult::Ignored {
@@ -1345,9 +1349,7 @@ impl WidgetTree {
                 }
                 if let Some(slot) = directional_intent.as_deref_mut()
                     && let Some(incular_gestures::ShortcutMatch::Intent(matched)) =
-                        callbacks.shortcut_scope.as_ref().and_then(|scope| {
-                            scope.find_with_keyboard(&event, keyboard)
-                        })
+                        retained_match.unwrap_or_else(find_shortcut)
                     && let Some(intent) = matched.downcast_command::<crate::DirectionalFocusIntent>()
                 {
                     *slot = Some(*intent);

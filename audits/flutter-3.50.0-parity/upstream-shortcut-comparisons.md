@@ -147,3 +147,17 @@ without changing keyboard routing. Incular's retained tree uses
 an implicit semantic root, so the single produced node corresponds
 to the one child of Flutter's explicit root. Three focused native
 checks plus the adjacent focus and shortcut targets passed.
+
+## Custom activator fallback
+
+The exact pinned `shortcuts_test.dart:1320` registration passed.
+An unindexed custom predicate accepts C by itself and Shift+Control+C;
+the keyed Control+C binding wins instead when there is no Shift.
+Only the winning action runs and releases are silent.
+
+The native API distinguishes declared trigger keys from an
+unindexed fallback. A second native control confirms that an
+unadvertised key never enters the predicate, a predicate sees the
+updated hardware snapshot, and cloning a custom activator replaces
+the same binding. Typed matching evaluates a candidate only once
+per focus ancestor, even when no action handles the event.

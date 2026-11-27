@@ -1516,7 +1516,41 @@ impl CharacterActivator {
     }
 }
 
-/// A key activator accepted by callback shortcut maps.
+type CustomShortcutPredicate = dyn Fn(&KeyboardEvent, Option<&HardwareKeyboardState>) -> bool;
+
+struct CustomShortcutState {
+    triggers: Option<Box<[KeyboardKey]>>,
+    accepts: Box<CustomShortcutPredicate>,
+}
+
+/// A custom activator whose clones identify the same shortcut map entry.
+#[derive(Clone)]
+pub struct CustomShortcutActivator(Rc<CustomShortcutState>);
+
+impl std::fmt::Debug for CustomShortcutActivator {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CustomShortcutActivator")
+            .field("triggers", &self.0.triggers)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for CustomShortcutActivator {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for CustomShortcutActivator {}
+
+impl std::hash::Hash for CustomShortcutActivator {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&Rc::as_ptr(&self.0), state);
+    }
+}
+
+/// A key activator accepted by typed and callback shortcut maps.
 ///
 /// Physical and logical activators are kept distinct, and a `Single` uses the
 /// logical key with Flutter-style modifier matching. `Character` instead
@@ -1536,6 +1570,7 @@ pub enum ShortcutActivator {
     Single(SingleActivator),
     Character(CharacterActivator),
     LogicalSet(LogicalKeySet),
+    Custom(CustomShortcutActivator),
 }
 
 impl ShortcutActivator {
@@ -1570,6 +1605,45 @@ impl ShortcutActivator {
         Self::Single(SingleActivator::new(trigger, modifiers))
     }
 
+    /// Creates an application-defined match predicate. In a typed map,
+    /// `Some(triggers)` restricts dispatch to those keys; `None` makes this
+    /// a fallback after keyed candidates. CallbackShortcuts invokes the
+    /// predicate directly, like Flutter's callback widget.
+    #[must_use]
+    pub fn custom(
+        triggers: Option<Vec<KeyboardKey>>,
+        accepts: impl Fn(&KeyboardEvent, Option<&HardwareKeyboardState>) -> bool + 'static,
+    ) -> Self {
+        let triggers = triggers.map(|mut keys| {
+            keys.sort_unstable();
+            keys.dedup();
+            keys.into_boxed_slice()
+        });
+        Self::Custom(CustomShortcutActivator(Rc::new(CustomShortcutState {
+            triggers,
+            accepts: Box::new(accepts),
+        })))
+    }
+
+    fn is_wildcard(&self) -> bool {
+        match self {
+            Self::Character(_) => true,
+            Self::Custom(activator) => activator.0.triggers.is_none(),
+            _ => false,
+        }
+    }
+
+    fn accepts_trigger(&self, key: &KeyboardKey) -> bool {
+        match self {
+            Self::Custom(activator) => activator
+                .0
+                .triggers
+                .as_ref()
+                .is_none_or(|keys| keys.binary_search(key).is_ok()),
+            _ => true,
+        }
+    }
+
     #[must_use]
     pub fn accepts(&self, event: &KeyboardEvent) -> bool {
         self.accepts_with_lock_modes(event, event.modifiers)
@@ -1600,6 +1674,7 @@ impl ShortcutActivator {
                 || activator.accepts(event),
                 |keyboard| activator.accepts_with_keyboard_state(event, keyboard),
             ),
+            Self::Custom(activator) => (activator.0.accepts)(event, keyboard),
         }
     }
 }
@@ -2097,19 +2172,21 @@ impl<C: CommandId> Shortcuts<C> {
     ) -> Option<&'a Intent<C>> {
         let lock_modes = event.modifiers
             | keyboard.map_or_else(Modifiers::empty, HardwareKeyboardState::lock_modes_enabled);
-        let mut character_fallback = None;
-        for (activator, intent) in &scope.activators {
-            if matches!(activator, ShortcutActivator::Character(_)) {
-                if character_fallback.is_none()
-                    && activator.accepts_with_keyboard_state(event, lock_modes, keyboard)
-                {
-                    character_fallback = Some(intent);
-                }
-            } else if activator.accepts_with_keyboard_state(event, lock_modes, keyboard) {
-                return Some(intent);
-            }
-        }
-        character_fallback
+        let eligible = |activator: &ShortcutActivator| {
+            activator.accepts_trigger(&event.key)
+                && activator.accepts_with_keyboard_state(event, lock_modes, keyboard)
+        };
+        scope
+            .activators
+            .iter()
+            .find(|(activator, _)| !activator.is_wildcard() && eligible(activator))
+            .or_else(|| {
+                scope
+                    .activators
+                    .iter()
+                    .find(|(activator, _)| activator.is_wildcard() && eligible(activator))
+            })
+            .map(|(_, intent)| intent)
     }
 
     fn erase_binding(binding: &ShortcutBinding<C>) -> ShortcutMatch {

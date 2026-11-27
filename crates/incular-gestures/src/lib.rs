@@ -72,7 +72,7 @@ pub use keyboard::{
     ActionListenerSubscription,
     ActionOutput, ActionResult, Actions, CallbackAction, CharacterActivator, Command, CommandId, ErasedActionScope, ErasedIntent,
     ErasedShortcutScope, FocusKeyEventHandler, FocusRawKeyEventHandler, Intent, KeyEventResult,
-    LockState, LogicalKeySet, LogicalShortcutKey, RawKeyDelivery, RawKeyEvent, ShortcutActivator, ShortcutKey,
+    CustomShortcutActivator, LockState, LogicalKeySet, LogicalShortcutKey, RawKeyDelivery, RawKeyEvent, ShortcutActivator, ShortcutKey,
     ScopedActionDispatcher, ShortcutMatch, ShortcutTrigger, Shortcuts, SingleActivator,
     VoidCallbackAction, VoidCallbackIntent, combine_key_event_results,
 };
