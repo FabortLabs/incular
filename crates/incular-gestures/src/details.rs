@@ -347,6 +347,21 @@ impl RawPointerEvent {
         self
     }
 
+    /// Copies this sample at a new time and global position and delta.
+    /// The returned event starts in global space; route it to a target
+    /// again to compute that target's local coordinates. The contact,
+    /// device, phase and measurements are unchanged.
+    #[must_use]
+    pub const fn with_global_motion(self, time: Instant, position: Offset, delta: Offset) -> Self {
+        Self {
+            time,
+            position,
+            delta,
+            ..self
+        }
+        .in_global_coordinates()
+    }
+
     /// Uses the original global values for the local fields as well.
     #[must_use]
     pub const fn in_global_coordinates(mut self) -> Self {

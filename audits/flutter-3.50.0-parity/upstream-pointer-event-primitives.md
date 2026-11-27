@@ -43,3 +43,20 @@ the explicit-mask constructor used by native adapters. Native controls
 also preserve an explicitly empty button mask and keep that motion in
 contact rather than treating it as hover. A new motion initially reports
 the same delta in global and local space. All 31 focused native tests passed.
+
+## Copying a global pointer sample
+
+All six pinned `copyWith` registrations at :660, :688, :716, :744,
+:772 and :800 passed. Native checks use the six corresponding packet
+shapes, retimestamp and reposition them, and verify pointer identity,
+contact state, button masks, radii, distance, tilt, obscured state,
+synthesized state and delta. The production resampler uses this same
+copy path rather than separately writing global and local coordinates.
+A routed stylus control preserves measured pressure and explicitly
+projects the copied sample into its next target.
+
+The registrations remain partial. Incular uses an optional normalized
+force measurement rather than Flutter's non-null default raw pressure,
+and a global Rust copy intentionally drops the previous local routing
+rather than carrying Flutter's transform wrapper. All 34 focused native
+copy, primitive, packet and resampler tests passed.

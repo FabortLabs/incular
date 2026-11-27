@@ -95,7 +95,7 @@ impl PointerEventResampler {
             }
             if event.phase != PointerPhase::Move {
                 self.emit_motion_if_changed(event, at, position, was_down, had_buttons, &mut emit);
-                emit(at_position(event, at, position, Offset::ZERO));
+                emit(event.with_global_motion(at, position, Offset::ZERO));
             }
         }
         if self.is_tracked
@@ -182,20 +182,6 @@ impl PointerEventResampler {
             button: None,
             ..origin
         };
-        emit(at_position(event, at, position, delta));
+        emit(event.with_global_motion(at, position, delta));
     }
-}
-
-fn at_position(
-    mut event: RawPointerEvent,
-    at: Instant,
-    position: Offset,
-    delta: Offset,
-) -> RawPointerEvent {
-    event.time = at;
-    event.position = position;
-    event.local_position = position;
-    event.delta = delta;
-    event.local_delta = delta;
-    event
 }
