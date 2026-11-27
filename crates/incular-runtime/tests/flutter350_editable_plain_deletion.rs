@@ -41,11 +41,16 @@ enum DeleteKey {
     Delete,
     WordBackspace,
     WordDelete,
+    LineBackspace,
+    LineDelete,
 }
 
 impl DeleteKey {
     fn events(self, platform: TextShortcutPlatform) -> [InputEvent; 2] {
-        let backward = matches!(self, Self::Backspace | Self::WordBackspace);
+        let backward = matches!(
+            self,
+            Self::Backspace | Self::WordBackspace | Self::LineBackspace
+        );
         let (key, code) = if backward {
             (NamedKey::Backspace, Code::Backspace)
         } else {
@@ -54,14 +59,19 @@ impl DeleteKey {
         let key = KeyboardKey::Named(key);
         let mut down = KeyboardEvent::key_down(key.clone(), code);
         let mut up = KeyboardEvent::key_up(key, code);
-        if matches!(self, Self::WordBackspace | Self::WordDelete) {
-            let mods = match platform {
-                TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs => Modifiers::ALT,
-                _ => Modifiers::CONTROL,
-            };
-            down.modifiers = mods;
-            up.modifiers = mods;
-        }
+        let apple = matches!(
+            platform,
+            TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs
+        );
+        let mods = match self {
+            Self::WordBackspace | Self::WordDelete if apple => Modifiers::ALT,
+            Self::WordBackspace | Self::WordDelete => Modifiers::CONTROL,
+            Self::LineBackspace | Self::LineDelete if apple => Modifiers::META,
+            Self::LineBackspace | Self::LineDelete => Modifiers::ALT,
+            Self::Backspace | Self::Delete => Modifiers::empty(),
+        };
+        down.modifiers = mods;
+        up.modifiers = mods;
         [InputEvent::Key(down), InputEvent::Key(up)]
     }
 }
@@ -75,13 +85,34 @@ fn check_deletion(
     mode: EditorMode,
     expected: Expected<'_>,
 ) {
+    check_deletion_with_style(
+        key,
+        platforms,
+        (initial_text, TextStyle::new().font_size(10.)),
+        selection,
+        affinity,
+        mode,
+        expected,
+    );
+}
+
+fn check_deletion_with_style(
+    key: DeleteKey,
+    platforms: &[TextShortcutPlatform],
+    (initial_text, style): (&str, TextStyle),
+    selection: TextSelection,
+    affinity: TextAffinity,
+    mode: EditorMode,
+    expected: Expected<'_>,
+) {
     let bounds = Constraints::tight(Size::new(201., 200.));
     for &platform in platforms {
         let controller = TextEditingController::with_text(initial_text);
         controller.set_selection_with_affinity(selection, affinity);
         let widget = EditableText::new(controller.clone())
             .text_direction(TextDirection::Ltr)
-            .style(TextStyle::new().font_size(10.))
+            .style(style.clone())
+            .cursor_width(0.)
             .multiline(mode != EditorMode::Obscured)
             .obscure_text(mode == EditorMode::Obscured)
             .read_only(mode == EditorMode::ReadOnly)
@@ -96,7 +127,11 @@ fn check_deletion(
         }
         runtime.run_frame(bounds).unwrap();
         assert_eq!(runtime.focused_element(), was_focused);
-        assert_eq!(controller.text(), expected.text, "{platform:?}");
+        assert_eq!(
+            controller.text(),
+            expected.text,
+            "{key:?} {platform:?} {selection:?}"
+        );
         assert_eq!(
             controller.selection(),
             TextSelection::collapsed(expected.caret),
@@ -510,6 +545,143 @@ fn word_deletion_stops_at_the_next_emoji_cluster_boundary() {
             EditorMode::Editable,
             Expected {
                 text: RESULT,
+                caret: caret_after,
+                affinity: TextAffinity::Downstream,
+            },
+        );
+    }
+}
+
+#[test]
+fn line_deletion_keeps_hard_breaks_and_respects_read_only_and_document_edges() {
+    use DeleteKey::{LineBackspace, LineDelete};
+    use EditorMode::{Editable, ReadOnly};
+    use TextAffinity::{Downstream, Upstream};
+    let before_last_line = "Now is the time for\nall good people\nto come to the aid\n";
+    let without_prefix = "Now is the time for\npeople\nto come to the aid\nof their country.";
+    let without_suffix = "Now is the time for\nall\nto come to the aid\nof their country.";
+    let without_first_line = "\nall good people\nto come to the aid\nof their country.";
+    for (key, caret, affinity, mode, text, after, after_affinity) in [
+        (
+            LineBackspace,
+            29,
+            Upstream,
+            Editable,
+            without_prefix,
+            20,
+            Downstream,
+        ),
+        (LineBackspace, 29, Upstream, ReadOnly, TEXT, 29, Upstream),
+        (LineBackspace, 0, Downstream, Editable, TEXT, 0, Downstream),
+        (
+            LineBackspace,
+            72,
+            Upstream,
+            Editable,
+            before_last_line,
+            55,
+            Downstream,
+        ),
+        (
+            LineDelete,
+            23,
+            Upstream,
+            Editable,
+            without_suffix,
+            23,
+            Downstream,
+        ),
+        (LineDelete, 23, Upstream, ReadOnly, TEXT, 23, Upstream),
+        (
+            LineDelete,
+            0,
+            Downstream,
+            Editable,
+            without_first_line,
+            0,
+            Downstream,
+        ),
+        (LineDelete, 72, Upstream, Editable, TEXT, 72, Upstream),
+    ] {
+        check_deletion(
+            key,
+            ALL,
+            TEXT,
+            TextSelection::collapsed(caret),
+            affinity,
+            mode,
+            Expected {
+                text,
+                caret: after,
+                affinity: after_affinity,
+            },
+        );
+    }
+}
+
+#[test]
+fn line_deletion_uses_the_caret_side_of_a_soft_wrap() {
+    use DeleteKey::{LineBackspace, LineDelete};
+    use TextAffinity::{Downstream, Upstream};
+    let Some(path) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    const FONT: &str = "Pinned FlutterTest for soft wrapped deletion";
+    incular_text::register_application_font_as(FONT, std::fs::read(path).unwrap());
+    let style = TextStyle::new().font_family(FONT).font_size(10.);
+    let text = "0123456789ABCDEFGHIJ".repeat(4);
+    let removed_line = "0123456789ABCDEFGHIJ".repeat(3);
+    for (key, affinity, expected_text, caret, expected_affinity) in [
+        (
+            LineBackspace,
+            Upstream,
+            removed_line.as_str(),
+            20,
+            Downstream,
+        ),
+        (LineBackspace, Downstream, text.as_str(), 40, Downstream),
+        (LineDelete, Upstream, text.as_str(), 40, Upstream),
+        (
+            LineDelete,
+            Downstream,
+            removed_line.as_str(),
+            40,
+            Downstream,
+        ),
+    ] {
+        check_deletion_with_style(
+            key,
+            ALL,
+            (&text, style.clone()),
+            TextSelection::collapsed(40),
+            affinity,
+            EditorMode::Editable,
+            Expected {
+                text: expected_text,
+                caret,
+                affinity: expected_affinity,
+            },
+        );
+    }
+}
+
+#[test]
+fn line_deletion_respects_fully_shaped_emoji_clusters() {
+    const FAMILY: &str = "👨‍👩‍👦";
+    const INPUT: &str = "👨‍👩‍👦👨‍👩‍👦👨‍👩‍👦";
+    for (key, text_after, caret_after) in [
+        (DeleteKey::LineBackspace, "👨‍👩‍👦👨‍👩‍👦", 0),
+        (DeleteKey::LineDelete, FAMILY, FAMILY.len()),
+    ] {
+        check_deletion(
+            key,
+            ALL,
+            INPUT,
+            TextSelection::collapsed(FAMILY.len()),
+            TextAffinity::Upstream,
+            EditorMode::Editable,
+            Expected {
+                text: text_after,
                 caret: caret_after,
                 affinity: TextAffinity::Downstream,
             },

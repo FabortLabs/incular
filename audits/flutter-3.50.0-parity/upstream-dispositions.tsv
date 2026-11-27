@@ -3764,3 +3764,17 @@ packages/flutter/test/widgets/editable_text_shortcuts_test.dart	555	readonly	pai
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	573	at start	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	591	at end	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	623	at cluster boundary	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	648	alt-backspace	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	670	softwrap line boundary, upstream	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	691	softwrap line boundary, downstream	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	703	readonly	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	721	at start	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	739	at end	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	774	at cluster boundary	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	799	alt-delete	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	821	softwrap line boundary, upstream	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	840	softwrap line boundary, downstream	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	858	readonly	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	876	at start	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	894	at end	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	926	at cluster boundary	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete

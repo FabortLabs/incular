@@ -48,3 +48,15 @@ boundary the command removes only the neighboring cluster.
 Read-only editors and commands with nothing to delete preserve
 both their caret and its affinity. The interior-surrogate cases
 remain unpaired.
+
+## Line-modified Backspace and Delete
+
+Fourteen pinned cases ran across all 84 platform expansions. The
+native test uses the pinned FlutterTest face at 10 px and the
+original 201 px viewport with zero cursor width, so exactly 20
+characters fit on each soft-wrapped line. At offset 40, upstream
+Backspace removes the preceding visual line and downstream Delete
+removes the following one; the opposite pair are no-ops and preserve
+affinity. The hard-break checks confirm that the newline is not
+deleted with the rest of its line. The document edges, readonly
+selection and whole emoji boundaries also match.
