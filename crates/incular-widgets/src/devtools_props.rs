@@ -73,6 +73,7 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             spans: _,
             inline: _,
             strut: _,
+            pointer_spans: _,
         } => {
             if let Some(direction) = text_direction {
                 out.push(prop(
