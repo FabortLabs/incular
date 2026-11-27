@@ -152,3 +152,125 @@ fn the_same_receiver_routes_full_editing_state_only_to_the_current_attachment() 
     assert_eq!(text.text(), "new");
     assert_eq!(host.send("TextInputClient.unknown", json!([client])), None);
 }
+
+#[test]
+fn the_mounted_flutter_keyboard_configuration_tracks_its_view_without_leaking_to_another() {
+    use incular_runtime::FlutterDeltaTextInputConnection;
+    use incular_text::TextSelection;
+
+    let controller = TextEditingController::with_text("one two");
+    controller.set_selection(TextSelection::collapsed(3));
+    let focus = FocusNode::new();
+    let editor = |multiline, interactive| {
+        EditableText::new(controller.clone())
+            .focus_node(focus.clone())
+            .autofocus(true)
+            .text_direction(TextDirection::Ltr)
+            .multiline(multiline)
+            .enable_interactive_selection(interactive)
+    };
+    let runtime = Rc::new(RefCell::new(
+        Runtime::new(editor(false, true).into()).unwrap(),
+    ));
+    let host = Host::new();
+    assert_eq!(
+        runtime
+            .borrow()
+            .flutter_text_input_configuration()
+            .unwrap()
+            .1
+            .view_id,
+        None
+    );
+    let _binding = FlutterTextInputBinding::install_for_view(&host.inbound, &runtime, 77);
+    let constraints = Constraints::tight(Size::new(260., 80.));
+    let frame =
+        |runtime: &Rc<RefCell<Runtime>>| runtime.borrow_mut().run_frame(constraints).unwrap();
+    frame(&runtime);
+    let field = runtime.borrow().focused_element().unwrap();
+    let (client, initial) = runtime.borrow().flutter_text_input_configuration().unwrap();
+    assert_eq!(initial.view_id, Some(77));
+    assert!(initial.enable_interactive_selection);
+    assert!(!initial.enable_delta_model);
+    let initial_commands = runtime.borrow_mut().take_text_input_commands();
+    assert_eq!(initial_commands.iter().filter(|command| {
+        matches!(command, TextInputCommand::SetClient { configuration, .. } if configuration.client == client)
+    }).count(), 1);
+
+    let other = Rc::new(RefCell::new(
+        Runtime::new(
+            EditableText::new(TextEditingController::with_text("other"))
+                .autofocus(true)
+                .text_direction(TextDirection::Ltr)
+                .into(),
+        )
+        .unwrap(),
+    ));
+    let other_host = Host::new();
+    let _other_binding = FlutterTextInputBinding::install_for_view(&other_host.inbound, &other, 99);
+    frame(&other);
+    assert_eq!(
+        other
+            .borrow()
+            .flutter_text_input_configuration()
+            .unwrap()
+            .1
+            .view_id,
+        Some(99)
+    );
+
+    // A view-only change is real configuration work, even though the native
+    // command and editor values otherwise compare equal.
+    runtime
+        .borrow_mut()
+        .set_flutter_text_input_view_id(Some(88));
+    assert!(runtime.borrow().frame_requested());
+    frame(&runtime);
+    let commands = runtime.borrow_mut().take_text_input_commands();
+    assert_eq!(commands.len(), 1);
+    assert!(
+        matches!(&commands[0], TextInputCommand::SetClient { configuration, .. } if configuration.client == client)
+    );
+    runtime
+        .borrow_mut()
+        .schedule_update(field, editor(true, false).into())
+        .unwrap();
+    frame(&runtime);
+    let (same_client, moved) = runtime.borrow().flutter_text_input_configuration().unwrap();
+    assert_eq!(same_client, client);
+    assert_eq!(moved.view_id, Some(88));
+    assert!(!moved.enable_interactive_selection);
+    let encoded = FlutterDeltaTextInputConnection::new(client)
+        .encode_set_client_with_config(&moved)
+        .unwrap();
+    let wire = JsonMethodCodec::decode_method_call(&encoded).unwrap();
+    assert_eq!(wire.method, "TextInput.setClient");
+    assert_eq!(wire.arguments[1]["viewId"], 88);
+    assert_eq!(wire.arguments[1]["enableInteractiveSelection"], false);
+    assert_eq!(
+        wire.arguments[1]["inputType"]["name"],
+        "TextInputType.multiline"
+    );
+    assert_eq!(
+        other
+            .borrow()
+            .flutter_text_input_configuration()
+            .unwrap()
+            .1
+            .view_id,
+        Some(99)
+    );
+    assert_eq!(runtime.borrow().focused_element(), Some(field));
+    assert_eq!(controller.selection(), TextSelection::collapsed(3));
+    assert!(focus.has_primary_focus());
+
+    runtime.borrow_mut().take_text_input_commands();
+    runtime
+        .borrow_mut()
+        .set_flutter_text_input_view_id(Some(123));
+    runtime
+        .borrow_mut()
+        .set_flutter_text_input_view_id(Some(88));
+    frame(&runtime);
+    assert!(runtime.borrow_mut().take_text_input_commands().is_empty());
+}

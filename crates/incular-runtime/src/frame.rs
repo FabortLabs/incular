@@ -374,6 +374,8 @@ pub struct Runtime {
     last_text_input_client: Option<MountedTextInputConnection>,
     next_text_input_client: u64,
     pub(crate) text_input_configuration: Option<TextInputConfiguration>,
+    pub(crate) flutter_text_input_view_id: Option<i64>,
+    sent_flutter_text_input_view_id: Option<i64>,
     pub(crate) text_input_state: Option<TextInputState>,
     pub(crate) text_input_caret_rect: Option<Rect>,
     /// A tap on the focused field asked for the keyboard (Flutter's
@@ -638,6 +640,8 @@ impl Runtime {
             last_text_input_client: None,
             next_text_input_client: 1,
             text_input_configuration: None,
+            flutter_text_input_view_id: None,
+            sent_flutter_text_input_view_id: None,
             text_input_state: None,
             text_input_caret_rect: None,
             text_input_show_requested: false,
@@ -3599,7 +3603,19 @@ impl Runtime {
             },
         };
         let configuration_changed = self.text_input_configuration.as_ref() != Some(&configuration);
-        let set_client = resend_client || client_changed || configuration_changed;
+        let view_changed = self.flutter_text_input_view_id != self.sent_flutter_text_input_view_id;
+        let pending_same_client = view_changed
+            && self.text_input_commands.iter().rev().any(|command| matches!(
+                command,
+                TextInputCommand::SetClient { configuration, .. } if configuration.client == client
+            ));
+        let set_client = resend_client
+            || client_changed
+            || configuration_changed
+            || (view_changed && !pending_same_client);
+        // The optional bridge reads the current view when draining a
+        // pending client command, not when the native command was queued.
+        self.sent_flutter_text_input_view_id = self.flutter_text_input_view_id;
         if set_client {
             self.text_input_commands
                 .push_back(TextInputCommand::SetClient {

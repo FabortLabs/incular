@@ -60,3 +60,20 @@ editor. The Rust regression verifies the same switch in the actual
 keyboard command. It uses the same client ID, selection and text, does
 not re-show or close the keyboard, and does not resend its unchanged
 configuration on the next frame. All six focused native tests passed.
+
+## View identity in mounted keyboard configuration
+
+Pinned `widgets/editable_text_test.dart:1286`, “EditableText sends viewId
+to config,” passes for view IDs 77 and 88. Incular's opt-in Flutter channel
+now gets that ID from its host binding, not from a native window slot.
+The native test starts with view 77, moves the same mounted editor to view
+88, and checks the actual JSON `TextInput.setClient` configuration together
+with the new multiline and selection policy. A separate runtime remains
+on view 99.
+
+A view-only update reissues configuration without changing the client's
+ID, editor focus, selection, or keyboard visibility. A pending attachment
+is not duplicated, and changing a view ID then reverting it before the
+frame sends nothing. The default native path does not acquire a Flutter
+ID. The test uses two retained runtimes and their protocol bindings, not
+two OS window surfaces. Three focused native targets passed 14 tests.

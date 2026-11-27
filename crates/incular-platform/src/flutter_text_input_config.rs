@@ -5,7 +5,10 @@ use std::hash::{Hash, Hasher};
 use incular_config::{Brightness, Locale};
 use serde_json::{Map, Value, json};
 
-use crate::{SmartDashesType, SmartQuotesType, TextCapitalization, TextInputAction, TextInputType};
+use crate::{
+    SmartDashesType, SmartQuotesType, TextCapitalization, TextInputAction, TextInputConfiguration,
+    TextInputType,
+};
 
 #[derive(Clone, Debug)]
 pub struct FlutterTextInputConfiguration {
@@ -71,6 +74,38 @@ impl Hash for FlutterTextInputConfiguration {
 }
 
 impl FlutterTextInputConfiguration {
+    /// Maps the active native editor's input policy to Flutter's wire
+    /// configuration. The embedder supplies its own view ID rather than
+    /// reusing a native window slot. Optional autofill context and the
+    /// delta-model opt-in are separate policies.
+    #[must_use]
+    pub fn from_native_editor(editor: &TextInputConfiguration, view_id: Option<i64>) -> Self {
+        let traits = &editor.traits;
+        Self {
+            view_id,
+            input_type: editor.input_type,
+            read_only: editor.read_only,
+            obscure_text: editor.obscure_text,
+            autocorrect: traits.autocorrect,
+            smart_dashes_type: Some(traits.smart_dashes_type),
+            smart_quotes_type: Some(traits.smart_quotes_type),
+            enable_suggestions: traits.enable_suggestions,
+            enable_interactive_selection: traits.enable_interactive_selection,
+            input_action: editor.action,
+            text_capitalization: traits.text_capitalization,
+            keyboard_appearance: traits.keyboard_appearance,
+            enable_ime_personalized_learning: traits.enable_ime_personalized_learning,
+            allowed_mime_types: traits
+                .content_mime_types
+                .as_deref()
+                .map(<[String]>::to_vec)
+                .unwrap_or_default(),
+            hint_locales: traits.hint_locales.clone(),
+            enable_inline_prediction: traits.enable_inline_prediction,
+            ..Self::default()
+        }
+    }
+
     fn effective_smart_dashes(&self) -> SmartDashesType {
         self.smart_dashes_type.unwrap_or(if self.obscure_text {
             SmartDashesType::Disabled

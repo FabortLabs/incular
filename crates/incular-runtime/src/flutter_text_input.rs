@@ -49,6 +49,18 @@ impl FlutterTextInputBinding {
         Self { scribble }
     }
 
+    /// Installs this handler for an explicit Flutter view. Call before the
+    /// editor attaches, so its first keyboard configuration carries the ID.
+    #[must_use]
+    pub fn install_for_view(
+        inbound: &FlutterInboundMessenger,
+        runtime: &Rc<RefCell<crate::Runtime>>,
+        view_id: i64,
+    ) -> Self {
+        runtime.borrow_mut().set_flutter_text_input_view_id(Some(view_id));
+        Self::install(inbound, runtime)
+    }
+
     /// The window's mounted handwriting targets, independent of keyboard focus.
     #[must_use]
     pub fn scribble_registry(&self) -> Rc<RefCell<FlutterScribbleRegistry>> {
@@ -348,6 +360,36 @@ fn decode_full_editing_state(
 }
 
 impl crate::Runtime {
+    /// Associates this runtime's optional Flutter protocol with the host's
+    /// view ID. A live editor reissues its configuration on the next frame
+    /// without changing focus, selection, or keyboard visibility.
+    pub fn set_flutter_text_input_view_id(&mut self, view_id: Option<i64>) {
+        if self.flutter_text_input_view_id != view_id {
+            self.flutter_text_input_view_id = view_id;
+            self.request_frame();
+        }
+    }
+
+    /// The mounted client's Flutter configuration. A native window slot is
+    /// never used as a substitute for a view ID that the embedder did not set.
+    #[must_use]
+    pub fn flutter_text_input_configuration(
+        &self,
+    ) -> Option<(TextInputClientId, FlutterTextInputConfiguration)> {
+        let client = self.active_flutter_editable_client()?;
+        let editor = self
+            .text_input_configuration
+            .as_ref()
+            .filter(|editor| editor.client == client)?;
+        Some((
+            client,
+            FlutterTextInputConfiguration::from_native_editor(
+                editor,
+                self.flutter_text_input_view_id,
+            ),
+        ))
+    }
+
     fn handle_flutter_text_input_method(
         &mut self,
         call: &MethodCall<Value>,
