@@ -2768,3 +2768,8 @@ packages/flutter/test/services/text_input_test.dart	259	Invalid TextRange fails 
 packages/flutter/test/widgets/transitions_test.dart	42	decoration test	paired-match	upstream-decorated-box-transition.md#linear-eased-and-zero-area-originals
 packages/flutter/test/widgets/transitions_test.dart	86	animations work with curves test	paired-match	upstream-decorated-box-transition.md#linear-eased-and-zero-area-originals
 packages/flutter/test/widgets/transitions_test.dart	134	does not crash at zero area	paired-match	upstream-decorated-box-transition.md#linear-eased-and-zero-area-originals
+packages/flutter/test/widgets/animated_opacity_repaint_test.dart	12	RenderAnimatedOpacityMixin does not drop layer when animating to 1	paired-match	upstream-opacity-repaint.md
+packages/flutter/test/widgets/animated_opacity_repaint_test.dart	48	RenderAnimatedOpacityMixin avoids repainting child as it animates	paired-match	upstream-opacity-repaint.md
+packages/flutter/test/widgets/animated_opacity_repaint_test.dart	84	RenderAnimatedOpacityMixin allows opacity layer to be disposed when animating to 0 opacity	partial-match	upstream-opacity-repaint.md
+packages/flutter/test/widgets/opacity_repaint_test.dart	12	RenderOpacity avoids repainting and does not drop layer at fully opaque	paired-match	upstream-opacity-repaint.md
+packages/flutter/test/widgets/opacity_repaint_test.dart	44	RenderOpacity allows opacity layer to be dropped at 0 opacity	partial-match	upstream-opacity-repaint.md
