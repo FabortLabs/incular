@@ -3410,3 +3410,4 @@ packages/flutter/test/widgets/shortcuts_test.dart	716	Default constructed Shortc
 packages/flutter/test/widgets/shortcuts_test.dart	1209	Shortcuts pass debug label to focus node.	paired-match	upstream-shortcut-comparisons.md#passive-shortcut-focus-and-semantics
 packages/flutter/test/widgets/shortcuts_test.dart	1368	Shortcuts does not insert a semantics node when includeSemantics is false	paired-match	upstream-shortcut-comparisons.md#passive-shortcut-focus-and-semantics
 packages/flutter/test/widgets/shortcuts_test.dart	1320	Shortcuts support activators that returns null in triggers	paired-match	upstream-shortcut-comparisons.md#custom-activator-fallback
+packages/flutter/test/widgets/shortcuts_test.dart	2143	sets debug label on focus node	paired-match	upstream-shortcut-comparisons.md#registrar-and-callback-focus-boundaries

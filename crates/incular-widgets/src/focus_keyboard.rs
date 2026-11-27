@@ -103,27 +103,44 @@ impl ShortcutScope {
 
 impl From<ShortcutScope> for Widget {
     fn from(scope: ShortcutScope) -> Self {
-        let widget = Widget::from_kind(WidgetKind::Gesture {
-            behavior: crate::gestures::HitTestBehavior::DeferToChild,
-            callbacks: Box::new(incular_gestures::GestureCallbacks {
+        passive_shortcut_boundary(
+            scope.child,
+            incular_gestures::GestureCallbacks {
                 shortcut_scope: Some(scope.shortcuts),
-                owned_focus_permission: Some(false),
-                owned_focus_debug_label: Some(
-                    scope.debug_label.unwrap_or_else(|| Rc::from("Shortcuts")),
-                ),
-                annotates_focus: true,
-                // This boundary never requests keyboard focus. Its optional
-                // accessibility annotation explicitly declares that fact.
-                include_semantics: false,
                 ..Default::default()
-            }),
-            child: scope.child,
-        });
-        if scope.include_semantics {
-            crate::Semantics::new(widget).focusable(false).into()
-        } else {
-            widget
-        }
+            },
+            Some(scope.debug_label.unwrap_or_else(|| Rc::from("Shortcuts"))),
+            false,
+            scope.include_semantics,
+        )
+    }
+}
+
+/// All shortcut wrappers are focus ancestors, but never take primary focus.
+pub(crate) fn passive_shortcut_boundary(
+    child: Widget,
+    mut callbacks: incular_gestures::GestureCallbacks,
+    label: Option<Rc<str>>,
+    skip_traversal: bool,
+    include_semantics: bool,
+) -> Widget {
+    callbacks.owned_focus_permission = Some(false);
+    callbacks.owned_focus_debug_label = label;
+    callbacks.annotates_focus = true;
+    callbacks.include_semantics = false;
+    callbacks.focus_node_widget_properties = Some(incular_gestures::FocusNodeWidgetProperties {
+        skip_traversal: Some(skip_traversal),
+        ..Default::default()
+    });
+    let widget = Widget::from_kind(WidgetKind::Gesture {
+        behavior: crate::gestures::HitTestBehavior::DeferToChild,
+        callbacks: Box::new(callbacks),
+        child,
+    });
+    if include_semantics {
+        crate::Semantics::new(widget).focusable(false).into()
+    } else {
+        widget
     }
 }
 
@@ -1035,14 +1052,9 @@ impl From<CallbackShortcuts> for Widget {
                 }
                 handled
             })),
-            include_semantics: false,
             ..incular_gestures::GestureCallbacks::default()
         };
-        Widget::from_kind(WidgetKind::Gesture {
-            behavior: crate::gestures::HitTestBehavior::DeferToChild,
-            callbacks: Box::new(callbacks),
-            child: value.child,
-        })
+        passive_shortcut_boundary(value.child, callbacks, None, true, true)
     }
 }
 

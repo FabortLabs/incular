@@ -2,7 +2,7 @@
 //! `ShortcutRegistrar`: application-wide shortcuts that widgets anywhere in
 //! the tree add and remove while they are mounted, such as menu accelerators.
 
-use crate::{BuildContext, Widget, tree::WidgetKind};
+use crate::{BuildContext, Widget, focus_keyboard::passive_shortcut_boundary};
 use incular_core::{HardwareKeyboardState, KeyboardEvent, KeyboardKey, Modifiers};
 pub use incular_gestures::CharacterActivator;
 use incular_gestures::{LogicalKeySet, SingleActivator};
@@ -298,16 +298,17 @@ fn registrar(registry: ShortcutRegistry, child: Widget) -> Widget {
         on_shortcut_with_keyboard_state: Some(Rc::new(move |event, lock_modes, keyboard| {
             handler.handle_key_with_keyboard_state(&event, lock_modes, keyboard)
         })),
-        include_semantics: false,
         ..incular_gestures::GestureCallbacks::default()
     };
     Widget::environment_scope(
         registry,
-        Widget::from_kind(WidgetKind::Gesture {
-            behavior: crate::gestures::HitTestBehavior::DeferToChild,
-            callbacks: Box::new(callbacks),
+        passive_shortcut_boundary(
             child,
-        }),
+            callbacks,
+            Some(Rc::from("Shortcuts: <Shortcut Registrar>")),
+            false,
+            true,
+        ),
     )
 }
 

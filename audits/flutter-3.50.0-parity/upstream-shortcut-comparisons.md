@@ -161,3 +161,15 @@ unadvertised key never enters the predicate, a predicate sees the
 updated hardware snapshot, and cloning a custom activator replaces
 the same binding. Typed matching evaluates a candidate only once
 per focus ancestor, even when no action handles the event.
+
+## Registrar and callback focus boundaries
+
+Flutter's exact `shortcuts_test.dart:2143` passed. A mounted registrar
+now gives its child's nearest focus boundary the diagnostic label
+`Shortcuts: <Shortcut Registrar>` without taking primary focus.
+The registrar and callback wrappers share the same passive boundary
+as typed Shortcuts. An authored Flutter probe and native test cover
+the callback wrapper's skipped traversal, retained descendant focus,
+key-down activation and silent key-up. This authored control adds no
+original count. Both focused Rust checks and the adjacent runtime
+shortcut targets passed.
