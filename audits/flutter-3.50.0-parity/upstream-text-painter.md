@@ -330,3 +330,15 @@ INCULAR_FLUTTER_AHEM_PATH="$PWD/.tmp/flutter/packages/flutter_tools/static/Ahem.
   cargo test --locked --offline -j1 -p incular-text --test flutter350_text_painter \
   text_caret_preserves_unicode_trailing_space_policies_at_tight_width -- --ignored --test-threads=1
 ```
+
+## Bidi hard boundaries and forced wraps
+
+The three runnable originals in `painting/text_painter_rtl_test.dart`
+pair. Ordinary words keep the exact boundaries on either side of a
+hard newline. On a 10 px line, Latin A and Hebrew Alef occupy separate
+rows without breaking the logical word. Both caret affinities at the
+wrap and paragraph end match, and selection boxes preserve each row's
+writing direction. The empty paragraph still reports the root font's
+75 px alphabetic baseline. The nine upstream-disabled registrations
+were not counted. The final focused native run passed 59 tests and
+left the known Unicode-separator regression ignored.

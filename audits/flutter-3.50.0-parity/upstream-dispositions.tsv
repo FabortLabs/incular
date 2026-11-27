@@ -3162,3 +3162,6 @@ packages/flutter/test/painting/text_painter_test.dart	1600	TextPainter throws wi
 packages/flutter/test/painting/text_painter_test.dart	2085	TextPainter dispatches memory events	paired-match	upstream-text-painter.md#textpainter-allocation-lifecycle
 packages/flutter/test/painting/text_painter_test.dart	1500	TextPainter handles invalid UTF-16	paired-match	upstream-text-painter.md#invalid-utf-16-span-input
 packages/flutter/test/painting/text_painter_test.dart	123	TextPainter caret test	reference-ran-incular-open	upstream-text-painter.md#open-non-ascii-hanging-separators
+packages/flutter/test/painting/text_painter_rtl_test.dart	13	TextPainter - basic words	paired-match	upstream-text-painter.md#bidi-hard-boundaries-and-forced-wraps
+packages/flutter/test/painting/text_painter_rtl_test.dart	306	TextPainter - forced line-wrapping with bidi	paired-match	upstream-text-painter.md#bidi-hard-boundaries-and-forced-wraps
+packages/flutter/test/painting/text_painter_rtl_test.dart	729	TextPainter - empty text baseline	paired-match	upstream-text-painter.md#bidi-hard-boundaries-and-forced-wraps

@@ -55,7 +55,7 @@ else:
     # missing glyph. Keep their original Unicode properties while
     # removing platform-specific system fallback in exact caret tests.
     characters = ("ل" if args.arabic_lam_fixture else "") + (
-        "👩👦👧👏🏽🚀מילים" if args.emoji_caret_fixture else ""
+        "👩👦👧👏🏽🚀מיליםא" if args.emoji_caret_fixture else ""
     ) + ("\ufffd" if args.replacement_fixture else "")
     with TTFont(io.BytesIO(font)) as face:
         square = face.getBestCmap()[ord("a")]
