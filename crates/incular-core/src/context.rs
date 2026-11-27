@@ -628,6 +628,28 @@ impl BuildContext {
         self.read_shared()
     }
 
+    /// Visits matching ancestor providers from nearest to farthest and
+    /// observes only the one that supplies a projected value.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn depend_mapped<T: Any, R>(&self, mut project: impl FnMut(&T) -> Option<R>) -> Option<R> {
+        let type_id = TypeId::of::<T>();
+        let mut current = Some(self.environment.as_ref());
+        while let Some(environment) = current {
+            let value = environment.values.borrow().get(&type_id).cloned();
+            if let Some(value) = value.and_then(|value| value.downcast::<T>().ok())
+                && let Some(result) = project(&value)
+            {
+                let key = DependencyKey::Environment { environment: environment.id, type_id };
+                with_active_scope(|scope| scope.tracker.record(scope.consumer, key))
+                    .unwrap_or_else(|| self.tracker.record(self.consumer, key));
+                return Some(result);
+            }
+            current = environment.parent.as_deref();
+        }
+        None
+    }
+
     /// Observes inherited values from nearest to farthest until the predicate
     /// rejects one. The rejected provider is observed too. Unlike ordinary
     /// build dependencies, the visited providers stay observed across

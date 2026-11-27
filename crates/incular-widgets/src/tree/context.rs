@@ -8,6 +8,20 @@ use incular_config::{
     TextDirection,
 };
 
+pub(super) struct MountedActionScope {
+    pub(super) scope: Rc<incular_gestures::ErasedActionScope>,
+    changed: incular_core::reactivity::DependencySource,
+    _subscriptions: Vec<incular_gestures::ActionListenerSubscription>,
+}
+
+impl MountedActionScope {
+    pub(super) fn new(scope: Rc<incular_gestures::ErasedActionScope>) -> Self {
+        let changed = incular_core::reactivity::DependencySource::default();
+        let subscriptions = scope.observe_changes(&changed);
+        Self { scope, changed, _subscriptions: subscriptions }
+    }
+}
+
 #[derive(Clone)]
 struct RuntimeEnvironmentSnapshot(RuntimeEnvironment);
 
@@ -296,6 +310,21 @@ impl<'a> BuildContext<'a> {
     #[must_use]
     pub fn find_shared<T: Any>(&self) -> Option<Rc<T>> {
         self.inner.read_shared::<T>()
+    }
+
+    /// Finds the nearest action for this intent and rebuilds this consumer
+    /// when the scope that owns it notifies dependents. A disabled action
+    /// is still returned and still shadows an outer action.
+    #[must_use]
+    pub fn maybe_find_action<C: incular_gestures::CommandId>(
+        &self,
+        intent: &incular_gestures::Intent<C>,
+    ) -> Option<incular_gestures::Action<C>> {
+        self.inner.depend_mapped::<MountedActionScope, _>(|mounted| {
+            let action = mounted.scope.action(intent)?;
+            mounted.changed.track();
+            Some(action)
+        })
     }
 
     pub(crate) fn visibility(&self) -> bool {

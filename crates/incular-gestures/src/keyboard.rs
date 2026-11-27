@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use std::rc::{Rc, Weak};
 
@@ -819,6 +819,10 @@ impl ActionDispatcher {
 }
 
 trait ActionRegistry {
+    fn observe_changes(
+        &self,
+        changed: &incular_core::reactivity::DependencySource,
+    ) -> Vec<ActionListenerSubscription>;
     fn action_for(&self, command: &dyn std::any::Any) -> Option<&dyn std::any::Any>;
     fn invoke(&self, erased: &ErasedIntent, dispatcher: &DispatcherLookup<'_>) -> Option<ActionResult>;
     fn invoke_shortcut(
@@ -829,6 +833,26 @@ trait ActionRegistry {
 }
 
 impl<C: CommandId> ActionRegistry for Actions<C> {
+    fn observe_changes(
+        &self,
+        changed: &incular_core::reactivity::DependencySource,
+    ) -> Vec<ActionListenerSubscription> {
+        let mut commands = HashSet::new();
+        let mut identities = HashSet::new();
+        self.scopes
+            .iter()
+            .rev()
+            .flat_map(|scope| &scope.actions)
+            .filter(|(command, action)| {
+                commands.insert(*command) && identities.insert(Rc::as_ptr(&action.listeners))
+            })
+            .map(|(_, action)| {
+                let changed = changed.clone();
+                action.add_action_listener(move || changed.notify())
+            })
+            .collect()
+    }
+
     fn action_for(&self, command: &dyn std::any::Any) -> Option<&dyn std::any::Any> {
         self.action_ref(command.downcast_ref::<C>()?)
             .map(|action| action as &dyn std::any::Any)
@@ -880,6 +904,27 @@ impl ErasedActionScope {
     #[must_use]
     pub fn dispatcher(&self) -> Option<Rc<ScopedActionDispatcher>> {
         self.dispatcher.clone()
+    }
+
+    /// Observes every effective action, once per action identity, for one
+    /// mounted scope. The retained scope owns the returned subscriptions.
+    #[doc(hidden)]
+    pub fn observe_changes(
+        &self,
+        changed: &incular_core::reactivity::DependencySource,
+    ) -> Vec<ActionListenerSubscription> {
+        self.registry.observe_changes(changed)
+    }
+
+    /// Whether these descriptors share their immutable map and dispatcher.
+    #[doc(hidden)]
+    pub fn same_mapping(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.registry, &other.registry)
+            && match (&self.dispatcher, &other.dispatcher) {
+                (None, None) => true,
+                (Some(a), Some(b)) => Rc::ptr_eq(a, b),
+                _ => false,
+            }
     }
 
     /// Reads a typed mapping without invoking the action or dispatcher.

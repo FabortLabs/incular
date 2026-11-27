@@ -131,4 +131,13 @@ Replacing the listened-to action disconnects the old action, and unmount
 or tree drop disconnects the remaining subscriptions even if the original
 widget value still exists. Merely mounting, invoking, or setting the same
 enabled flag does not emit a state change. All 16 focused native tests passed.
-The original still has partial credit pending inherited scope subscriptions.
+Each mounted action scope now also observes its effective actions.
+Replacing or removing the map updates and releases its subscriptions.
+The native test exercises the original three-action listener-count
+sequence, including moving an action to another scope. A separate
+pinned comparison confirmed that changing an action rebuilds readers
+of its owning scope, not readers unrelated to that scope. Native
+lookups observe only the matching scope and do not skip a disabled
+mapping. All 33 focused native tests passed. The original remains
+partial until the arbitrary callback return value is preserved as
+well as whether the action ran.

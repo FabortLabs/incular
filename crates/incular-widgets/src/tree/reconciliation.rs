@@ -89,6 +89,17 @@ fn element_environment(
                 (Some(InheritedScopeValue::new(mode)), false)
             };
         }
+        WidgetKind::Gesture { callbacks, .. } if callbacks.action_scope.is_some() => {
+            use super::context::MountedActionScope;
+            let scope = callbacks.action_scope.as_ref().expect("action scope was matched");
+            if let Some(previous) = previous
+                && previous.value.downcast_ref::<MountedActionScope>()
+                    .is_some_and(|mounted| mounted.scope.same_mapping(scope))
+            {
+                return (Some(previous.clone()), false);
+            }
+            return (Some(InheritedScopeValue::new(MountedActionScope::new(scope.clone()))), false);
+        }
         WidgetKind::Scroll { controller, .. } => controller,
         WidgetKind::SliverViewport { config } => &config.controller,
         _ => return (None, false),
