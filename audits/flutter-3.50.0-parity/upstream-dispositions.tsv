@@ -2533,7 +2533,7 @@ packages/flutter/test/services/system_navigator_test.dart	39	System navigator co
 packages/flutter/test/services/process_text_test.dart	11	ProcessTextService.queryTextActions emits correct method call	paired-match	upstream-process-text-service.md
 packages/flutter/test/services/process_text_test.dart	29	ProcessTextService.processTextAction emits correct method call	paired-match	upstream-process-text-service.md
 packages/flutter/test/services/process_text_test.dart	55	ProcessTextService handles engine answers over the channel	paired-match	upstream-process-text-service.md
-packages/flutter/test/services/scribe_test.dart	12	when receiving an unsupported message	reference-ran-incular-open	upstream-scribe-messages.md
+packages/flutter/test/services/scribe_test.dart	12	when receiving an unsupported message	paired-match	upstream-scribe-messages.md
 packages/flutter/test/services/scribe_test.dart	29	Scribe.isStylusHandwritingAvailable calls through to platform channel	paired-match	upstream-scribe-messages.md
 packages/flutter/test/services/scribe_test.dart	52	Scribe.isFeatureAvailable calls through to platform channel	paired-match	upstream-scribe-messages.md
 packages/flutter/test/services/scribe_test.dart	74	Scribe.startStylusHandwriting calls through to platform channel	paired-match	upstream-scribe-messages.md

@@ -8,8 +8,10 @@ either boolean. Starting handwriting sends exactly one command and
 accepts a null void result. Native evidence uses the actual serialized
 method and reply envelopes.
 
-The fourth registration, unsupported inbound dispatch, passes on
-Flutter but remains unpaired because the optional embedder adapter
-does not own a global inbound binary-message dispatcher. All 17
-selected native checks passed. This describes the channel, not
-native stylus recognition on an Android device.
+The fourth pinned registration now pairs through the embedder's direct
+inbound messenger. The original raw JSON has a method name and no args;
+receiving it without a listener replies null exactly once. Installing a
+handler before the deferred reply does not replay it. This is direct host
+dispatch, not the engine's buffered channel. Nineteen selected native
+channel tests passed. The comparison does not claim real handwriting
+recognition on an Android device.

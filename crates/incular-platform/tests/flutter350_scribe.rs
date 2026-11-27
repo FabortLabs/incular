@@ -1,10 +1,12 @@
 use incular_platform::{
-    FlutterPlatformMessenger, Scribe, ScribeError,
+    FlutterChannelMicrotask, FlutterInboundMessenger, FlutterPlatformMessenger, Scribe,
+    ScribeError,
     message_codecs::{JsonMethodCodec, MethodCall},
 };
 use serde_json::{Value, json};
 use std::{
     cell::RefCell,
+    collections::VecDeque,
     future::{Future, ready},
     pin::pin,
     rc::Rc,
@@ -110,4 +112,31 @@ fn starting_handwriting_makes_one_call_and_accepts_a_null_void_reply() {
     let (mut scribe, log) = service(Value::Null);
     wait(scribe.start_stylus_handwriting()).unwrap();
     check(&log, "Scribe.startStylusHandwriting");
+}
+
+#[test]
+fn unsupported_platform_scribe_message_replies_null_and_does_not_replay() {
+    let tasks = Rc::new(RefCell::new(VecDeque::<FlutterChannelMicrotask>::new()));
+    let inbound = FlutterInboundMessenger::new({
+        let tasks = tasks.clone();
+        move |task| tasks.borrow_mut().push_back(task)
+    });
+    let channel = Scribe::<Host>::CHANNEL;
+    let replies = Rc::new(RefCell::new(Vec::new()));
+    // The Flutter original uses JSONMessageCodec with only a method key,
+    // rather than a request encoded by JSONMethodCodec.
+    let payload = serde_json::to_vec(&json!({"method": "Scribe.unsupportedMessage"})).unwrap();
+    inbound.dispatch_unbuffered(channel, Some(payload), {
+        let replies = replies.clone();
+        move |reply| replies.borrow_mut().push(reply)
+    });
+    assert!(replies.borrow().is_empty());
+
+    inbound.set_message_handler(channel, |_, _| panic!("unsupported call was buffered"));
+    loop {
+        let task = tasks.borrow_mut().pop_front();
+        let Some(task) = task else { break };
+        task();
+    }
+    assert_eq!(*replies.borrow(), [None]);
 }
