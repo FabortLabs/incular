@@ -2848,8 +2848,13 @@ impl Runtime {
                         self.text_shortcut_platform,
                         TextShortcutPlatform::Android | TextShortcutPlatform::Ios
                     );
-                let deferred_text_touch =
-                    mobile_touch && !text_target_was_focused && text_target.is_some();
+                let ignores_text_pointer = text_target.is_some_and(|field| {
+                    self.tree.text_field_renderer_ignores_pointer(field)
+                });
+                let deferred_text_touch = mobile_touch
+                    && !text_target_was_focused
+                    && text_target.is_some()
+                    && !ignores_text_pointer;
                 let keep_text_field_focus = text_target.is_none()
                     && self
                         .focused
@@ -2866,7 +2871,7 @@ impl Runtime {
                 let focused_text_field = self
                     .focused
                     .is_some_and(|focused| self.tree.is_text_field(focused));
-                if !deferred_text_touch {
+                if !deferred_text_touch && !ignores_text_pointer {
                     self.set_focus_with_external_selection(
                         if keep_text_field_focus {
                             self.focused
@@ -2881,9 +2886,12 @@ impl Runtime {
                 // Flutter's EditableText only installs its selection gestures
                 // while `_userSelectionEnabled` (`!readOnly || !obscureText`)
                 // holds; a read-only obscured field keeps focus but no caret.
-                self.captured_text_field =
-                    text_target.filter(|field| self.text_field_pointer_selection_enabled(*field));
-                if let Some(field) = text_target {
+                self.captured_text_field = text_target.filter(|field| {
+                    !ignores_text_pointer && self.text_field_pointer_selection_enabled(*field)
+                });
+                if let Some(field) = text_target
+                    && !ignores_text_pointer
+                {
                     if deferred_text_touch {
                         self.pending_mobile_text_touch = Some(text_gestures::PendingMobileTextTouch {
                             field,
@@ -3314,14 +3322,21 @@ impl Runtime {
             self.parked_focus = None;
         }
         if self.pending_mobile_text_touch.is_some_and(|press| {
-            !self.tree.is_text_field(press.field) || !self.tree.can_request_focus(press.field)
+            !self.tree.is_text_field(press.field)
+                || !self.tree.can_request_focus(press.field)
+                || self.tree.text_field_renderer_ignores_pointer(press.field)
         }) {
             self.cancel_pending_mobile_text_touch();
         }
         if self.captured_text_field.is_some_and(|field| {
-            !self.tree.is_text_field(field) || !self.tree.can_request_focus(field)
+            !self.tree.is_text_field(field)
+                || !self.tree.can_request_focus(field)
+                || self.tree.text_field_renderer_ignores_pointer(field)
         }) {
             self.captured_text_field = None;
+        }
+        if self.text_taps.is_some_and(|tap| self.tree.text_field_renderer_ignores_pointer(tap.field)) {
+            self.text_taps = None;
         }
         if self.captured_selectable_text.is_some_and(|label| {
             !self.tree.is_selectable_text(label) || !self.tree.can_request_focus(label)

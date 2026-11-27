@@ -1249,6 +1249,7 @@ pub struct EditableText {
     /// `None` resolves to [`ToolbarOptions::for_field`].
     toolbar_options: Option<ToolbarOptions>,
     /// Flutter's `contextMenuBuilder`; `None` shows no context menu.
+    renderer_ignores_pointer: bool,
     context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
     selection_handles_builder: Option<crate::TextSelectionHandlesBuilder>,
     collapsed_selection_handle_layout: Option<crate::TextSelectionHandleLayout>,
@@ -1325,6 +1326,7 @@ impl EditableText {
             scroll_padding: incular_config::EdgeInsets::all(20.0),
             cursor_opacity_animates: false,
             toolbar_options: None,
+            renderer_ignores_pointer: false,
             context_menu_builder: None,
             selection_handles_builder: None,
             collapsed_selection_handle_layout: None,
@@ -1817,6 +1819,15 @@ impl EditableText {
         self
     }
 
+    /// Leaves pointer selection and focus to a caller-provided gesture
+    /// handler, like Flutter's `rendererIgnoresPointer`. Keyboard editing,
+    /// text-position queries and explicit selection actions remain available.
+    #[must_use]
+    pub fn renderer_ignores_pointer(mut self, ignores: bool) -> Self {
+        self.renderer_ignores_pointer = ignores;
+        self
+    }
+
     /// Builds the menu a secondary click opens (Flutter's
     /// `EditableText.contextMenuBuilder`). Unset, like Flutter's bare
     /// `EditableText`, the field has no context menu; Material and Controls
@@ -2164,6 +2175,7 @@ impl From<EditableText> for Widget {
             text_align: value.text_align,
             enabled: value.enabled,
             read_only: value.read_only,
+            renderer_ignores_pointer: value.renderer_ignores_pointer,
             obscure_text: value.obscure_text,
             obscuring_character: value.obscuring_character,
             keyboard_selection_enabled,

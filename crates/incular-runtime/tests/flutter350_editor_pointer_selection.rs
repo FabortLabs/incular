@@ -11,12 +11,7 @@ use incular_text::{
 };
 use incular_widgets::{EditableText, RawPointerEvent, SizedBox};
 
-#[test]
-fn physical_taps_drags_and_long_press_report_their_selection_causes() {
-    use PointerDeviceKind::{Mouse, Touch};
-    use PointerPhase::{Down, Move, Up};
-    use SelectionChangedCause::{DoubleTap, Drag, LongPress, Tap};
-
+fn ahem_style() -> Option<TextStyle> {
     const AHEM: &str = "Pinned pointer editing Ahem";
     let path = std::env::var_os("INCULAR_FLUTTER_AHEM_PATH")
         .map(PathBuf::from)
@@ -26,16 +21,28 @@ fn physical_taps_drags_and_long_press_report_their_selection_causes() {
         });
     if !path.is_file() {
         eprintln!("Pinned Ahem unavailable; pointer geometry not run");
-        return;
+        return None;
     }
     register_application_font_as(AHEM, std::fs::read(path).unwrap());
+    Some(TextStyle::new().font_family(AHEM).font_size(14.))
+}
+
+#[test]
+fn physical_taps_drags_and_long_press_report_their_selection_causes() {
+    use PointerDeviceKind::{Mouse, Touch};
+    use PointerPhase::{Down, Move, Up};
+    use SelectionChangedCause::{DoubleTap, Drag, LongPress, Tap};
+
+    let Some(style) = ahem_style() else {
+        return;
+    };
     let controller = TextEditingController::with_text("alpha beta gamma");
     controller.set_selection(TextSelection::collapsed(0));
     let changes = Rc::new(RefCell::new(Vec::new()));
     let editor = EditableText::new(controller.clone())
         .autofocus(true)
         .text_direction(TextDirection::Ltr)
-        .style(TextStyle::new().font_family(AHEM).font_size(14.))
+        .style(style)
         .context_menu_builder(|_, _| SizedBox::square(10.).into())
         .on_selection_changed({
             let changes = changes.clone();
@@ -93,4 +100,94 @@ fn physical_taps_drags_and_long_press_report_their_selection_causes() {
         .unwrap();
     send(&mut runtime, 1910, 4, Touch, Up, 100.);
     check(TextSelection::new(6, 10), LongPress);
+}
+
+#[test]
+fn the_renderer_can_leave_pointer_selection_and_focus_to_its_caller() {
+    use incular_core::InputEvent;
+    use incular_widgets::FocusNode;
+
+    let Some(style) = ahem_style() else {
+        return;
+    };
+    let controller = TextEditingController::with_text("alpha beta gamma");
+    controller.set_selection(TextSelection::collapsed(1));
+    let focus = FocusNode::new();
+    let causes = Rc::new(RefCell::new(Vec::new()));
+    let build = |ignore| {
+        EditableText::new(controller.clone())
+            .focus_node(focus.clone())
+            .autofocus(true)
+            .text_direction(TextDirection::Ltr)
+            .renderer_ignores_pointer(ignore)
+            .style(style.clone())
+            .on_selection_changed({
+                let causes = causes.clone();
+                move |_, cause| causes.borrow_mut().push(cause)
+            })
+    };
+    let mut runtime = Runtime::new(build(true).into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Linux);
+    let constraints = Constraints::loose(Size::new(800., 100.));
+    let base = Instant::now();
+    runtime.run_frame_at(constraints, base).unwrap();
+    let field = runtime.focused_element().unwrap();
+    let render = runtime.tree().render_id(field).unwrap();
+    assert!(focus.has_primary_focus());
+
+    let tap = |runtime: &mut Runtime, position: Offset, milliseconds: u64| {
+        for (phase, duration) in [(PointerPhase::Down, 0), (PointerPhase::Up, 20)] {
+            let _ = runtime.handle_input_at(
+                InputEvent::Pointer { phase, position },
+                base + Duration::from_millis(milliseconds + duration),
+            );
+        }
+    };
+    let point = Offset::new(58., 7.);
+    assert_eq!(
+        runtime
+            .tree()
+            .text_field_position_at(field, point)
+            .unwrap()
+            .0,
+        4
+    );
+    tap(&mut runtime, point, 100);
+    assert_eq!(controller.selection(), TextSelection::collapsed(1));
+    assert!(causes.borrow().is_empty());
+    assert!(focus.has_primary_focus());
+
+    focus.unfocus();
+    runtime
+        .run_frame_at(constraints, base + Duration::from_millis(150))
+        .unwrap();
+    tap(&mut runtime, point, 200);
+    assert!(runtime.focused_element().is_none());
+    assert_eq!(controller.selection(), TextSelection::collapsed(1));
+
+    focus.request_focus();
+    runtime
+        .run_frame_at(constraints, base + Duration::from_millis(250))
+        .unwrap();
+    assert!(runtime.select_editable_position_at_with_cause(
+        field,
+        point,
+        None,
+        SelectionChangedCause::Tap
+    ));
+    assert_eq!(controller.selection(), TextSelection::collapsed(4));
+    assert_eq!(causes.borrow().as_slice(), &[SelectionChangedCause::Tap]);
+
+    runtime.schedule_update(field, build(false).into()).unwrap();
+    runtime
+        .run_frame_at(constraints, base + Duration::from_millis(300))
+        .unwrap();
+    assert_eq!(runtime.tree().render_id(field), Some(render));
+    assert!(focus.has_primary_focus());
+    tap(&mut runtime, Offset::new(30., 7.), 350);
+    assert_eq!(controller.selection(), TextSelection::collapsed(2));
+    assert_eq!(
+        causes.borrow().as_slice(),
+        &[SelectionChangedCause::Tap, SelectionChangedCause::Tap]
+    );
 }

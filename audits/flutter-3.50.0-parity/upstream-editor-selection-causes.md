@@ -36,3 +36,18 @@ compatibility and rejecting a direct SetText on that field. Three
 focused native targets passed 18 tests. These authored cases add no
 upstream registration credit. Ordering when both onChanged and
 onSelectionChanged are installed remains a separate comparison.
+
+## Caller-owned pointer handling
+
+Flutter's `rendererIgnoresPointer` lets a caller provide text gestures
+without competing with the renderer. The pinned authored probe verifies
+that a direct tap does not move the selection or take focus while that flag
+is on. It leaves position queries and explicit `selectPositionAt` available,
+then restores regular tap selection when the live renderer is reconfigured.
+
+Incular adds `EditableText::renderer_ignores_pointer` (false by default)
+and gives explicit selection calls a typed cause, without requiring a
+different renderer or adding layout borders. The mounted renderer and
+focus identity stay stable across the toggle. The two native editor
+cases and 12 adjacent tap and gesture checks passed. This authored
+comparison adds no original registration count.

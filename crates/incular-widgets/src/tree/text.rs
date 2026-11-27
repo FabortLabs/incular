@@ -2626,6 +2626,18 @@ impl WidgetTree {
         }
     }
 
+    /// Whether the mounted editor delegates its own pointer gestures.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_renderer_ignores_pointer(&self, target: ElementId) -> bool {
+        self.elements.get(target.0).is_some_and(|element| {
+            matches!(
+                element.widget.kind(),
+                WidgetKind::TextField(spec) if spec.renderer_ignores_pointer
+            )
+        })
+    }
+
     /// Whether a mounted editor listens to user selection changes.
     #[doc(hidden)]
     #[must_use]

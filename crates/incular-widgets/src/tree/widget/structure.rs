@@ -777,6 +777,7 @@ impl PartialEq for TextFieldSpec {
             && self.text_align == other.text_align
             && self.enabled == other.enabled
             && self.read_only == other.read_only
+            && self.renderer_ignores_pointer == other.renderer_ignores_pointer
             && self.obscure_text == other.obscure_text
             && self.obscuring_character == other.obscuring_character
             && self.keyboard_selection_enabled == other.keyboard_selection_enabled

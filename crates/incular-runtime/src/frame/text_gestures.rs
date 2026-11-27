@@ -69,6 +69,10 @@ impl Runtime {
                         self.selectable_text_right_click(label, position, menu_was_showing)
                     });
                 };
+                if self.tree.text_field_renderer_ignores_pointer(field) {
+                    self.secondary_text_press = None;
+                    return false;
+                }
                 let selection = self
                     .tree
                     .text_controller(field)
@@ -119,6 +123,7 @@ impl Runtime {
         // `delegate.selectionEnabled`.
         if !snapshot.traits.enable_interactive_selection
             || !self.text_field_pointer_selection_enabled(field)
+            || self.tree.text_field_renderer_ignores_pointer(field)
         {
             return false;
         }
@@ -743,7 +748,7 @@ fn previous_word(text: &str, offset: usize) -> Option<(usize, usize)> {
 /// the latest press.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct TextTapRun {
-    field: ElementId,
+    pub(super) field: ElementId,
     down_position: Offset,
     last_up: Option<Instant>,
     raw_count: u32,
@@ -1053,6 +1058,24 @@ impl Runtime {
         );
         self.frame_requested |= changed;
         changed
+    }
+
+    /// Like `select_editable_position_at`, but preserves the caller-provided
+    /// cause for the mounted editor's selection callback. This is also
+    /// available when the editor delegates its internal pointer handling.
+    pub fn select_editable_position_at_with_cause(
+        &mut self,
+        field: ElementId,
+        from: Offset,
+        to: Option<Offset>,
+        cause: SelectionChangedCause,
+    ) -> bool {
+        let previous = self.observed_editor_selection(field);
+        let applied = self.select_editable_position_at(field, from, to);
+        if applied {
+            self.report_editor_selection_delta(field, previous, cause);
+        }
+        applied
     }
 
     /// Selects whole words between two global points in a laid-out editor.
