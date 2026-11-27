@@ -1590,7 +1590,7 @@ impl WidgetTree {
                 .callbacks
                 .callback(action)
                 .or_else(|| self.gesture_semantic_callback(element, action))
-                .or_else(|| self.merged_sliver_action_callback(id, action))
+                .or_else(|| self.merged_compatible_action_callback(id, action))
         })
     }
     /// Returns the current bound handler for an explicitly bound semantic action.

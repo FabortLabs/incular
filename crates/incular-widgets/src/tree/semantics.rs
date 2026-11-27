@@ -1141,7 +1141,7 @@ impl WidgetTree {
         let action_fragments = if joins_text_merge || outside_semantic_scope {
             None
         } else {
-            self.sliver_action_fragments(element, entry)
+            self.compatible_action_fragments(element, entry)
         };
         let own_text_merge = if joins_text_merge || outside_semantic_scope {
             SemanticTextMerge::None
@@ -2302,10 +2302,10 @@ impl WidgetTree {
         })
     }
 
-    /// Forms a merge only from a sliver's simple annotation fragments.
-    /// Count the declared actions before suppression: two tap handlers
+    /// Forms a merge from simple annotation fragments at a box or sliver
+    /// boundary. Count actions before suppression: two tap handlers
     /// conflict even if one is currently blocked from accessibility.
-    fn sliver_action_fragments(
+    fn compatible_action_fragments(
         &self,
         element: ElementId,
         entry: &Element,
@@ -2317,11 +2317,16 @@ impl WidgetTree {
             || explicit.state.explicit_child_nodes
             || properties.merge_descendants
             || properties.callbacks != SemanticCallbacks::default()
-            || !self
-                .viewport_sliver_child(entry.parent?, element)
-                .is_some_and(|(_, id)| crate::scrolling::is_semantics_anchor(id))
         {
             return None;
+        }
+        match entry
+            .parent
+            .and_then(|parent| self.viewport_sliver_child(parent, element))
+        {
+            Some((_, id)) if crate::scrolling::is_semantics_anchor(id) => {}
+            None if can_own_hint_value(entry, effective_focus_block(entry, false)) => {}
+            _ => return None,
         }
 
         let mut work = self.visible_semantic_children(element, entry).into_owned();
@@ -2334,7 +2339,7 @@ impl WidgetTree {
             if !self.can_contribute_merged_semantics(source) {
                 continue;
             }
-            let mask = self.sliver_action_fragment_mask(child, source)?;
+            let mask = self.compatible_action_fragment_mask(child, source)?;
             if actions & mask != 0 {
                 return None;
             }
@@ -2353,7 +2358,7 @@ impl WidgetTree {
         (labels >= 2 && actions != 0).then_some(fragments)
     }
 
-    fn sliver_action_fragment_mask(&self, element: ElementId, entry: &Element) -> Option<u16> {
+    fn compatible_action_fragment_mask(&self, element: ElementId, entry: &Element) -> Option<u16> {
         let properties = entry.widget.semantic_properties();
         if !self.can_contribute_merged_semantics(entry)
             || properties.merge_descendants
@@ -2412,7 +2417,7 @@ impl WidgetTree {
         )
     }
 
-    fn merged_sliver_action_source(
+    fn merged_compatible_action_source(
         &self,
         element: ElementId,
         action: SemanticActionKind,
@@ -2421,7 +2426,7 @@ impl WidgetTree {
             .iter()
             .position(|&candidate| candidate == action)?;
         let entry = self.elements.get(element.0)?;
-        self.sliver_action_fragments(element, entry)?
+        self.compatible_action_fragments(element, entry)?
             .into_iter()
             .find_map(|(child, mask)| {
                 (mask & (1 << bit) != 0 && !self.pointer_actions_blocked(child)).then_some(child)
@@ -2430,12 +2435,12 @@ impl WidgetTree {
 
     /// Resolve the current mounted callback rather than caching its pointer
     /// in the projected node. Handler-only replacements remain graph no-ops.
-    pub(super) fn merged_sliver_action_callback(
+    pub(super) fn merged_compatible_action_callback(
         &self,
         element: ElementId,
         action: SemanticActionKind,
     ) -> Option<Rc<dyn Fn() + 'static>> {
-        let child = self.merged_sliver_action_source(element, action)?;
+        let child = self.merged_compatible_action_source(element, action)?;
         self.elements
             .get(child.0)?
             .widget
@@ -2451,7 +2456,7 @@ impl WidgetTree {
         policy: SemanticTextMerge,
     ) -> bool {
         if policy == SemanticTextMerge::CompatibleActions {
-            return self.sliver_action_fragment_mask(element, entry).is_some();
+            return self.compatible_action_fragment_mask(element, entry).is_some();
         }
         // A controls-only merge does not absorb labels or their roles.
         if policy == SemanticTextMerge::CompatibleControls && element_own_label(entry).is_some() {
@@ -2775,7 +2780,7 @@ impl WidgetTree {
     pub fn semantic_activation_target(&self, element: ElementId) -> Option<ElementId> {
         let entry = self.elements.get(element.0)?;
         self.find_semantic_activation_target(element, absorbs_descendant_semantics(entry))
-            .or_else(|| self.merged_sliver_action_source(element, SemanticActionKind::Activate))
+            .or_else(|| self.merged_compatible_action_source(element, SemanticActionKind::Activate))
     }
 
     fn find_semantic_activation_target(
