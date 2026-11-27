@@ -425,6 +425,9 @@ impl ProviderImageState {
         context: &BuildContext<'_>,
     ) -> Widget {
         let stream = self.stream(config, provider, context, config.configuration(context));
+        if config.error_builder.is_some() {
+            stream.suppress_unhandled_errors();
+        }
         let (progress, error) = match stream.state() {
             ImageLoadState::Loading(progress) => (progress, None),
             ImageLoadState::Ready(image) => {

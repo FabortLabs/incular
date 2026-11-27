@@ -302,12 +302,17 @@ impl ImageStream {
         ImageFrameSubscription { binding }
     }
 
-    pub(crate) fn suppress_unhandled_errors(&self) {
-        self.leaf()
-            .unhandled_errors
-            .get_or_init(UnhandledImageErrors::default)
-            .suppressed
-            .set(true);
+    /// Remembers that a consumer presents a failure itself. This only
+    /// suppresses the pending completer's unhandled report; the error still
+    /// reaches the stream state and any active listener.
+    pub fn suppress_unhandled_errors(&self) {
+        let leaf = self.leaf();
+        if !leaf.completed.get() {
+            leaf.unhandled_errors
+                .get_or_init(UnhandledImageErrors::default)
+                .suppressed
+                .set(true);
+        }
     }
 
     /// Receives new progress reports, without replaying the latest snapshot.

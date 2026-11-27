@@ -16,3 +16,15 @@ source that will actually complete the stream. All 17 focused image
 stream, handoff, listener, and progress tests passed. This verifies
 the one-shot provider stream, not reporting from animated codecs or
 the global Flutter exception hook.
+
+## ProviderImage fallback across unmount
+
+Both pinned `widgets/image_test.dart` cases at :3026 and :3082
+passed. A mounted provider image with an error builder remembers
+that policy on its actual pending stream. Dropping the image and,
+in the second case, first removing only its builder while retaining
+the same provider, does not reenable reporting when the source
+later fails. The mounted native controls previously reported that
+failure in both cases. A provider image that never installed a
+builder still reports once. All 26 focused provider, stream,
+and scroll-aware image tests passed.

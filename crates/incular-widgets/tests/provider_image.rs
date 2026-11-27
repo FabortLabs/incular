@@ -268,3 +268,53 @@ fn updating_memory_image_density_reflows_without_replacing_the_source_pixels() {
     assert_eq!(harness.size(), Size::new(4., 4.));
     assert_eq!(painted(&mut harness.tree), (Size::new(4., 4.), original.1));
 }
+
+fn fail_after_image_widget_is_removed(had_builder: bool, remove_builder_first: bool) {
+    use incular_widgets::Center;
+
+    let (provider, completer) = deferred(1);
+    let reports: Rc<RefCell<Vec<ImageError>>> = Rc::default();
+    completer.set_unhandled_error_reporter({
+        let reports = reports.clone();
+        move |error| reports.borrow_mut().push(error)
+    });
+    let image = Image::provider(provider.clone());
+    let mut harness = Harness::new(Center::new(if had_builder {
+        image.error_builder(|_, _: &ImageError| -> Widget {
+            panic!("the disposed image cannot rebuild")
+        })
+    } else {
+        image
+    }));
+    assert!(reports.borrow().is_empty());
+    assert_eq!(provider.resolutions.get(), 1);
+    if remove_builder_first {
+        harness.update(Center::new(Image::provider(provider.clone())));
+        assert_eq!(
+            provider.resolutions.get(),
+            1,
+            "same source remains resolved"
+        );
+    }
+    harness.update(Center::new(Widget::box_(Size::ZERO, Color::TRANSPARENT)));
+    let failure = ImageError::Io("Network failed".into());
+    assert!(completer.fail(failure.clone()));
+    harness.layout();
+    let expected = if had_builder { vec![] } else { vec![failure] };
+    assert_eq!(reports.take(), expected);
+}
+
+#[test]
+fn an_error_builder_suppresses_late_reporting_after_the_widget_is_disposed() {
+    fail_after_image_widget_is_removed(true, false);
+}
+
+#[test]
+fn removing_the_error_builder_does_not_reenable_late_reporting() {
+    fail_after_image_widget_is_removed(true, true);
+}
+
+#[test]
+fn an_image_without_an_error_builder_does_not_suppress_the_provider_report() {
+    fail_after_image_widget_is_removed(false, false);
+}
