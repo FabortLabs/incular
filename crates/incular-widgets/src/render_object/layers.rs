@@ -94,7 +94,8 @@ impl LayerSpec {
         let foreground_picture = matches!(
             widget,
             WidgetKind::Button(spec) if spec.color.alpha == 0 && spec.focused_color.is_some()
-        ) || matches!(widget, WidgetKind::Table { border: Some(border), .. } if border.has_paint());
+        ) || matches!(widget, WidgetKind::Table { border: Some(border), .. } if border.has_paint())
+            || matches!(widget, WidgetKind::RawScrollbar { .. });
         let attachment = match widget {
             WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. } => {
                 if widget_clips(widget) {

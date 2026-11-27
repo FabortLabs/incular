@@ -206,6 +206,7 @@ pub(crate) struct RenderTextFieldState {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RenderRawScrollbarState {
     pub(crate) scrollbar: Option<RawScrollbar>,
+    pub(crate) geometry: Option<crate::RawScrollbarGeometry>,
 }
 
 /// Overlay-scrollbar interaction state owned by scroll viewports.

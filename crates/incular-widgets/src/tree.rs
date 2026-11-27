@@ -1849,6 +1849,8 @@ struct TrackedElements {
     text_fields: BTreeSet<ElementId>,
     /// Elements whose render object owns scroll state (overlay scrollbars).
     scroll_views: BTreeSet<ElementId>,
+    /// Explicit overlays also need to paint even without an automatic scrollbar.
+    raw_scrollbars: BTreeSet<ElementId>,
     sliver_viewports: BTreeSet<ElementId>,
     wheels: BTreeSet<ElementId>,
     stateful_layout_builders: BTreeSet<ElementId>,
@@ -1886,6 +1888,11 @@ impl TrackedElements {
     /// updating an ordinary element costs no index operation at all.
     fn track(&mut self, id: ElementId, element: &Element, render: &RenderKind) -> u16 {
         let kind = element.widget.kind();
+        if matches!(render, RenderKind::RawScrollbar { .. }) {
+            self.raw_scrollbars.insert(id);
+        } else if !self.raw_scrollbars.is_empty() {
+            self.raw_scrollbars.remove(&id);
+        }
         let membership = [
             (
                 &mut self.compositor_nodes,
@@ -2042,6 +2049,9 @@ impl TrackedElements {
     /// Drops `id` from every index; `tracked` is its recorded membership.
     /// An element filed nowhere, as most are, costs nothing.
     fn untrack(&mut self, id: ElementId, tracked: u16) {
+        if !self.raw_scrollbars.is_empty() {
+            self.raw_scrollbars.remove(&id);
+        }
         if tracked != 0 {
             // Includes both sources and listeners. Conservatively invalidate
             // for other indexed removals too; ordinary leaves are covered by

@@ -75,11 +75,6 @@ impl WidgetTree {
                 {
                     scrollbar.set_style(style);
                 }
-                let _ = state
-                    .scrollbar
-                    .as_ref()
-                    .expect("raw scrollbar state")
-                    .geometry(size);
                 (size, offsets)
             }
             RenderKind::ListWheelScrollView { .. } | RenderKind::ListWheelViewport { .. } => {

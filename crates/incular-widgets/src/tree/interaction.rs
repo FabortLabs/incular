@@ -4645,6 +4645,27 @@ impl WidgetTree {
     /// keeps producing frames until it settles.
     pub fn pump_scrollbar_fades(&mut self, now: Instant) -> bool {
         let mut live = false;
+        let explicit = self
+            .tracked
+            .raw_scrollbars
+            .iter()
+            .filter_map(|element| {
+                let render = self.render_id(*element)?;
+                let node = self.renders.get(render.0)?;
+                (!node.parked).then_some((render, node.size))
+            })
+            .collect::<Vec<_>>();
+        for (render, size) in explicit {
+            let state = self.raw_scrollbar_state_live_mut(render);
+            if let Some(scrollbar) = state.scrollbar.as_mut() {
+                live |= scrollbar.tick(now);
+                let geometry = Some(scrollbar.geometry(size));
+                if state.geometry != geometry {
+                    state.geometry = geometry;
+                    self.mark_render_paint(render);
+                }
+            }
+        }
         for render in self.scroll_view_renders() {
             let Some((controller, _)) = self.scrollbar_local_geometry(render) else {
                 continue;

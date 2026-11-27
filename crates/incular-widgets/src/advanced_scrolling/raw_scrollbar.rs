@@ -541,25 +541,25 @@ impl RawScrollbar {
         let min_scroll_extent = self.controller.min_offset().min(0.0);
         let max_scroll_extent = self.controller.max_offset().max(0.0);
         let scroll_range = max_scroll_extent - min_scroll_extent;
-        let main_extent = axis.main_extent(viewport_size);
         let cross_extent = axis.cross_extent(viewport_size);
-        let track_main = (main_extent - style.main_axis_margin * 2.0).max(0.0);
-        let track_cross = style
-            .thickness
-            .min((cross_extent - style.cross_axis_margin * 2.0).max(0.0));
+        let travel_extent = (viewport_extent - style.main_axis_margin * 2.0).max(0.0);
+        let track_cross = style.thickness + style.cross_axis_margin * 2.0;
         let cross_start = match style.orientation {
             RawScrollbarOrientation::Left | RawScrollbarOrientation::Top => style.cross_axis_margin,
-            RawScrollbarOrientation::Right => {
-                (cross_extent - style.cross_axis_margin - track_cross).max(0.0)
-            }
-            RawScrollbarOrientation::Bottom => {
-                (cross_extent - style.cross_axis_margin - track_cross).max(0.0)
+            RawScrollbarOrientation::Right | RawScrollbarOrientation::Bottom => {
+                cross_extent - style.cross_axis_margin - style.thickness
             }
         };
-        let track_origin = axis.offset(style.main_axis_margin, cross_start);
-        let track = Rect::from_origin_size(track_origin, axis.size(track_main, track_cross));
+        // As in Flutter, the track has the scroll metrics' viewport length,
+        // not the canvas length. Main-axis margins inset the thumb only.
+        let track_origin = axis.offset(0., cross_start - style.cross_axis_margin);
+        let track = Rect::from_origin_size(track_origin, axis.size(viewport_extent, track_cross));
 
-        if content_extent <= viewport_extent || viewport_extent <= 0.0 || track_main <= 0.0 {
+        if cross_extent <= 0.0
+            || content_extent <= viewport_extent
+            || viewport_extent <= 0.0
+            || travel_extent <= 0.0
+        {
             return RawScrollbarGeometry {
                 visible: false,
                 opacity: 0.0,
@@ -573,7 +573,6 @@ impl RawScrollbar {
             };
         }
 
-        let fraction = (viewport_extent / content_extent).clamp(0.0, 1.0);
         // Flutter's ScrollbarPainter: the fraction of the viewport that is
         // overscrolled is `1 - extentInside / viewportDimension`, and the
         // thumb minimum shrinks linearly over its first 20%.
@@ -581,12 +580,13 @@ impl RawScrollbar {
             - (metrics.min_scroll_extent - metrics.pixels).clamp(0.0, viewport_extent)
             - (metrics.pixels - metrics.max_scroll_extent).clamp(0.0, viewport_extent);
         let fraction_overscrolled = 1.0 - extent_inside / viewport_extent;
-        let min_extent = style.min_thumb_extent.min(track_main)
+        let fraction = (extent_inside / content_extent).clamp(0.0, 1.0);
+        let min_extent = style.min_thumb_extent.min(travel_extent)
             * (1.0 - fraction_overscrolled.clamp(0.0, 0.2) / 0.2);
-        let thumb_main = (track_main * fraction)
-            .max(style.min_overscroll_thumb_extent.min(track_main))
+        let thumb_main = (travel_extent * fraction)
+            .max(style.min_overscroll_thumb_extent.min(travel_extent))
             .max(min_extent);
-        let thumb_travel = (track_main - thumb_main).max(0.0);
+        let thumb_travel = (travel_extent - thumb_main).max(0.0);
         let offset_fraction = if scroll_range > 0.0 {
             ((self.controller.offset() - min_scroll_extent) / scroll_range).clamp(0.0, 1.0)
         } else {
@@ -605,7 +605,7 @@ impl RawScrollbar {
             visible: true,
             opacity: 1.0,
             track,
-            thumb: Rect::from_origin_size(thumb_origin, axis.size(thumb_main, track_cross)),
+            thumb: Rect::from_origin_size(thumb_origin, axis.size(thumb_main, style.thickness)),
             min_scroll_extent,
             max_scroll_extent,
             thumb_travel,
@@ -673,7 +673,7 @@ impl RawScrollbar {
             return false;
         }
         let axis = self.style.orientation.axis();
-        let track_start = axis.main_extent_of(geometry.track.origin);
+        let track_start = self.style.main_axis_margin;
         let point_main = axis.main_extent_of(point);
         let desired_thumb =
             (point_main - drag.grab_offset - track_start).clamp(0.0, geometry.thumb_travel);
@@ -717,7 +717,7 @@ impl RawScrollbar {
             return false;
         }
         let axis = self.style.orientation.axis();
-        let track_start = axis.main_extent_of(geometry.track.origin);
+        let track_start = self.style.main_axis_margin;
         let mut fraction =
             (main_position - track_start - axis.main_extent_of(geometry.thumb.size) / 2.0)
                 .clamp(0.0, geometry.thumb_travel)

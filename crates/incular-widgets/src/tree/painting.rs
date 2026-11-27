@@ -1025,6 +1025,9 @@ impl WidgetTree {
                 border.paint(&mut canvas, rect, &geometry.rows, &geometry.columns);
                 picture.extend_from(&canvas.finish());
                 foreground_bounds = painted_bounds(picture.commands(), size);
+            } else if matches!(&*kind, RenderKind::RawScrollbar { .. }) {
+                self.paint_explicit_scrollbar(id, size, &mut picture);
+                foreground_bounds = painted_bounds(picture.commands(), size);
             } else if let Some(focus_ring) = focus_ring.filter(|color| color.alpha > 0) {
                 let inset = 1.0;
                 let ring_size = Size::new(
@@ -1263,6 +1266,31 @@ impl WidgetTree {
                 rrect: RRect::uniform(geometry.thumb, style.width * 0.5),
                 brush: thumb.into(),
             });
+        }
+    }
+
+    fn paint_explicit_scrollbar(&self, id: RenderObjectId, size: Size, cache: &mut DisplayList) {
+        let Some(scrollbar) = self
+            .renders
+            .get(id.0)
+            .and_then(|node| node.raw_scrollbar_state())
+            .and_then(|state| state.scrollbar.as_ref())
+        else {
+            return;
+        };
+        let geometry = scrollbar.geometry(size);
+        if !geometry.visible {
+            return;
+        }
+        let style = scrollbar.style();
+        for (rect, mut color) in [
+            (geometry.track, style.track_color),
+            (geometry.thumb, style.thumb_color),
+        ] {
+            color.alpha = (f32::from(color.alpha) * geometry.opacity).round() as u8;
+            if color.alpha > 0 {
+                cache.push(PaintCommand::Rect { rect, color });
+            }
         }
     }
     pub(super) fn hit_test_render(

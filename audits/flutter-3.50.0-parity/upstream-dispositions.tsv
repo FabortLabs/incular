@@ -3828,3 +3828,7 @@ packages/flutter/test/widgets/form_test.dart	1438	forceErrorText forces an error
 packages/flutter/test/widgets/form_test.dart	1471	Validator will not be called if forceErrorText is provided	paired-match	upstream-form-state.md#forced-and-explicitly-cleared-errors
 packages/flutter/test/widgets/form_test.dart	1975	clearError() clears error but keeps value	paired-match	upstream-form-state.md#forced-and-explicitly-cleared-errors
 packages/flutter/test/widgets/form_test.dart	2002	clearError() clears all field errors	paired-match	upstream-form-state.md#forced-and-explicitly-cleared-errors
+packages/flutter/test/widgets/scrollbar_test.dart	89	Scrollbar is not smaller than minLength with large scroll views, if minLength is small 	paired-match	upstream-raw-scrollbar-paint.md
+packages/flutter/test/widgets/scrollbar_test.dart	122	When scrolling normally (no overscrolling), the size of the scrollbar stays the same, and it scrolls evenly	paired-match	upstream-raw-scrollbar-paint.md
+packages/flutter/test/widgets/scrollbar_test.dart	247	scrollbarOrientation are respected	paired-match	upstream-raw-scrollbar-paint.md
+packages/flutter/test/widgets/scrollbar_test.dart	1682	RawScrollbar mainAxisMargin property works properly	paired-match	upstream-raw-scrollbar-paint.md
