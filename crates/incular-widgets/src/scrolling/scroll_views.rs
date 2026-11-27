@@ -737,6 +737,21 @@ fn list_view_widget(value: ListView) -> Widget {
                 item_extent
             };
             let children = Rc::new(children);
+            // Eager descriptors can supply exact extents for their tight
+            // rows without calling any lazy builders. This lets an initial
+            // deep jump see the known range before clamping its position.
+            let item_extent_builder = if item_extent.is_none()
+                && item_extent_builder.is_none()
+                && prototype_item.is_none()
+                && children.iter().any(|row| exact_explicit_extent(row, value.scroll_direction).is_some())
+            {
+                let rows = children.clone();
+                let axis = value.scroll_direction;
+                Some(Rc::new(move |index| exact_explicit_extent(&rows[index], axis).unwrap_or(f32::NAN))
+                    as Rc<dyn Fn(usize) -> f32>)
+            } else {
+                item_extent_builder
+            };
             let find_child_index: FindChildIndex = {
                 let children = children.clone();
                 let lookup = std::cell::OnceCell::new();
@@ -808,28 +823,27 @@ fn list_view_widget(value: ListView) -> Widget {
     .with_sliver_semantic_child_count(semantic_child_count)
 }
 
-fn uniform_explicit_item_extent(children: &[Widget], axis: Axis) -> Option<f32> {
-    let extent = |item: &Widget| {
-        let value = match item.kind() {
-            WidgetKind::Box { size, .. } => axis.main_extent(*size),
-            WidgetKind::Constrained { constraints, .. } => {
-                let (min, max) = match axis {
-                    Axis::Vertical => (constraints.min_height(), constraints.max_height()),
-                    Axis::Horizontal => (constraints.min_width(), constraints.max_width()),
-                };
-                if min != max {
-                    return None;
-                }
-                min
-            }
-            _ => return None,
-        };
-        (value.is_finite() && value > 0.).then_some(value)
+fn exact_explicit_extent(item: &Widget, axis: Axis) -> Option<f32> {
+    let value = match item.kind() {
+        WidgetKind::Box { size, .. } => axis.main_extent(*size),
+        WidgetKind::Constrained { constraints, .. } => {
+            let (min, max) = match axis {
+                Axis::Vertical => (constraints.min_height(), constraints.max_height()),
+                Axis::Horizontal => (constraints.min_width(), constraints.max_width()),
+            };
+            if min != max { return None; }
+            min
+        }
+        WidgetKind::Colored { child: Some(child), .. } => exact_explicit_extent(child, axis)?,
+        _ => return None,
     };
-    let first = extent(children.first()?)?;
-    children[1..]
-        .iter()
-        .all(|item| extent(item) == Some(first))
+    (value.is_finite() && value > 0.).then_some(value)
+}
+
+fn uniform_explicit_item_extent(children: &[Widget], axis: Axis) -> Option<f32> {
+    let first = exact_explicit_extent(children.first()?, axis)?;
+    children[1..].iter()
+        .all(|item| exact_explicit_extent(item, axis) == Some(first))
         .then_some(first)
 }
 
