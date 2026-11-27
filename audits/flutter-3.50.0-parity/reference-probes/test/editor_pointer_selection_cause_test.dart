@@ -87,4 +87,62 @@ void main() {
     expect((controller.selection.baseOffset, controller.selection.extentOffset), (6, 10));
     expect(changes.last.$2, SelectionChangedCause.longPress);
   });
+
+  testWidgets('a focused Android editor waits for a completed finger tap', (WidgetTester tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final TextEditingController controller = TextEditingController(text: 'alpha beta gamma');
+    final FocusNode focus = FocusNode();
+    final _SelectionDelegate delegate = _SelectionDelegate();
+    final List<SelectionChangedCause?> causes = [];
+    addTearDown(controller.dispose);
+    addTearDown(focus.dispose);
+    controller.selection = const TextSelection.collapsed(offset: 1);
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: TextSelectionGestureDetectorBuilder(delegate: delegate).buildGestureDetector(
+            behavior: HitTestBehavior.translucent,
+            child: EditableText(
+              key: delegate.editableTextKey,
+              controller: controller,
+              focusNode: focus,
+              autofocus: true,
+              rendererIgnoresPointer: true,
+              style: const TextStyle(fontSize: 14),
+              cursorColor: const Color(0xffffffff),
+              backgroundCursorColor: const Color(0xff333333),
+              onSelectionChanged: (selection, cause) => causes.add(cause),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    causes.clear();
+    final point = tester.getTopLeft(find.byType(EditableText)) + const Offset(58, 7);
+
+    final TestGesture canceled = await tester.startGesture(point);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(controller.selection.baseOffset, 1);
+    expect(causes, isEmpty);
+    await canceled.cancel();
+    await tester.pump();
+    expect(controller.selection.baseOffset, 1);
+    expect(causes, isEmpty);
+    expect(focus.hasPrimaryFocus, isTrue);
+
+    await tester.pump(const Duration(milliseconds: 600));
+    final TestGesture complete = await tester.startGesture(point);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(controller.selection.baseOffset, 1);
+    expect(causes, isEmpty);
+    await complete.up();
+    await tester.pump();
+    expect(controller.selection.baseOffset, 4);
+    expect(causes, [SelectionChangedCause.tap]);
+    expect(focus.hasPrimaryFocus, isTrue);
+  });
 }

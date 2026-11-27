@@ -805,17 +805,14 @@ impl Runtime {
 
     /// `onTapDown`, `onDoubleTapDown` and `onTripleTapDown` of Flutter's
     /// `TextSelectionGestureDetectorBuilder` for a primary press.
-    pub(super) fn text_field_primary_down(
-        &mut self,
+    pub(super) fn continues_text_tap_series(
+        &self,
         field: ElementId,
         position: Offset,
-        was_focused: bool,
-        kind: PointerDeviceKind,
-        menu_was_showing: bool,
-    ) {
+        now: Instant,
+    ) -> bool {
         use incular_widgets::internal::gesture_constants::{DOUBLE_TAP_SLOP, DOUBLE_TAP_TIMEOUT};
-        let now = self.input_now();
-        let consecutive = self.text_taps.is_some_and(|run| {
+        self.text_taps.is_some_and(|run| {
             run.field == field
                 && run
                     .last_up
@@ -824,7 +821,19 @@ impl Runtime {
                     .x
                     .hypot((position - run.down_position).y)
                     <= DOUBLE_TAP_SLOP
-        });
+        })
+    }
+
+    pub(super) fn text_field_primary_down(
+        &mut self,
+        field: ElementId,
+        position: Offset,
+        was_focused: bool,
+        kind: PointerDeviceKind,
+        menu_was_showing: bool,
+    ) {
+        let now = self.input_now();
+        let consecutive = self.continues_text_tap_series(field, position, now);
         let raw_count = if consecutive {
             self.text_taps.map_or(1, |run| run.raw_count + 1)
         } else {
@@ -963,15 +972,12 @@ impl Runtime {
             Some(run) if run.effective_count == 3 => {
                 self.text_field_select_boundaries_in_range(field, run.down_position, position, now);
             }
-            Some(_) => {
+            _ => {
                 // Android tracks a finger with a collapsed caret. A precise
                 // pointer or stylus instead extends a text selection.
                 let extend = self.text_shortcut_platform != TextShortcutPlatform::Android
                     || !matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown);
                 self.tree.text_field_set_caret(field, position, extend, now);
-            }
-            None => {
-                self.tree.text_field_set_caret(field, position, true, now);
             }
         }
         self.report_editor_selection_delta(field, previous, SelectionChangedCause::Drag);
@@ -1273,6 +1279,7 @@ pub(super) struct PendingMobileTextTouch {
     pub(super) field: ElementId,
     pub(super) position: Offset,
     pub(super) menu_was_showing: bool,
+    pub(super) was_focused: bool,
 }
 
 impl PendingMobileTextTouch {
@@ -1330,11 +1337,12 @@ impl Runtime {
                     self.text_long_press = None;
                     return false;
                 }
-                if self
-                    .pending_mobile_text_touch
-                    .is_some_and(|pending| pending.field == field)
+                if let Some(pending) = self.pending_mobile_text_touch
+                    && pending.field == field
                 {
-                    if !self.tree.can_request_focus(field) {
+                    if !self.tree.can_request_focus(field)
+                        || (pending.was_focused && self.focused != Some(field))
+                    {
                         self.cancel_pending_mobile_text_touch();
                         return false;
                     }
@@ -1501,9 +1509,15 @@ impl Runtime {
         }
         match self.text_shortcut_platform {
             TextShortcutPlatform::Ios => false,
-            TextShortcutPlatform::Android => self
-                .text_taps
-                .is_some_and(|run| run.field == field && run.was_focused),
+            TextShortcutPlatform::Android => match self.text_taps {
+                Some(run) => run.field == field && run.was_focused,
+                // An accepted finger drag from a focused editor consumes
+                // its pending tap without synthesizing a tap callback.
+                None => kind == PointerDeviceKind::Touch
+                    && self.captured_text_field == Some(field)
+                    && self.focused == Some(field)
+                    && self.pending_mobile_text_touch.is_none(),
+            },
             _ => true,
         }
     }

@@ -68,3 +68,20 @@ edits, a re-entrant restoration, and the corrected value sent back to the
 input method. The same ordering applies to the routed key, toolbar and
 accessibility edit paths. Four focused native targets passed 34 tests.
 No original registration count was added for the authored case.
+
+## Android single-finger tap timing
+
+The pinned pointer probe confirmed a focused Android editor keeps its
+old caret through pointer-down and through a canceled tap. A completed
+tap then moves it and reports exactly one `Tap`. Incular's regression
+originally moved the caret and notified at pointer-down, before the
+gesture was known to be a tap.
+
+The runtime now waits for the release of a single Android finger tap.
+Existing consecutive tap, long-press and accepted focused touch-drag
+behavior is preserved. In particular, a focused Android finger drag
+still follows with a collapsed selection, and an unfocused drag still
+does not focus the field. A native control also discards a delayed
+release when intervening focus changes invalidate the press. Three
+focused Rust targets passed 27 tests. No extra upstream registration
+credit was added for the authored comparison.

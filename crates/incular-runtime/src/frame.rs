@@ -2743,11 +2743,18 @@ impl Runtime {
             }
             PointerPhase::Move => {
                 self.text_handle_drag_move(position);
-                if self
-                    .pending_mobile_text_touch
-                    .is_some_and(|press| !press.within_slop(position))
+                if let Some(press) = self.pending_mobile_text_touch
+                    && !press.within_slop(position)
                 {
-                    self.cancel_pending_mobile_text_touch();
+                    if press.was_focused && self.focused == Some(press.field) {
+                        // The editor can still follow an Android finger
+                        // drag, but this contact is no longer a tap.
+                        self.pending_mobile_text_touch = None;
+                        self.text_long_press = None;
+                        self.text_taps = None;
+                    } else {
+                        self.cancel_pending_mobile_text_touch();
+                    }
                 }
                 self.text_long_press_moved(position);
                 // A started long press extends by word and owns the move.
@@ -2858,10 +2865,16 @@ impl Runtime {
                 let ignores_text_pointer = text_target.is_some_and(|field| {
                     self.tree.text_field_renderer_ignores_pointer(field)
                 });
+                // Android places the caret on a completed finger tap.
+                // A press that becomes a scroll or is canceled must not
+                // move the existing selection at pointer-down time.
                 let deferred_text_touch = mobile_touch
-                    && !text_target_was_focused
-                    && text_target.is_some()
-                    && !ignores_text_pointer;
+                    && !ignores_text_pointer
+                    && text_target.is_some_and(|field| {
+                        !text_target_was_focused
+                            || (self.text_shortcut_platform == TextShortcutPlatform::Android
+                                && !self.continues_text_tap_series(field, position, self.input_now()))
+                    });
                 let keep_text_field_focus = text_target.is_none()
                     && self
                         .focused
@@ -2904,6 +2917,7 @@ impl Runtime {
                             field,
                             position,
                             menu_was_showing: text_menu_was_showing,
+                            was_focused: text_target_was_focused,
                         });
                     }
                     if self.captured_text_field.is_some() {
@@ -2947,6 +2961,7 @@ impl Runtime {
                     if press.within_slop(position)
                         && text_target == Some(press.field)
                         && self.tree.can_request_focus(press.field)
+                        && (!press.was_focused || self.focused == Some(press.field))
                     {
                         self.pending_mobile_text_touch = None;
                         let was_focused = self.focused == Some(press.field);
@@ -3332,6 +3347,7 @@ impl Runtime {
             !self.tree.is_text_field(press.field)
                 || !self.tree.can_request_focus(press.field)
                 || self.tree.text_field_renderer_ignores_pointer(press.field)
+                || (press.was_focused && self.focused != Some(press.field))
         }) {
             self.cancel_pending_mobile_text_touch();
         }

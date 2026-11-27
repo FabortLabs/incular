@@ -191,3 +191,82 @@ fn the_renderer_can_leave_pointer_selection_and_focus_to_its_caller() {
         &[SelectionChangedCause::Tap, SelectionChangedCause::Tap]
     );
 }
+
+#[test]
+fn an_android_finger_does_not_move_a_focused_caret_until_the_tap_is_released() {
+    let Some(style) = ahem_style() else {
+        return;
+    };
+    let controller = TextEditingController::with_text("alpha beta gamma");
+    controller.set_selection(TextSelection::collapsed(1));
+    let causes = Rc::new(RefCell::new(Vec::new()));
+    let focus = incular_widgets::FocusNode::new();
+    let editor = EditableText::new(controller.clone())
+        .focus_node(focus.clone())
+        .autofocus(true)
+        .text_direction(TextDirection::Ltr)
+        .style(style)
+        .on_selection_changed({
+            let causes = causes.clone();
+            move |selection, cause| causes.borrow_mut().push((selection, cause))
+        });
+    let mut runtime = Runtime::new(editor.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let constraints = Constraints::loose(Size::new(800., 100.));
+    let base = Instant::now();
+    runtime.run_frame_at(constraints, base).unwrap();
+    let field = runtime.focused_element().unwrap();
+    let point = Offset::new(58., 7.);
+    let send = |runtime: &mut Runtime, id, at, phase| {
+        let changed_button = matches!(phase, PointerPhase::Down | PointerPhase::Up)
+            .then_some(PRIMARY_POINTER_BUTTON);
+        let _ = runtime.handle_raw_pointer_event(
+            RawPointerEvent::new(
+                id,
+                3,
+                PointerDeviceKind::Touch,
+                u32::from(phase == PointerPhase::Down),
+                point,
+                phase,
+                base + Duration::from_millis(at),
+            )
+            .with_button(changed_button),
+        );
+    };
+    send(&mut runtime, 1, 0, PointerPhase::Down);
+    runtime
+        .run_frame_at(constraints, base + Duration::from_millis(100))
+        .unwrap();
+    assert_eq!(controller.selection(), TextSelection::collapsed(1));
+    assert!(causes.borrow().is_empty());
+    send(&mut runtime, 1, 110, PointerPhase::Cancel);
+    assert_eq!(controller.selection(), TextSelection::collapsed(1));
+    assert!(causes.borrow().is_empty());
+    assert_eq!(runtime.focused_element(), Some(field));
+
+    send(&mut runtime, 2, 700, PointerPhase::Down);
+    runtime
+        .run_frame_at(constraints, base + Duration::from_millis(800))
+        .unwrap();
+    assert_eq!(controller.selection(), TextSelection::collapsed(1));
+    assert!(causes.borrow().is_empty());
+    send(&mut runtime, 2, 810, PointerPhase::Up);
+    assert_eq!(controller.selection(), TextSelection::collapsed(4));
+    assert_eq!(
+        causes.borrow().as_slice(),
+        &[(TextSelection::collapsed(4), SelectionChangedCause::Tap)]
+    );
+    assert_eq!(runtime.focused_element(), Some(field));
+
+    controller.set_selection(TextSelection::collapsed(1));
+    causes.borrow_mut().clear();
+    send(&mut runtime, 3, 1400, PointerPhase::Down);
+    focus.unfocus();
+    runtime
+        .run_frame_at(constraints, base + Duration::from_millis(1450))
+        .unwrap();
+    send(&mut runtime, 3, 1490, PointerPhase::Up);
+    assert!(runtime.focused_element().is_none());
+    assert_eq!(controller.selection(), TextSelection::collapsed(1));
+    assert!(causes.borrow().is_empty());
+}
