@@ -38,3 +38,18 @@ Padding now subtracts the insets for the child's cross-axis measurement,
 then adds its insets to the returned extent on the measured axis.
 All 28 focused native regressions passed. These authored cases do not
 add paired credit to the original manifest.
+
+## Direct Padding measurements before layout
+
+Four pinned registrations passed, including the duplicate pairs in the
+original file. The native pair runs both min/max queries on both axes at
+cross extents 0, 10, 80 and infinity, then lays out under tight 10×10
+constraints. A padded fixed 20×20 box reports 50 at all cross extents.
+A padded 1:1 aspect box reports 30, 30, 80 and 30 respectively.
+
+The queries read supported retained render kinds without performing
+layout or calling builders. Unsupported and invalid inputs return no
+measurement, rather than substituting a committed layout size. The
+native fixture covers this with a callback counter. All 18 focused
+native tests passed. This batch does not claim direct sizing support
+for adaptive text, slivers or arbitrary user layout closures.

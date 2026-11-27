@@ -3,6 +3,7 @@
 use super::*;
 
 mod behavior;
+mod intrinsics;
 
 use super::rendering::{
     fitted_transform, resolve_transform, transform_around, transform_around_alignment,

@@ -3025,3 +3025,7 @@ packages/flutter/test/rendering/intrinsic_width_test.dart	286	RenderIntrinsicWid
 packages/flutter/test/rendering/intrinsic_width_test.dart	379	RenderIntrinsicHeight when parent is given loose constraints smaller than intrinsic height of child	paired-match	upstream-render-intrinsic-constraints.md
 packages/flutter/test/rendering/intrinsic_width_test.dart	399	RenderIntrinsicHeight when parent is given tight constraints larger than intrinsic height of child	paired-match	upstream-render-intrinsic-constraints.md
 packages/flutter/test/rendering/intrinsic_width_test.dart	419	RenderIntrinsicHeight when parent is given tight constraints smaller than intrinsic height of child	paired-match	upstream-render-intrinsic-constraints.md
+packages/flutter/test/rendering/intrinsic_width_test.dart	439	Padding and boring intrinsics	paired-match	upstream-render-intrinsic-constraints.md#direct-padding-measurements-before-layout
+packages/flutter/test/rendering/intrinsic_width_test.dart	477	Padding and interesting intrinsics	paired-match	upstream-render-intrinsic-constraints.md#direct-padding-measurements-before-layout
+packages/flutter/test/rendering/intrinsic_width_test.dart	515	Padding and boring intrinsics	paired-match	upstream-render-intrinsic-constraints.md#direct-padding-measurements-before-layout
+packages/flutter/test/rendering/intrinsic_width_test.dart	553	Padding and interesting intrinsics	paired-match	upstream-render-intrinsic-constraints.md#direct-padding-measurements-before-layout
