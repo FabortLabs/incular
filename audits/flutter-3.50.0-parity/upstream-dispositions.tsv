@@ -3225,3 +3225,6 @@ packages/flutter/test/services/text_input_test.dart	1998	setCaretRect reports er
 packages/flutter/test/services/text_input_test.dart	2036	setSelectionRects reports error when fails	paired-match	upstream-text-input-controls.md#operation-specific-host-error-reporting
 packages/flutter/test/services/text_input_test.dart	2123	requestAutofill reports error when fails	paired-match	upstream-text-input-controls.md#operation-specific-host-error-reporting
 packages/flutter/test/services/text_input_test.dart	2161	finishAutofillContext reports error when fails	paired-match	upstream-text-input-controls.md#operation-specific-host-error-reporting
+packages/flutter/test/services/text_input_test.dart	1106	TextInputClient scribbleInteractionBegan and scribbleInteractionFinished	paired-match	upstream-scribble-elements.md
+packages/flutter/test/services/text_input_test.dart	1141	TextInputClient focusElement	paired-match	upstream-scribble-elements.md
+packages/flutter/test/services/text_input_test.dart	1173	TextInputClient requestElementsInRect	paired-match	upstream-scribble-elements.md

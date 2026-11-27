@@ -24,6 +24,7 @@ mod display;
 mod file_dialog;
 mod haptic_feedback;
 mod flutter_lifecycle;
+mod flutter_scribble;
 mod flutter_basic_message_channel;
 mod flutter_inbound_messenger;
 mod flutter_event_channel;
@@ -121,6 +122,7 @@ pub use flutter_inbound_messenger::{
     FlutterBinaryPayload, FlutterBinaryReply, FlutterChannelMicrotask, FlutterInboundMessenger,
 };
 pub use flutter_floating_cursor::{FloatingCursorDragState, FlutterFloatingCursorPoint, FlutterFloatingCursorPointError};
+pub use flutter_scribble::{FlutterScribbleClient, FlutterScribbleError, FlutterScribbleRegistry};
 pub use flutter_event_channel::{
     FlutterEventOperation, FlutterEventSubscription, FlutterEventTask, FlutterJsonBroadcast,
     FlutterJsonEventChannel, FlutterJsonStreamEvent,
