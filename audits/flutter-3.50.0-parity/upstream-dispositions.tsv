@@ -2720,3 +2720,6 @@ packages/flutter/test/painting/text_span_test.dart	291	TextSpan computeSemantics
 packages/flutter/test/painting/text_span_test.dart	303	TextSpan visitDirectChildren	paired-match	upstream-inline-text-spans.md
 packages/flutter/test/painting/text_span_test.dart	137	TextSpan widget change test	paired-match	upstream-inline-text-spans.md#comparing-replacements
 packages/flutter/test/painting/text_span_test.dart	205	TextSpan nested widget change test	paired-match	upstream-inline-text-spans.md#comparing-replacements
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_code_generator_test.dart	466	ignores previews with null packageName for LSP updates	paired-match	upstream-preview-codegen.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_code_generator_test.dart	574	filters out non-package/non-SDK imports and allocates non-colliding prefixes	paired-match	upstream-preview-codegen.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_code_generator_test.dart	599	throws StateError when prefixes have already been allocated	paired-match	upstream-preview-codegen.md

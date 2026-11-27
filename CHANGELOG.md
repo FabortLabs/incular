@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Widget preview tooling can generate Rust factory registrations with
+  stable import aliases, omitting sources outside importable packages.
+
 - Inline text spans expose speech metadata and UTF-16 position lookup,
   keeping presentation labels separate from literal layout text. Rich paragraph
   comparisons distinguish nested inline child changes from paint-only edits.

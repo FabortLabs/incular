@@ -10,6 +10,7 @@
 pub mod commands;
 pub mod discovery;
 pub mod preview_changes;
+pub mod preview_codegen;
 pub mod preview_ide;
 pub mod preview_manifest;
 pub mod preview_reload;
