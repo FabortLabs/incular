@@ -296,3 +296,36 @@ fn native_projection_keeps_table_rows_cells_and_headers() {
         ]
     );
 }
+
+#[test]
+fn checked_publication_rejects_empty_children_and_does_not_emit_orphans() {
+    #[derive(Default)]
+    struct Published(Vec<SemanticsSnapshot>);
+    impl SemanticsAdapter for Published {
+        fn publish(&mut self, snapshot: SemanticsSnapshot) {
+            self.0.push(snapshot);
+        }
+        fn poll_action(&mut self) -> Option<SemanticActionRequest> {
+            None
+        }
+    }
+
+    let mut semantic = SemanticsTree::new();
+    let child = insert(&mut semantic, "reachable child", vec![]);
+    let root = insert(&mut semantic, "root", vec![child]);
+    let orphan = insert(&mut semantic, "temporary unattached node", vec![]);
+    let empty = rect(0., 0., 0., 10.);
+    semantic.set_root(Some(root));
+    semantic.update_geometry(child, empty, &[]);
+    semantic.update_geometry(orphan, empty, &[]);
+    let mut published = Published::default();
+    let issue = published.publish_visible_tree(&semantic).unwrap_err();
+    assert_eq!(issue.nodes(), &[InvisibleSemanticsNode { node: child, parent: Some(root), bounds: empty }]);
+    assert!(published.0.is_empty());
+
+    semantic.update_geometry(child, rect(0., 0., 2., 2.), &[]);
+    published.publish_visible_tree(&semantic).unwrap();
+    assert_eq!(published.0.len(), 1);
+    assert_eq!(published.0[0].root, Some(root));
+    assert_eq!(published.0[0].nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [child, root]);
+}

@@ -312,3 +312,68 @@ fn ordinal_comparison_within_the_same_name_has_all_eight_cases() {
         }
     }
 }
+
+#[test]
+fn visibility_inspection_allows_only_a_childless_empty_root_or_consumed_empty_child() {
+    use incular_semantics::InvisibleSemanticsNode;
+
+    let empty = Rect::from_origin_size(Offset::ZERO, Size::new(0., 10.));
+    let visible = Rect::from_origin_size(Offset::ZERO, Size::new(10., 10.));
+    let mut tree = SemanticsTree::new();
+    let root = tree.insert(SemanticNode { bounds: empty, ..node(placeholder()) });
+    let child = tree.insert(SemanticNode { bounds: empty, ..node(placeholder()) });
+    let collapsed_grandchild = tree.insert(SemanticNode { bounds: empty, ..node(placeholder()) });
+    tree.update_geometry(child, empty, &[collapsed_grandchild]);
+    tree.set_root(Some(root));
+    assert!(tree.validate_visibility().is_ok(), "empty root alone");
+
+    tree.update_geometry(root, visible, &[child]);
+    assert!(tree.validate_visibility_with_merge_boundaries(|node| node.id == root).is_ok());
+
+    tree.update_geometry(child, visible, &[]);
+    assert!(tree.validate_visibility().is_ok());
+
+    tree.update_geometry(root, empty, &[child]);
+    tree.update_geometry(child, empty, &[collapsed_grandchild]);
+    let error = tree.validate_visibility_with_merge_boundaries(|node| node.id == root).unwrap_err();
+    assert_eq!(error.nodes(), &[InvisibleSemanticsNode { node: root, parent: None, bounds: empty }]);
+    assert!(error.to_string().contains("root with children"));
+
+    tree.update_geometry(root, visible, &[child]);
+    let error = tree.validate_visibility().unwrap_err();
+    assert_eq!(error.nodes(), &[InvisibleSemanticsNode { node: child, parent: Some(root), bounds: empty }]);
+    assert!(error.to_string().contains("is a child of"));
+
+    // Hidden viewport cache entries are valid when their geometry is nonempty.
+    let mut child_state = tree.node(child).unwrap().clone();
+    child_state.bounds = visible;
+    child_state.children.clear();
+    child_state.state.hidden = true;
+    tree.update(child, child_state);
+    assert!(tree.validate_visibility().is_ok());
+}
+
+#[test]
+fn merge_membership_follows_ancestor_policy_without_merging_the_owner_into_itself() {
+    let mut tree = SemanticsTree::new();
+    let root = tree.insert(node(placeholder()));
+    let child = tree.insert(node(placeholder()));
+    let first = tree.insert(node(placeholder()));
+    let second = tree.insert(node(placeholder()));
+    tree.update_geometry(root, tree.node(root).unwrap().bounds, &[child]);
+    tree.update_geometry(child, tree.node(child).unwrap().bounds, &[first, second]);
+    tree.set_root(Some(root));
+
+    for (boundaries, child_owner, grandchild_owner) in [
+        (vec![], None, None),
+        (vec![root], Some(root), Some(root)),
+        (vec![root, child], Some(root), Some(root)),
+        (vec![child], None, Some(child)),
+    ] {
+        let merges = |node: &SemanticNode| boundaries.contains(&node.id);
+        assert_eq!(tree.merge_owner(root, merges), None);
+        assert_eq!(tree.merge_owner(child, merges), child_owner);
+        assert_eq!(tree.merge_owner(first, merges), grandchild_owner);
+        assert_eq!(tree.merge_owner(second, merges), grandchild_owner);
+    }
+}

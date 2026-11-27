@@ -17,12 +17,14 @@ mod attributed_string;
 mod custom_action;
 mod label_builder;
 mod sort_key;
+mod visibility;
 pub use attributed_string::{
     AttributedString, InvalidStringAttribute, SemanticTextAttributes, StringAttribute,
 };
 pub use custom_action::{CustomSemanticsAction, CustomSemanticsActionId};
 pub use incular_core::TextDirection;
 pub use label_builder::SemanticsLabelBuilder;
+pub use visibility::{InvisibleSemanticsNode, InvisibleSemanticsNodes};
 pub use sort_key::{
     CustomSemanticsSortKey, IncompatibleSemanticsSortKeyTypes, SemanticsSortKeyRef,
 };

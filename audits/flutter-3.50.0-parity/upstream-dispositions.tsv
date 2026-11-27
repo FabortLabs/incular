@@ -3668,3 +3668,5 @@ packages/flutter/test/gestures/recognizer_test.dart	168	uses expected pre-accept
 packages/flutter/test/gestures/events_test.dart	829	Ensure certain event types are allowed	paired-match	upstream-pointer-packet-converter.md#trackpad-signals-are-not-contacts
 packages/flutter/test/gestures/events_test.dart	839	Ensure certain event types are not allowed	partial-match	upstream-pointer-packet-converter.md#trackpad-signals-are-not-contacts
 packages/flutter/test/semantics/semantics_test.dart	521	Incompatible OrdinalSortKey throw AssertionError when compared	paired-match	upstream-semantics-binding.md#checked-sort-key-comparisons
+packages/flutter/test/semantics/semantics_test.dart	175	provides the correct isMergedIntoParent value	paired-match	upstream-semantics-visibility.md
+packages/flutter/test/semantics/semantics_test.dart	229	sendSemanticsUpdate verifies no invisible nodes	paired-match	upstream-semantics-visibility.md

@@ -13,7 +13,7 @@ use accesskit::{
 use incular_core::{Offset, Rect, Size};
 use std::{
     borrow::Cow,
-    collections::{HashMap, hash_map::Entry},
+    collections::{HashMap, HashSet, hash_map::Entry},
 };
 
 pub use incular_semantics::*;
@@ -28,6 +28,35 @@ pub struct SemanticsSnapshot {
     /// Every parentless node in logical order.
     pub roots: Vec<SemanticNodeId>,
     pub nodes: Vec<SemanticNode>,
+}
+
+impl SemanticsSnapshot {
+    /// A checked conversion for custom owners that construct their own
+    /// semantic geometry. The normal retained bridge stays incremental.
+    ///
+    /// # Errors
+    /// Returns independently invisible nodes rather than emitting an
+    /// invalid update.
+    pub fn from_visible_tree(tree: &SemanticsTree) -> Result<Self, InvisibleSemanticsNodes> {
+        tree.validate_visibility()?;
+        let roots: Vec<_> = tree.roots().iter().copied().filter(|id| tree.node(*id).is_some()).collect();
+        let mut pending = roots.clone();
+        let mut attached = HashSet::new();
+        while let Some(id) = pending.pop() {
+            if attached.insert(id) && let Some(node) = tree.node(id) {
+                pending.extend(&node.children);
+            }
+        }
+        let nodes = tree.iter()
+            .filter(|(id, _)| attached.contains(id))
+            .map(|(_, node)| {
+                let mut node = platform_semantic_node(node).into_owned();
+                node.children.retain(|&id| tree.node(id).is_some());
+                node
+            })
+            .collect();
+        Ok(Self { root: roots.first().copied(), roots, nodes })
+    }
 }
 
 impl From<&SemanticsTree> for SemanticsSnapshot {
@@ -53,6 +82,16 @@ pub struct SemanticActionRequest {
 /// Small platform-neutral testing seam retained from the previous adapter API.
 pub trait SemanticsAdapter {
     fn publish(&mut self, snapshot: SemanticsSnapshot);
+
+    /// Validates an independently constructed tree before emitting an update.
+    ///
+    /// # Errors
+    /// Returns invisible nodes without calling the adapter's publish method.
+    fn publish_visible_tree(&mut self, tree: &SemanticsTree) -> Result<(), InvisibleSemanticsNodes> {
+        self.publish(SemanticsSnapshot::from_visible_tree(tree)?);
+        Ok(())
+    }
+
     fn poll_action(&mut self) -> Option<SemanticActionRequest>;
 }
 
