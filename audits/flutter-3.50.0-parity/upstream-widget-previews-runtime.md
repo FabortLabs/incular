@@ -202,3 +202,24 @@ Incular expresses the member and group transforms as Rust traits. This
 implements runtime expansion, not compiler annotation discovery or the
 generated scaffold's MultiPreview registration. The fixture is authored
 and adds no original-registration credit.
+
+### Moving populated source directories
+
+The real `DirectoryWatcher` used by pinned `flutter_tools` reports both
+nested-file addition and removal when a populated directory enters or
+leaves `lib` by rename. The authored
+`reference-probes/tooling/preview_source_directory_move.dart` reproduces
+it on Linux without a fake watcher. Invoke the pinned SDK's `dart` with
+`--packages=.tmp/flutter/packages/flutter_tools/.dart_tool/package_config.json`
+and pass the probe path.
+
+Incular previously emitted nothing when the move did not change the
+installed recursive watch roots. It now tracks directory topology
+under registered source paths and requests a rescan when a subtree
+arrives or leaves, even if the backend has no per-file events. The
+watcher checks only the affected subtree for ordinary structural
+events, keeps exclusions and symlink policy intact, and emits no rescan
+on an unrelated file rename. The focused Linux native tests exercise
+both move directions without notifications left over from the previous
+move, alongside existing manifest, source and reload checks. This is
+an authored comparison, not another original registration.

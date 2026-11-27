@@ -126,6 +126,12 @@ impl PreviewChangeRouter {
     }
 
     #[cfg(feature = "preview-watch")]
+    pub(crate) fn is_source_directory(&self, path: &Path) -> bool {
+        self.source_dirs.iter().any(|dir| path.starts_with(dir))
+            && !self.excluded.iter().any(|dir| path.starts_with(dir))
+    }
+
+    #[cfg(feature = "preview-watch")]
     pub(crate) fn watch_plan(&self) -> io::Result<std::collections::BTreeMap<PathBuf, bool>> {
         use std::{collections::BTreeMap, fs};
 
