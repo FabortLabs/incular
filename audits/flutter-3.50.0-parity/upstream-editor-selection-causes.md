@@ -85,3 +85,19 @@ does not focus the field. A native control also discards a delayed
 release when intervening focus changes invalidate the press. Three
 focused Rust targets passed 27 tests. No extra upstream registration
 credit was added for the authored comparison.
+
+## iOS single-finger selection and toolbar
+
+In pinned Flutter, tapping strictly inside a focused range keeps both
+endpoints intact, toggles the toolbar without hiding the handles, and
+does not send a selection callback. Outside the selection, a finger
+tap over the interior of a word places the caret at the word's trailing
+edge with upstream affinity. The pinned probe uses real EditableText
+geometry and spies on the toolbar methods; the Rust test exercises the
+actual context menu's open and close state. The old runtime collapsed
+a selected range to the tapped character as soon as the finger went
+down. The corrected path waits for a confirmed single tap and leaves
+double taps, long presses, and the spelling path separate.
+
+This is an authored paired comparison for iOS, not full credit for
+the upstream multi-platform registrations in text_selection_test.dart.

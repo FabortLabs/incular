@@ -15,6 +15,40 @@ class _SelectionDelegate implements TextSelectionGestureDetectorBuilderDelegate 
   bool get selectionEnabled => true;
 }
 
+class _ToolbarEditor extends EditableText {
+  _ToolbarEditor({
+    required super.key,
+    required super.controller,
+    required super.focusNode,
+    required super.onSelectionChanged,
+  }) : super(
+         autofocus: true,
+         rendererIgnoresPointer: true,
+         style: const TextStyle(fontSize: 14),
+         cursorColor: const Color(0xffffffff),
+         backgroundCursorColor: const Color(0xff333333),
+       );
+
+  @override
+  EditableTextState createState() => _ToolbarEditorState();
+}
+
+class _ToolbarEditorState extends EditableTextState {
+  bool toolbarVisible = false;
+
+  @override
+  void toggleToolbar([bool hideHandles = true]) {
+    assert(!hideHandles);
+    toolbarVisible = !toolbarVisible;
+  }
+
+  @override
+  void hideToolbar([bool hideHandles = true]) {
+    toolbarVisible = false;
+    super.hideToolbar(hideHandles);
+  }
+}
+
 void main() {
   testWidgets('pointer selection distinguishes tap, double tap, drag and long press', (
     WidgetTester tester,
@@ -145,4 +179,82 @@ void main() {
     expect(causes, [SelectionChangedCause.tap]);
     expect(focus.hasPrimaryFocus, isTrue);
   });
+
+  testWidgets(
+    'iOS touch taps preserve a selected range or move to a word edge',
+    (WidgetTester tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final TextEditingController controller = TextEditingController(
+        text: 'alpha beta gamma',
+      );
+      final FocusNode focus = FocusNode();
+      final _SelectionDelegate delegate = _SelectionDelegate();
+      final List<SelectionChangedCause?> causes = [];
+      const TextSelection selected = TextSelection(
+        baseOffset: 1,
+        extentOffset: 4,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(focus.dispose);
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: TextSelectionGestureDetectorBuilder(delegate: delegate)
+                .buildGestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  child: _ToolbarEditor(
+                    key: delegate.editableTextKey,
+                    controller: controller,
+                    focusNode: focus,
+                    onSelectionChanged: (selection, cause) => causes.add(cause),
+                  ),
+                ),
+          ),
+        ),
+      );
+      final state = delegate.editableTextKey.currentState! as _ToolbarEditorState;
+      await tester.pump();
+      controller.selection = selected;
+      await tester.pump();
+      causes.clear();
+      final Offset origin = tester.getTopLeft(find.byType(_ToolbarEditor));
+      Future<void> tap(double x, int ms) async {
+        final TestGesture gesture = await tester.createGesture();
+        await gesture.down(
+          origin + Offset(x, 7),
+          timeStamp: Duration(milliseconds: ms),
+        );
+        await gesture.up(timeStamp: Duration(milliseconds: ms + 50));
+      }
+
+      await tap(30, 100);
+      await tester.pump();
+      expect(controller.selection, selected);
+      expect(state.toolbarVisible, isTrue);
+      expect(causes, isEmpty);
+
+      await tester.pump(const Duration(milliseconds: 650));
+      await tap(30, 700);
+      await tester.pump();
+      expect(controller.selection, selected);
+      expect(state.toolbarVisible, isFalse);
+
+      controller.selection = const TextSelection.collapsed(offset: 0);
+      await tester.pump(const Duration(milliseconds: 650));
+      await tap(100, 1400);
+      await tester.pump();
+      expect(
+        controller.selection,
+        const TextSelection.collapsed(
+          offset: 10,
+          affinity: TextAffinity.upstream,
+        ),
+      );
+      expect(causes, [SelectionChangedCause.tap]);
+      expect(focus.hasPrimaryFocus, isTrue);
+    },
+  );
 }

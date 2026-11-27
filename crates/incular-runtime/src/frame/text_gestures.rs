@@ -845,10 +845,11 @@ impl Runtime {
             kind,
             PointerDeviceKind::Touch | PointerDeviceKind::Stylus | PointerDeviceKind::InvertedStylus
         );
-        let ios_misspelling_tap = self.text_shortcut_platform == TextShortcutPlatform::Ios
+        let ios_touch_tap = self.text_shortcut_platform == TextShortcutPlatform::Ios
             && matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown)
             && effective_count == 1
-            && !shift
+            && !shift;
+        let ios_misspelling_tap = ios_touch_tap
             && self.tree.text_field_spell_check_toolbar(field).is_some()
             && self.tree.text_field_position_at(field, position).is_some_and(|(offset, _)| {
                 self.tree.text_field_suggestion_span_at_cursor_index(field, offset).is_some()
@@ -864,12 +865,12 @@ impl Runtime {
             menu_was_showing,
             was_focused,
         });
-        self.hide_text_field_overlays(field);
-        // The iOS selection gesture is confirmed on tap-up; a touch
-        // drag or long press must not select a misspelling on the press.
-        if ios_misspelling_tap {
+        // A touch press alone on iOS must preserve the selection. The
+        // release may toggle the toolbar, move to a word edge, or be canceled.
+        if ios_touch_tap {
             return;
         }
+        self.hide_text_field_overlays(field);
         let previous = self.observed_editor_selection(field);
         match effective_count {
             2 => {
@@ -1019,9 +1020,16 @@ impl Runtime {
             let current = (controller.selection_if_set(), controller.caret_affinity());
             if previous != current {
                 let _ = self.show_spell_check_suggestions_toolbar(run.field);
-            } else if !run.menu_was_showing {
-                self.show_text_field_touch_menu(run.field, position);
+            } else {
+                self.finish_ios_touch_toolbar(run, position, true);
             }
+            return;
+        }
+        if single_tap
+            && self.text_shortcut_platform == TextShortcutPlatform::Ios
+            && matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown)
+        {
+            self.finish_ios_touch_selection(run, position);
             return;
         }
         if single_tap
@@ -1036,6 +1044,55 @@ impl Runtime {
             && (run.was_focused || self.tree.text_field_spell_check_toolbar(run.field).is_some())
         {
             self.show_text_field_handles(run.field);
+        }
+    }
+
+    fn finish_ios_touch_selection(&mut self, run: TextTapRun, position: Offset) {
+        let field = run.field;
+        let (Some(controller), Some((offset, affinity))) = (
+            self.tree.text_controller(field),
+            self.tree.text_field_position_at(field, position),
+        ) else {
+            return;
+        };
+        let editable = self.tree.text_field_is_editable(field);
+        let before = self.observed_editor_selection(field);
+        let on_selection = controller.selection_if_set().is_some_and(|selection| {
+            if selection.is_collapsed() {
+                editable && selection.base == offset && affinity == controller.caret_affinity()
+            } else {
+                selection.start() < offset && offset < selection.end()
+            }
+        });
+        if run.was_focused && on_selection {
+            self.finish_ios_touch_toolbar(run, position, true);
+            return;
+        }
+
+        // Flutter's RenderEditable uses the position saved by tap-down to
+        // choose the word edge, but evaluates the toolbar against tap-up.
+        let previous = (
+            controller.selection_if_set(),
+            controller.caret_affinity(),
+            controller.selection_is_directional(),
+        );
+        self.select_editable_word_edge_at(field, run.down_position);
+        let unchanged = previous == (
+            controller.selection_if_set(),
+            controller.caret_affinity(),
+            controller.selection_is_directional(),
+        );
+        self.report_editor_selection_delta(field, before, SelectionChangedCause::Tap);
+        self.finish_ios_touch_toolbar(run, position, unchanged && run.was_focused && editable);
+    }
+
+    fn finish_ios_touch_toolbar(&mut self, run: TextTapRun, position: Offset, toggle: bool) {
+        if toggle && !run.menu_was_showing {
+            self.show_text_field_touch_menu(run.field, position);
+            self.frame_requested = true;
+        } else if let Some(menu) = self.tree.text_field_toolbar_state(run.field) {
+            // toggleToolbar(false) and hideToolbar(false) leave the handles.
+            self.frame_requested |= menu.hide();
         }
     }
 

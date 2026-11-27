@@ -270,3 +270,73 @@ fn an_android_finger_does_not_move_a_focused_caret_until_the_tap_is_released() {
     assert_eq!(controller.selection(), TextSelection::collapsed(1));
     assert!(causes.borrow().is_empty());
 }
+
+#[test]
+fn ios_touch_taps_keep_a_selected_range_or_place_the_caret_at_a_word_edge() {
+    let Some(style) = ahem_style() else {
+        return;
+    };
+    let controller = TextEditingController::with_text("alpha beta gamma");
+    let selected = TextSelection::new(1, 4);
+    controller.set_selection(selected);
+    let causes = Rc::new(RefCell::new(Vec::new()));
+    let editor = EditableText::new(controller.clone())
+        .text_direction(TextDirection::Ltr)
+        .autofocus(true)
+        .style(style)
+        .context_menu_builder(|_, _| {
+            incular_widgets::IgnorePointer::new(SizedBox::square(10.)).into()
+        })
+        .on_selection_changed({
+            let causes = causes.clone();
+            move |_, cause| causes.borrow_mut().push(cause)
+        });
+    let mut runtime = Runtime::new(editor.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    let constraints = Constraints::loose(Size::new(800., 100.));
+    let base = Instant::now();
+    runtime.run_frame_at(constraints, base).unwrap();
+    let field = runtime.focused_element().unwrap();
+    let menu = runtime.tree().text_field_context_menu(field).unwrap();
+    let tap = |runtime: &mut Runtime, id: u64, milliseconds: u64, x: f32| {
+        for (phase, offset) in [(PointerPhase::Down, 0), (PointerPhase::Up, 50)] {
+            let _ = runtime.handle_raw_pointer_event(
+                RawPointerEvent::new(
+                    id,
+                    2,
+                    PointerDeviceKind::Touch,
+                    u32::from(phase == PointerPhase::Down),
+                    Offset::new(x, 7.),
+                    phase,
+                    base + Duration::from_millis(milliseconds + offset),
+                )
+                .with_button(Some(PRIMARY_POINTER_BUTTON)),
+            );
+        }
+        runtime
+            .run_frame_at(constraints, base + Duration::from_millis(milliseconds + 60))
+            .unwrap();
+    };
+    tap(&mut runtime, 1, 0, 30.);
+    assert_eq!(controller.selection(), selected);
+    assert!(menu.is_showing());
+    assert!(causes.borrow().is_empty());
+
+    tap(&mut runtime, 2, 700, 30.);
+    assert_eq!(controller.selection(), selected);
+    assert!(!menu.is_showing());
+    assert!(causes.borrow().is_empty());
+
+    controller.set_selection(TextSelection::collapsed(0));
+    runtime
+        .run_frame_at(constraints, base + Duration::from_millis(800))
+        .unwrap();
+    tap(&mut runtime, 3, 1400, 100.);
+    assert_eq!(controller.selection(), TextSelection::collapsed(10));
+    assert_eq!(
+        controller.caret_affinity(),
+        incular_text::TextAffinity::Upstream
+    );
+    assert_eq!(causes.borrow().as_slice(), &[SelectionChangedCause::Tap]);
+    assert_eq!(runtime.focused_element(), Some(field));
+}
