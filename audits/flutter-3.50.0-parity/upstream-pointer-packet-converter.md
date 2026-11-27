@@ -129,3 +129,16 @@ with the linear part of its affine transform. Position and absolute
 local pan still use the full transform, including translation. Retained
 packet delivery now reports Flutter's `(0.25, -0.25)` local delta.
 This authored probe does not add an upstream registration.
+
+## Native input at fractional device pixel ratios
+
+The pinned `fractional_pointer_ratio_test.dart` probe feeds physical
+`(10, -10.0000003)` at 1.3× into Flutter's pointer and scroll converter.
+The native Winit adapter agrees bit for bit at Incular's f32 output,
+with the expected sign reversal for content scroll. Keeping the
+coordinates and scale in f64 through division prevents one-ULP cursor
+or wheel drift. WindowMetrics shares that implementation and preserves
+host precision in the inverse direction too. The desktop shell's
+existing full-precision cursor path now uses the same conversion.
+All 28 focused adapter and platform tests passed. This authored
+probe does not add upstream registration credit.

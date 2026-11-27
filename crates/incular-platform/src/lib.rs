@@ -666,15 +666,22 @@ impl WindowMetrics {
     #[must_use]
     pub fn logical_to_physical(self, offset: Offset) -> Offset {
         Offset::new(
-            offset.x * self.scale_factor as f32,
-            offset.y * self.scale_factor as f32,
+            (f64::from(offset.x) * self.scale_factor) as f32,
+            (f64::from(offset.y) * self.scale_factor) as f32,
         )
     }
     #[must_use]
     pub fn physical_to_logical(self, offset: Offset) -> Offset {
+        self.physical_coordinates_to_logical(f64::from(offset.x), f64::from(offset.y))
+    }
+
+    /// Converts a host position or delta without rounding the physical
+    /// coordinates or device scale before returning a logical offset.
+    #[must_use]
+    pub fn physical_coordinates_to_logical(self, x: f64, y: f64) -> Offset {
         Offset::new(
-            offset.x / self.scale_factor as f32,
-            offset.y / self.scale_factor as f32,
+            (x / self.scale_factor) as f32,
+            (y / self.scale_factor) as f32,
         )
     }
 }

@@ -95,7 +95,7 @@ pub fn normalize_cursor(
     position: winit::dpi::PhysicalPosition<f64>,
     metrics: WindowMetrics,
 ) -> Offset {
-    metrics.physical_to_logical(Offset::new(position.x as f32, position.y as f32))
+    metrics.physical_coordinates_to_logical(position.x, position.y)
 }
 #[must_use]
 pub fn pointer_event(
@@ -400,8 +400,7 @@ pub fn wheel_event(delta: winit::event::MouseScrollDelta, metrics: WindowMetrics
     let delta = match delta {
         winit::event::MouseScrollDelta::LineDelta(x, y) => Offset::new(-x * 40.0, -y * 40.0),
         winit::event::MouseScrollDelta::PixelDelta(position) => {
-            let logical =
-                metrics.physical_to_logical(Offset::new(position.x as f32, position.y as f32));
+            let logical = normalize_cursor(position, metrics);
             Offset::new(-logical.x, -logical.y)
         }
     };

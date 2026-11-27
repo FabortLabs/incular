@@ -402,3 +402,16 @@ fn text_input_adapter_retains_ordered_commands() {
     adapter.clear();
     assert!(adapter.commands().is_empty());
 }
+
+#[test]
+fn metrics_convert_with_host_precision_before_narrowing() {
+    let metrics = WindowMetrics::new(PhysicalSize::new(1008, 2198), 1.3);
+    assert_eq!(
+        metrics.physical_to_logical(Offset::new(10., -10.)),
+        Offset::new(f32::from_bits(0x40f62762), f32::from_bits(0xc0f62762)),
+    );
+    assert_eq!(
+        metrics.logical_to_physical(Offset::new(200_000., -200_000.)),
+        Offset::new(260_000., -260_000.),
+    );
+}

@@ -2556,12 +2556,11 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
 }
 
 fn logical_cursor_position(cursor: PhysicalPosition<f64>, metrics: WindowMetrics) -> Offset {
-    let scale = if metrics.scale_factor.is_finite() && metrics.scale_factor > 0.0 {
-        metrics.scale_factor
+    if metrics.scale_factor.is_finite() && metrics.scale_factor > 0.0 {
+        winit_adapter::normalize_cursor(cursor, metrics)
     } else {
-        1.0
-    };
-    Offset::new((cursor.x / scale) as f32, (cursor.y / scale) as f32)
+        Offset::new(cursor.x as f32, cursor.y as f32)
+    }
 }
 
 fn platform_menu_key(event: &winit::event::KeyEvent) -> Option<std::borrow::Cow<'_, str>> {

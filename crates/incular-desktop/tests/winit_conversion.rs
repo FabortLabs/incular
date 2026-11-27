@@ -84,3 +84,24 @@ fn scroll_forms_use_natural_content_direction_and_fractional_pixels() {
     };
     assert_eq!(delta.y, -1.25);
 }
+
+#[test]
+fn fractional_view_ratio_does_not_round_host_coordinates_before_dividing() {
+    let metrics = WindowMetrics::new(PhysicalSize::new(1008, 2198), 1.3);
+    let host = winit::dpi::PhysicalPosition::new(10., -10.0000003);
+    let expect_position = Offset::new(f32::from_bits(0x40f62762), f32::from_bits(0xc0f62763));
+    assert_eq!(normalize_cursor(host, metrics), expect_position);
+    let PlatformEvent::Input(InputEvent::PointerWithId { position, .. }) =
+        identified_pointer_event(42, PointerPhase::Down, host, metrics)
+    else {
+        unreachable!()
+    };
+    assert_eq!(position, expect_position);
+    let PlatformEvent::Input(InputEvent::Scroll { delta }) =
+        wheel_event(winit::event::MouseScrollDelta::PixelDelta(host), metrics)
+    else {
+        unreachable!()
+    };
+    // Incular reports content offsets, so the Winit wheel sign is reversed.
+    assert_eq!(delta, Offset::new(-expect_position.x, -expect_position.y));
+}
