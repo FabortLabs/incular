@@ -188,3 +188,13 @@ actual recorded glyph, that its first-line advance still describes
 only the real text, and that the two-line height remains unchanged.
 Three focused native targets passed 71 tests, with the existing
 Unicode-space case ignored.
+
+### Plain and selectable Text forwarding
+
+Pinned `widgets/text_test.dart:1797`, `:1808`, and `:1816`
+passed. The native mounted control uses the same `hy\u00ADphenation`
+source, first with the default and hidden policy on ordinary Text,
+then under an active selection area. It confirms the label really
+participates in selection and verifies a 20-pixel source advance with
+or without the rendered mark, rather than relying only on descriptor
+values. All 12 retained-paragraph tests passed.

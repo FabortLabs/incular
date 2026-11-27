@@ -375,3 +375,42 @@ fn a_mounted_paragraph_defaults_to_manual_and_relayouts_only_when_hyphens_change
         assert_eq!(painted_mark, mode == Hyphens::Manual);
     }
 }
+
+#[test]
+fn ordinary_and_selectable_text_forward_the_discretionary_hyphen_policy() {
+    use incular_widgets::{Hyphens, Text};
+
+    for (selectable, mode, glyphs) in [
+        (false, None, 3),
+        (false, Some(Hyphens::Hidden), 2),
+        (true, Some(Hyphens::Hidden), 2),
+        (true, Some(Hyphens::Manual), 3),
+    ] {
+        let Some((style, engine)) = flutter_test_style() else {
+            return;
+        };
+        let text = Text::new("hy\u{00ad}phenation").style(style.font_size(10.));
+        let text = mode.map_or_else(|| text.clone(), |mode| text.clone().hyphens(mode));
+        let key = GlobalKey::new();
+        let widget = Widget::from(text).with_key(key);
+        let root = if selectable {
+            Widget::selection_area(SelectionAreaController::new(), widget)
+        } else {
+            widget
+        };
+        let root = Directionality::new(TextDirection::Ltr, root);
+        let mut tree = WidgetTree::with_text_engine(engine);
+        tree.mount(root.into()).unwrap();
+        tree.layout(Constraints::loose(Size::new(90., 100.))).unwrap();
+        let field = tree.element_with_key(&key.into()).unwrap();
+        assert_eq!(tree.is_selectable_text(field), selectable);
+        let layout = tree.text_layout(tree.render_id(field).unwrap()).unwrap();
+        assert_eq!(layout.lines.len(), 2);
+        assert_eq!(layout.lines[0].width, 20.);
+        assert_eq!(
+            layout.lines[0].glyphs.iter().filter(|g| g.advance > 0.).count(),
+            glyphs,
+            "selectable={selectable}, hyphens={mode:?}",
+        );
+    }
+}
