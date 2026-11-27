@@ -101,6 +101,11 @@ pub struct PointerPacketDispatchError<E> {
 type PacketContactKey = (u64, u64);
 type PendingPacketCancels = RefCell<Vec<PacketContactKey>>;
 
+enum WarmUpPacketInput {
+    Event(ConvertedPointerEvent),
+    Cancel(PacketContactKey),
+}
+
 /// A view-scoped handle for canceling a physical packet contact from an input
 /// callback. Cancellation is queued rather than dispatching recursively.
 #[derive(Clone)]
@@ -302,6 +307,8 @@ pub struct Runtime {
     pub(crate) legacy_pointer: Option<(u64, u64)>,
     packet_contacts: HashMap<PacketContactKey, RawPointerEvent>,
     deferred_packet_events: VecDeque<ConvertedPointerEvent>,
+    warm_up_packet_lock: bool,
+    warm_up_packets: VecDeque<WarmUpPacketInput>,
     pending_packet_cancels: Option<Rc<PendingPacketCancels>>,
     pub(crate) last_pointer: Offset,
     hover_devices: hover_devices::HoverDevices,
@@ -578,6 +585,8 @@ impl Runtime {
             legacy_pointer: None,
             packet_contacts: HashMap::new(),
             deferred_packet_events: VecDeque::new(),
+            warm_up_packet_lock: false,
+            warm_up_packets: VecDeque::new(),
             pending_packet_cancels: None,
             last_pointer: Offset::ZERO,
             hover_devices: hover_devices::HoverDevices::default(),
@@ -1194,6 +1203,8 @@ impl Runtime {
         self.tree.cancel_all_gesture_streams();
         self.packet_contacts.clear();
         self.deferred_packet_events.clear();
+        self.warm_up_packets.clear();
+        self.warm_up_packet_lock = false;
         self.pending_packet_cancels = None;
         self.captured_text_field = None;
         self.captured_selectable_text = None;
@@ -1225,6 +1236,8 @@ impl Runtime {
         self.tree.cancel_all_gesture_streams();
         self.packet_contacts.clear();
         self.deferred_packet_events.clear();
+        self.warm_up_packets.clear();
+        self.warm_up_packet_lock = false;
         self.pending_packet_cancels = None;
         self.tree.release_edit_subscriptions();
         self.legacy_pointer = None;
@@ -2009,6 +2022,8 @@ impl Runtime {
     /// Dispatch a packet with a fallible host handler ahead of retained input.
     /// A failed sample is reported with its identity and does not reach widgets.
     /// The remaining samples stay in arrival order for the next packet pump.
+    /// During a warm-up build, host validation still happens at ingress;
+    /// accepted samples wait to hit-test and dispatch until the rebuilt frame.
     pub fn handle_pointer_data_packet_checked<E>(
         &mut self,
         view_id: u64,
@@ -2028,10 +2043,32 @@ impl Runtime {
                 self.deferred_packet_events.extend(converted);
                 return Err(PointerPacketDispatchError { cause, event });
             }
-            self.handle_converted_pointer_event(event);
-            self.flush_pointer_packet_cancellations();
+            if self.warm_up_packet_lock {
+                self.warm_up_packets.push_back(WarmUpPacketInput::Event(event));
+                self.flush_pointer_packet_cancellations();
+            } else {
+                self.handle_converted_pointer_event(event);
+                self.flush_pointer_packet_cancellations();
+            }
         }
         Ok(())
+    }
+
+    fn replay_warm_up_packets(&mut self) {
+        if !self.warm_up_packet_lock {
+            return;
+        }
+        // A caller can ask to cancel between the last submitted packet
+        // and the draw; record that request at the end, while still locked.
+        self.flush_pointer_packet_cancellations();
+        self.warm_up_packet_lock = false;
+        while let Some(input) = self.warm_up_packets.pop_front() {
+            match input {
+                WarmUpPacketInput::Event(event) => self.handle_converted_pointer_event(event),
+                WarmUpPacketInput::Cancel(key) => self.cancel_packet_contact(key),
+            }
+            self.flush_pointer_packet_cancellations();
+        }
     }
 
     /// A handle suitable for capture by a listener or recognizer. Drivers
@@ -2050,15 +2087,23 @@ impl Runtime {
             .as_ref()
             .and_then(|queue| queue.borrow_mut().pop())
         {
-            let Some(previous) = self.packet_contacts.get(&key).copied() else {
-                continue;
-            };
-            let cancel = RawPointerEvent::new(
-                previous.pointer, previous.device, previous.kind, 0,
-                previous.position, PointerPhase::Cancel, previous.time,
-            );
-            self.dispatch_packet_contact(cancel);
+            if self.warm_up_packet_lock {
+                self.warm_up_packets.push_back(WarmUpPacketInput::Cancel(key));
+            } else {
+                self.cancel_packet_contact(key);
+            }
         }
+    }
+
+    fn cancel_packet_contact(&mut self, key: PacketContactKey) {
+        let Some(previous) = self.packet_contacts.get(&key).copied() else {
+            return;
+        };
+        let cancel = RawPointerEvent::new(
+            previous.pointer, previous.device, previous.kind, 0,
+            previous.position, PointerPhase::Cancel, previous.time,
+        );
+        self.dispatch_packet_contact(cancel);
     }
 
     fn handle_converted_pointer_event(&mut self, input: ConvertedPointerEvent) {
@@ -4650,6 +4695,7 @@ impl Runtime {
             return false;
         }
         self.warm_up_frame = incular_animation::scheduler::WarmUpFrame::reserve();
+        self.warm_up_packet_lock |= self.warm_up_frame.is_some();
         self.warm_up_frame.is_some()
     }
 
@@ -4678,6 +4724,7 @@ impl Runtime {
         match result {
             Ok((list, mut stats)) => {
                 frame.complete();
+                self.replay_warm_up_packets();
                 stats.requested_another_frame = self.frame_requested();
                 Ok(Some((list, stats)))
             }
@@ -4701,7 +4748,14 @@ impl Runtime {
         if self.defer_native_frame_during_warm_up() {
             return Err(TreeError::WarmUpFrameInProgress);
         }
-        self.run_frame_mode(constraints, now, false)
+        let (list, mut stats) = self.run_frame_mode(constraints, now, false)?;
+        // A failed warm-up keeps its input until a successful layout rather
+        // than replaying against a tree that has not finished rebuilding.
+        if self.warm_up_packet_lock {
+            self.replay_warm_up_packets();
+            stats.requested_another_frame = self.frame_requested();
+        }
+        Ok((list, stats))
     }
 
     /// Consumes a colliding host redraw without losing its demand. Repeated
@@ -4979,6 +5033,7 @@ impl Runtime {
     /// application root first so descendants it unmounts are skipped.
     #[cfg(feature = "hot-reload")]
     pub(crate) fn reassemble(&mut self) {
+        self.warm_up_packet_lock = true;
         // Hot reload shows changed enter animations right away.
         incular_widgets::motion::replay_enter_animations();
         let root = self.application_root;

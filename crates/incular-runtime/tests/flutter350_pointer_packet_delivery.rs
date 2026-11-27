@@ -430,3 +430,40 @@ fn after_failure_valid_queued_contacts_resume_before_new_input_without_replaying
         [8, 8, 9, 9]
     );
 }
+
+#[test]
+fn a_native_packet_waits_for_the_warm_up_build_before_contact_dispatch() {
+    let mut fixture = Fixture::new();
+    assert!(fixture.runtime.schedule_warm_up_frame());
+    fixture.packet(&[Data::Down, Data::Up]);
+    assert!(fixture.hit_phases().is_empty());
+    assert!(fixture.routed_phases().is_empty());
+    let frame = fixture.now + Duration::from_millis(16);
+    assert!(fixture.runtime.begin_warm_up_frame_at(frame));
+    assert!(fixture.routed_phases().is_empty());
+    fixture.runtime.draw_warm_up_frame(Constraints::tight(Size::new(100., 100.))).unwrap().unwrap();
+    assert_eq!(fixture.hit_phases(), [PointerPhase::Down, PointerPhase::Up]);
+    assert_eq!(fixture.routed_phases(), [PointerPhase::Down, PointerPhase::Up]);
+    let events = fixture.routed.borrow();
+    assert_eq!(events[0].time, fixture.now);
+    assert_eq!(events[1].time, fixture.now + Duration::from_millis(1));
+}
+
+#[test]
+fn a_cancellation_during_warm_up_keeps_its_order_between_packet_contacts() {
+    let mut fixture = Fixture::new();
+    let cancel = fixture.runtime.pointer_packet_cancellation();
+    assert!(fixture.runtime.schedule_warm_up_frame());
+    fixture.packet(&[Data::Down]);
+    assert!(cancel.cancel(24, 7));
+    fixture.runtime.flush_pointer_packet_cancellations();
+    fixture.packet(&[Data::Up]);
+    assert!(fixture.routed_phases().is_empty());
+    fixture.runtime.run_frame_at(
+        Constraints::tight(Size::new(200., 200.)),
+        fixture.now + Duration::from_millis(16),
+    ).unwrap();
+    assert_eq!(fixture.routed_phases(), [PointerPhase::Down, PointerPhase::Cancel]);
+    assert_eq!(fixture.hit_phases(), [PointerPhase::Down, PointerPhase::Cancel]);
+    assert!(fixture.taps.borrow().is_empty());
+}
