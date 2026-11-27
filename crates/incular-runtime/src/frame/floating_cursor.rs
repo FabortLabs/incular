@@ -107,8 +107,11 @@ impl Runtime {
                     settling_at: None,
                 };
                 run.bound(anchor, geometry);
-                self.tree
-                    .set_floating_caret(field, Some(run.rect(caret.size, 1.)));
+                self.tree.set_floating_caret_with_anchor(
+                    field,
+                    Some(run.rect(caret.size, 1.)),
+                    Some(run.text),
+                );
                 self.floating_caret = Some(run);
             }
             FloatingCursorDragState::Update => {
@@ -146,8 +149,11 @@ impl Runtime {
                 {
                     run.text = text;
                 }
-                self.tree
-                    .set_floating_caret(field, Some(run.rect(geometry.caret.size, 1.)));
+                self.tree.set_floating_caret_with_anchor(
+                    field,
+                    Some(run.rect(geometry.caret.size, 1.)),
+                    Some(run.text),
+                );
                 self.floating_caret = Some(run);
             }
             FloatingCursorDragState::End => {

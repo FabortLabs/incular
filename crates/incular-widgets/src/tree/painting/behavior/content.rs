@@ -169,6 +169,7 @@ impl WidgetTree {
                     show_cursor,
                     paint_cursor_above_text,
                     cursor_color,
+                    background_cursor_color,
                     selection_color,
                     autocorrection_text_rect_color,
                     spell_check_selection_color,
@@ -369,15 +370,56 @@ impl WidgetTree {
                             controller.caret_opacity(Instant::now(), cursor_opacity_animates),
                         )
                     });
+                    let shape_caret = |x, y, height| {
+                        editable_cursor_rect(
+                            field,
+                            Offset::new(
+                                editable_caret_x(field, size.width, x) - active_scroll_x
+                                    + content_padding.left,
+                                top + y - active_scroll_y,
+                            ),
+                            height,
+                        )
+                    };
+                    let regular_caret = |rect: Rect, color: Color| {
+                        (rect.size.width > 0.0 && rect.size.height > 0.0).then(|| {
+                            if cursor_radius > 0.0 {
+                                PaintCommand::RRect {
+                                    rrect: RRect::uniform(rect, cursor_radius),
+                                    brush: color.into(),
+                                }
+                            } else {
+                                PaintCommand::Rect { rect, color }
+                            }
+                        })
+                    };
+                    let mut background_caret = None;
                     let mut caret_command = None;
                     if focused
                         && show_cursor
                         && selection.is_empty()
                         && controller.selection_if_set().is_some()
                     {
-                        if let Some(rect) = floating_cursor {
+                        if let Some(floating) = floating_cursor {
+                            if let (Some(color), Some((position, affinity))) =
+                                (background_cursor_color, floating.anchor)
+                            {
+                                let (x, y, height) = text_field_caret_geometry(
+                                    &layout, position, affinity, value_empty, field,
+                                );
+                                let anchor = shape_caret(x, y, height);
+                                let dx = floating.rect.origin.x - anchor.origin.x
+                                    + (floating.rect.size.width - anchor.size.width) * 0.5;
+                                let dy = floating.rect.origin.y - anchor.origin.y
+                                    + (floating.rect.size.height - anchor.size.height) * 0.5;
+                                // RenderEditable suppresses overlapping carets using
+                                // their centers and a strict 15 logical pixel cutoff.
+                                if dx * dx + dy * dy >= 15. * 15. {
+                                    background_caret = regular_caret(anchor, color);
+                                }
+                            }
                             caret_command = Some(PaintCommand::RRect {
-                                rrect: RRect::uniform(rect, 1.),
+                                rrect: RRect::uniform(floating.rect, 1.),
                                 brush: Color {
                                     alpha: 191,
                                     ..cursor_color
@@ -385,36 +427,19 @@ impl WidgetTree {
                                 .into(),
                             });
                         } else if caret_alpha > 0 {
-                            let cursor_color = Color {
-                                alpha: caret_alpha,
-                                ..cursor_color
-                            };
-                            let rect = editable_cursor_rect(
-                                field,
-                                Offset::new(
-                                    editable_caret_x(field, size.width, caret) - active_scroll_x
-                                        + content_padding.left,
-                                    top + caret_y - active_scroll_y,
-                                ),
-                                caret_height,
+                            caret_command = regular_caret(
+                                shape_caret(caret, caret_y, caret_height),
+                                Color { alpha: caret_alpha, ..cursor_color },
                             );
-                            if rect.size.width > 0.0 && rect.size.height > 0.0 {
-                                caret_command = Some(if cursor_radius > 0.0 {
-                                    PaintCommand::RRect {
-                                        rrect: RRect::uniform(rect, cursor_radius),
-                                        brush: cursor_color.into(),
-                                    }
-                                } else {
-                                    PaintCommand::Rect {
-                                        rect,
-                                        color: cursor_color,
-                                    }
-                                });
-                            }
                         }
                     }
-                    if !paint_cursor_above_text && let Some(command) = caret_command.take() {
-                        cache.push(command);
+                    if !paint_cursor_above_text {
+                        if let Some(command) = background_caret.take() {
+                            cache.push(command);
+                        }
+                        if let Some(command) = caret_command.take() {
+                            cache.push(command);
+                        }
                     }
                     cache.push(PaintCommand::PushTransform {
                         transform: CoreTransform::translation(Offset::new(
@@ -460,6 +485,9 @@ impl WidgetTree {
                         }
                     }
                     cache.push(PaintCommand::PopTransform);
+                    if let Some(command) = background_caret {
+                        cache.push(command);
+                    }
                     if let Some(command) = caret_command {
                         cache.push(command);
                     }

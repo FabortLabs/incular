@@ -307,3 +307,94 @@ fn removing_the_editor_while_the_floating_caret_resets_cancels_frame_work() {
     assert!(!stats.requested_another_frame);
     assert_eq!(controller.value(), value);
 }
+
+#[test]
+fn a_distant_floating_caret_paints_its_background_anchor_only_during_drag() {
+    use incular_text::TextStyle;
+
+    const BACKGROUND: Color = Color::rgba(135, 86, 52, 255);
+    let constraints = Constraints::tight(Size::new(400., 120.));
+    let controller = TextEditingController::with_text("AAAA");
+    controller.set_selection(TextSelection::collapsed(0));
+    let editor = EditableText::new(controller.clone())
+        .autofocus(true)
+        .text_direction(TextDirection::Ltr)
+        .style(TextStyle::new().font_size(80.))
+        .cursor_color(CURSOR)
+        .background_cursor_color(BACKGROUND);
+    let mut runtime = Runtime::new(editor.into()).unwrap();
+    runtime.set_debug_deterministic_cursor(true);
+    runtime.run_frame(constraints).unwrap();
+    let sender = json!(
+        runtime
+            .take_text_input_commands()
+            .into_iter()
+            .find_map(|command| match command {
+                TextInputCommand::SetClient { configuration, .. } => {
+                    Some(configuration.client.get())
+                }
+                _ => None,
+            })
+            .unwrap()
+    );
+    let field = runtime.focused_element().unwrap();
+    let anchor = runtime
+        .tree()
+        .floating_caret_geometry(field, 0, TextAffinity::Downstream)
+        .unwrap()
+        .caret;
+    let anchor_paint = |list: &DisplayList| {
+        list.commands()
+            .iter()
+            .enumerate()
+            .find_map(|(index, command)| match command {
+                PaintCommand::Rect { rect, color } if *color == BACKGROUND => Some((index, *rect)),
+                _ => None,
+            })
+    };
+    let move_caret = |runtime: &mut Runtime, phase: &str, x: f32| {
+        assert_eq!(
+            wire(runtime, sender.clone(), phase, json!({"X":x, "Y":0})),
+            Some(true)
+        );
+        runtime.run_frame(constraints).unwrap().0
+    };
+
+    let start = move_caret(&mut runtime, "start", 0.);
+    assert!(visible_floating_caret(&start));
+    assert!(anchor_paint(&start).is_none());
+    let overlapping = move_caret(&mut runtime, "update", 10.);
+    assert!(visible_floating_caret(&overlapping));
+    assert!(anchor_paint(&overlapping).is_none());
+    let separated = move_caret(&mut runtime, "update", 20.);
+    let (anchor_index, regular) = anchor_paint(&separated).unwrap();
+    assert_eq!(regular, anchor);
+    assert!(
+        separated.commands()[anchor_index + 1..]
+            .iter()
+            .any(|command| {
+                matches!(command, PaintCommand::RRect { brush: Brush::Solid(color), .. }
+            if *color == Color { alpha: 191, ..CURSOR })
+            })
+    );
+    assert_eq!(controller.selection(), TextSelection::collapsed(0));
+
+    assert_eq!(
+        wire(&mut runtime, sender, "end", json!({"X":0, "Y":0})),
+        Some(true)
+    );
+    let ending = Instant::now();
+    let (settling, _) = runtime
+        .run_frame_at(constraints, ending + Duration::from_millis(20))
+        .unwrap();
+    assert!(visible_floating_caret(&settling));
+    assert!(anchor_paint(&settling).is_none());
+    let (settled, _) = runtime
+        .run_frame_at(constraints, ending + Duration::from_millis(140))
+        .unwrap();
+    assert!(!visible_floating_caret(&settled));
+    assert!(anchor_paint(&settled).is_none());
+    assert!(settled.commands().iter().any(|command| {
+        matches!(command, PaintCommand::Rect { color, .. } if *color == CURSOR)
+    }));
+}

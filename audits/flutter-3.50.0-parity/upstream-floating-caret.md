@@ -33,3 +33,21 @@ caret remains, no new frame or animation deadline is requested, and the old
 controller's value is untouched even after the reset would have elapsed.
 Incular checks actual frame demand rather than counting Flutter's internal
 ticker objects. All five focused native floating-caret tests passed.
+
+## Background caret during drag
+
+When configured, Flutter paints the regular caret in
+`backgroundCursorColor` at the text position closest to the floating caret.
+`RenderEditable` suppresses it when the squared distance between their
+centers is less than `15 × 15` logical pixels. It is not drawn during the
+reset animation, and the ordinary caret color returns when the reset finishes.
+
+Incular previously never drew that text anchor. The new
+`EditableText::background_cursor_color` builder is optional, matching the
+raw renderer's absence of a second caret when no color is supplied. It uses
+the current shaped geometry and regular caret radius, preserves paint order,
+and does not change text layout or the selection. The authored
+`editor_floating_caret_background_test.dart` passed against the pinned SDK;
+the two focused Rust targets passed eight tests. This covers the background
+caret, not the remaining exact wrapped-line pixel or selection-cause checks,
+and adds no upstream count.

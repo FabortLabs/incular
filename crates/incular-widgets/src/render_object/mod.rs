@@ -28,6 +28,13 @@ mod layers;
 mod update;
 pub(crate) use layers::RenderLayers;
 
+/// The floating caret and, during drag only, its nearest text position.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FloatingCaretPaint {
+    pub(crate) rect: incular_core::Rect,
+    pub(crate) anchor: Option<(usize, incular_text::TextAffinity)>,
+}
+
 /// Geometry that is meaningful for every retained render node.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct RenderGeometry {
@@ -158,7 +165,7 @@ pub(crate) struct RenderTextFieldState {
     pub(crate) scroll_y: f32,
     pub(crate) focused: bool,
     pub(crate) cursor_frame: CursorFrame,
-    pub(crate) floating_cursor: Option<incular_core::Rect>,
+    pub(crate) floating_cursor: Option<FloatingCaretPaint>,
     pub(crate) autocorrection_prompt: Option<(incular_text::TextEditingController, u64, incular_text::TextRange)>,
     /// The editing value (content revision and selection), focus and size
     /// whose caret the scroll offsets last revealed. Like Flutter's

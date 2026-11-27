@@ -258,12 +258,23 @@ impl WidgetTree {
 
     #[doc(hidden)]
     pub fn set_floating_caret(&mut self, id: ElementId, rect: Option<Rect>) {
+        self.set_floating_caret_with_anchor(id, rect, None);
+    }
+
+    #[doc(hidden)]
+    pub fn set_floating_caret_with_anchor(
+        &mut self,
+        id: ElementId,
+        rect: Option<Rect>,
+        anchor: Option<(usize, incular_text::TextAffinity)>,
+    ) {
+        let cursor = rect.map(|rect| crate::render_object::FloatingCaretPaint { rect, anchor });
         let Some(render) = self.render_id(id) else { return; };
         let Some(state) = self.renders.get(render.0).and_then(|node| node.text_field_state()) else {
             return;
         };
-        if state.floating_cursor != rect {
-            self.text_field_state_live_mut(render).floating_cursor = rect;
+        if state.floating_cursor != cursor {
+            self.text_field_state_live_mut(render).floating_cursor = cursor;
             self.mark_render_paint(render);
         }
     }

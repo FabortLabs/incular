@@ -1221,6 +1221,7 @@ pub struct EditableText {
     show_cursor: Option<bool>,
     paint_cursor_above_text: bool,
     cursor_color: Color,
+    background_cursor_color: Option<Color>,
     selection_color: Option<Color>,
     autocorrection_text_rect_color: Option<Color>,
     input_type: Option<TextInputTypeHint>,
@@ -1297,6 +1298,7 @@ impl EditableText {
             show_cursor: None,
             paint_cursor_above_text: false,
             cursor_color: Color::WHITE,
+            background_cursor_color: None,
             selection_color: None,
             autocorrection_text_rect_color: None,
             input_type: None,
@@ -1707,6 +1709,15 @@ impl EditableText {
     #[must_use]
     pub fn cursor_color(mut self, color: Color) -> Self {
         self.cursor_color = color;
+        self
+    }
+
+    /// Sets the regular caret color shown at the nearest text position
+    /// while a floating caret is dragged far enough away from it.
+    /// No background caret is painted unless a color is supplied.
+    #[must_use]
+    pub fn background_cursor_color(mut self, color: Color) -> Self {
+        self.background_cursor_color = Some(color);
         self
     }
 
@@ -2124,6 +2135,7 @@ impl From<EditableText> for Widget {
             show_cursor: value.show_cursor.unwrap_or(!value.read_only),
             paint_cursor_above_text: value.paint_cursor_above_text,
             cursor_color: value.cursor_color,
+            background_cursor_color: value.background_cursor_color,
             selection_color: value.selection_color,
             autocorrection_text_rect_color: value.autocorrection_text_rect_color,
             text_direction: value.text_direction,
