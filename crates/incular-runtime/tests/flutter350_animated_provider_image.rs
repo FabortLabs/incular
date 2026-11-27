@@ -11,7 +11,7 @@ use incular_core::{Size, time::Instant};
 use incular_image::{AnimatedWebpDecoder, ImageDecodeCompletion, ImageFrameCodec, ImagePlayback};
 use incular_rendering::PaintCommand;
 use incular_runtime::Runtime;
-use incular_widgets::{Image, MediaQuery, TickerMode, Widget};
+use incular_widgets::{Image, MediaQuery, SizedBox, Stack, TickerMode, Widget};
 
 const TWO_FRAMES: &[u8] = include_bytes!("../../incular-image/tests/fixtures/webp_two_cycles.webp");
 
@@ -221,4 +221,76 @@ fn reduced_motion_can_pause_and_resume_an_already_mounted_image() {
     assert_eq!(pixels(&mut runtime, at(800)), [[0, 0, 255, 255]]);
     assert_eq!(log.borrow()[5], (Some(3), true));
     assert_eq!(log.borrow().len(), 6);
+}
+
+fn drain_image_workers(runtime: &mut Runtime) {
+    let timeout = Instant::now() + Duration::from_secs(2);
+    loop {
+        runtime.process_runtime_work();
+        if runtime.runtime_diagnostics().active_tracked_tasks == 0 {
+            return;
+        }
+        assert!(Instant::now() < timeout, "image worker did not complete");
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+#[test]
+fn real_worker_codec_feeds_native_images_on_app_frames() {
+    let log = FrameLog::default();
+    let mut runtime = Runtime::new(Stack::new([] as [Widget; 0]).into()).unwrap();
+    let source = runtime.spawner().load_animated_webp(Arc::from(TWO_FRAMES));
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, Stack::new([build(&source, &log)]).into())
+        .unwrap();
+    let t0 = Instant::now();
+    assert!(pixels(&mut runtime, t0).is_empty());
+    drain_image_workers(&mut runtime);
+    assert_eq!(pixels(&mut runtime, t0), [[255, 0, 0, 255]]);
+    drain_image_workers(&mut runtime);
+    assert_eq!(
+        pixels(&mut runtime, t0 + Duration::from_millis(199)),
+        [[255, 0, 0, 255]]
+    );
+    assert_eq!(
+        pixels(&mut runtime, t0 + Duration::from_millis(200)),
+        [[0, 0, 255, 255]]
+    );
+}
+
+#[test]
+fn dropped_worker_source_is_not_kept_alive_by_codec_initialization() {
+    let mut runtime = Runtime::new(Stack::new([] as [Widget; 0]).into()).unwrap();
+    let source = runtime.spawner().load_animated_webp(Arc::from(TWO_FRAMES));
+    let weak = source.downgrade();
+    drop(source);
+    assert!(weak.upgrade().is_none());
+    drain_image_workers(&mut runtime);
+    assert!(weak.upgrade().is_none());
+}
+
+#[test]
+fn bad_encoded_source_notifies_the_mounted_error_builder() {
+    let mut runtime = Runtime::new(Stack::new([] as [Widget; 0]).into()).unwrap();
+    let source = runtime
+        .spawner()
+        .load_animated_webp(Arc::from(&b"bad input"[..]));
+    let errors = Rc::new(RefCell::new(Vec::new()));
+    let captured = errors.clone();
+    let widget = Image::playback(source).error_builder(move |_, error| {
+        captured.borrow_mut().push(error.clone());
+        Widget::from(SizedBox::new())
+    });
+    runtime
+        .schedule_update(
+            runtime.tree().root().unwrap(),
+            Stack::new([Widget::from(widget)]).into(),
+        )
+        .unwrap();
+    let now = Instant::now();
+    assert!(pixels(&mut runtime, now).is_empty());
+    drain_image_workers(&mut runtime);
+    assert!(pixels(&mut runtime, now).is_empty());
+    assert_eq!(errors.borrow().len(), 1);
 }

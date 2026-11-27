@@ -16,6 +16,7 @@ mod flutter_text_input;
 mod focus_keys;
 mod frame;
 mod global_shortcuts;
+mod image_playback;
 mod profiling;
 mod reactive;
 mod request_admission;

@@ -66,3 +66,15 @@ MediaQuery animation setting without making unrelated media aspects
 dependencies. Ordinary one-shot providers still pass their focused
 suite. Automatically recognizing animated input in the standard
 providers and supporting other animation containers remain open.
+
+### Worker-backed encoded playback
+
+`RuntimeSpawner::load_animated_webp` opens a source on the existing
+blocking worker pool. Per source it decodes only one frame at a time
+and returns each owned result to the UI thread before scheduling
+presentation. The native runtime fixtures verify red/blue draws at
+199/200 ms, invalid encoded input reaching the mounted error builder,
+and a dropped source not being retained by an unfinished initialization.
+The stream preserves a successfully decoded frame separately from
+a later decode failure. These are authored checks and add no
+registration credit.
