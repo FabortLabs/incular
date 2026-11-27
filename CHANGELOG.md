@@ -34,6 +34,9 @@ a version and date when publishing.
 
 ### Added
 
+- Raw editable text exposes selection height and width styles. A configured
+  selection highlight remains visible when the editor loses focus.
+
 - Synthetic raw pointer presses and contact moves default to the primary
   button unless given an explicit button mask. Zero is not treated as hover
   by the contact-motion constructor.

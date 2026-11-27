@@ -2,7 +2,11 @@
 
 use super::{LayoutKey, LineCaretStops, TextEngine, TextLayoutOptions, common_prefix_len};
 use crate::geometry::{ParagraphSlot, TextLineRef, TextLines};
-use crate::{TextCaretPosition, TextGeometry, TextMetrics, TextOverflow, TextStyle};
+use crate::text_painter::SelectionBoxContext;
+use crate::{
+    BoxHeightStyle, BoxWidthStyle, TextCaretPosition, TextGeometry, TextMetrics, TextOverflow,
+    TextPainterBox, TextRange, TextStyle,
+};
 use incular_core::Size;
 use std::sync::{Arc, OnceLock};
 
@@ -22,6 +26,7 @@ use std::sync::{Arc, OnceLock};
 pub struct TextDocumentLayout {
     paragraphs: Arc<[ParagraphSlot]>,
     line_count: usize,
+    widest_selection_line: OnceLock<f32>,
     pub metrics: TextMetrics,
     /// Caret stops in document coordinates, derived per line on first use.
     line_carets: OnceLock<LineCaretStops>,
@@ -45,6 +50,7 @@ impl TextDocumentLayout {
         Self {
             paragraphs,
             line_count,
+            widest_selection_line: OnceLock::new(),
             metrics,
             line_carets: OnceLock::new(),
         }
@@ -62,6 +68,58 @@ impl TextDocumentLayout {
             .iter()
             .map(|slot| slot.layout.glyph_count())
             .sum()
+    }
+
+    /// Styled selection boxes in document coordinates. Only paragraphs
+    /// intersecting the selected source range generate boxes. Max width and
+    /// spacing use document boundaries, not each paragraph's boundaries.
+    #[must_use]
+    pub fn boxes_for_selection(
+        &self,
+        range: TextRange,
+        height_style: BoxHeightStyle,
+        width_style: BoxWidthStyle,
+    ) -> Vec<TextPainterBox> {
+        if range.is_empty() {
+            return Vec::new();
+        }
+        let widest = (width_style == BoxWidthStyle::Max).then(|| {
+            *self.widest_selection_line.get_or_init(|| {
+                self.paragraphs
+                    .iter()
+                    .map(|slot| slot.layout.longest_selection_line())
+                    .fold(0., f32::max)
+            })
+        });
+        let first = self
+            .paragraphs
+            .partition_point(|slot| slot.byte <= range.start)
+            .saturating_sub(1);
+        self.paragraphs
+            .iter()
+            .enumerate()
+            .skip(first)
+            .take_while(|(_, slot)| slot.byte < range.end)
+            .flat_map(|(index, slot)| {
+                let local =
+                    TextRange::new(range.start.saturating_sub(slot.byte), range.end - slot.byte);
+                slot.layout
+                    .boxes_for_selection_in_document(
+                        local,
+                        height_style,
+                        SelectionBoxContext {
+                            widest,
+                            starts_document: index == 0,
+                            ends_document: index + 1 == self.paragraphs.len(),
+                        },
+                    )
+                    .into_iter()
+                    .map(move |mut selection| {
+                        selection.rect.origin.y += slot.y;
+                        selection
+                    })
+            })
+            .collect()
     }
 
     fn slot_for_line(&self, line: usize) -> Option<&ParagraphSlot> {

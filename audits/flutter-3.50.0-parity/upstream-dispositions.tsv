@@ -3693,3 +3693,4 @@ packages/flutter/test/widgets/editable_text_test.dart	5916	reporting error when 
 packages/flutter/test/widgets/editable_text_test.dart	2834	pasteText reports error to FlutterError when Clipboard.getData throws	partial-match	upstream-fit-overlays-scroll-notifications-clipboard.md#editor-clipboard-errors-preserve-backend-context
 packages/flutter/test/widgets/editable_text_test.dart	687	when backgroundCursorColor is updated, RenderEditable should be updated	paired-match	upstream-floating-caret.md#retained-cursor-colors-and-configured-opacity
 packages/flutter/test/widgets/editable_text_test.dart	18145	Cursor color with an opacity is respected	paired-match	upstream-floating-caret.md#retained-cursor-colors-and-configured-opacity
+packages/flutter/test/widgets/editable_text_test.dart	336	Tight selectionWidthStyle does not expand to a longer next line	paired-match	upstream-editable-selection-paint.md#height-and-width-styles-at-the-actual-highlight

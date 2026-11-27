@@ -278,6 +278,8 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 cursor_color: spec.cursor_color,
                 background_cursor_color: spec.background_cursor_color,
                 selection_color: spec.selection_color,
+                selection_height_style: spec.selection_height_style,
+                selection_width_style: spec.selection_width_style,
                 autocorrection_text_rect_color: spec.autocorrection_text_rect_color,
                 spell_check_selection_color: spec
                     .spell_check

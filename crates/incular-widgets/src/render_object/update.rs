@@ -88,6 +88,25 @@ fn invalidation_for_change(old: &RenderKind, new: &RenderKind) -> Invalidation {
             return I::PAINT | I::SEMANTICS | I::HIT_TEST;
         }
     }
+    if let (RenderKind::TextField(old), RenderKind::TextField(new)) = (old, new)
+        && (
+            old.selection_color,
+            old.selection_height_style,
+            old.selection_width_style,
+        ) != (
+            new.selection_color,
+            new.selection_height_style,
+            new.selection_width_style,
+        )
+    {
+        let mut normalized = (**new).clone();
+        normalized.selection_color = old.selection_color;
+        normalized.selection_height_style = old.selection_height_style;
+        normalized.selection_width_style = old.selection_width_style;
+        if **old == normalized {
+            return I::PAINT;
+        }
+    }
     if image_composite_only_change(old, new) {
         return I::COMPOSITE;
     }

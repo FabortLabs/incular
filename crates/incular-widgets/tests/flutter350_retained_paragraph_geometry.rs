@@ -508,6 +508,7 @@ fn inline_selection_keeps_adjacent_placeholders_separate_with_tight_or_max_heigh
 fn tight_editable_selection_through_a_hard_break_stays_on_the_short_line_without_focus() {
     use incular_core::Color;
     use incular_rendering::PaintCommand;
+    use incular_text::{BoxHeightStyle, BoxWidthStyle};
     use incular_widgets::EditableText;
 
     let Some((style, engine)) = flutter_test_style() else {
@@ -519,6 +520,19 @@ fn tight_editable_selection_through_a_hard_break_stays_on_the_short_line_without
         .max_lines(None)
         .style(style.font_size(10.).line_height_multiplier(1.))
         .selection_color(Color::BLACK);
+    assert_eq!(
+        widget.configured_selection_width_style(),
+        BoxWidthStyle::Tight
+    );
+    assert_eq!(
+        widget.configured_selection_height_style(),
+        if cfg!(target_arch = "wasm32") {
+            BoxHeightStyle::Max
+        } else {
+            BoxHeightStyle::IncludeLineSpacingMiddle
+        }
+    );
+    let widget = widget.selection_width_style(BoxWidthStyle::Tight);
     let mut tree = WidgetTree::with_text_engine(engine);
     let field = tree.mount(widget.into()).unwrap();
     let constraints = Constraints::tight(Size::new(800., 600.));
@@ -533,4 +547,145 @@ fn tight_editable_selection_through_a_hard_break_stays_on_the_short_line_without
     assert_eq!(selection, [[0., 0., 30., 10.]]);
     assert_eq!(tree.focused_keyboard_element(), None);
     assert_eq!(tree.root(), Some(field));
+}
+
+#[test]
+fn retained_editable_width_style_repaints_whole_and_segmented_layouts_without_remeasuring() {
+    use incular_core::Color;
+    use incular_rendering::PaintCommand;
+    use incular_text::{BoxHeightStyle, BoxWidthStyle};
+    use incular_widgets::EditableText;
+
+    for segmented in [false, true] {
+        let Some((style, engine)) = flutter_test_style() else {
+            return;
+        };
+        let controller = incular_text::TextEditingController::with_text("abc\nabcdefghij");
+        controller.set_selection(TextSelection::new(0, 4));
+        let build = |height, width| {
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .max_lines(None)
+                .paragraph_layout(segmented)
+                .style(style.clone().font_size(10.).line_height_multiplier(1.))
+                .selection_color(Color::BLACK)
+                .selection_height_style(height)
+                .selection_width_style(width)
+        };
+        let constraints = Constraints::tight(Size::new(800., 600.));
+        let fixed_height = BoxHeightStyle::IncludeLineSpacingMiddle;
+        let mut tree = WidgetTree::with_text_engine(engine);
+        let field = tree
+            .mount(build(fixed_height, BoxWidthStyle::Tight).into())
+            .unwrap();
+        tree.layout(constraints).unwrap();
+        let render = tree.render_id(field).unwrap();
+        let before = tree.diagnostics().layouts;
+        for (height, width, expected) in [
+            (
+                fixed_height,
+                BoxWidthStyle::Tight,
+                &[[0., 0., 30., 10.]][..],
+            ),
+            (
+                fixed_height,
+                BoxWidthStyle::Max,
+                &[[0., 0., 30., 10.], [30., 0., 100., 10.]][..],
+            ),
+            (
+                BoxHeightStyle::Max,
+                BoxWidthStyle::Tight,
+                &[[0., 0., 30., 10.]][..],
+            ),
+        ] {
+            tree.update(field, build(height, width).into()).unwrap();
+            tree.layout(constraints).unwrap();
+            let selected: Vec<_> = tree
+                .paint()
+                .commands()
+                .iter()
+                .filter_map(|command| match command {
+                    PaintCommand::Rect {
+                        rect,
+                        color: Color::BLACK,
+                    } => Some(edges(*rect)),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(
+                selected, expected,
+                "segmented: {segmented}, {height:?}, {width:?}"
+            );
+            assert_eq!(tree.render_id(field), Some(render));
+            assert_eq!(
+                tree.diagnostics().layouts,
+                before,
+                "a selection style is paint-only"
+            );
+        }
+    }
+}
+
+#[test]
+fn editable_default_height_covers_middle_line_spacing_across_entire_document() {
+    use incular_core::Color;
+    use incular_rendering::PaintCommand;
+    use incular_text::BoxHeightStyle;
+    use incular_widgets::EditableText;
+
+    for segmented in [false, true] {
+        let Some((style, engine)) = flutter_test_style() else {
+            return;
+        };
+        let controller = incular_text::TextEditingController::with_text("ab\ncd\nef");
+        controller.set_selection(TextSelection::new(0, 8));
+        let build = || {
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .max_lines(None)
+                .paragraph_layout(segmented)
+                .style(style.clone().font_size(10.).line_height_multiplier(2.))
+                .selection_color(Color::BLACK)
+        };
+        let constraints = Constraints::tight(Size::new(800., 600.));
+        let mut tree = WidgetTree::with_text_engine(engine);
+        let field = tree.mount(build().into()).unwrap();
+        tree.layout(constraints).unwrap();
+        let boxes = |tree: &mut WidgetTree| -> Vec<_> {
+            tree.paint()
+                .commands()
+                .iter()
+                .filter_map(|command| match command {
+                    PaintCommand::Rect {
+                        rect,
+                        color: Color::BLACK,
+                    } => Some(edges(*rect)),
+                    _ => None,
+                })
+                .collect()
+        };
+        let max = [[0., 0., 20., 20.], [0., 20., 20., 40.], [0., 40., 20., 60.]];
+        if cfg!(target_arch = "wasm32") {
+            assert_eq!(boxes(&mut tree), max);
+        } else {
+            assert_eq!(
+                boxes(&mut tree),
+                [
+                    [0., 7.5, 20., 23.75],
+                    [0., 23.75, 20., 43.75],
+                    [0., 43.75, 20., 60.]
+                ],
+                "segmented: {segmented}",
+            );
+        }
+        let before = tree.diagnostics().layouts;
+        tree.update(
+            field,
+            build().selection_height_style(BoxHeightStyle::Max).into(),
+        )
+        .unwrap();
+        tree.layout(constraints).unwrap();
+        assert_eq!(boxes(&mut tree), max, "segmented: {segmented}");
+        assert_eq!(tree.diagnostics().layouts, before);
+    }
 }

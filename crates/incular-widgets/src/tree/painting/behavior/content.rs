@@ -171,6 +171,8 @@ impl WidgetTree {
                     cursor_color,
                     background_cursor_color,
                     selection_color,
+                    selection_height_style,
+                    selection_width_style,
                     autocorrection_text_rect_color,
                     spell_check_selection_color,
                     ..
@@ -351,13 +353,19 @@ impl WidgetTree {
                             text_field_display_offset(controller, selection.start, mask),
                             text_field_display_offset(controller, selection.end, mask),
                         );
-                        for rect in selection_rects(
-                            &layout,
+                        let paint_offset = Offset::new(
+                            content_padding.left - active_scroll_x,
+                            top - active_scroll_y,
+                        );
+                        for selection_box in layout.boxes_for_selection(
                             selection,
-                            active_scroll_x - content_padding.left,
-                            active_scroll_y,
-                            top,
+                            selection_height_style,
+                            selection_width_style,
                         ) {
+                            let rect = Rect::from_origin_size(
+                                selection_box.rect.origin + paint_offset,
+                                selection_box.rect.size,
+                            );
                             cache.push(PaintCommand::Rect {
                                 rect,
                                 color: selection_color,

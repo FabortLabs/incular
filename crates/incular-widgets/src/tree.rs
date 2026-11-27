@@ -658,6 +658,8 @@ pub struct TextFieldRender {
     pub(crate) cursor_color: Color,
     pub(crate) background_cursor_color: Option<Color>,
     pub(crate) selection_color: Option<Color>,
+    pub(crate) selection_height_style: incular_text::BoxHeightStyle,
+    pub(crate) selection_width_style: incular_text::BoxWidthStyle,
     pub(crate) autocorrection_text_rect_color: Option<Color>,
     pub(crate) spell_check_selection_color: Option<Color>,
     /// The resolved misspelled style while spell checking runs (Flutter's

@@ -1236,6 +1236,8 @@ pub struct EditableText {
     cursor_color: Color,
     background_cursor_color: Option<Color>,
     selection_color: Option<Color>,
+    selection_height_style: incular_text::BoxHeightStyle,
+    selection_width_style: incular_text::BoxWidthStyle,
     autocorrection_text_rect_color: Option<Color>,
     input_type: Option<TextInputTypeHint>,
     input_action: TextInputActionHint,
@@ -1317,6 +1319,12 @@ impl EditableText {
             cursor_color: Color::WHITE,
             background_cursor_color: None,
             selection_color: None,
+            selection_height_style: if cfg!(target_arch = "wasm32") {
+                incular_text::BoxHeightStyle::Max
+            } else {
+                incular_text::BoxHeightStyle::IncludeLineSpacingMiddle
+            },
+            selection_width_style: incular_text::BoxWidthStyle::Tight,
             autocorrection_text_rect_color: None,
             input_type: None,
             input_action: TextInputActionHint::Unspecified,
@@ -1783,6 +1791,30 @@ impl EditableText {
         self
     }
 
+    /// Controls how much line height the selection highlight covers.
+    #[must_use]
+    pub const fn selection_height_style(mut self, style: incular_text::BoxHeightStyle) -> Self {
+        self.selection_height_style = style;
+        self
+    }
+
+    #[must_use]
+    pub const fn configured_selection_height_style(&self) -> incular_text::BoxHeightStyle {
+        self.selection_height_style
+    }
+
+    /// Controls whether complete intermediate lines extend to the widest line.
+    #[must_use]
+    pub const fn selection_width_style(mut self, style: incular_text::BoxWidthStyle) -> Self {
+        self.selection_width_style = style;
+        self
+    }
+
+    #[must_use]
+    pub const fn configured_selection_width_style(&self) -> incular_text::BoxWidthStyle {
+        self.selection_width_style
+    }
+
     /// Suppresses the highlight without changing the logical selection.
     #[must_use]
     pub fn clear_selection_color(mut self) -> Self {
@@ -2198,6 +2230,8 @@ impl From<EditableText> for Widget {
             cursor_color: value.cursor_color,
             background_cursor_color: value.background_cursor_color,
             selection_color: value.selection_color,
+            selection_height_style: value.selection_height_style,
+            selection_width_style: value.selection_width_style,
             autocorrection_text_rect_color: value.autocorrection_text_rect_color,
             text_direction: value.text_direction,
             locale: value.locale,

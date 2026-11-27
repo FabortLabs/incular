@@ -193,6 +193,13 @@ pub struct ParagraphCaretContext<'a> {
     pub strut: Option<TextStrut>,
 }
 
+/// Document boundaries for one retained paragraph's selection boxes.
+pub(crate) struct SelectionBoxContext {
+    pub(crate) widest: Option<f32>,
+    pub(crate) starts_document: bool,
+    pub(crate) ends_document: bool,
+}
+
 impl TextLayout {
     /// Tight visual boxes for complete clusters in the UTF-8 range.
     #[must_use]
@@ -209,6 +216,27 @@ impl TextLayout {
         height_style: BoxHeightStyle,
         width_style: BoxWidthStyle,
     ) -> Vec<TextPainterBox> {
+        self.boxes_for_selection_in_document(
+            range,
+            height_style,
+            SelectionBoxContext {
+                widest: (width_style == BoxWidthStyle::Max).then(|| self.longest_selection_line()),
+                starts_document: true,
+                ends_document: true,
+            },
+        )
+    }
+
+    pub(crate) fn longest_selection_line(&self) -> f32 {
+        self.lines.iter().map(|line| line.width).fold(0., f32::max)
+    }
+
+    pub(crate) fn boxes_for_selection_in_document(
+        &self,
+        range: TextRange,
+        height_style: BoxHeightStyle,
+        context: SelectionBoxContext,
+    ) -> Vec<TextPainterBox> {
         let end = range.end.min(self.retained_source_end());
         if range.start >= end {
             return Vec::new();
@@ -216,15 +244,19 @@ impl TextLayout {
         let range = TextRange::new(range.start, end);
         let mut result: Vec<TextPainterBox> = Vec::new();
         let lines = &self.lines;
-        let widest = (width_style == BoxWidthStyle::Max)
-            .then(|| lines.iter().map(|line| line.width).fold(0., f32::max));
         let first = lines.partition_point(|line| line.end <= range.start);
         let mut placeholders = self.placeholders.as_ref();
         placeholders = &placeholders[placeholders.partition_point(|child| child.line < first)..];
-        for (index, line) in lines.iter().enumerate().skip(first).take_while(|(_, line)| {
-            line.start < range.end
-        }) {
-            let line_bounds = self.selection_line_bounds(index, height_style);
+        for (index, line) in lines
+            .iter()
+            .enumerate()
+            .skip(first)
+            .take_while(|(_, line)| line.start < range.end)
+        {
+            let first_line = context.starts_document && index == 0;
+            let last_line = context.ends_document && index + 1 == lines.len();
+            let line_bounds =
+                self.selection_line_bounds(index, height_style, first_line, last_line);
             let run_heights = self.selection_run_heights.as_deref().unwrap_or(&[]);
             let first_box = result.len();
             let count = placeholders.partition_point(|child| child.line == index);
@@ -306,8 +338,8 @@ impl TextLayout {
                 previous_run = run_key;
                 previous_was_inline = inline.is_some();
             }
-            if let Some(widest) = widest
-                && index + 1 < lines.len()
+            if let Some(widest) = context.widest
+                && !last_line
                 && let Some(left) = result.get(first_box).copied()
             {
                 let right = *result.last().expect("line supplied a selection box");
@@ -335,7 +367,13 @@ impl TextLayout {
         result
     }
 
-    fn selection_line_bounds(&self, index: usize, style: BoxHeightStyle) -> Option<(f32, f32)> {
+    fn selection_line_bounds(
+        &self,
+        index: usize,
+        style: BoxHeightStyle,
+        first: bool,
+        last: bool,
+    ) -> Option<(f32, f32)> {
         let line = &self.lines[index];
         if style == BoxHeightStyle::Tight {
             return None;
@@ -357,8 +395,6 @@ impl TextLayout {
             Some(strut) => line.ascent - line.unscaled_ascent.max(strut.raw_ascent),
             None => line.ascent - line.unscaled_ascent,
         };
-        let first = index == 0;
-        let last = index + 1 == self.lines.len();
         match style {
             BoxHeightStyle::IncludeLineSpacingTop => {
                 if first { top += spacing; }

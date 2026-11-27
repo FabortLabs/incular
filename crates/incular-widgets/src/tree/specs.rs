@@ -590,6 +590,8 @@ pub struct TextFieldSpec {
     pub(crate) cursor_color: Color,
     pub(crate) background_cursor_color: Option<Color>,
     pub(crate) selection_color: Option<Color>,
+    pub(crate) selection_height_style: incular_text::BoxHeightStyle,
+    pub(crate) selection_width_style: incular_text::BoxWidthStyle,
     pub(crate) autocorrection_text_rect_color: Option<Color>,
     pub(crate) text_direction: Option<TextDirection>,
     pub(crate) locale: Option<incular_config::Locale>,

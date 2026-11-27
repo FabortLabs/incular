@@ -13,7 +13,10 @@ use std::{
 
 use incular_config::Constraints;
 use incular_core::{DirtyFlags, Offset, Size};
-use incular_text::{TextDocumentLayout, TextGeometry, TextLayout};
+use incular_text::{
+    BoxHeightStyle, BoxWidthStyle, TextDocumentLayout, TextGeometry, TextLayout, TextPainterBox,
+    TextRange,
+};
 
 use crate::{
     advanced_scrolling::draggable::DraggableSheetConfig,
@@ -93,6 +96,20 @@ impl FieldLayout {
         match self {
             Self::Whole(layout) => &layout.color_runs,
             Self::Paragraphs(_) => &[],
+        }
+    }
+
+    pub(crate) fn boxes_for_selection(
+        &self,
+        range: TextRange,
+        height_style: BoxHeightStyle,
+        width_style: BoxWidthStyle,
+    ) -> Vec<TextPainterBox> {
+        match self {
+            Self::Whole(layout) => layout.boxes_for_selection(range, height_style, width_style),
+            Self::Paragraphs(layout) => {
+                layout.boxes_for_selection(range, height_style, width_style)
+            }
         }
     }
 

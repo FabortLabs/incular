@@ -791,6 +791,8 @@ impl PartialEq for TextFieldSpec {
             && self.cursor_color == other.cursor_color
             && self.background_cursor_color == other.background_cursor_color
             && self.selection_color == other.selection_color
+            && self.selection_height_style == other.selection_height_style
+            && self.selection_width_style == other.selection_width_style
             && self.autocorrection_text_rect_color == other.autocorrection_text_rect_color
             && self.text_direction == other.text_direction
             && self.locale == other.locale
