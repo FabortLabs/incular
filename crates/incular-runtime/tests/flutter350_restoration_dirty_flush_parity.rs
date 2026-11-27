@@ -333,3 +333,34 @@ fn cancelling_the_awaited_redraw_releases_the_deferred_save() {
         );
     }
 }
+
+#[cfg(debug_assertions)]
+#[test]
+fn the_shared_restoration_manager_reports_one_owned_lifetime() {
+    use incular_core::memory::allocations::{MemoryAllocations, ObjectEventKind};
+
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let trace = events.clone();
+    let _observer = MemoryAllocations::current().add_listener(move |event| {
+        if event.class_name == "RestorationManager" {
+            trace.borrow_mut().push(event);
+        }
+    });
+    let fixture = Fixture::new();
+    assert_eq!(events.borrow().len(), 1);
+    let retained = fixture.handle.clone();
+    drop(fixture);
+    assert_eq!(
+        events.borrow().len(),
+        1,
+        "a cloned handle holds the same manager"
+    );
+    drop(retained);
+
+    let events = events.borrow();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].kind, ObjectEventKind::Created);
+    assert_eq!(events[1].kind, ObjectEventKind::Disposed);
+    assert_eq!(events[0].id, events[1].id);
+    assert!(events.iter().all(|event| event.library == "services"));
+}

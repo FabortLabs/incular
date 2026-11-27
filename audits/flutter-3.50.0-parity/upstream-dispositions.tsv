@@ -3813,3 +3813,4 @@ packages/flutter/test/painting/image_stream_test.dart	1184	errors are not report
 packages/flutter/test/painting/image_stream_test.dart	1211	errors are reported after listener removal by default	paired-match	upstream-image-error-reporting.md
 packages/flutter/test/widgets/image_test.dart	3026	errorBuilder prevents FlutterError report even if widget is disposed	paired-match	upstream-image-error-reporting.md#providerimage-fallback-across-unmount
 packages/flutter/test/widgets/image_test.dart	3082	errorBuilder prevents FlutterError report even if errorBuilder is later removed	paired-match	upstream-image-error-reporting.md#providerimage-fallback-across-unmount
+packages/flutter/test/services/restoration_test.dart	16	'$RestorationManager dispatches memory events'	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md#owned-restoration-manager-memory-events

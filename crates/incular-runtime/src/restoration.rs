@@ -497,6 +497,7 @@ struct RestorationManagerInner {
     config: RestorationConfig,
     state: std::cell::RefCell<ManagerState>,
     scheduler: std::cell::RefCell<Option<Weak<std::cell::RefCell<tasks::TaskScheduler>>>>,
+    _lifetime: incular_core::memory::allocations::ObjectLifetime,
 }
 
 /// Runtime-owned manager. The core restoration scope adapts to this manager;
@@ -639,6 +640,10 @@ impl RestorationManager {
                     handoff_epoch: 0,
                 }),
                 scheduler: std::cell::RefCell::new(None),
+                _lifetime: incular_core::memory::allocations::ObjectLifetime::new(
+                    "services",
+                    "RestorationManager",
+                ),
             }),
         }
     }

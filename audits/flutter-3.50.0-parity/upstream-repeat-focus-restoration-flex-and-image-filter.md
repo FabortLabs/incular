@@ -175,3 +175,13 @@ targets is bypassed. The native API uses the window's current
 primary focus (the initiating node in these originals), not every
 possible FocusNode-relative traversal policy. Forty-four related
 native tests passed, including keyboard input and editor selection.
+
+## Owned restoration manager memory events
+
+The pinned `services/restoration_test.dart:16` registration passed.
+The native fixture starts a real application with an in-memory
+restoration store. The runtime-owned manager reports one creation;
+cloning the restoration capability neither creates another manager
+nor drops the first early when the app is released. The final handle
+releases that same allocation and produces one disposal. All 15
+focused persistence, bucket ownership, and dirty-flush checks passed.
