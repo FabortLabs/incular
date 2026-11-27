@@ -312,63 +312,118 @@ impl Runtime {
         self.tree.text_field_select(field, selection, affinity, now)
     }
 
-    /// `EditableTextState.contextMenuButtonItems` with Flutter's
-    /// `TextSelectionHandleControls` gates (`cutEnabled`, `copyEnabled`,
-    /// `pasteEnabled`, `selectAllEnabled`) for the target platform.
-    fn text_field_context_menu_items(&mut self, field: ElementId) -> Vec<ContextMenuButtonItem> {
+    /// `EditableTextState.contextMenuButtonItems` before attaching handlers.
+    fn text_field_context_menu_button_types(
+        &mut self,
+        field: ElementId,
+    ) -> [Option<ContextMenuButtonType>; 4] {
+        use ContextMenuButtonType::{Copy, Cut, Paste, SelectAll};
+        use incular_widgets::ToolbarOptions;
+
         let Some(snapshot) = self.tree.text_field_input_geometry(field) else {
-            return Vec::new();
+            return [None; 4];
         };
         let Some(controller) = self.tree.text_controller(field) else {
-            return Vec::new();
+            return [None; 4];
         };
-        let read_only = !self.tree.text_field_is_editable(field);
+        let read_only = snapshot.read_only || !snapshot.enabled;
         let obscured = snapshot.obscure_text;
-        let collapsed = snapshot.selection.is_collapsed();
-        let text_len = controller.with_value(|value| value.text.len());
-        let cut = !read_only && !obscured && !collapsed;
-        let copy = !obscured && !collapsed;
-        // `ClipboardStatus.pasteable`: the clipboard holds text.
-        let paste = !read_only && self.clipboard.has_text();
-        let select_all = snapshot.traits.enable_interactive_selection
-            && !(read_only && obscured)
-            && match self.text_shortcut_platform {
-                TextShortcutPlatform::MacOs => false,
-                TextShortcutPlatform::Ios => text_len > 0 && collapsed,
-                TextShortcutPlatform::Android
-                | TextShortcutPlatform::Linux
-                | TextShortcutPlatform::Windows => {
-                    text_len > 0
-                        && !(snapshot.selection.start() == 0
-                            && snapshot.selection.end() == text_len)
-                }
+        let can_select_all = snapshot.traits.enable_interactive_selection && !(read_only && obscured);
+        let (legacy_controls, options) =
+            self.tree.text_field_toolbar_policy(field).unwrap_or_default();
+        let (cut, copy, paste, select_all) =
+            if legacy_controls {
+                let options =
+                    options.unwrap_or_else(|| ToolbarOptions::for_field(read_only, obscured));
+                (
+                    options.cut && !read_only && !obscured,
+                    options.copy && !obscured,
+                    options.paste && !read_only,
+                    options.select_all && can_select_all,
+                )
+            } else {
+                let collapsed = snapshot.selection.is_collapsed();
+                let text_len = controller.with_value(|value| value.text.len());
+                let select_all = match self.text_shortcut_platform {
+                    TextShortcutPlatform::MacOs => false,
+                    TextShortcutPlatform::Ios => text_len > 0 && collapsed,
+                    TextShortcutPlatform::Android
+                    | TextShortcutPlatform::Linux
+                    | TextShortcutPlatform::Windows => {
+                        text_len > 0
+                            && !(snapshot.selection.start() == 0
+                                && snapshot.selection.end() == text_len)
+                    }
+                };
+                let options = options
+                    .filter(|options| *options != ToolbarOptions::EMPTY)
+                    .unwrap_or_else(|| ToolbarOptions::for_field(false, false));
+                (
+                    options.cut && !read_only && !obscured && !collapsed,
+                    options.copy && !obscured && !collapsed,
+                    options.paste && !read_only && self.clipboard.has_text(),
+                    options.select_all && can_select_all && select_all,
+                )
             };
+        [(Cut, cut), (Copy, copy), (Paste, paste), (SelectAll, select_all)]
+            .map(|(kind, enabled)| enabled.then_some(kind))
+    }
+
+    fn text_field_context_menu_items(&mut self, field: ElementId) -> Vec<ContextMenuButtonItem> {
         let dispatcher = self.dispatcher();
-        let item = |button_type, intent: TextIntent| {
-            let dispatcher = dispatcher.clone();
-            ContextMenuButtonItem::new(button_type, move || {
-                dispatcher.dispatch(move |runtime: &mut Runtime| {
-                    runtime.run_text_menu_intent(field, intent);
-                });
+        self.text_field_context_menu_button_types(field)
+            .into_iter()
+            .flatten()
+            .filter_map(|button_type| {
+                let intent = match button_type {
+                    ContextMenuButtonType::Cut => TextIntent::Cut,
+                    ContextMenuButtonType::Copy => TextIntent::Copy,
+                    ContextMenuButtonType::Paste => TextIntent::Paste,
+                    ContextMenuButtonType::SelectAll => TextIntent::SelectAll,
+                    _ => return None,
+                };
+                let dispatcher = dispatcher.clone();
+                Some(ContextMenuButtonItem::new(button_type, move || {
+                    dispatcher.dispatch(move |runtime: &mut Runtime| {
+                        runtime.run_text_menu_intent(field, intent);
+                    });
+                }))
             })
-        };
-        let mut items = Vec::with_capacity(4);
-        if cut {
-            items.push(item(ContextMenuButtonType::Cut, TextIntent::Cut));
-        }
-        if copy {
-            items.push(item(ContextMenuButtonType::Copy, TextIntent::Copy));
-        }
-        if paste {
-            items.push(item(ContextMenuButtonType::Paste, TextIntent::Paste));
-        }
-        if select_all {
-            items.push(item(
-                ContextMenuButtonType::SelectAll,
-                TextIntent::SelectAll,
-            ));
-        }
-        items
+            .collect()
+    }
+
+    /// Queries the focused text editor's default system menu and builds its
+    /// platform command. This does not open an in-widget toolbar or move focus.
+    pub fn show_focused_system_context_menu(
+        &mut self,
+        menus: &mut incular_platform::SystemContextMenus,
+        controller: &incular_platform::SystemContextMenuController,
+    ) -> Result<Option<incular_platform::SystemContextMenuCommand>, incular_platform::SystemContextMenuError>
+    {
+        use incular_platform::{SystemContextMenuError, SystemContextMenuItem};
+        let connection = self
+            .text_input_client
+            .filter(|connection| Some(connection.target) == self.focused)
+            .ok_or(SystemContextMenuError::NoTextInput)?;
+        let rect = self
+            .tree
+            .editable_selection_menu_rect(connection.target)
+            .ok_or(SystemContextMenuError::InvalidTarget)?;
+        let items = self
+            .text_field_context_menu_button_types(connection.target)
+            .into_iter()
+            .flatten()
+            .filter_map(|kind| {
+                Some(match kind {
+                    ContextMenuButtonType::Cut => SystemContextMenuItem::Cut,
+                    ContextMenuButtonType::Copy => SystemContextMenuItem::Copy,
+                    ContextMenuButtonType::Paste => SystemContextMenuItem::Paste,
+                    ContextMenuButtonType::SelectAll => SystemContextMenuItem::SelectAll,
+                    _ => return None,
+                })
+            })
+            .collect();
+        menus.show_with_items(controller, Some(connection.client), rect, items)
     }
 
     /// Runs a context menu button's intent on its field, which may have

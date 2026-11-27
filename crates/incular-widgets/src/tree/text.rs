@@ -897,6 +897,18 @@ impl WidgetTree {
                 _ => None,
             })
     }
+    /// Whether an editor uses legacy selection controls and its explicit toolbar flags.
+    #[doc(hidden)]
+    pub fn text_field_toolbar_policy(
+        &self,
+        id: ElementId,
+    ) -> Option<(bool, Option<crate::ToolbarOptions>)> {
+        match self.elements.get(id.0)?.widget.kind() {
+            WidgetKind::TextField(spec) => Some((spec.legacy_selection_controls, spec.toolbar_options)),
+            _ => None,
+        }
+    }
+
     /// The shared toolbar overlay, including a currently open suggestions menu.
     #[doc(hidden)]
     #[must_use]
@@ -1818,6 +1830,83 @@ impl WidgetTree {
                 SelectionHandleType::Right,
             )?),
         })
+    }
+
+    /// The global logical rectangle targeted by the platform text menu.
+    /// A collapsed selection has zero width. A selection crossing lines
+    /// uses the whole editor width rather than just the selected glyphs.
+    #[must_use]
+    pub fn editable_selection_menu_rect(&self, id: ElementId) -> Option<Rect> {
+        use incular_text::TextAffinity::{Downstream, Upstream};
+
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let layout = node.field_layout()?;
+        let state = self.text_field_state_live(render);
+        let preferred_height = layout.metrics().line_height;
+        let (selection, empty, edge_clusters) = field.controller.with_value(|value| {
+            let selection = value.selection;
+            let range = selection.range();
+            let clusters = value.text.get(range.as_range()).filter(|s| !s.is_empty()).map(|_| {
+                (
+                    TextRange::new(range.start, next_grapheme_boundary(&value.text, range.start)),
+                    TextRange::new(previous_grapheme_boundary(&value.text, range.end), range.end),
+                )
+            });
+            (selection, value.text.is_empty(), clusters)
+        });
+        let glyph_height = |range| {
+            self.editable_composing_rect(id, range)
+                .map_or(preferred_height, |rect| rect.size.height)
+        };
+        let (start_height, end_height) = edge_clusters.map_or(
+            (preferred_height, preferred_height),
+            |(start, end)| (glyph_height(start), glyph_height(end)),
+        );
+        let padding = field.content_padding;
+        let content_top = text_field_content_top(
+            field.multiline,
+            node.size.height,
+            preferred_height,
+            padding,
+        );
+        let endpoint = |byte, affinity| {
+            let (x, y, line_height) = text_field_caret_geometry(&layout, byte, affinity, empty, field);
+            Offset::new(
+                x + padding.left - state.scroll_x,
+                y + line_height + content_top - state.scroll_y,
+            )
+        };
+        let (first, last) = if selection.is_collapsed() {
+            let point = endpoint(selection.extent, field.controller.caret_affinity());
+            (point, point)
+        } else {
+            (endpoint(selection.start(), Downstream), endpoint(selection.end(), Upstream))
+        };
+
+        let world = self.render_world_transform(render);
+        let a = world.transform_point(Offset::ZERO);
+        let b = world.transform_point(Offset::new(node.size.width, node.size.height));
+        if [a.x, a.y, b.x, b.y].into_iter().any(f32::is_nan) {
+            return Some(Rect::default());
+        }
+        let left = a.x.min(b.x);
+        let top = a.y.min(b.y);
+        let crosses_lines = last.y - first.y > end_height / 2.;
+        let (left, right) = if crosses_lines {
+            (left, a.x.max(b.x))
+        } else {
+            (left + first.x.min(last.x), left + first.x.max(last.x))
+        };
+        let rect_top = top + first.y - start_height;
+        let rect_bottom = top + last.y;
+        Some(Rect::from_origin_size(
+            Offset::new(left, rect_top),
+            Size::maybe_new(right - left, rect_bottom - rect_top)?,
+        ))
     }
 
     /// The caret rectangle of the byte `offset` in global coordinates, from

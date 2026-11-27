@@ -8,7 +8,8 @@ a version and date when publishing.
 ### Added
 
 - Platform services can manage system text-menu ownership, target geometry,
-  and custom actions using Flutter-compatible channel messages.
+  and custom actions using Flutter-compatible channel messages. A focused
+  editor can supply the default items and its logical selection rectangle.
 
 - Platform receivers can buffer early plugin messages and drain them in order
   when a local handler is installed. Each message has a one-shot reply.

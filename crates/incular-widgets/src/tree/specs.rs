@@ -558,6 +558,8 @@ pub struct TextFieldSpec {
     pub(crate) spell_check: Option<crate::SpellCheckConfiguration>,
     pub(crate) spell_check_suppressed: bool,
     pub(crate) has_context_menu_builder: bool,
+    pub(crate) legacy_selection_controls: bool,
+    pub(crate) toolbar_options: Option<crate::ToolbarOptions>,
     /// A shared portal for the ordinary and spell-check builders.
     pub(crate) context_menu: Option<Rc<crate::context_menu::TextContextMenuState>>,
     /// The field's selection handles, present when it has a handles builder.

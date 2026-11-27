@@ -22,9 +22,8 @@ the pinned iOS engine; the JSON preserves their numeric legacy field with
 a placeholder rather than copying Dart object hashes. Custom actions have
 separate opaque wire IDs.
 
-This change exposes a platform-service controller, not an iOS menu host or
-an automatic `EditableText` hookup. The widget-host test :459 remains
-uncredited. Native errors use typed Rust results rather than Dart asserts.
+The platform-service controller does not implement an iOS menu host.
+Native errors use typed Rust results rather than Dart asserts.
 
 ## Action lifetime and late platform messages
 
@@ -41,3 +40,25 @@ normally. This controller deliberately exposes the typed error to its
 embedding dispatcher; no full messenger error-envelope behavior is
 claimed. Ten native context-menu tests and four native receiver controls
 passed.
+
+## Mounted editor defaults and selection rectangle
+
+The exact pinned :459 registration passed. The native runtime pairs its
+autofocused, right-aligned multiline editor and retains a real text input
+connection. The platform command uses the default Cut, Copy, Paste, and
+Select All items in that order, opens the controller, and does not shift
+text focus. A control rejects menu requests without a focused editor.
+
+The authored Ahem fixture verifies replayed rectangle geometry
+to 0.002 logical pixels on both frameworks, with a translated, right-aligned
+400-wide editor at (13, 17). A caret sends approximately
+`(390, 17, 0, 10)`, a partial one-line selection sends
+`(380, 17, 20, 10)`, and a multiline selection sends `(13, 17, 400, 20)`
+in either selection direction. This uses the selection, not the visible
+caret's painted width. The system and existing in-widget toolbars share
+the four standard button gates. Legacy controls use the declared options;
+modern controls account for selection and clipboard state.
+
+No claim is made for actual UIKit display, automatic widget lifecycle,
+additional platform-only actions, complex bidi/soft-wrap endpoint
+resolution, or the other `widgets/system_context_menu_test.dart` cases.

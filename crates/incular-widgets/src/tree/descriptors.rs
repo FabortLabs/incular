@@ -1768,6 +1768,8 @@ impl From<EditableText> for Widget {
             .and_then(crate::SpellCheckConfiguration::suggestions_toolbar_builder)
             .cloned();
         let selection_handles_builder = value.selection_handles_builder.clone();
+        let legacy_selection_controls = context_menu_builder.is_none()
+            && selection_handles_builder.is_none();
         let edit_transform = compose_edit_transform(
             value.max_lines == Some(1),
             value.input_formatters,
@@ -1782,6 +1784,8 @@ impl From<EditableText> for Widget {
         let spec = TextFieldSpec {
             context_menu: None,
             has_context_menu_builder: context_menu_builder.is_some(),
+            legacy_selection_controls,
+            toolbar_options: value.toolbar_options,
             selection_handles: None,
             spell_check: value.spell_check,
             spell_check_suppressed,
