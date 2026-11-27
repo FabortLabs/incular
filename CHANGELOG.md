@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Custom animations can track local value and status listeners and start or
+  stop observing a parent only on the first or last actual registration.
+
 - Basic platform message channels send and receive unwrapped binary, UTF-8,
   JSON, and standard-codec values. Null stays distinct from empty bytes.
 

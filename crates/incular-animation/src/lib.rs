@@ -8,6 +8,7 @@ mod animations;
 mod controller;
 mod curve2d;
 mod curves;
+mod listener_helpers;
 pub mod motion;
 pub mod physics;
 pub mod scheduler;
@@ -32,6 +33,9 @@ pub use curve2d::{
     CatmullRomCurve, CatmullRomSpline, CatmullRomSplineError, Curve2D, Curve2DSample,
 };
 pub use curves::{CubicTransformError, Curve, CurveBlend, CurveChain, Curves, CustomCurve};
+pub use listener_helpers::{
+    AnimationListenerPanic, AnimationStatusListener, AnimationValueListener, LazyAnimationListeners,
+};
 pub use motion::{
     Channel, Keyframes, MotionValue, Spring, Transition, TransitionKind, end_transaction, ms, secs,
     transaction, with_transition, without_transition,
