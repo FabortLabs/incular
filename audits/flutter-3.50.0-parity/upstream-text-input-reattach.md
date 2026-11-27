@@ -293,3 +293,14 @@ before touching queued work or retained state. The regression checks
 both the queued and immediate APIs, then types into the same original
 editor without losing focus. A stable parent still allows reparenting.
 All 18 targeted scheduler, focus and controller cases passed.
+
+## Corrected input and a retired client
+
+Pinned :10812 and :10894 pair. Submitting the same rejected host value
+twice produces the corrected `Flutter is the best!` value and caret
+offset 20 once for each packet. Publishing again without another packet
+does not resend it. In the separate blur scenario the valid host value
+does not echo; closing the retired client sends Flutter's clear then
+deferred hide. Repeating the value after blur emits nothing and does not
+reopen the keyboard or reacquire focus. All 15 focused native input
+checks passed.

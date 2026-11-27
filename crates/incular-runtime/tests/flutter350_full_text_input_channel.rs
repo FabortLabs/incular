@@ -730,3 +730,155 @@ fn setting_controller_text_to_empty_removes_the_retained_glyphs() {
     assert_eq!(controller.selection_if_set(), None);
     assert!(!focus.has_focus());
 }
+
+#[test]
+fn a_rejected_remote_edit_is_corrected_on_the_wire_each_time_it_arrives() {
+    use incular_platform::{FlutterTextInputConfiguration, FlutterTextInputControls};
+    use incular_text::TextEditingValue;
+    use incular_widgets::CallbackTextInputFormatter;
+
+    let controller = TextEditingController::new();
+    let focus = FocusNode::new();
+    let formatter =
+        CallbackTextInputFormatter::new(|_: &TextEditingValue, _: &TextEditingValue| {
+            TextEditingValue::new("Flutter is the best!")
+        });
+    let mut runtime = Runtime::new(
+        field(&controller, &focus, true)
+            .input_formatter(formatter)
+            .into(),
+    )
+    .unwrap();
+    frame(&mut runtime);
+    let client = attached(&mut runtime);
+    let mut controls = FlutterTextInputControls::new(false);
+    assert!(controls.attach_existing(client, FlutterTextInputConfiguration::default(), |_| {}));
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    let _ = controls.take_platform_calls();
+
+    let rejected = "I will be modified by the formatter.";
+    let packet = update(
+        json!(client.get()),
+        json!({
+            "text": rejected, "selectionBase": rejected.len(), "selectionExtent": rejected.len(),
+        }),
+    );
+    for _ in 0..2 {
+        assert_eq!(controls.handle_platform_edit(&packet).unwrap(), Some(true));
+        assert_eq!(
+            runtime
+                .handle_flutter_text_input_editing_call(&packet)
+                .unwrap(),
+            Some(true)
+        );
+        frame(&mut runtime);
+        assert!(
+            runtime
+                .publish_flutter_text_input_snapshot(&mut controls)
+                .unwrap()
+        );
+        let calls = controls.take_platform_calls();
+        let states: Vec<_> = calls
+            .iter()
+            .filter(|call| call.method == "TextInput.setEditingState")
+            .collect();
+        assert_eq!(states.len(), 1);
+        assert_eq!(states[0].arguments["text"], "Flutter is the best!");
+        assert_eq!(states[0].arguments["selectionBase"], 20);
+        assert_eq!(states[0].arguments["selectionExtent"], 20);
+        assert_eq!(controller.text(), "Flutter is the best!");
+        assert!(
+            !runtime
+                .publish_flutter_text_input_snapshot(&mut controls)
+                .unwrap()
+        );
+    }
+}
+
+#[test]
+fn repeating_a_host_value_after_blur_does_not_reopen_the_keyboard_or_refocus() {
+    use incular_platform::{
+        FlutterTextInputConfiguration, FlutterTextInputControls, FlutterTextInputWireCall,
+    };
+
+    let controller = TextEditingController::new();
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(field(&controller, &focus, true).into()).unwrap();
+    frame(&mut runtime);
+    let client = attached(&mut runtime);
+    assert!(focus.has_primary_focus());
+    let mut controls = FlutterTextInputControls::new(false);
+    assert!(controls.attach_existing(client, FlutterTextInputConfiguration::default(), |_| {}));
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    let _ = controls.take_platform_calls();
+    let same = update(
+        json!(client.get()),
+        json!({
+            "text": "a", "selectionBase": 0, "selectionExtent": 0,
+        }),
+    );
+    assert_eq!(controls.handle_platform_edit(&same).unwrap(), Some(true));
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_editing_call(&same)
+            .unwrap(),
+        Some(true)
+    );
+    frame(&mut runtime);
+    assert!(
+        !runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    assert!(controls.take_platform_calls().is_empty());
+    let _ = runtime.take_text_input_commands();
+
+    focus.unfocus();
+    frame(&mut runtime);
+    assert!(!focus.has_focus());
+    let native = runtime.take_text_input_commands();
+    assert!(native.iter().any(|command| matches!(
+        command, TextInputCommand::Clear { client: id } if *id == client
+    )));
+    assert!(controls.close(client));
+    assert!(controls.flush_pending_hide());
+    assert_eq!(
+        controls.take_platform_calls(),
+        [
+            FlutterTextInputWireCall {
+                method: "TextInput.clearClient",
+                arguments: Value::Null
+            },
+            FlutterTextInputWireCall {
+                method: "TextInput.hide",
+                arguments: Value::Null
+            },
+        ]
+    );
+
+    assert_eq!(controls.handle_platform_edit(&same).unwrap(), Some(false));
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_editing_call(&same)
+            .unwrap(),
+        Some(false)
+    );
+    frame(&mut runtime);
+    assert!(!focus.has_focus());
+    assert!(runtime.take_text_input_commands().is_empty());
+    assert!(
+        !runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    assert!(controls.take_platform_calls().is_empty());
+    assert_eq!(controller.text(), "a");
+}

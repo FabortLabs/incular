@@ -3710,3 +3710,5 @@ packages/flutter/test/widgets/editable_text_test.dart	10349	input from controlle
 packages/flutter/test/widgets/editable_text_test.dart	11115	controller listener changes value	partial-match	upstream-text-input-reattach.md#controller-listeners-publish-only-the-final-edit
 packages/flutter/test/widgets/editable_text_test.dart	10977	TextEditingController.text set to empty string clears field	paired-match	upstream-text-input-reattach.md#clear-and-empty-text-updates
 packages/flutter/test/widgets/editable_text_test.dart	11013	TextEditingController.clear() behavior test	paired-match	upstream-text-input-reattach.md#clear-and-empty-text-updates
+packages/flutter/test/widgets/editable_text_test.dart	10812	Send text input state to engine when the input formatter rejects user input	paired-match	upstream-text-input-reattach.md#corrected-input-and-a-retired-client
+packages/flutter/test/widgets/editable_text_test.dart	10894	Repeatedly receiving [TextEditingValue] will not trigger a keyboard request	paired-match	upstream-text-input-reattach.md#corrected-input-and-a-retired-client
