@@ -75,11 +75,12 @@ fn offstage_lays_out_a_constrained_descendant_without_painting() {
     };
     let mut tree = WidgetTree::new();
     let root = tree.mount(scene(true)).unwrap();
-    assert_eq!(size(&tree, 1), Size::ZERO);
+    let leaf = tree.element_with_key(&Key::from(1_u64)).unwrap();
+    assert_eq!(tree.element_layout_size(leaf), None);
     assert_eq!(calls.get(), 0);
     layout(&mut tree);
     let _ = tree.paint();
-    assert_eq!(size(&tree, 1), Size::new(800., 10.));
+    assert_eq!(tree.element_layout_size(leaf), Some(Size::new(800., 10.)));
     assert_eq!(calls.get(), 0);
 
     tree.update(root, scene(false)).unwrap();
@@ -87,6 +88,17 @@ fn offstage_lays_out_a_constrained_descendant_without_painting() {
     let _ = tree.paint();
     assert_eq!(size(&tree, 1), Size::new(800., 10.));
     assert_eq!(calls.get(), 1);
+}
+
+#[test]
+fn a_measured_empty_box_is_distinct_from_an_unlaid_out_box() {
+    let mut tree = WidgetTree::new();
+    let child = Widget::from(SizedBox::shrink()).with_key(4_u64);
+    tree.mount(Center::new(child).into()).unwrap();
+    let child = tree.element_with_key(&Key::from(4_u64)).unwrap();
+    assert_eq!(tree.element_layout_size(child), None);
+    layout(&mut tree);
+    assert_eq!(tree.element_layout_size(child), Some(Size::ZERO));
 }
 
 struct LayoutCounter(Rc<Cell<u32>>);

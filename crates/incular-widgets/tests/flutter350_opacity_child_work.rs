@@ -89,3 +89,81 @@ fn retained_opacity_toggles_child_label_at_the_original_thresholds() {
         assert_eq!(label, visible, "alpha={alpha} keep={keep}");
     }
 }
+
+fn child_label_count(tree: &mut WidgetTree) -> usize {
+    tree.update_semantics();
+    tree.semantics()
+        .iter()
+        .filter(|(_, node)| node.label.as_deref() == Some("opacity child"))
+        .count()
+}
+
+#[test]
+fn render_opacity_visits_the_child_only_while_effectively_visible() {
+    let build = |alpha| {
+        Opacity::new(
+            alpha,
+            Text::new("opacity child").text_direction(TextDirection::Ltr),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(1.)).unwrap();
+    let bounds = Constraints::tight(Size::new(100., 60.));
+    for (alpha, expected) in [
+        (1., 1),
+        (0.5, 1),
+        (0.25, 1),
+        (0.125, 1),
+        (0., 0),
+        (0.125, 1),
+        (0., 0),
+        (0.001, 0),
+        (0.003, 1),
+    ] {
+        tree.update(root, build(alpha)).unwrap();
+        tree.layout(bounds).unwrap();
+        assert_eq!(child_label_count(&mut tree), expected, "alpha={alpha}");
+    }
+}
+
+#[test]
+fn mounted_animation_opacity_semantics_track_crossings_on_the_same_child() {
+    use incular_animation::AnimationController;
+    use incular_widgets::FadeTransition;
+    use std::time::{Duration, Instant};
+
+    let controller = AnimationController::new(Duration::from_millis(100));
+    let fade = FadeTransition::from_animation(
+        controller.clone(),
+        Text::new("opacity child").text_direction(TextDirection::Ltr),
+    );
+    let mut tree = WidgetTree::new();
+    assert_eq!(controller.value(), 0.);
+    controller.set_value(0.2);
+    assert_eq!(child_label_count(&mut tree), 0);
+    controller.set_value(1.);
+    assert_eq!(child_label_count(&mut tree), 0);
+    tree.mount(fade).unwrap();
+    let start = Instant::now();
+    let bounds = Constraints::tight(Size::new(100., 60.));
+    for (index, (alpha, expected)) in [
+        (1., 1),
+        (0.5, 1),
+        (0.25, 1),
+        (0.125, 1),
+        (0., 0),
+        (0.125, 1),
+        (0., 0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        controller.set_value(alpha);
+        let at = start + Duration::from_millis(index as u64);
+        tree.tick_animations(at);
+        tree.layout(bounds).unwrap();
+        tree.update_compositor(at).unwrap();
+        assert_eq!(child_label_count(&mut tree), expected, "alpha={alpha}");
+    }
+}

@@ -1349,6 +1349,15 @@ impl WidgetTree {
             .and_then(RenderNode::text_layout)
             .map(Arc::as_ref)
     }
+    /// The last measured local size of an element. A mounted but not yet
+    /// laid-out element has no measured size, unlike a laid-out zero-size
+    /// element. A pending relayout does not erase the previous measurement.
+    #[must_use]
+    pub fn element_layout_size(&self, id: ElementId) -> Option<Size> {
+        let render = self.renders.get(self.render_id(id)?.0)?;
+        render.constraints.map(|_| render.size)
+    }
+
     /// Current world-space bounds for a mounted element. This is useful for
     /// platform-neutral tooling and tests; it never exposes a render ID.
     #[must_use]

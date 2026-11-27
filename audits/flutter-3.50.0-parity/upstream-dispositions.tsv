@@ -1500,7 +1500,7 @@ packages/flutter/test/rendering/sliver_persistent_header_test.dart	29	RenderSliv
 packages/flutter/test/rendering/limited_box_test.dart	129	LimitedBox: no child use parent	partial-match	upstream-limited-box-and-decoration-contracts.md#optional-limitedbox-child-and-parent-minimums
 packages/flutter/test/rendering/constraints_test.dart	13	RenderFractionallySizedBox constraints	paired-match	upstream-render-box-edges.md
 packages/flutter/test/rendering/constraints_test.dart	34	BoxConstraints with NaN	partial-match	upstream-render-box-edges.md
-packages/flutter/test/rendering/offstage_test.dart	13	offstage	partial-match	upstream-render-box-edges.md
+packages/flutter/test/rendering/offstage_test.dart	13	offstage	paired-match	upstream-render-box-edges.md
 packages/flutter/test/rendering/relayout_boundary_test.dart	9	relayout boundary change does not trigger relayout	paired-match	upstream-render-box-edges.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	53	FractionallySizedBox alignment (direction-sensitive)	paired-match	upstream-fractional-sizing-and-direction.md
 packages/flutter/test/widgets/fractionally_sized_box_test.dart	74	OverflowBox alignment with FractionallySizedBox	paired-match	upstream-fractional-sizing-and-direction.md
@@ -3793,3 +3793,5 @@ packages/flutter/test/rendering/selection_test.dart	33	adjustDragOffset works	pa
 packages/flutter/test/rendering/view_test.dart	71	ViewConfiguration == and hashCode	paired-match	upstream-view-configuration.md
 packages/flutter/test/rendering/view_constraints_test.dart	11	Properly constraints the physical size	paired-match	upstream-view-configuration.md
 packages/flutter/test/painting/strut_style_test.dart	9	StrutStyle diagnostics test	paired-match	upstream-strut-diagnostics.md
+packages/flutter/test/rendering/semantics_and_children_test.dart	22	RenderOpacity and children and semantics	paired-match	upstream-render-box-edges.md#opacity-child-semantics
+packages/flutter/test/rendering/semantics_and_children_test.dart	41	RenderOpacity and children and semantics	partial-match	upstream-render-box-edges.md#opacity-child-semantics
