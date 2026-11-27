@@ -329,17 +329,20 @@ fn removing_the_editor_while_the_floating_caret_resets_cancels_frame_work() {
 fn a_distant_floating_caret_paints_its_background_anchor_only_during_drag() {
     use incular_text::TextStyle;
 
-    const BACKGROUND: Color = Color::rgba(135, 86, 52, 255);
+    const PREVIOUS: Color = Color::rgba(244, 67, 54, 255);
+    const BACKGROUND: Color = Color::rgba(76, 175, 80, 255);
     let constraints = Constraints::tight(Size::new(400., 120.));
     let controller = TextEditingController::with_text("AAAA");
     controller.set_selection(TextSelection::collapsed(0));
-    let editor = EditableText::new(controller.clone())
-        .autofocus(true)
-        .text_direction(TextDirection::Ltr)
-        .style(TextStyle::new().font_size(80.))
-        .cursor_color(CURSOR)
-        .background_cursor_color(BACKGROUND);
-    let mut runtime = Runtime::new(editor.into()).unwrap();
+    let editor = |background| {
+        EditableText::new(controller.clone())
+            .autofocus(true)
+            .text_direction(TextDirection::Ltr)
+            .style(TextStyle::new().font_size(80.))
+            .cursor_color(CURSOR)
+            .background_cursor_color(background)
+    };
+    let mut runtime = Runtime::new(editor(PREVIOUS).into()).unwrap();
     runtime.set_debug_deterministic_cursor(true);
     runtime.run_frame(constraints).unwrap();
     let sender = json!(
@@ -355,6 +358,11 @@ fn a_distant_floating_caret_paints_its_background_anchor_only_during_drag() {
             .unwrap()
     );
     let field = runtime.focused_element().unwrap();
+    let render = runtime.tree().render_id(field);
+    runtime.schedule_update(field, editor(BACKGROUND).into()).unwrap();
+    runtime.run_frame(constraints).unwrap();
+    assert_eq!(runtime.tree().render_id(field), render);
+    assert_eq!(runtime.focused_element(), Some(field));
     let anchor = runtime
         .tree()
         .floating_caret_geometry(field, 0, TextAffinity::Downstream)
@@ -386,6 +394,9 @@ fn a_distant_floating_caret_paints_its_background_anchor_only_during_drag() {
     let separated = move_caret(&mut runtime, "update", 20.);
     let (anchor_index, regular) = anchor_paint(&separated).unwrap();
     assert_eq!(regular, anchor);
+    assert!(!separated.commands().iter().any(|command| {
+        matches!(command, PaintCommand::Rect { color: PREVIOUS, .. })
+    }));
     assert!(
         separated.commands()[anchor_index + 1..]
             .iter()

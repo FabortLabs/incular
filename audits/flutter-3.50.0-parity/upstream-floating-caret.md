@@ -135,3 +135,14 @@ authored hard-break probe also advances through the 125 ms reset:
 it selects the previous line's end, offset 26 with upstream affinity.
 The native case verifies both points in time and the final force-press
 notification. Nine focused native floating-caret tests passed.
+
+## Retained cursor colors and configured opacity
+
+Pinned `widgets/editable_text_test.dart:687` and `:18145` passed.
+A same-element red-to-green background-caret update preserves render
+identity and editor focus. During a separated floating drag the emitted
+anchor is green, not cached red, and stays at the same underlying caret.
+A tap on an initially unfocused editor paints precisely one red caret
+with the configured 140/255 alpha rather than opaque red. The caret is
+absent before the tap. All 19 focused native color, cursor cadence and
+floating-caret checks passed.

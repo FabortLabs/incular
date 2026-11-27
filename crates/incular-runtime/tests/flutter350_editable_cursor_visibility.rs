@@ -135,3 +135,47 @@ fn autofocus_in_a_focused_scope_collapses_an_unset_selection_at_the_end() {
     assert_eq!(controller.selection(), TextSelection::collapsed(text.len()));
     assert_eq!(caret_paints(&frame), 1);
 }
+
+#[test]
+fn focusing_an_editor_paints_the_configured_translucent_cursor_without_opacifying_it() {
+    use incular_core::{InputEvent, Offset, PointerPhase};
+
+    const TRANSLUCENT: Color = Color::rgba(255, 0, 0, 140);
+    const OPAQUE: Color = Color::rgba(255, 0, 0, 255);
+    let focus = FocusNode::new();
+    let controller = TextEditingController::with_text("blah blah");
+    let field = editor(&controller, &focus).cursor_color(TRANSLUCENT);
+    let mut runtime = Runtime::new(field.into()).unwrap();
+    runtime.set_debug_deterministic_cursor(true);
+    let is_test_caret = |command: &PaintCommand| {
+        matches!(
+            command,
+            PaintCommand::Rect {
+                color: TRANSLUCENT | OPAQUE,
+                ..
+            }
+        )
+    };
+    let (unfocused, _) = runtime.run_frame(viewport()).unwrap();
+    assert!(!unfocused.commands().iter().any(is_test_caret));
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        let _ = runtime.handle_input(InputEvent::Pointer {
+            phase,
+            position: Offset::new(20., 10.),
+        });
+    }
+    let (focused, _) = runtime.run_frame(viewport()).unwrap();
+    assert!(focus.has_primary_focus());
+    let painted: Vec<_> = focused
+        .commands()
+        .iter()
+        .filter(|command| is_test_caret(command))
+        .collect();
+    assert!(matches!(
+        painted.as_slice(),
+        [PaintCommand::Rect {
+            color: TRANSLUCENT,
+            ..
+        }]
+    ));
+}
