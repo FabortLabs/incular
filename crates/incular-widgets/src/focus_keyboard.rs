@@ -37,10 +37,14 @@ pub struct ActionScope {
 impl ActionScope {
     #[must_use]
     pub fn new<C: CommandId>(actions: Rc<Actions<C>>, child: impl Into<Widget>) -> Self {
-        Self {
-            actions: incular_gestures::ErasedActionScope::from_actions(actions),
-            child: child.into(),
-        }
+        Self::from_erased(incular_gestures::ErasedActionScope::from_actions(actions), child.into())
+    }
+
+    pub(crate) fn from_erased(
+        actions: Rc<incular_gestures::ErasedActionScope>,
+        child: Widget,
+    ) -> Self {
+        Self { actions, child }
     }
 
     /// Installs an explicit dispatcher for this scope and descendants with
@@ -78,11 +82,18 @@ pub struct ShortcutScope {
 impl ShortcutScope {
     #[must_use]
     pub fn new<C: CommandId>(shortcuts: Rc<Shortcuts<C>>, child: impl Into<Widget>) -> Self {
+        Self::from_erased(shortcuts.erased_scope(), child.into())
+    }
+
+    pub(crate) fn from_erased(
+        shortcuts: Rc<incular_gestures::ErasedShortcutScope>,
+        child: Widget,
+    ) -> Self {
         Self {
-            shortcuts: shortcuts.erased_scope(),
+            shortcuts,
             include_semantics: true,
             debug_label: None,
-            child: child.into(),
+            child,
         }
     }
 
@@ -743,6 +754,11 @@ impl From<FocusScope> for Widget {
         }
     }
 }
+
+/// The standard activation intent for focused controls. WidgetsApp binds
+/// the platform's supported logical activation keys to this command.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ActivateIntent;
 
 /// Requests spatial keyboard focus traversal.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

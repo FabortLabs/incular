@@ -43,3 +43,20 @@ inherited behavior, falling back to the standard behavior when no
 ancestor provides it. An additional native control changes the
 nearest configuration from touch to mouse and verifies the mounted
 builder is notified. Four focused and eight adjacent tests passed.
+
+## Default and custom app activation
+
+Pinned `widgets/app_test.dart:43,68,101` ran successfully (including
+both simulator variants of :101). The mounted builder-only app now
+binds unmodified Space to the standard `ActivateIntent` and resolves
+the checkbox analogue's focus-local action. Supplying an app shortcut
+and action for the same key replaces the default: the custom action
+fires once, while the checkbox value stays unchanged. Releases do
+not invoke either mapping.
+
+Incular also verifies native main Enter, keypad Enter, and Select
+against the same mounted control, and that Control chords do not
+trigger it. :101 is partial because the portable event path does not
+carry Flutter's GameButtonA or replicate its simulator transports.
+No full application key table or platform gamepad support is
+claimed. Three focused and 17 adjacent Rust tests passed.

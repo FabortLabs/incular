@@ -18,7 +18,7 @@ use incular_config::{
     ApplicationDefaults, Locale, LocaleResolver, LocalizationCatalog, RuntimeEnvironment,
     TransparencyMode, WindowSizePolicy,
 };
-use incular_core::{Color, RestorationKey, RestorationScope, Size};
+use incular_core::{Color, KeyboardKey, Modifiers, NamedKey, RestorationKey, RestorationScope, Size};
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,
@@ -675,6 +675,23 @@ pub struct WidgetsAppData {
     pub revision: u64,
 }
 
+fn default_activation_shortcuts() -> Rc<incular_gestures::ErasedShortcutScope> {
+    let mut bindings = crate::Shortcuts::<crate::ActivateIntent>::typed();
+    let mut bind = |key| {
+        bindings.bind_activator(
+            crate::SingleActivator::new(key, Modifiers::empty()),
+            crate::ActivateIntent,
+        );
+    };
+    bind(KeyboardKey::Character(" ".to_owned()));
+    if !cfg!(target_arch = "wasm32") {
+        // The portable logical Enter covers the main and keypad positions.
+        bind(KeyboardKey::Named(NamedKey::Enter));
+        bind(KeyboardKey::Named(NamedKey::Select));
+    }
+    Rc::new(bindings).erased_scope()
+}
+
 /// Application-level localization selection and root-widget policy.
 #[derive(Clone)]
 pub struct WidgetsApp {
@@ -689,6 +706,8 @@ pub struct WidgetsApp {
     catalog: Option<Rc<dyn LocalizationCatalog>>,
     builder: Option<Rc<dyn Fn(Widget) -> Widget>>,
     router_root: Option<Widget>,
+    shortcuts: Rc<incular_gestures::ErasedShortcutScope>,
+    actions: Option<Rc<incular_gestures::ErasedActionScope>>,
     show_checked_mode_banner: bool,
     restoration_scope_id: Option<String>,
 }
@@ -725,6 +744,8 @@ impl WidgetsApp {
             catalog: None,
             builder: None,
             router_root: None,
+            shortcuts: default_activation_shortcuts(),
+            actions: None,
             show_checked_mode_banner: true,
             restoration_scope_id: None,
         }
@@ -879,6 +900,21 @@ impl WidgetsApp {
         self
     }
 
+    /// Replaces the app's default shortcut bindings. Descendant scopes still
+    /// have precedence.
+    #[must_use]
+    pub fn shortcuts<C: crate::CommandId>(mut self, shortcuts: Rc<crate::Shortcuts<C>>) -> Self {
+        self.shortcuts = shortcuts.erased_scope();
+        self
+    }
+
+    /// Supplies the app-level action implementations for its shortcuts.
+    #[must_use]
+    pub fn actions<C: crate::CommandId>(mut self, actions: Rc<crate::Actions<C>>) -> Self {
+        self.actions = Some(incular_gestures::ErasedActionScope::from_actions(actions));
+        self
+    }
+
     /// Builds the complete root with an explicit runtime environment.
     #[must_use]
     pub fn build_with_environment(&self, environment: RuntimeEnvironment) -> Widget {
@@ -917,6 +953,12 @@ impl WidgetsApp {
         // Flutter's WidgetsApp puts a `ShortcutRegistrar` above the app's
         // content, so menus anywhere can add accelerators.
         child = crate::ShortcutRegistrar::new(child).into();
+        if let Some(actions) = &self.actions {
+            child = crate::ActionScope::from_erased(actions.clone(), child).into();
+        }
+        child = crate::ShortcutScope::from_erased(self.shortcuts.clone(), child)
+            .debug_label("<Default WidgetsApp Shortcuts>")
+            .into();
         if let Some(catalog) = self.catalog.as_ref()
             && let Some(locale) = locale.clone()
         {
