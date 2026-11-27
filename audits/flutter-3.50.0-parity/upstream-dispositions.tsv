@@ -2645,3 +2645,12 @@ packages/flutter/test/rendering/editable_intrinsics_test.dart	12	editable intrin
 packages/flutter/test/rendering/editable_intrinsics_test.dart	54	textScaler affects intrinsics	paired-match	upstream-editable-intrinsics.md
 packages/flutter/test/rendering/editable_intrinsics_test.dart	70	maxLines affects intrinsics	paired-match	upstream-editable-intrinsics.md
 packages/flutter/test/rendering/editable_intrinsics_test.dart	90	strutStyle affects intrinsics	paired-match	upstream-editable-intrinsics.md
+packages/flutter/test/foundation/timeline_test.dart	18	Does not collect when collection not enabled	paired-match	upstream-foundation-timeline.md
+packages/flutter/test/foundation/timeline_test.dart	24	Collects when collection is enabled	paired-match	upstream-foundation-timeline.md
+packages/flutter/test/foundation/timeline_test.dart	42	Deletes old data when reset	paired-match	upstream-foundation-timeline.md
+packages/flutter/test/foundation/timeline_test.dart	53	Reports zero aggregation when requested missing block	paired-match	upstream-foundation-timeline.md
+packages/flutter/test/foundation/timeline_test.dart	63	Measures the runtime of a function	paired-match	upstream-foundation-timeline.md
+packages/flutter/test/foundation/timeline_test.dart	95	FlutterTimeline.instanceSync does not collect anything	paired-match	upstream-foundation-timeline.md
+packages/flutter/test/foundation/timeline_test.dart	104	FlutterTimeline.now returns a value	paired-match	upstream-foundation-timeline.md
+packages/flutter/test/foundation/timeline_test.dart	109	Can collect more than one slice of data	paired-match	upstream-foundation-timeline.md
+packages/flutter/test/foundation/timeline_test.dart	125	Collects blocks in a correct order	paired-match	upstream-foundation-timeline.md

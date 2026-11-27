@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Core exposes opt-in synchronous timeline capture, draining and named
+  duration aggregation.
+
 - Custom shape borders can provide forward and reverse interpolation used
   by ShapeDecoration painting, clipping and hit testing.
 

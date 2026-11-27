@@ -10,6 +10,7 @@ pub mod debug_double;
 pub mod debug_instrumentation;
 pub mod matrix4;
 pub mod debug_print;
+pub mod debug_timeline;
 mod context;
 mod fast_hash;
 mod geometry;
@@ -46,6 +47,7 @@ pub use debug_instrumentation::{
     debug_instrument_action, debug_instrumentation_enabled, set_debug_instrumentation_enabled,
 };
 pub use debug_print::{DebugPrintBuffer, debug_print_synchronously, debug_word_wrap};
+pub use debug_timeline::{AggregatedTimedBlock, AggregatedTimings, DebugTimeline, DebugTimelineError, TimedBlock};
 pub use context::{BuildContext, ConsumerId, ContextGuard, DependencySnapshot};
 pub use geometry::{
     ChangeImpact, Color, DirtyFlags, HslColor, HsvColor, Invalidation, Lerp, Offset, Rect, Size,

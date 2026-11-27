@@ -59,3 +59,10 @@ microseconds and rounds the final result. It does not change the unsigned
 Use `MergedListenable` to track or subscribe to several dependency sources.
 Construction attaches no listener. Dropping an owned `MergedSubscription`
 detaches it from every source.
+
+## Synchronous diagnostic timing
+
+Create a `DebugTimeline` for a diagnostic scope, enable its collection,
+and call `time_sync` around synchronous work. `collect` drains the timed
+blocks and provides name-based totals; `reset` discards completed samples.
+Instant events may be forwarded separately and do not enter the totals.
