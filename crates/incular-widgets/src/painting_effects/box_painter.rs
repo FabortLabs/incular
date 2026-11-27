@@ -436,7 +436,7 @@ fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDire
             paint_decoration_bitmap(image, bitmap.clone(), direction, 1.)
         }
         DecorationImageSource::Provider(provider) => {
-            let (provider, image) = (provider.clone(), image.clone());
+            let (provider, image) = (provider.clone(), Rc::new(image.clone()));
             Widget::mount_scoped_layout_builder(
                 |_| DecorationProviderState::default(),
                 move |state, context, constraints| {
@@ -445,9 +445,10 @@ fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDire
                         context,
                         (size.width.is_finite() && size.height.is_finite()).then_some(size),
                     );
+                    let retained = state.last_image_for(&image);
                     let fallback_stream = match &image.placeholder {
                         Some(DecorationImageSource::Provider(fallback))
-                            if !state.primary_is_ready(&provider, &configuration) =>
+                            if retained.is_none() && !state.primary_is_ready(&provider, &configuration) =>
                         {
                             Some(DecorationProviderState::stream(
                                 &state.placeholder, fallback, configuration.clone(), image.on_error.as_ref(),
@@ -456,7 +457,14 @@ fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDire
                         _ => None,
                     };
                     let primary = state.primary_stream(&provider, configuration, image.on_error.as_ref());
-                    if let incular_image::ImageLoadState::Ready(bitmap) = primary.frame_state() {
+                    let ready = match primary.frame_state() {
+                        incular_image::ImageLoadState::Ready(bitmap) => {
+                            state.remember_image(&image, &bitmap);
+                            Some(bitmap)
+                        }
+                        _ => retained,
+                    };
+                    if let Some(bitmap) = ready {
                         state.placeholder.borrow_mut().take();
                         let source_scale = bitmap.scale() as f32;
                         return paint_decoration_bitmap(&image, bitmap, direction, source_scale);
@@ -489,6 +497,7 @@ fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDire
 #[derive(Default)]
 struct DecorationProviderState {
     current: RefCell<Option<ResolvedDecorationImage>>,
+    last_ready: RefCell<Option<(Rc<DecorationImage>, incular_image::ImageHandle)>>,
     placeholder: RefCell<Option<ResolvedDecorationImage>>,
     primary_completion: RefCell<Option<incular_image::ImageFrameSubscription>>,
 }
@@ -545,6 +554,7 @@ impl crate::tree::RetainedState for DecorationProviderState {
 
     fn dispose(&self) {
         self.primary_completion.borrow_mut().take();
+        self.last_ready.borrow_mut().take();
         self.current.borrow_mut().take();
         self.placeholder.borrow_mut().take();
     }
@@ -553,6 +563,28 @@ impl crate::tree::RetainedState for DecorationProviderState {
 }
 
 impl DecorationProviderState {
+    // A provider can change its stream key when the paint size changes.
+    // Preserve its old frame for the same decoration until the new one is
+    // available, but never carry pixels into a different image description.
+    fn last_image_for(&self, image: &Rc<DecorationImage>) -> Option<incular_image::ImageHandle> {
+        let mut last = self.last_ready.borrow_mut();
+        if last.as_ref().is_some_and(|(owner, _)| {
+            !Rc::ptr_eq(owner, image) && owner.as_ref() != image.as_ref()
+        }) {
+            last.take();
+        }
+        last.as_ref().map(|(_, bitmap)| bitmap.clone())
+    }
+
+    fn remember_image(&self, image: &Rc<DecorationImage>, bitmap: &incular_image::ImageHandle) {
+        let mut last = self.last_ready.borrow_mut();
+        if last.as_ref().is_none_or(|(owner, previous)| {
+            !Rc::ptr_eq(owner, image) || previous.id() != bitmap.id()
+        }) {
+            last.replace((image.clone(), bitmap.clone()));
+        }
+    }
+
     fn current_stream(
         slot: &RefCell<Option<ResolvedDecorationImage>>,
         provider: &crate::AnyImageProvider,

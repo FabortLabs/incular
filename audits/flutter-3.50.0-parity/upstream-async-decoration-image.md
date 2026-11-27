@@ -49,3 +49,18 @@ failed provider delivers its original typed error once, after the
 painter is materialized, not from inside layout. Async errors are
 reported to the live handler; an obsolete provider cannot notify a
 replaced decoration. All 15 focused native tests passed.
+
+## Keep the last primary during a size-key handoff
+
+Both authored Flutter pixel controls passed, with and without an
+initial fallback. Once a decoration has a primary image, resizing
+the box to a configuration whose new stream is pending keeps that
+image covering the resized bounds. The fallback is not painted again.
+The previous native implementation flashed the fallback at the new
+size. Its painter now retains the most recent successful frame
+independently of the stream while the image descriptor is unchanged.
+
+The native check proves the actual displayed bitmap changes only when
+the current size's stream completes. A completion for a superseded
+width cannot overwrite the current image. All 27 focused native cases
+passed. The authored comparison adds no original-registration credit.
