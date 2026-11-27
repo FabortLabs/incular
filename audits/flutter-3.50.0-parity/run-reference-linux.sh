@@ -4,7 +4,8 @@ set -euo pipefail
 usage() {
   printf '%s\n' 'Usage: bash run-reference-linux.sh probe FILE_test.dart' \
     '       bash run-reference-linux.sh upstream LIBRARY/FILE_test.dart "Exact full test name" [...]' \
-    '       bash run-reference-linux.sh tooling WIDGET_PREVIEW_FILE_test.dart "Exact full test name" [...]' >&2
+    '       bash run-reference-linux.sh tooling WIDGET_PREVIEW_FILE_test.dart "Exact full test name" [...]' \
+    '       bash run-reference-linux.sh scaffold WIDGET_PREVIEW_FILE_test.dart "Exact full test name" [...]' >&2
   exit 2
 }
 
@@ -27,7 +28,7 @@ case "$mode" in
     [[ "$test_file" =~ ^[a-z0-9_]+_test\.dart$ ]] || usage
     fixture="$audit/reference-probes/test/$test_file"
     ;;
-  upstream|tooling)
+  upstream|tooling|scaffold)
     (( $# >= 1 && $# <= 5 )) || usage
     if [[ "$mode" == tooling ]]; then
       [[ "$test_file" =~ ^([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
@@ -43,6 +44,10 @@ case "$mode" in
           fixture="$tool_root/test/commands.shard/hermetic/widget_preview/$test_file"
           ;;
       esac
+    elif [[ "$mode" == scaffold ]]; then
+      [[ "$test_file" =~ ^[a-z0-9_]+_test\.dart$ ]] || usage
+      scaffold_root="$flutter_root/dev/integration_tests/widget_preview_scaffold"
+      fixture="$scaffold_root/test/$test_file"
     else
       [[ "$test_file" =~ ^(animation|foundation|gestures|painting|physics|rendering|scheduler|semantics|services|widget_previews|widgets)/([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
       fixture="$flutter_root/packages/flutter/test/$test_file"
@@ -71,6 +76,25 @@ if [[ "$mode" == probe ]]; then
   mkdir "$scratch/test"
   cp -- "$audit/reference-probes/pubspec.yaml" "$scratch/pubspec.yaml"
   cp -- "$fixture" "$scratch/test/$test_file"
+  fixture="test/$test_file"
+elif [[ "$mode" == scaffold ]]; then
+  cp -R -- "$scaffold_root/lib" "$scaffold_root/test" "$scratch/"
+  # Widget tests do not need the CLI's separate Dart process or its pinned
+  # host-native dependencies. Fixtures importing CLI internals are not
+  # runnable through this isolated widget-test package.
+  if grep -q 'package:flutter_tools/' "$fixture"; then
+    printf '%s\n' 'This fixture requires Flutter CLI tooling dependencies.' >&2
+    exit 1
+  fi
+  python3 - "$scaffold_root/pubspec.yaml" > "$scratch/pubspec.yaml" <<'PYTHON'
+from pathlib import Path
+import sys
+
+manifest = Path(sys.argv[1]).read_text(encoding="utf-8")
+manifest = manifest.replace("resolution: workspace\n", "")
+manifest = manifest.replace("  flutter_tools:\n    path: ../../../packages/flutter_tools/\n", "")
+print(manifest)
+PYTHON
   fixture="test/$test_file"
 elif [[ "$mode" == upstream ]]; then
   python3 - "$flutter_root/packages/flutter_goldens" > "$scratch/pubspec.yaml" <<'PY'
@@ -136,7 +160,7 @@ else
   fi
 
   test_args=(--no-pub --concurrency=1 --reporter expanded)
-  if [[ "$mode" == upstream ]]; then
+  if [[ "$mode" == upstream || "$mode" == scaffold ]]; then
     test_args+=(--name "$pattern")
   fi
   "$flutter" test "${test_args[@]}" "$fixture" 2>&1 | tee result.log

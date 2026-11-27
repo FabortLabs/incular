@@ -252,6 +252,8 @@ pub struct Root {
     revision: Rc<Cell<u64>>,
     #[builder(default)]
     range: Range,
+    #[builder(default, setter(strip_option))]
+    interaction_step: Option<f32>,
     #[builder(default = Axis::Horizontal)]
     orientation: Axis,
     #[builder(default = true)]
@@ -346,6 +348,14 @@ impl Root {
         self.range.step = value.abs().max(f32::EPSILON);
         self
     }
+    /// Sets the keyboard and accessibility adjustment separately from
+    /// pointer quantization. Ordinary discrete sliders use the same step.
+    #[must_use]
+    pub fn interaction_step(mut self, step: f32) -> Self {
+        self.interaction_step = (step.is_finite() && step > 0.).then_some(step);
+        self
+    }
+
     #[must_use]
     pub fn vertical(mut self) -> Self {
         self.orientation = Axis::Vertical;
@@ -714,6 +724,7 @@ impl Root {
             visual
         };
 
+        let interaction_step = self.interaction_step.unwrap_or(range.step);
         // Sliders are keyboard controls as well as pointer controls. Keep the
         // value and callback in the same retained cells used by pointer drag,
         // so arrow/Home/End/repeat events cannot diverge from mouse behavior.
@@ -770,7 +781,7 @@ impl Root {
                         KeyboardKey::Named(NamedKey::Home) => keyboard_range.min,
                         KeyboardKey::Named(NamedKey::End) => keyboard_range.max,
                         _ => keyboard_range
-                            .clamp(current + action.unwrap_or(1.0) * keyboard_range.step),
+                            .clamp(current + action.unwrap_or(1.0) * interaction_step),
                     };
                     if (next - current).abs() > f32::EPSILON {
                         keyboard_value.set(next);
@@ -801,7 +812,7 @@ impl Root {
                 numeric_value: Some(f64::from(range.clamp(current_value))),
                 numeric_min: Some(f64::from(range.min)),
                 numeric_max: Some(f64::from(range.max)),
-                numeric_step: Some(f64::from(range.step)),
+                numeric_step: Some(f64::from(interaction_step)),
                 ..SemanticState::default()
             });
         if self.enabled {
@@ -810,7 +821,7 @@ impl Root {
             let increment_revision = revision.clone();
             let increment_callback = callback.clone();
             semantics = semantics.on_increase(move || {
-                let next = range.clamp(increment_value.get() + range.step);
+                let next = range.clamp(increment_value.get() + interaction_step);
                 update_value(
                     &increment_value,
                     &increment_revision,
@@ -822,7 +833,7 @@ impl Root {
             let decrement_revision = revision;
             let decrement_callback = callback;
             semantics = semantics.on_decrease(move || {
-                let next = range.clamp(decrement_value.get() - range.step);
+                let next = range.clamp(decrement_value.get() - interaction_step);
                 update_value(
                     &decrement_value,
                     &decrement_revision,

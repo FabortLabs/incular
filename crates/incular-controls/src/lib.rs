@@ -51,6 +51,7 @@ pub mod toast;
 pub mod toggle;
 pub mod toggle_group;
 pub mod toolbar;
+pub mod widget_previews;
 pub mod tooltip;
 
 pub use app::ControlThemeScope;

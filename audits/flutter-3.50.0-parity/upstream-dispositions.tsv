@@ -3522,3 +3522,7 @@ packages/flutter/test/gestures/gesture_binding_test.dart	120	Platform view hit t
 packages/flutter/test/gestures/gesture_binding_test.dart	133	Platform view hit test should accept gesture if a platform view is not the first hit in hitTest result path	paired-match	upstream-pointer-packet-converter.md#native-platform-view-hit-requests
 packages/flutter/test/gestures/gesture_binding_test.dart	149	Platform view hit test should accept gesture if a platform view is the first hit in hitTest result path	paired-match	upstream-pointer-packet-converter.md#native-platform-view-hit-requests
 packages/flutter/test/gestures/gesture_binding_test.dart	687	Error handling	paired-match	upstream-pointer-packet-converter.md#failed-host-dispatch
+dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	22	displays initial state correctly	paired-match	upstream-preview-zoom.md
+dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	50	Zoom in and Zoom out linearly	paired-match	upstream-preview-zoom.md
+dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	84	Reset zoom works correctly	paired-match	upstream-preview-zoom.md
+dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	106	Slider updates scale correctly	paired-match	upstream-preview-zoom.md
