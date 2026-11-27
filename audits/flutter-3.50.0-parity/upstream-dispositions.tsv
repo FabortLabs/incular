@@ -2967,3 +2967,7 @@ packages/flutter/test/rendering/layers_test.dart	443	mutating ClipRectLayer fiel
 packages/flutter/test/rendering/layers_test.dart	453	mutating ClipRRectLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md
 packages/flutter/test/rendering/layers_test.dart	473	mutating ClipPath fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md
 packages/flutter/test/rendering/layers_test.dart	519	mutating BackdropFilterLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md
+packages/flutter/test/rendering/layers_test.dart	463	mutating ClipRSuperellipseLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md#effect-mutations
+packages/flutter/test/rendering/layers_test.dart	485	mutating OpacityLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md#effect-mutations
+packages/flutter/test/rendering/layers_test.dart	495	mutating ColorFilterLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md#effect-mutations
+packages/flutter/test/rendering/layers_test.dart	504	mutating ShaderMaskLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md#effect-mutations
