@@ -81,3 +81,18 @@ stream at that same size requests one frame only after completion.
 Both emit no image draws, so the listener distinction is not an
 artifact of accidentally painting visible content. All nine focused
 runtime tests passed.
+
+## Decoded image clone suppression
+
+Pinned painting/decoration_test.dart:212 pairs. A provider can publish
+multiple decoded frames. On the zero-size decoration used by the
+original, the first frame requests a redraw, the same image handle
+cloned or repeated does not, and a new decoded identity requests
+another redraw. Separately decoded but byte-identical images still
+count as different frames.
+
+The one-shot stream API keeps its terminal rules. Frame-sequence
+subscribers observe the latest distinct image; listeners waiting for
+the first outcome all see the first frame even if one callback
+publishes a new image reentrantly. All 10 focused runtime tests and
+18 focused image/stream tests passed.

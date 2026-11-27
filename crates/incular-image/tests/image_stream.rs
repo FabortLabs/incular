@@ -229,10 +229,62 @@ fn a_consumed_frame_listener_does_not_retain_decoded_pixels() {
     let weak = image.downgrade();
     let (stream, completer) = ImageStream::loading();
     let _subscription = stream.listen_frame(|result, _| {
-        assert_eq!(result.unwrap().decoded().pixels().as_ref(), [255, 255, 255, 255]);
+        assert_eq!(
+            result.unwrap().decoded().pixels().as_ref(),
+            [255, 255, 255, 255]
+        );
     });
     drop(stream);
     assert!(completer.complete(image));
     drop(completer);
     assert!(weak.is_dropped());
+}
+
+#[test]
+fn reentrant_frame_publication_preserves_the_initial_listener_snapshot() {
+    use std::{cell::RefCell, rc::Rc};
+
+    let (stream, publisher) = ImageStream::frame_sequence();
+    let first = pixel();
+    let next = pixel();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+
+    let sender = publisher.clone();
+    let second_frame = next.clone();
+    let first_observer = seen.clone();
+    let _first_listener = stream.listen_frame(move |result, synchronous| {
+        assert!(!synchronous);
+        assert!(sender.publish(second_frame.clone()));
+        assert!(!sender.publish(second_frame));
+        first_observer.borrow_mut().push(result.unwrap().id());
+    });
+    let second_observer = seen.clone();
+    let _second_listener = stream.listen_frame(move |result, synchronous| {
+        assert!(!synchronous);
+        second_observer.borrow_mut().push(result.unwrap().id());
+    });
+
+    assert!(publisher.publish(first.clone()));
+    assert_eq!(&*seen.borrow(), &[first.id(), first.id()]);
+    assert_eq!(stream.frame_state(), ImageLoadState::Ready(next.clone()));
+
+    let late_observer = seen.clone();
+    let _later = stream.listen_frame(move |result, synchronous| {
+        assert!(synchronous);
+        late_observer.borrow_mut().push(result.unwrap().id());
+    });
+    assert_eq!(seen.borrow().last(), Some(&next.id()));
+    assert!(!publisher.publish(next));
+    assert!(!publisher.fail_before_first_frame(ImageError::InvalidDimensions));
+}
+
+#[test]
+fn a_sequence_can_fail_before_any_frame_but_cannot_restart_after_failure() {
+    let (stream, publisher) = ImageStream::frame_sequence();
+    assert!(publisher.fail_before_first_frame(ImageError::InvalidDimensions));
+    assert!(!publisher.publish(pixel()));
+    assert_eq!(
+        stream.frame_state(),
+        ImageLoadState::Failed(ImageError::InvalidDimensions)
+    );
 }

@@ -336,3 +336,29 @@ fn an_unfinished_zero_size_decoration_notifies_only_after_completion() {
     assert!(draws(&frame(&mut runtime)).is_empty());
     assert!(!runtime.frame_requested());
 }
+
+#[test]
+fn repeating_a_clone_on_a_decoration_stream_does_not_repaint() {
+    let (stream, publisher) = ImageStream::frame_sequence();
+    let provider = Deferred {
+        stream,
+        resolutions: Rc::default(),
+    };
+    let mut runtime = Runtime::new(Stack::new([zero_size_decoration(provider)]).into()).unwrap();
+    assert!(draws(&frame(&mut runtime)).is_empty());
+    assert!(!runtime.frame_requested());
+
+    let first = pix();
+    assert!(publisher.publish(first.clone()));
+    assert!(runtime.frame_requested());
+    assert!(draws(&frame(&mut runtime)).is_empty());
+    assert!(!runtime.frame_requested());
+
+    assert!(!publisher.publish(first));
+    assert!(!runtime.frame_requested());
+
+    assert!(publisher.publish(pix()));
+    assert!(runtime.frame_requested());
+    assert!(draws(&frame(&mut runtime)).is_empty());
+    assert!(!runtime.frame_requested());
+}

@@ -7,11 +7,12 @@
 //! [`ImageStreamCompleter`], from a UI-thread callback such as the runtime's
 //! task completion. Reading [`ImageStream::state`] inside a build makes the
 //! build depend on the stream, so each change rebuilds it on the next frame.
+//! Providers that produce multiple frames use an ImageFramePublisher.
 
 use std::{
     any::Any,
     cell::{Cell, OnceCell, RefCell},
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     fmt,
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     rc::{Rc, Weak},
@@ -118,6 +119,20 @@ impl ImageStream {
             stream: stream.clone(),
         };
         (stream, completer)
+    }
+
+    /// Starts a stream whose provider can publish distinct decoded frames
+    /// after its first successful decode. The one-shot completer's
+    /// terminal behavior is unchanged.
+    #[must_use]
+    pub fn frame_sequence() -> (Self, ImageFramePublisher) {
+        let stream = Self::with(ImageLoadState::Loading(None));
+        let publisher = ImageFramePublisher(Rc::new(FramePublisherState {
+            stream: stream.clone(),
+            queue: RefCell::new(VecDeque::new()),
+            publishing: Cell::new(false),
+        }));
+        (stream, publisher)
     }
 
     /// A stream that is already ready, as a synchronous provider returns.
@@ -530,6 +545,71 @@ impl ImageFrameBinding {
 
 fn abandoned_image_load() -> ImageError {
     ImageError::Io("image loader disconnected before delivering a result".into())
+}
+
+struct FramePublisherState {
+    stream: ImageStream,
+    queue: RefCell<VecDeque<ImageHandle>>,
+    publishing: Cell<bool>,
+}
+
+/// Source of a provider's decoded frames. Repeating a clone of the
+/// current frame does not invalidate consumers or request another paint.
+#[derive(Clone)]
+pub struct ImageFramePublisher(Rc<FramePublisherState>);
+
+impl ImageFramePublisher {
+    /// Publishes a distinct image. Reentrant sends are delivered after the
+    /// current one, so all first-frame callbacks see the same initial frame.
+    pub fn publish(&self, image: ImageHandle) -> bool {
+        let state = &*self.0;
+        {
+            let mut queue = state.queue.borrow_mut();
+            let duplicate = queue.back().map_or_else(
+                || match &*state.stream.cell.state.borrow() {
+                    ImageLoadState::Ready(current) => current == &image,
+                    ImageLoadState::Failed(_) => true,
+                    ImageLoadState::Loading(_) => false,
+                },
+                |queued| queued == &image,
+            );
+            if duplicate {
+                return false;
+            }
+            queue.push_back(image);
+        }
+        if state.publishing.replace(true) {
+            return true;
+        }
+        struct PublishGuard<'a>(&'a FramePublisherState);
+        impl Drop for PublishGuard<'_> {
+            fn drop(&mut self) {
+                self.0.publishing.set(false);
+                // Only nonempty if an observer unwound during delivery.
+                self.0.queue.borrow_mut().clear();
+            }
+        }
+        let _guard = PublishGuard(state);
+        loop {
+            let frame = state.queue.borrow_mut().pop_front();
+            let Some(frame) = frame else { break };
+            if state.stream.cell.completed.get() {
+                *state.stream.cell.state.borrow_mut() = ImageLoadState::Ready(frame);
+                state.stream.cell.changes.notify();
+                if let Some(changes) = state.stream.cell.frame_changes.get() {
+                    changes.notify();
+                }
+            } else {
+                state.stream.set(ImageLoadState::Ready(frame));
+            }
+        }
+        true
+    }
+
+    /// Fails a sequence that has not published its first frame yet.
+    pub fn fail_before_first_frame(&self, error: ImageError) -> bool {
+        self.0.stream.set(ImageLoadState::Failed(error))
+    }
 }
 
 /// Reports progress and the outcome of a loading [`ImageStream`]

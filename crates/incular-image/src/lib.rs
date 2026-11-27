@@ -34,9 +34,8 @@ pub use playback::{
 pub use resize::{ImageResizeOptions, ResizeImage, ResizeImageKey, ResizeImagePolicy};
 
 pub use stream::{
-    AnyImageProvider, ImageChunkEvent, ImageChunkSubscription, ImageFrameSubscription,
-    ImageLoadState, ImageStream,
-    ImageStreamCompleter,
+    AnyImageProvider, ImageChunkEvent, ImageChunkSubscription, ImageFramePublisher,
+    ImageFrameSubscription, ImageLoadState, ImageStream, ImageStreamCompleter,
 };
 
 use incular_core::finite_non_negative;

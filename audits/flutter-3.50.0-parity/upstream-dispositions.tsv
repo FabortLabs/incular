@@ -3167,3 +3167,4 @@ packages/flutter/test/painting/text_painter_rtl_test.dart	306	TextPainter - forc
 packages/flutter/test/painting/text_painter_rtl_test.dart	729	TextPainter - empty text baseline	paired-match	upstream-text-painter.md#bidi-hard-boundaries-and-forced-wraps
 packages/flutter/test/painting/decoration_test.dart	170	BoxDecorationImageListenerSync	paired-match	upstream-async-decoration-image.md#image-clipping-after-async-completion
 packages/flutter/test/painting/decoration_test.dart	189	BoxDecorationImageListenerAsync	paired-match	upstream-async-decoration-image.md#image-clipping-after-async-completion
+packages/flutter/test/painting/decoration_test.dart	212	BoxDecorationImageListener does not change when image is clone	paired-match	upstream-async-decoration-image.md#decoded-image-clone-suppression
