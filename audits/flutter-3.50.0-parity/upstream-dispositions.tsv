@@ -3201,7 +3201,7 @@ packages/flutter/test/services/text_input_test.dart	1567	IOSSystemContextMenuIte
 packages/flutter/test/services/text_input_test.dart	1576	IOSSystemContextMenuItemDataShare debugFillProperties	paired-match	upstream-system-context-menu.md#system-menu-and-ios-title-diagnostics
 packages/flutter/test/services/text_input_test.dart	640	basic structure	paired-match	upstream-keyboard-input-types.md
 packages/flutter/test/services/text_input_test.dart	295	FloatingCursor coordinates type-casting	paired-match	upstream-floating-caret.md
-packages/flutter/test/widgets/editable_text_test.dart	13347	Floating cursor affinity	reference-ran-incular-open	upstream-floating-caret.md
+packages/flutter/test/widgets/editable_text_test.dart	13347	Floating cursor affinity	paired-match	upstream-floating-caret.md#soft-wrap-affinity-and-floating-caret-prototype
 packages/flutter/test/widgets/editable_text_test.dart	13422	Floating cursor ending with selection	partial-match	upstream-floating-caret.md
 packages/flutter/test/services/text_input_test.dart	1078	TextInputClient showToolbar method is called	partial-match	upstream-text-input-reattach.md#host-selection-toolbar
 packages/flutter/test/services/text_input_test.dart	1056	TextInputClient showAutocorrectionPromptRect method is called	partial-match	upstream-autocorrection-prompt.md

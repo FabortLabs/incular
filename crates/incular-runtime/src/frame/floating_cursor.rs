@@ -1,4 +1,5 @@
 use super::{ElementId, Runtime, TextInputClientId};
+use incular_config::TargetPlatform;
 use incular_core::{Offset, Rect, Size, time::Instant};
 use incular_platform::{FloatingCursorDragState, FlutterFloatingCursorPoint};
 use incular_text::{TextAffinity, TextEditingController, TextSelection};
@@ -58,9 +59,20 @@ impl FloatingCaretRun {
     }
 
     fn rect(&self, size: Size, inflation: f32) -> Rect {
+        // RenderEditable paints from the platform's raw prototype, not
+        // from the resolved regular caret rectangle. Inflation then adds
+        // half a pixel on each horizontal edge and one on each vertical edge.
+        let (prototype_top, prototype_height) = if TargetPlatform::current().is_apple() {
+            (0., size.height + 2.)
+        } else {
+            (2., size.height - 4.)
+        };
         Rect::from_origin_size(
-            self.offset - Offset::new(0.5 * inflation, inflation),
-            Size::new(size.width + inflation, size.height + 2. * inflation),
+            self.offset + Offset::new(-0.5 * inflation, prototype_top - inflation),
+            Size::new(
+                size.width + inflation,
+                (prototype_height + 2. * inflation).max(0.),
+            ),
         )
     }
 }

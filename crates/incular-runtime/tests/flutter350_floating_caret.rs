@@ -131,8 +131,14 @@ fn floating_caret_moves_visually_then_changes_a_collapsed_selection_after_settli
         .floating_caret_geometry(field, 0, TextAffinity::Downstream)
         .unwrap();
     let painted = floating_caret_rect(&runtime.run_frame(constraints()).unwrap().0).unwrap();
+    let prototype_top = if incular_config::TargetPlatform::current().is_apple() {
+        0.
+    } else {
+        2.
+    };
     let y = geometry.caret.origin.y
         + (geometry.caret.size.height - geometry.preferred_height) * 0.5
+        + prototype_top
         - 1.;
     assert!((painted.origin.y - y).abs() < 0.01);
     assert_eq!(
@@ -217,6 +223,7 @@ fn reversing_after_overshoot_reenters_from_the_edge_without_a_long_dead_zone() {
         json!({"X":1000, "Y":0}),
     );
     let edge = floating_caret_rect(&runtime.run_frame(constraints()).unwrap().0).unwrap();
+    assert!((edge.origin.x - 180.5).abs() < 0.01);
     wire(
         &mut runtime,
         sender.clone(),
@@ -235,6 +242,16 @@ fn reversing_after_overshoot_reenters_from_the_edge_without_a_long_dead_zone() {
     assert!((reentered.origin.x - (edge.origin.x - 25.)).abs() < 0.01);
     assert_eq!(controller.selection(), TextSelection::collapsed(0));
 
+    // The viewport can be wider than the text. Reentering the viewport
+    // immediately does not imply the closest text position is inside the word.
+    wire(
+        &mut runtime,
+        sender.clone(),
+        "update",
+        json!({"X":870, "Y":0}),
+    );
+    let inside_text = floating_caret_rect(&runtime.run_frame(constraints()).unwrap().0).unwrap();
+    assert!((inside_text.origin.x - (edge.origin.x - 125.)).abs() < 0.01);
     wire(&mut runtime, sender, "end", json!({"X":0, "Y":0}));
     runtime
         .run_frame_at(constraints(), Instant::now() + Duration::from_millis(130))
@@ -397,4 +414,76 @@ fn a_distant_floating_caret_paints_its_background_anchor_only_during_drag() {
     assert!(settled.commands().iter().any(|command| {
         matches!(command, PaintCommand::Rect { color, .. } if *color == CURSOR)
     }));
+}
+
+#[test]
+fn floating_caret_start_honors_wrapped_line_affinity_at_pinned_pixels() {
+    use incular_config::TargetPlatform;
+    use incular_core::Rect;
+    use incular_text::{TextStyle, register_application_font_as};
+
+    const FONT: &str = "Pinned floating caret Ahem";
+    let path = std::env::var_os("INCULAR_FLUTTER_AHEM_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../.tmp/flutter/packages/flutter_tools/static/Ahem.ttf")
+        });
+    if !path.is_file() {
+        eprintln!("Pinned Flutter Ahem unavailable; exact caret comparison not run");
+        return;
+    }
+    register_application_font_as(FONT, std::fs::read(path).unwrap());
+    let controller =
+        TextEditingController::with_text("ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz");
+    let editor = EditableText::new(controller.clone())
+        .autofocus(true)
+        .text_direction(TextDirection::Ltr)
+        .style(TextStyle::new().font_family(FONT).font_size(14.))
+        .max_lines(Some(2))
+        .cursor_color(CURSOR)
+        .cursor_width(2.);
+    let mut runtime = Runtime::new(editor.into()).unwrap();
+    runtime.set_debug_deterministic_cursor(true);
+    let constraints = Constraints::loose(Size::new(500., 60.));
+    runtime.run_frame(constraints).unwrap();
+    let sender = json!(
+        runtime
+            .take_text_input_commands()
+            .into_iter()
+            .find_map(|command| match command {
+                TextInputCommand::SetClient { configuration, .. } => {
+                    Some(configuration.client.get())
+                }
+                _ => None,
+            })
+            .unwrap()
+    );
+    let (prototype_top, height) = if TargetPlatform::current().is_apple() {
+        (-1., 18.)
+    } else {
+        (1., 12.)
+    };
+    for (affinity, x, line_top) in [
+        (TextAffinity::Downstream, 0.5, 14.),
+        (TextAffinity::Upstream, 378.5, 0.),
+    ] {
+        controller.set_selection_with_affinity(TextSelection::collapsed(27), affinity);
+        runtime.run_frame(constraints).unwrap();
+        assert_eq!(
+            wire(&mut runtime, sender.clone(), "start", json!({"X":0, "Y":0})),
+            Some(true)
+        );
+        let list = runtime.run_frame(constraints).unwrap().0;
+        assert_eq!(
+            floating_caret_rect(&list),
+            Some(Rect::from_origin_size(
+                Offset::new(x, line_top + prototype_top),
+                Size::new(3., height),
+            )),
+            "floating caret at the wrapped boundary: {affinity:?}",
+        );
+        assert_eq!(controller.selection(), TextSelection::collapsed(27));
+        assert_eq!(controller.caret_affinity(), affinity);
+    }
 }

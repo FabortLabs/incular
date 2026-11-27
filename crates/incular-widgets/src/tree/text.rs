@@ -242,13 +242,20 @@ impl WidgetTree {
         );
         let minimum = Offset::new(padding.left - 4., top - 4.);
         let viewport_width = (node.size.width - padding.horizontal()).max(0.);
+        // A force-line editor lays out its paragraph to the viewport minus
+        // the caret margin, even when the visible glyphs occupy less space.
+        // Ignoring that minimum cuts off the trailing whitespace at a wrap.
+        let paragraph_width = metrics
+            .size
+            .width
+            .max((viewport_width - editable_caret_margin(field)).max(0.));
         let viewport_height = (node.size.height - top - padding.bottom).max(0.);
         Some(FloatingCaretGeometry {
             caret,
             preferred_height: metrics.line_height,
             minimum,
             maximum: Offset::new(
-                padding.left + viewport_width.min(metrics.size.width) + 4.,
+                padding.left + viewport_width.min(paragraph_width) + 4.,
                 (top + viewport_height.min(metrics.size.height) - metrics.line_height + 5.)
                     .max(minimum.y),
             ),
@@ -3034,7 +3041,17 @@ pub(super) fn caret_geometry(
     byte: usize,
     affinity: incular_text::TextAffinity,
 ) -> (f32, f32, f32) {
-    let index = line_for_byte(layout, byte);
+    let mut index = line_for_byte(layout, byte);
+    if affinity == incular_text::TextAffinity::Downstream
+        && layout
+            .get_line(index)
+            .is_some_and(|line| line.end() == byte && line.caret_end() == byte)
+        && layout.get_line(index + 1).is_some_and(|next| next.start() == byte)
+    {
+        // A soft wrap shares one byte offset between its two lines. Do
+        // not move a caret across a hard newline that the selection owns.
+        index += 1;
+    }
     let line = layout.get_line(index);
     (
         line.map_or(0., |_| {

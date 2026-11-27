@@ -16,10 +16,10 @@ A collapsed selection moves only after settling; a selection already
 extended by the IME is not overridden. The authored pinned mounted
 sequence and native padding/timing/identity checks verify those cases.
 
-The pinned widget affinity and ending-with-selection registrations
-also ran. Their exact multi-line pixel coordinates, secondary
-background caret and the Flutter force-press selection notification
-are not fully paired.
+The pinned ending-with-selection widget registration remains partial:
+its exact sequence and the Flutter force-press selection notification
+are not fully paired. The separate wrapped-line affinity registration
+and the background caret have their own checks below.
 
 Four focused native floating-caret tests and 13 lifecycle regressions passed.
 
@@ -49,8 +49,7 @@ the current shaped geometry and regular caret radius, preserves paint order,
 and does not change text layout or the selection. The authored
 `editor_floating_caret_background_test.dart` passed against the pinned SDK;
 the two focused Rust targets passed eight tests. This covers the background
-caret, not the remaining exact wrapped-line pixel or selection-cause checks,
-and adds no upstream count.
+caret, not the separate selection-cause checks, and adds no upstream count.
 
 ## Live caret configuration
 
@@ -61,3 +60,23 @@ rounded caret is `(40, 0, 4, 10)` with radius 3 and becomes
 `(80, 0, 4, 20)` at 2× text scaling without growing in width or radius.
 Hiding it again removes the paint command. Focus identity, selection, and
 upstream affinity are unchanged through all updates. Five native tests passed.
+
+## Soft-wrap affinity and floating caret prototype
+
+Pinned `widgets/editable_text_test.dart:13347`, “Floating cursor affinity,”
+passes. The initially unpaired Incular renderer put both affinities on the
+first line, clamped the trailing-space edge too soon, and painted a caret
+four pixels too tall on Linux. With the pinned Ahem font, Downstream now
+paints `(0.5, 15, 3, 12)` at the start of the next line, while Upstream
+paints `(378.5, 1, 3, 12)` at the trailing edge of the previous line.
+The selection stays unchanged. The normal caret code switches lines only for
+a shared soft-wrap edge, preserving the hard-break selection reveal behavior.
+
+The raw floating prototype follows Flutter's platform grouping: top 2 and
+height minus 4 on Android/Fuchsia/Linux/Windows; top 0 and height plus 2 on
+iOS/macOS. Only then are the half-pixel horizontal and one-pixel vertical
+margins applied. The force-line viewport boundary is independent of shorter
+glyph runs. The pinned authored overshoot probe measured x coordinates
+180.5, 180.5, 155.5 and 55.5 through reversal into a 180-pixel viewport.
+The four focused Rust targets passed 17 tests; the native Apple path was
+not run in this Linux environment.
