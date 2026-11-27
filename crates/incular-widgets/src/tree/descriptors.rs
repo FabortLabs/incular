@@ -3,7 +3,7 @@
 //! Public descriptor types lower into the opaque `Widget` transport. Mutable mounted state continues to live exclusively in `WidgetTree`.
 
 use super::*;
-use crate::tree::specs::TextParagraphPolicy;
+use crate::tree::specs::{AppPrivateCommandCallback, TextParagraphPolicy};
 
 /// Renderer-neutral image sizing policy (maps to Flutter's `BoxFit`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -1056,6 +1056,7 @@ pub struct EditableText {
     clip_behavior: incular_config::Clip,
     on_editing_complete: Option<Rc<dyn Fn()>>,
     on_submit: Option<Rc<dyn Fn(String)>>,
+    on_app_private_command: Option<AppPrivateCommandCallback>,
     multiline: bool,
     min_lines: Option<usize>,
     max_lines: Option<usize>,
@@ -1126,6 +1127,7 @@ impl EditableText {
             clip_behavior: incular_config::Clip::HardEdge,
             on_editing_complete: None,
             on_submit: None,
+            on_app_private_command: None,
             multiline: false,
             min_lines: None,
             max_lines: Some(1),
@@ -1348,6 +1350,17 @@ impl EditableText {
     #[must_use]
     pub fn on_submit(mut self, callback: impl Fn(String) + 'static) -> Self {
         self.on_submit = Some(Rc::new(callback));
+        self
+    }
+    /// Receives an application-specific message from the active input method.
+    /// Missing message data is delivered as an empty object. The editor does
+    /// not interpret the action or change text or focus on its own.
+    #[must_use]
+    pub fn on_app_private_command(
+        mut self,
+        callback: impl Fn(&str, &serde_json::Map<String, serde_json::Value>) + 'static,
+    ) -> Self {
+        self.on_app_private_command = Some(Rc::new(callback));
         self
     }
     /// Enables multiline editing. Material text-field wrappers should use
@@ -1859,6 +1872,7 @@ impl From<EditableText> for Widget {
             clip_behavior: value.clip_behavior,
             on_editing_complete: value.on_editing_complete,
             on_submit: value.on_submit,
+            on_app_private_command: value.on_app_private_command,
             multiline: value.multiline,
             min_lines: value.min_lines,
             max_lines: value.max_lines,

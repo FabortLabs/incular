@@ -12,11 +12,12 @@ enum EditableCaret {
     ImeAnchor,
 }
 
-/// The application callback that failed while finalizing an edit.
+/// The application callback that failed during a text input event.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TextEditingCallback {
     EditingComplete,
     Submitted,
+    AppPrivateCommand,
 }
 
 /// A caught Rust panic from an editor callback, preserving its message.
@@ -2063,6 +2064,30 @@ impl WidgetTree {
             caret_rect,
         })
     }
+    /// Dispatches a validated private input-method message to a retained editor.
+    #[doc(hidden)]
+    pub fn dispatch_app_private_command(
+        &self,
+        target: ElementId,
+        action: &str,
+        data: &serde_json::Map<String, serde_json::Value>,
+        mut report: impl FnMut(TextEditingCallbackError),
+    ) {
+        let Some(element) = self.elements.get(target.0) else {
+            return;
+        };
+        let WidgetKind::TextField(spec) = element.widget.kind() else {
+            return;
+        };
+        if let Some(callback) = &spec.on_app_private_command {
+            run_editing_callback(
+                TextEditingCallback::AppPrivateCommand,
+                || callback(action, data),
+                &mut report,
+            );
+        }
+    }
+
     /// Completes editing in a field: `on_editing_complete` runs first, then
     /// `on_submit` with the committed text. Focus is owned by the caller.
     pub fn submit_text_field(&self, id: ElementId) -> bool {

@@ -510,6 +510,9 @@ pub(crate) type EditTransform = Rc<
 >;
 pub(crate) type EditChanged = Rc<dyn Fn(&str)>;
 
+pub(crate) type AppPrivateCommandCallback =
+    Rc<dyn Fn(&str, &serde_json::Map<String, serde_json::Value>)>;
+
 #[doc(hidden)]
 #[derive(Clone)]
 pub struct TextFieldSpec {
@@ -531,6 +534,7 @@ pub struct TextFieldSpec {
     pub(crate) clip_behavior: incular_config::Clip,
     pub(crate) on_editing_complete: Option<Rc<dyn Fn()>>,
     pub(crate) on_submit: Option<Rc<dyn Fn(String)>>,
+    pub(crate) on_app_private_command: Option<AppPrivateCommandCallback>,
     pub(crate) multiline: bool,
     pub(crate) min_lines: Option<usize>,
     pub(crate) max_lines: Option<usize>,

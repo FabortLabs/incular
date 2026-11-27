@@ -2809,3 +2809,9 @@ packages/flutter/test/gestures/drag_test.dart	2473	Does not crash when one of th
 packages/flutter/test/services/text_input_test.dart	346	equality operator works correctly	paired-match	upstream-text-input-configuration.md#equality-copy-and-hashing
 packages/flutter/test/services/text_input_test.dart	413	copyWith method works correctly	paired-match	upstream-text-input-configuration.md#equality-copy-and-hashing
 packages/flutter/test/services/text_input_test.dart	482	hashCode works correctly	paired-match	upstream-text-input-configuration.md#equality-copy-and-hashing
+packages/flutter/test/services/text_input_test.dart	902	TextInputClient performPrivateCommand method is called	paired-match	upstream-app-private-input-command.md
+packages/flutter/test/services/text_input_test.dart	927	TextInputClient performPrivateCommand method is called with float	paired-match	upstream-app-private-input-command.md
+packages/flutter/test/services/text_input_test.dart	952	TextInputClient performPrivateCommand method is called with CharSequence array	paired-match	upstream-app-private-input-command.md
+packages/flutter/test/services/text_input_test.dart	980	TextInputClient performPrivateCommand method is called with CharSequence	paired-match	upstream-app-private-input-command.md
+packages/flutter/test/services/text_input_test.dart	1005	TextInputClient performPrivateCommand method is called with float array	paired-match	upstream-app-private-input-command.md
+packages/flutter/test/services/text_input_test.dart	1030	TextInputClient performPrivateCommand method is called with no data at all	paired-match	upstream-app-private-input-command.md

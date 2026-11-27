@@ -22,6 +22,13 @@ change settings while retaining the source configuration's effective smart dashe
 and quotes. Set either setting to `None` inside the update to resolve it again
 from the copy's `obscure_text` value.
 
+A Flutter-compatible embedder can also route
+`TextInputClient.performPrivateCommand` through
+`Runtime::handle_flutter_text_input_private_command_call`. Register
+`EditableText::on_app_private_command` to receive the action and its JSON
+object. Missing or null data is an empty object. The editor does not interpret
+the command, and a retired attachment cannot send it to the new editor.
+
 ```rust
 use incular::prelude::*;
 

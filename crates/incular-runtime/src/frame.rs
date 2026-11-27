@@ -1046,7 +1046,7 @@ impl Runtime {
     pub fn observe_runtime_error(&mut self, observer: impl Fn(RuntimeErrorReport) + 'static) {
         self.error_observers.push(Rc::new(observer));
     }
-    /// Observes caught errors from editing-complete and submitted callbacks.
+    /// Observes caught errors from application callbacks during text input.
     /// Their panic messages are reported instead of escaping the native input
     /// loop. Only builds that unwind can catch a panic.
     pub fn observe_text_editing_error(
@@ -3726,12 +3726,7 @@ impl Runtime {
         let mut callback_errors = Vec::new();
         let handled = self.tree.submit_text_field_with_errors(field, |error| callback_errors.push(error));
         for error in callback_errors {
-            if self.editing_error_observers.is_empty() {
-                tracing::error!(callback = ?error.callback, message = %error.message, "editable text callback failed");
-            }
-            for observer in &self.editing_error_observers {
-                observer(&error);
-            }
+            self.report_editing_callback_error(error);
         }
         if should_move_focus {
             let refocus_requested = focus_node.as_ref().is_some_and(|node| {
@@ -3748,6 +3743,28 @@ impl Runtime {
             }
         }
         handled
+    }
+
+    fn report_editing_callback_error(&self, error: incular_widgets::TextEditingCallbackError) {
+        if self.editing_error_observers.is_empty() {
+            tracing::error!(callback = ?error.callback, message = %error.message, "editable text callback failed");
+        }
+        for observer in &self.editing_error_observers {
+            observer(&error);
+        }
+    }
+
+    pub(crate) fn dispatch_flutter_app_private_command(
+        &self,
+        action: &str,
+        data: &serde_json::Map<String, serde_json::Value>,
+    ) {
+        if let Some(connection) = self.text_input_client {
+            self.tree
+                .dispatch_app_private_command(connection.target, action, data, |error| {
+                    self.report_editing_callback_error(error);
+                });
+        }
     }
 
     fn restart_submitted_text_input(&mut self, field: ElementId) {

@@ -142,6 +142,19 @@ pub enum FlutterTextInputEditingError {
     ReversedComposition { start: i64, end: i64 },
 }
 
+/// Malformed application-private command on the optional Flutter channel.
+#[derive(Debug, thiserror::Error)]
+pub enum FlutterTextInputPrivateCommandError {
+    #[error(transparent)]
+    Codec(#[from] JsonMethodCodecError),
+    #[error("expected a client ID and a private-command object")]
+    InvalidArguments,
+    #[error("expected a string private-command action")]
+    InvalidAction,
+    #[error("expected private-command data to be an object or null")]
+    InvalidData,
+}
+
 fn editing_endpoint(
     text: &str,
     offset: i64,
@@ -263,6 +276,47 @@ impl crate::Runtime {
         }
         let state = decode_full_editing_state(args.get(1).ok_or(InvalidArguments)?)?;
         self.handle_text_editing_state(state);
+        Ok(Some(true))
+    }
+
+    /// Delivers `TextInputClient.performPrivateCommand` to the current editor.
+    /// Returns `Some(true)` for a valid active message (even without an app
+    /// listener), `Some(false)` for a retired client, and `None` for another method.
+    ///
+    /// # Errors
+    /// Invalid messages for the active attachment leave the editor untouched.
+    pub fn handle_flutter_text_input_private_command_call(
+        &self,
+        data: &[u8],
+    ) -> Result<Option<bool>, FlutterTextInputPrivateCommandError> {
+        use FlutterTextInputPrivateCommandError::{InvalidAction, InvalidArguments, InvalidData};
+        let call = JsonMethodCodec::decode_method_call(data)?;
+        if call.method != "TextInputClient.performPrivateCommand" {
+            return Ok(None);
+        }
+        let Some(active) = self.active_flutter_editable_client() else {
+            return Ok(Some(false));
+        };
+        let args = call.arguments.as_array().ok_or(InvalidArguments)?;
+        let sender = args.first().ok_or(InvalidArguments)?;
+        if !sender_matches(sender, active).ok_or(InvalidArguments)? {
+            return Ok(Some(false));
+        }
+        let command = args
+            .get(1)
+            .and_then(Value::as_object)
+            .ok_or(InvalidArguments)?;
+        let action = command
+            .get("action")
+            .and_then(Value::as_str)
+            .ok_or(InvalidAction)?;
+        let empty = Map::new();
+        let data = match command.get("data") {
+            None | Some(Value::Null) => &empty,
+            Some(Value::Object(data)) => data,
+            _ => return Err(InvalidData),
+        };
+        self.dispatch_flutter_app_private_command(action, data);
         Ok(Some(true))
     }
 
