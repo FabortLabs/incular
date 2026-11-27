@@ -3243,3 +3243,5 @@ packages/flutter/test/foundation/diagnostics_json_test.dart	257	delegateForAddin
 packages/flutter/test/foundation/diagnostics_json_test.dart	95	iterative implementation (without full details)	paired-match	upstream-diagnostic-tree-json.md
 packages/flutter/test/foundation/diagnostics_json_test.dart	10	Element diagnostics json includes widgetRuntimeType	paired-match	upstream-diagnostic-tree-json.md
 packages/flutter/test/foundation/diagnostics_json_test.dart	20	StatefulElement diagnostics are stateful	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_test.dart	1458	iterable flags property test	paired-match	upstream-diagnostic-messages-and-flags.md
+packages/flutter/test/foundation/diagnostics_test.dart	1658	message test	paired-match	upstream-diagnostic-messages-and-flags.md

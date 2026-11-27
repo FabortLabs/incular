@@ -6,6 +6,7 @@ use std::{
     rc::Rc,
 };
 
+use indexmap::IndexMap;
 use serde_json::{Value, json};
 
 /// Visibility of a diagnostic in ascending display order.
@@ -49,6 +50,8 @@ pub enum DiagnosticsTreeStyle {
     /// Use the normal sparse tree presentation.
     #[default]
     Sparse,
+    /// Keep the named diagnostic and its value on one line.
+    SingleLine,
 }
 
 impl DiagnosticsTreeStyle {
@@ -56,6 +59,7 @@ impl DiagnosticsTreeStyle {
         match self {
             Self::None => "none",
             Self::Sparse => "sparse",
+            Self::SingleLine => "singleLine",
         }
     }
 }
@@ -79,6 +83,53 @@ pub trait DiagnosticValue: PartialEq {
     /// A boolean value, when this type is a boolean.
     fn as_diagnostic_bool(&self) -> Option<bool> {
         None
+    }
+}
+
+impl DiagnosticValue for () {
+    const TYPE_NAME: &'static str = "void";
+
+    fn to_diagnostic_json(&self) -> Value {
+        Value::Null
+    }
+
+    fn diagnostic_text(&self) -> String {
+        "null".to_owned()
+    }
+}
+
+/// Ordered optional values for an inspector property that exposes only
+/// their presence, never their actual objects.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DiagnosticFlagEntries<T>(IndexMap<String, Option<T>>);
+
+impl<T> DiagnosticFlagEntries<T> {
+    /// Returns every submitted entry, including the absent ones.
+    #[must_use]
+    pub fn entries(&self) -> &IndexMap<String, Option<T>> {
+        &self.0
+    }
+
+    fn present_names(&self) -> impl Iterator<Item = &str> {
+        self.0
+            .iter()
+            .filter_map(|(name, value)| value.as_ref().map(|_| name.as_str()))
+    }
+}
+
+impl<T: DiagnosticValue> DiagnosticValue for DiagnosticFlagEntries<T> {
+    const TYPE_NAME: &'static str = "Map";
+
+    fn to_diagnostic_json(&self) -> Value {
+        Value::Null
+    }
+
+    fn has_json_value(&self) -> bool {
+        false
+    }
+
+    fn diagnostic_text(&self) -> String {
+        self.present_names().collect::<Vec<_>>().join(", ")
     }
 }
 
@@ -311,6 +362,12 @@ enum Presentation<T> {
     },
     Flag,
     ObjectFlag,
+    Message,
+    FlagsSummary {
+        member_type: &'static str,
+        has_names: fn(&T) -> bool,
+        names_for_json: fn(&T) -> Option<Vec<&str>>,
+    },
     Enum {
         short_name: fn(&T) -> &str,
     },
@@ -537,6 +594,9 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         let hidden_flag = match self.presentation {
             Presentation::Flag => self.value().is_some() && self.flag_label().is_none(),
             Presentation::ObjectFlag => self.object_flag_label().is_none(),
+            Presentation::FlagsSummary { has_names, .. } => {
+                self.if_empty.is_none() && !self.value().is_some_and(has_names)
+            }
             _ => false,
         };
         if self.level == DiagnosticLevel::Hidden || hidden_flag {
@@ -608,6 +668,8 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
     #[must_use]
     pub fn to_json(&self) -> Value {
         let generated_type;
+        let flags_property_type;
+        let mut property_type = T::TYPE_NAME;
         let type_name = match self.presentation {
             Presentation::Plain => {
                 generated_type = format!("DiagnosticsProperty<{}>", T::TYPE_NAME);
@@ -615,6 +677,13 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             }
             Presentation::String { .. } => "StringProperty",
             Presentation::Flag => "FlagProperty",
+            Presentation::Message => "MessageProperty",
+            Presentation::FlagsSummary { member_type, .. } => {
+                generated_type = format!("FlagsSummary<{member_type}>");
+                flags_property_type = format!("Map<String, {member_type}?>");
+                property_type = &flags_property_type;
+                generated_type.as_str()
+            }
             Presentation::ObjectFlag => {
                 generated_type = format!("ObjectFlagProperty<{}>", T::TYPE_NAME);
                 generated_type.as_str()
@@ -631,7 +700,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             "type": type_name,
             "name": self.name,
             "missingIfNull": self.missing_if_null,
-            "propertyType": T::TYPE_NAME,
+            "propertyType": property_type,
             "defaultLevel": self.level.name(),
         });
         match self.value() {
@@ -686,9 +755,54 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                     output["unit"] = json!(unit);
                 }
             }
-            Presentation::Plain | Presentation::ObjectFlag | Presentation::Enum { .. } => {}
+            Presentation::FlagsSummary { names_for_json, .. } => {
+                if let Some(names) = self.value().and_then(names_for_json) {
+                    output["values"] = json!(names);
+                }
+            }
+            Presentation::Plain
+            | Presentation::ObjectFlag
+            | Presentation::Message
+            | Presentation::Enum { .. } => {}
         }
         output
+    }
+}
+
+impl DiagnosticsProperty<()> {
+    /// A diagnostic description with no label or concrete value.
+    #[must_use]
+    pub fn message(message: impl Into<String>) -> Self {
+        Self::new("", None)
+            .description(message)
+            .show_name(false)
+            .style(DiagnosticsTreeStyle::SingleLine)
+    }
+
+    /// A labeled diagnostic message with no concrete value.
+    #[must_use]
+    pub fn message_property(name: impl Into<String>, message: impl Into<String>) -> Self {
+        let mut property = Self::new(name, None)
+            .description(message)
+            .style(DiagnosticsTreeStyle::SingleLine);
+        property.presentation = Presentation::Message;
+        property
+    }
+}
+
+impl<T: DiagnosticValue> DiagnosticsProperty<DiagnosticFlagEntries<T>> {
+    /// Summarizes optional values by showing the names whose values are
+    /// present, in insertion order. No values are inspected or invoked.
+    #[must_use]
+    pub fn flags_summary(name: impl Into<String>, values: IndexMap<String, Option<T>>) -> Self {
+        let mut property = Self::new(name, Some(DiagnosticFlagEntries(values)))
+            .style(DiagnosticsTreeStyle::SingleLine);
+        property.presentation = Presentation::FlagsSummary {
+            member_type: T::TYPE_NAME,
+            has_names: |flags| flags.present_names().next().is_some(),
+            names_for_json: |flags| (!flags.0.is_empty()).then(|| flags.present_names().collect()),
+        };
+        property
     }
 }
 

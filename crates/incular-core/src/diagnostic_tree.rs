@@ -218,24 +218,7 @@ impl DiagnosticsNode {
     }
 
     fn truncation_marker() -> Self {
-        Self {
-            details: Map::from_iter([
-                ("description".into(), json!("...")),
-                ("type".into(), json!("DiagnosticsProperty<void>")),
-                ("name".into(), json!("")),
-                ("showName".into(), json!(false)),
-                ("style".into(), json!("singleLine")),
-                ("allowNameWrap".into(), json!(true)),
-            ]),
-            specialized: Map::from_iter([
-                ("missingIfNull".into(), json!(false)),
-                ("propertyType".into(), json!("void")),
-                ("defaultLevel".into(), json!("info")),
-                ("value".into(), Value::Null),
-            ]),
-            properties: Vec::new(),
-            children: Vec::new(),
-        }
+        Self::property(&DiagnosticsProperty::message("..."))
     }
 
     fn serialize_list<'a>(

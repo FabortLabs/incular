@@ -55,7 +55,8 @@ pub use debug_instrumentation::{
 };
 pub use debug_print::{DebugPrintBuffer, debug_print_synchronously, debug_word_wrap};
 pub use diagnostic_property::{
-    DiagnosticCallback, DiagnosticEnum, DiagnosticFailure, DiagnosticLevel, DiagnosticValue,
+    DiagnosticCallback, DiagnosticEnum, DiagnosticFailure, DiagnosticFlagEntries, DiagnosticLevel,
+    DiagnosticValue,
     DiagnosticsProperty, DiagnosticsTreeStyle, InvalidEnumDescription, describe_enum,
     describe_legacy_enum,
 };
