@@ -2858,3 +2858,8 @@ packages/flutter/test/painting/colors_test.dart	651	Display P3 pure green to ext
 packages/flutter/test/painting/colors_test.dart	668	sRGB to Display P3 round-trip	paired-match	upstream-wide-color-conversion.md
 packages/flutter/test/painting/colors_test.dart	129	HSVColor.lerp identical a,b	paired-match	color-clamp-comparisons.md#nullable-hsl-and-hsv-identity
 packages/flutter/test/painting/colors_test.dart	413	HSLColor.lerp identical a,b	paired-match	color-clamp-comparisons.md#nullable-hsl-and-hsv-identity
+packages/flutter/test/painting/image_stream_test.dart	1039	ImageStream, setCompleter before addListener - synchronousCall should be true	paired-match	upstream-image-info-and-handoff.md
+packages/flutter/test/painting/image_stream_test.dart	1058	ImageStream, setCompleter after addListener - synchronousCall should be false	paired-match	upstream-image-info-and-handoff.md
+packages/flutter/test/painting/image_stream_test.dart	1092	ImageInfo dispatches memory events	paired-match	upstream-image-info-and-handoff.md
+packages/flutter/test/painting/image_stream_test.dart	1156	ImageInfo.isCloneOf returns false when scales differ	paired-match	upstream-image-info-and-handoff.md
+packages/flutter/test/painting/image_stream_test.dart	1169	ImageInfo.isCloneOf returns true when all properties match	paired-match	upstream-image-info-and-handoff.md

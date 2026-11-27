@@ -6,6 +6,7 @@
 
 mod asset_image;
 mod bundled_cache;
+mod info;
 mod resize;
 mod stream;
 
@@ -17,6 +18,7 @@ pub use bundled_cache::{
     BundleImageCache, clear_shared_bundle_image_cache, shared_bundle_image_cache,
 };
 
+pub use info::ImageInfo;
 pub use resize::{ImageResizeOptions, ResizeImage, ResizeImageKey, ResizeImagePolicy};
 
 pub use stream::{
