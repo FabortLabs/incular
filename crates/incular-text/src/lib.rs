@@ -13,7 +13,7 @@ mod style;
 mod text_painter;
 pub use text_painter::{
     Hyphens, PlaceholderDimensions, TextPainter, TextPainterBox, TextPainterError, TextPainterLine,
-    TextPainterPaint,
+    TextPainterPaint, TextPainterPosition, TextPainterPositionError,
 };
 #[cfg(all(target_os = "windows", not(feature = "bundled-dictionaries")))]
 mod windows_segmentation;

@@ -3158,3 +3158,4 @@ packages/flutter/test/painting/text_painter_test.dart	2061	debugPaintTextLayoutB
 packages/flutter/test/painting/text_painter_test.dart	1269	TextPainter set hyphens test	paired-match	upstream-text-painter.md#discretionary-hyphen-paint-and-caret-geometry
 packages/flutter/test/painting/text_painter_test.dart	1288	TextPainter renders a hyphen at a soft hyphen line break	paired-match	upstream-text-painter.md#discretionary-hyphen-paint-and-caret-geometry
 packages/flutter/test/painting/text_painter_test.dart	1300	Changing TextPainter.hyphens after layout changes the width	paired-match	upstream-text-painter.md#discretionary-hyphen-paint-and-caret-geometry
+packages/flutter/test/painting/text_painter_test.dart	1600	TextPainter throws with stack trace when accessing text layout	paired-match	upstream-text-painter.md#point-queries-and-layout-invalidation-diagnostics

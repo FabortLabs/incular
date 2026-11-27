@@ -1,6 +1,7 @@
 //! Stateful paragraph measurement over the shared Incular shaping engine.
 
 use std::{
+    backtrace::Backtrace,
     fmt,
     sync::{Arc, OnceLock},
 };
@@ -44,6 +45,41 @@ impl fmt::Display for TextPainterError {
     }
 }
 impl std::error::Error for TextPainterError {}
+
+/// Why a point cannot be resolved into a text position.
+#[derive(Debug)]
+pub enum TextPainterPositionError {
+    NeverLaidOut,
+    LayoutInvalidated {
+        first_invalidation: Option<Arc<Backtrace>>,
+    },
+    Disposed,
+}
+
+impl fmt::Display for TextPainterPositionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NeverLaidOut => f.write_str("The TextPainter has never been laid out."),
+            Self::LayoutInvalidated { first_invalidation } => {
+                f.write_str("The calls that first invalidated the text layout were:")?;
+                if let Some(stack) = first_invalidation {
+                    write!(f, "\n{stack}")?;
+                }
+                Ok(())
+            }
+            Self::Disposed => fmt::Display::fmt(&TextPainterError::Disposed, f),
+        }
+    }
+}
+
+impl std::error::Error for TextPainterPositionError {}
+
+/// A paragraph insertion point at a UTF-8 byte boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TextPainterPosition {
+    pub offset: usize,
+    pub affinity: TextAffinity,
+}
 
 /// Whether a discretionary line break paints a soft hyphen.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -183,6 +219,9 @@ pub struct TextPainter {
     has_soft_hyphen: bool,
     placeholder_dimensions: Vec<PlaceholderDimensions>,
     measured: Option<MeasuredText>,
+    layout_invalidated: bool,
+    #[cfg(debug_assertions)]
+    first_invalidation: Option<Arc<Backtrace>>,
     debug_paint_text_layout_boxes: bool,
     disposed: bool,
 }
@@ -226,6 +265,18 @@ impl TextPainter {
         painter.max_intrinsic_width()
     }
 
+    /// Drops current geometry. In debug builds, the first invalidation
+    /// after a successful layout retains its backtrace until relayout.
+    pub fn mark_needs_layout(&mut self) {
+        if self.measured.take().is_some() {
+            self.layout_invalidated = true;
+            #[cfg(debug_assertions)]
+            {
+                self.first_invalidation = Some(Arc::new(Backtrace::force_capture()));
+            }
+        }
+    }
+
     /// Replaces the span and invalidates its measurement.
     pub fn set_text(&mut self, text: Option<TextSpan>) {
         if self.text != text {
@@ -237,7 +288,7 @@ impl TextPainter {
                 self.placeholder_dimensions.clear();
             }
             self.text = text;
-            self.measured = None;
+            self.mark_needs_layout();
         }
     }
 
@@ -261,28 +312,28 @@ impl TextPainter {
             return Err(TextPainterError::InvalidPlaceholderCount);
         }
         self.placeholder_dimensions = dimensions.to_vec();
-        self.measured = None;
+        self.mark_needs_layout();
         Ok(())
     }
 
     pub fn set_text_direction(&mut self, direction: Option<TextDirection>) {
         if self.direction != direction {
             self.direction = direction;
-            self.measured = None;
+            self.mark_needs_layout();
         }
     }
 
     pub fn set_text_align(&mut self, alignment: TextAlign) {
         if self.alignment != alignment {
             self.alignment = alignment;
-            self.measured = None;
+            self.mark_needs_layout();
         }
     }
 
     pub fn set_text_width_basis(&mut self, basis: TextWidthBasis) {
         if self.width_basis != basis {
             self.width_basis = basis;
-            self.measured = None;
+            self.mark_needs_layout();
         }
     }
 
@@ -296,7 +347,7 @@ impl TextPainter {
         }
         if self.max_lines != max_lines {
             self.max_lines = max_lines;
-            self.measured = None;
+            self.mark_needs_layout();
         }
         Ok(())
     }
@@ -305,7 +356,7 @@ impl TextPainter {
     pub fn set_default_style(&mut self, style: TextStyle) {
         if self.default_style != style {
             self.default_style = style;
-            self.measured = None;
+            self.mark_needs_layout();
         }
     }
 
@@ -313,7 +364,7 @@ impl TextPainter {
     pub fn set_text_scaler(&mut self, scaler: TextScaler) {
         if self.scaler != scaler {
             self.scaler = scaler;
-            self.measured = None;
+            self.mark_needs_layout();
         }
     }
 
@@ -321,7 +372,7 @@ impl TextPainter {
     pub fn set_strut_style(&mut self, strut: Option<StrutStyle>) {
         if self.strut_style != strut {
             self.strut_style = strut;
-            self.measured = None;
+            self.mark_needs_layout();
         }
     }
 
@@ -333,7 +384,7 @@ impl TextPainter {
     pub fn set_hyphens(&mut self, hyphens: Hyphens) {
         if self.hyphens != hyphens {
             self.hyphens = hyphens;
-            self.measured = None;
+            self.mark_needs_layout();
         }
     }
 
@@ -341,7 +392,7 @@ impl TextPainter {
     pub fn set_text_height_behavior(&mut self, behavior: Option<TextHeightBehavior>) {
         if self.height_behavior != behavior {
             self.height_behavior = behavior;
-            self.measured = None;
+            self.mark_needs_layout();
         }
     }
 
@@ -490,6 +541,11 @@ impl TextPainter {
             TextWidthBasis::LongestLine => hyphenated_width.unwrap_or_else(|| visual_width(&shaped)),
         }
         .clamp(min_width, max_width);
+        self.layout_invalidated = false;
+        #[cfg(debug_assertions)]
+        {
+            self.first_invalidation = None;
+        }
         self.measured = Some(MeasuredText {
             min: min_width,
             max: max_width,
@@ -912,6 +968,53 @@ impl TextPainter {
         self.caret_offset(self.plain.len(), affinity, caret_width)
     }
 
+    /// Returns the closest retained insertion point in local paint
+    /// coordinates. The result uses UTF-8 bytes and preserves wrap affinity.
+    pub fn position_for_offset(
+        &self,
+        point: Offset,
+    ) -> Result<TextPainterPosition, TextPainterPositionError> {
+        if self.disposed {
+            return Err(TextPainterPositionError::Disposed);
+        }
+        let Some(measured) = self.measured.as_ref() else {
+            return Err(if self.layout_invalidated {
+                TextPainterPositionError::LayoutInvalidated {
+                    #[cfg(debug_assertions)]
+                    first_invalidation: self.first_invalidation.clone(),
+                    #[cfg(not(debug_assertions))]
+                    first_invalidation: None,
+                }
+            } else {
+                TextPainterPositionError::NeverLaidOut
+            });
+        };
+        let lines = &measured.shaped.lines;
+        let index = lines
+            .partition_point(|line| line.top <= point.y)
+            .saturating_sub(1);
+        let x = point.x - measured.paint_offset.x;
+        let stops = measured.shaped.line_caret_positions(index);
+        let right = stops.partition_point(|stop| stop.x < x);
+        let left = right.checked_sub(1).and_then(|index| stops.get(index));
+        let right = stops.get(right);
+        let closest = match (left, right) {
+            (Some(left), Some(right)) if x - left.x <= right.x - x => Some(left),
+            (_, Some(right)) => Some(right),
+            (left, None) => left,
+        };
+        Ok(closest.map_or(
+            TextPainterPosition {
+                offset: lines.get(index).map_or(0, |line| line.start),
+                affinity: TextAffinity::Downstream,
+            },
+            |stop| TextPainterPosition {
+                offset: stop.offset,
+                affinity: stop.affinity,
+            },
+        ))
+    }
+
     /// Looks up the word segment containing the given UTF-8 byte position.
     pub fn word_boundary(&self, position: usize) -> Result<TextRange, TextPainterError> {
         self.measured()?;
@@ -931,6 +1034,10 @@ impl TextPainter {
         }
         self.disposed = true;
         self.measured = None;
+        #[cfg(debug_assertions)]
+        {
+            self.first_invalidation = None;
+        }
         self.placeholder_dimensions.clear();
         self.text = None;
         self.plain = String::new();

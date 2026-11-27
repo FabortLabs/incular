@@ -276,3 +276,14 @@ gap for other Unicode separators, with no original test credit for
 that gap. Three original registrations, both authored reference
 controls, 48 native painter tests and 4 native placeholder tests
 passed. The native exact assertions use pinned Ahem advances.
+
+## Point queries and layout invalidation diagnostics
+
+The pinned invalid-layout original pairs. Position queries distinguish
+a painter that has never laid out from a painter whose geometry is stale
+and a disposed painter. Debug builds retain the actual first-invalidation
+backtrace, preserve it across repeated marks, and clear it after a
+successful relayout. The native point query uses the measured paint
+offset and snaps to the nearest retained caret in the selected visual
+line. The extra native control hits both rows of a centered paragraph.
+The original and all 50 focused painter tests passed.

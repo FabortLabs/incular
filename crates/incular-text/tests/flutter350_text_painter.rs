@@ -1650,3 +1650,78 @@ fn changing_soft_hyphens_invalidates_the_retained_paint_width() {
     painter.layout_with_engine(&mut engine, 0., 49.).unwrap();
     assert_eq!(painter.width(), Ok(40.));
 }
+
+#[test]
+fn position_queries_distinguish_unlaid_out_and_invalidated_geometry() {
+    use incular_core::Offset;
+    use incular_text::TextPainterPositionError;
+    let mut painter = painter(TextSpan::new("TEXT"), TextDirection::Ltr);
+    let error = painter.position_for_offset(Offset::ZERO).unwrap_err();
+    assert!(matches!(error, TextPainterPositionError::NeverLaidOut));
+    assert!(
+        error
+            .to_string()
+            .contains("The TextPainter has never been laid out.")
+    );
+    painter.layout(0., f32::INFINITY).unwrap();
+    assert_eq!(painter.position_for_offset(Offset::ZERO).unwrap().offset, 0);
+    painter.mark_needs_layout();
+    let error = painter.position_for_offset(Offset::ZERO).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("The calls that first invalidated the text layout were:")
+    );
+    let TextPainterPositionError::LayoutInvalidated { first_invalidation } = error else {
+        panic!("expected invalidation");
+    };
+    painter.mark_needs_layout();
+    let TextPainterPositionError::LayoutInvalidated {
+        first_invalidation: second,
+    } = painter.position_for_offset(Offset::ZERO).unwrap_err()
+    else {
+        panic!("expected invalidation");
+    };
+    if cfg!(debug_assertions) {
+        assert!(Arc::ptr_eq(
+            first_invalidation.as_ref().unwrap(),
+            second.as_ref().unwrap()
+        ));
+    }
+    painter.layout(0., f32::INFINITY).unwrap();
+    assert_eq!(painter.position_for_offset(Offset::ZERO).unwrap().offset, 0);
+    painter.dispose().unwrap();
+    assert!(matches!(
+        painter.position_for_offset(Offset::ZERO),
+        Err(TextPainterPositionError::Disposed)
+    ));
+}
+
+#[test]
+fn positions_use_the_painted_x_offset_and_line_vertical_extent() {
+    use incular_core::Offset;
+    let Some((mut engine, font)) = centered_width_ahem() else {
+        return;
+    };
+    let mut painter = painter(
+        TextSpan::new("ABC\nDE").style(font.font_size(10.)),
+        TextDirection::Ltr,
+    );
+    painter.set_text_align(TextAlign::Center);
+    painter.layout_with_engine(&mut engine, 90., 90.).unwrap();
+    for (x, y, offset) in [
+        (30., 0., 0),
+        (36., 0., 1),
+        (56., 0., 3),
+        (35., 11., 4),
+        (51., 11., 6),
+    ] {
+        assert_eq!(
+            painter
+                .position_for_offset(Offset::new(x, y))
+                .unwrap()
+                .offset,
+            offset
+        );
+    }
+}
