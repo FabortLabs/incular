@@ -3144,3 +3144,6 @@ packages/flutter/test/painting/text_painter_test.dart	476	TextPainter caret cent
 packages/flutter/test/painting/text_painter_test.dart	927	TextPainter error test	paired-match	upstream-text-painter.md#infinite-minimums-finite-paint-and-centered-trailing-whitespace
 packages/flutter/test/painting/text_painter_test.dart	1848	TextPainter infinite width - centered	paired-match	upstream-text-painter.md#infinite-minimums-finite-paint-and-centered-trailing-whitespace
 packages/flutter/test/painting/text_painter_test.dart	1882	TextPainter infinite width - LTR justified	paired-match	upstream-text-painter.md#infinite-minimums-finite-paint-and-centered-trailing-whitespace
+packages/flutter/test/painting/text_painter_test.dart	376	TextPainter caret zalgo test	paired-match	upstream-text-painter.md#clustered-carets-across-scripts
+packages/flutter/test/painting/text_painter_test.dart	381	TextPainter caret Devanagari test	paired-match	upstream-text-painter.md#clustered-carets-across-scripts
+packages/flutter/test/painting/text_painter_test.dart	1522	Diacritic	paired-match	upstream-text-painter.md#clustered-carets-across-scripts

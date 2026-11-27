@@ -190,3 +190,14 @@ natural width. With pinned Ahem, the original leading carets are
 geometry error before layout, and dispatches valid shaped data with
 the supplied origin afterwards. All 34 focused native tests passed
 with the pinned Flutter Ahem font explicitly enabled.
+
+## Clustered carets across scripts
+
+Three original caret cases pair. The regression samples cover stacked
+combining marks, Devanagari cluster boundaries, and upstream affinity at
+the end of a Thai cluster. The first two compare each observable UTF-16
+caret against independently shaped prefix widths and check that caret
+positions do not reverse inside a cluster. The Thai terminal caret
+reaches the measured width. All three exact pinned registrations passed.
+This does not cover the registration for trailing breakable Unicode
+spaces, where Parley still wraps the Ogham space at a tight width.

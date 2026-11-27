@@ -1128,3 +1128,100 @@ fn painting_before_layout_reports_missing_paint_geometry() {
             .contains("TextPainter.paint called when text geometry was not yet calculated")
     );
 }
+
+fn assert_ltr_prefix_carets(
+    engine: &mut TextEngine,
+    style: &TextStyle,
+    text: &str,
+    boundaries: impl IntoIterator<Item = usize>,
+) {
+    let mut whole = painter(TextSpan::new(text).style(style.clone()), TextDirection::Ltr);
+    whole.layout_with_engine(engine, 0., f32::INFINITY).unwrap();
+    let caret = |unit| {
+        whole
+            .caret_offset_utf16(unit, incular_text::TextAffinity::Downstream, 0.)
+            .unwrap()
+            .x
+    };
+    for byte in boundaries {
+        let prefix = &text[..byte];
+        let mut prefix_painter = painter(
+            TextSpan::new(prefix).style(style.clone()),
+            TextDirection::Ltr,
+        );
+        prefix_painter
+            .layout_with_engine(engine, 0., f32::INFINITY)
+            .unwrap();
+        let width = prefix_painter.width().unwrap();
+        let actual = caret(prefix.encode_utf16().count());
+        assert!(
+            (actual - width).abs() < 0.001,
+            "caret at {prefix:?} in {text:?}: {actual} != {width}"
+        );
+    }
+    let positions = (0..=text.encode_utf16().count())
+        .map(caret)
+        .collect::<Vec<_>>();
+    assert!(
+        positions
+            .windows(2)
+            .all(|window| window[0] <= window[1] + 0.001),
+        "{text:?}: {positions:?}"
+    );
+}
+
+#[test]
+fn a_combining_mark_stack_preserves_prefix_carets() {
+    let Some((mut engine, style)) = centered_width_ahem() else {
+        return;
+    };
+    let text = "Z͉̳̺ͥͬ̾a̴͕̲̒̒͌̋ͪl̨͎̰̘͉̟ͤ̀̈̚͜g͕͔̤͖̟̒͝ͅo̵̡̡̼͚̐ͯ̅ͪ̆ͣ̚";
+    let segmenter = icu_segmenter::GraphemeClusterSegmenter::new();
+    assert_ltr_prefix_carets(
+        &mut engine,
+        &style.font_size(14.),
+        text,
+        segmenter.segment_str(text),
+    );
+}
+
+#[test]
+fn devanagari_shaping_preserves_the_caret_at_each_supplied_cluster_boundary() {
+    let Some((mut engine, style)) = centered_width_ahem() else {
+        return;
+    };
+    let parts = ["प्रा", "प्त", " ", "व", "र्ण", "न", " ", "प्र", "व्रु", "ति"];
+    let text = parts.concat();
+    let mut offset = 0;
+    let boundaries = std::iter::once(0).chain(parts.into_iter().map(|part| {
+        offset += part.len();
+        offset
+    }));
+    assert_ltr_prefix_carets(&mut engine, &style.font_size(14.), &text, boundaries);
+}
+
+#[test]
+fn the_upstream_caret_in_thai_includes_the_final_combining_mark() {
+    let Some((mut engine, style)) = centered_width_ahem() else {
+        return;
+    };
+    let text = "ฟห้";
+    let mut painter = painter(
+        TextSpan::new(text).style(style.font_size(14.)),
+        TextDirection::Ltr,
+    );
+    painter
+        .layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(
+        painter
+            .caret_offset_utf16(
+                text.encode_utf16().count(),
+                incular_text::TextAffinity::Upstream,
+                0.
+            )
+            .unwrap()
+            .x,
+        painter.width().unwrap()
+    );
+}
