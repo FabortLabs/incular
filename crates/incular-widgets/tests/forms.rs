@@ -134,7 +134,13 @@ fn form_field_restoration_keeps_the_declared_reset_default() {
         scope.get_json(&key),
         Some(json!({
             "text": "updated@example.test",
-            "selection": { "base": 20, "extent": 20 },
+            "selection": {
+                "base": 20,
+                "extent": 20,
+                "affinity": "downstream",
+                "isDirectional": false,
+                "isSet": false,
+            },
         }))
     );
     field.reset();
@@ -303,7 +309,11 @@ fn typed_form_field_state_registers_validates_saves_and_resets() {
 
     form.reset();
     assert_eq!(state.value(), Some(3));
-    assert!(state.is_valid());
+    assert!(!state.has_error(), "reset clears presentation");
+    assert!(
+        !state.is_valid(),
+        "the restored value still fails the validator"
+    );
 
     drop(state);
     assert_eq!(form.field_count(), 0);
@@ -319,7 +329,14 @@ fn typed_form_field_autovalidates_on_did_change() {
             .then(|| "required".to_owned())
     });
     state.set_autovalidate_mode(AutovalidateMode::OnUserInteraction);
-    assert!(state.is_valid(), "no validation before user interaction");
+    assert!(
+        !state.has_error(),
+        "no displayed error before user interaction"
+    );
+    assert!(
+        !state.is_valid(),
+        "validity can be queried without displaying an error"
+    );
 
     state.did_change("ada".to_owned());
     assert!(state.is_valid());

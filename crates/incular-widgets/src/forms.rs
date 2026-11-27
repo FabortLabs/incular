@@ -7,7 +7,7 @@
 
 use std::{
     cell::{Cell, RefCell},
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     rc::{Rc, Weak},
 };
 
@@ -57,6 +57,7 @@ struct FieldState {
     validator: RefCell<Option<Validator>>,
     on_submit: RefCell<Option<SubmitCallback>>,
     autovalidate: Cell<AutovalidateMode>,
+    interacted: Cell<bool>,
     error: RefCell<Option<String>>,
     controller_listener: RefCell<Option<incular_text::TextEditingSubscription>>,
     validating: Cell<bool>,
@@ -76,6 +77,7 @@ impl FormEntry for FieldState {
 
     fn reset_entry(&self) {
         self.controller.set_text(self.initial_text.clone());
+        self.interacted.set(false);
         self.error.replace(None);
     }
 
@@ -177,6 +179,7 @@ impl Form {
             validator: RefCell::new(None),
             on_submit: RefCell::new(None),
             autovalidate: Cell::new(AutovalidateMode::Disabled),
+            interacted: Cell::new(false),
             error: RefCell::new(None),
             controller_listener: RefCell::new(None),
             validating: Cell::new(false),
@@ -216,6 +219,7 @@ impl Form {
     pub fn register_value<T: Clone + 'static>(&self, initial: Option<T>) -> FormFieldState<T> {
         let id = next_field_id(&self.state);
         let state = FormFieldState::new(initial);
+        state.inner.registration.set(Some(id));
         state.inner.form.replace(Some(Rc::downgrade(&self.state)));
         let entry: Rc<dyn FormEntry> = state.inner.clone();
         self.state
@@ -260,6 +264,19 @@ impl Form {
         let valid = validate_fields(&self.live_fields());
         notify_form_listeners(&self.state);
         valid
+    }
+
+    /// Validates the whole form and returns the stable IDs of exactly the
+    /// invalid fields. All attached fields have their error state updated.
+    #[must_use]
+    pub fn validate_granularly(&self) -> BTreeSet<FormFieldId> {
+        let invalid = self
+            .live_fields()
+            .into_iter()
+            .filter_map(|(id, field)| (!field.validate_entry()).then_some(id))
+            .collect();
+        notify_form_listeners(&self.state);
+        invalid
     }
 
     /// Restores every live field to the value it had when registered.
@@ -429,9 +446,26 @@ impl FormField {
 
     /// Records an edit made through an externally-owned editor.
     pub fn notify_user_interaction(&self) {
+        let first = !self.field.interacted.replace(true);
         if self.field.autovalidate.get() != AutovalidateMode::Disabled {
             let _ = self.validate();
+        } else if first {
+            self.notify_form();
         }
+    }
+
+    #[must_use]
+    pub fn has_interacted_by_user(&self) -> bool {
+        if let Some(form) = self.form.upgrade() {
+            form.borrow().changes.track();
+        }
+        self.field.interacted.get()
+    }
+
+    /// Evaluates the validator without changing the displayed error.
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        query_field(&self.field, false)
     }
 
     #[must_use]
@@ -463,10 +497,7 @@ impl FormField {
     }
 
     pub fn reset(&self) {
-        self.field
-            .controller
-            .set_text(self.field.initial_text.clone());
-        self.field.error.replace(None);
+        self.field.reset_entry();
         self.notify_form();
     }
 
@@ -502,6 +533,7 @@ fn validate_fields(fields: &[LiveField]) -> bool {
 fn run_validation(
     validating: &Cell<bool>,
     error: &RefCell<Option<String>>,
+    commit_error: bool,
     validate: impl FnOnce() -> Option<String>,
 ) -> bool {
     if validating.replace(true) {
@@ -516,12 +548,18 @@ fn run_validation(
     let _guard = Reset(validating);
     let next_error = validate();
     let valid = next_error.is_none();
-    error.replace(next_error);
+    if commit_error {
+        error.replace(next_error);
+    }
     valid
 }
 
 fn validate_field(field: &FieldState) -> bool {
-    run_validation(&field.validating, &field.error, || {
+    query_field(field, true)
+}
+
+fn query_field(field: &FieldState, commit_error: bool) -> bool {
+    run_validation(&field.validating, &field.error, commit_error, || {
         let validator = field.validator.borrow().clone();
         validator.and_then(|validator| validator(&field.controller.text()))
     })
@@ -576,6 +614,7 @@ pub struct GenericFormField<T: Clone + 'static> {
     initial_value: Option<T>,
     validator: Option<GenericValidator<T>>,
     on_saved: Option<Rc<dyn Fn(T)>>,
+    on_reset: Option<Rc<dyn Fn()>>,
     autovalidate_mode: AutovalidateMode,
     enabled: bool,
     restoration_id: Option<String>,
@@ -593,6 +632,7 @@ impl<T: Clone + 'static> GenericFormField<T> {
             initial_value: None,
             validator: None,
             on_saved: None,
+            on_reset: None,
             autovalidate_mode: AutovalidateMode::Disabled,
             enabled: true,
             restoration_id: None,
@@ -629,6 +669,13 @@ impl<T: Clone + 'static> GenericFormField<T> {
         self
     }
 
+    /// Runs after the retained field restores its initial value.
+    #[must_use]
+    pub fn on_reset(mut self, on_reset: impl Fn() + 'static) -> Self {
+        self.on_reset = Some(Rc::new(on_reset));
+        self
+    }
+
     #[must_use]
     pub fn autovalidate_mode(mut self, mode: AutovalidateMode) -> Self {
         self.autovalidate_mode = mode;
@@ -659,6 +706,7 @@ impl<T: Clone + 'static> From<GenericFormField<T>> for Widget {
         if let Some(on_saved) = value.on_saved {
             state.inner.on_saved.replace(Some(on_saved));
         }
+        state.inner.on_reset.replace(value.on_reset);
         if value.autovalidate_mode != AutovalidateMode::Disabled {
             // Installs after the validator so `Always` validates against it.
             state.set_autovalidate_mode(value.autovalidate_mode);
@@ -1219,18 +1267,35 @@ struct GenericFieldState<T> {
     error: RefCell<Option<String>>,
     validator: RefCell<Option<GenericValidator<T>>>,
     on_saved: RefCell<Option<GenericSaveCallback<T>>>,
+    on_reset: RefCell<Option<Rc<dyn Fn()>>>,
     autovalidate: Cell<AutovalidateMode>,
+    interacted: Cell<bool>,
+    registration: Cell<Option<FormFieldId>>,
     validating: Cell<bool>,
     form: RefCell<Option<Weak<RefCell<FormRegistry>>>>,
 }
 
 impl<T: Clone + 'static> GenericFieldState<T> {
     fn validate_value(&self) -> bool {
+        self.query_validity(true)
+    }
+
+    fn query_validity(&self, commit_error: bool) -> bool {
         let value = self.value.borrow().clone();
-        run_validation(&self.validating, &self.error, || {
+        run_validation(&self.validating, &self.error, commit_error, || {
             let validator = self.validator.borrow().clone();
             validator.and_then(|validator| validator(value.as_ref()))
         })
+    }
+
+    fn reset_value(&self, value: Option<T>) {
+        self.value.replace(value);
+        self.error.replace(None);
+        self.interacted.set(false);
+        let callback = self.on_reset.borrow().clone();
+        if let Some(callback) = callback {
+            callback();
+        }
     }
 
     fn save_value(&self) {
@@ -1259,8 +1324,7 @@ impl<T: Clone + 'static> FormEntry for GenericFieldState<T> {
     }
 
     fn reset_entry(&self) {
-        self.value.replace(self.initial.clone());
-        self.error.replace(None);
+        self.reset_value(self.initial.clone());
     }
 
     fn error_entry(&self) -> Option<String> {
@@ -1284,7 +1348,10 @@ impl<T: Clone + 'static> FormFieldState<T> {
                 error: RefCell::new(None),
                 validator: RefCell::new(None),
                 on_saved: RefCell::new(None),
+                on_reset: RefCell::new(None),
                 autovalidate: Cell::new(AutovalidateMode::Disabled),
+                interacted: Cell::new(false),
+                registration: Cell::new(None),
                 validating: Cell::new(false),
                 form: RefCell::new(None),
             }),
@@ -1306,9 +1373,21 @@ impl<T: Clone + 'static> FormFieldState<T> {
         self.inner.error.borrow().is_some()
     }
 
+    /// The field's identity in its form, or none for standalone state.
+    #[must_use]
+    pub fn id(&self) -> Option<FormFieldId> {
+        self.inner.registration.get()
+    }
+
+    #[must_use]
+    pub fn has_interacted_by_user(&self) -> bool {
+        self.inner.interacted.get()
+    }
+
+    /// Evaluates the validator without updating the displayed error.
     #[must_use]
     pub fn is_valid(&self) -> bool {
-        self.inner.error.borrow().is_none()
+        self.inner.query_validity(false)
     }
 
     /// Installs the validator. `Some(message)` is a failure.
@@ -1321,6 +1400,10 @@ impl<T: Clone + 'static> FormFieldState<T> {
     /// runs only while a value is present.
     pub fn set_on_saved(&self, on_saved: impl Fn(T) + 'static) {
         self.inner.on_saved.replace(Some(Rc::new(on_saved)));
+    }
+
+    pub fn set_on_reset(&self, on_reset: impl Fn() + 'static) {
+        self.inner.on_reset.replace(Some(Rc::new(on_reset)));
     }
 
     /// Sets when the field revalidates. [`AutovalidateMode::Always`]
@@ -1338,6 +1421,7 @@ impl<T: Clone + 'static> FormFieldState<T> {
     /// when autovalidation is enabled.
     pub fn did_change(&self, value: T) {
         self.inner.value.replace(Some(value));
+        self.inner.interacted.set(true);
         if self.inner.autovalidate.get() != AutovalidateMode::Disabled {
             let _ = self.inner.validate_value();
         }
@@ -1359,8 +1443,7 @@ impl<T: Clone + 'static> FormFieldState<T> {
 
     /// Replaces the value with `initial` and clears the recorded error.
     pub fn reset(&self, initial: Option<T>) {
-        self.inner.value.replace(initial);
-        self.inner.error.replace(None);
+        self.inner.reset_value(initial);
         self.inner.notify_form();
     }
 }

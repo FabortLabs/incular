@@ -3814,3 +3814,11 @@ packages/flutter/test/painting/image_stream_test.dart	1211	errors are reported a
 packages/flutter/test/widgets/image_test.dart	3026	errorBuilder prevents FlutterError report even if widget is disposed	paired-match	upstream-image-error-reporting.md#providerimage-fallback-across-unmount
 packages/flutter/test/widgets/image_test.dart	3082	errorBuilder prevents FlutterError report even if errorBuilder is later removed	paired-match	upstream-image-error-reporting.md#providerimage-fallback-across-unmount
 packages/flutter/test/services/restoration_test.dart	16	'$RestorationManager dispatches memory events'	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md#owned-restoration-manager-memory-events
+packages/flutter/test/widgets/form_test.dart	14	onSaved callback is called	paired-match	upstream-form-state.md
+packages/flutter/test/widgets/form_test.dart	95	onReset callback is called	paired-match	upstream-form-state.md
+packages/flutter/test/widgets/form_test.dart	237	isValid returns true when a field is valid	paired-match	upstream-form-state.md
+packages/flutter/test/widgets/form_test.dart	282	isValid returns false when the field is invalid and does not change error display	paired-match	upstream-form-state.md
+packages/flutter/test/widgets/form_test.dart	330	validateGranularly returns a set containing all, and only, invalid fields	paired-match	upstream-form-state.md
+packages/flutter/test/widgets/form_test.dart	1295	hasInteractedByUser returns false when the input has not changed	paired-match	upstream-form-state.md
+packages/flutter/test/widgets/form_test.dart	1317	hasInteractedByUser returns true after the input has changed	paired-match	upstream-form-state.md
+packages/flutter/test/widgets/form_test.dart	1344	hasInteractedByUser returns false after the field is reset	paired-match	upstream-form-state.md
