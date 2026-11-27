@@ -2425,7 +2425,7 @@ impl WidgetKind {
                 match mode {
                     ChildLayoutMode::IntrinsicWidth { .. } => WidgetType::IntrinsicWidth,
                     ChildLayoutMode::IntrinsicHeight => WidgetType::IntrinsicHeight,
-                    ChildLayoutMode::MaxIntrinsicSize(_) => WidgetType::MaxIntrinsicSize,
+                    ChildLayoutMode::MaxIntrinsicSize { .. } => WidgetType::MaxIntrinsicSize,
                     ChildLayoutMode::IgnoreBaseline => WidgetType::IgnoreBaseline,
                     ChildLayoutMode::SemanticAnnotation => WidgetType::SemanticAnnotation,
                     ChildLayoutMode::TableCell(_) => WidgetType::TableCell,

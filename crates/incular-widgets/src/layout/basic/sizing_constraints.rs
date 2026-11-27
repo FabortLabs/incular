@@ -671,6 +671,7 @@ impl From<IntrinsicHeight> for Widget {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MaxIntrinsicSize {
     maximum: Size,
+    minimum: Option<Size>,
     child: Widget,
 }
 
@@ -691,15 +692,38 @@ impl MaxIntrinsicSize {
         );
         Self {
             maximum,
+            minimum: None,
             child: child.into(),
         }
+    }
+
+    /// Also declares minimum intrinsic extents. Without this setting, the
+    /// child's own minimum measurements are used, capped by the override.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either extent is negative, not finite, or above its maximum.
+    #[must_use]
+    pub fn with_minimum(mut self, minimum: Size) -> Self {
+        assert!(
+            minimum.width >= 0.
+                && minimum.height >= 0.
+                && minimum.width <= self.maximum.width
+                && minimum.height <= self.maximum.height,
+            "minimum intrinsic extents must lie between zero and their maxima"
+        );
+        self.minimum = Some(minimum);
+        self
     }
 }
 
 impl From<MaxIntrinsicSize> for Widget {
     fn from(value: MaxIntrinsicSize) -> Self {
         Widget::from_kind(WidgetKind::ProxyLayout {
-            mode: ChildLayoutMode::MaxIntrinsicSize(value.maximum),
+            mode: ChildLayoutMode::MaxIntrinsicSize {
+                maximum: value.maximum,
+                minimum: value.minimum,
+            },
             child: value.child,
         })
     }

@@ -53,3 +53,21 @@ measurement, rather than substituting a committed layout size. The
 native fixture covers this with a callback counter. All 18 focused
 native tests passed. This batch does not claim direct sizing support
 for adaptive text, slivers or arbitrary user layout closures.
+
+## Stepped and shrink-wrapped proxy measurements
+
+Five exact originals passed for shrink-wrapping width or height,
+including steps on the width, height, and both. The mounted native
+fixtures mirror both the resulting parent/child dimensions and direct
+min/max queries at cross extents 0, 10, 80 and infinity. They distinguish
+the leaf's min (10×20), max (100×200), and ordinary size (55×110).
+Width queries for IntrinsicWidth both use the child's maximum width;
+its height reports the separate minimum and maximum with a height step
+if configured. IntrinsicHeight does the analogous maximum selection
+on height while retaining the child's separate width measurements.
+
+The additional pinned probe and native control use a 2:1 ratio child
+to make an unbounded cross query visibly different from the finite
+case. Both derived cross extents agree with Flutter; the width proxy
+uses the stepped width rather than the unrounded width for that probe.
+All 24 focused native cases passed.

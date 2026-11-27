@@ -56,12 +56,13 @@ impl WidgetTree {
             return None;
         }
         let node = self.renders.get(id.0)?;
-        let child_extent = |cross| match node.children.first() {
+        let query_child = |axis, kind, cross| match node.children.first() {
             Some(&child) => {
                 with_recursive_tree_stack(|| self.dry_intrinsic_extent(child, axis, kind, cross))
             }
             None => Some(0.),
         };
+        let child_extent = |cross| query_child(axis, kind, cross);
         match node.object.kind() {
             RenderKind::Box { desired, .. } | RenderKind::Shape { desired, .. } => {
                 Some(axis.main_extent(*desired))
@@ -94,13 +95,54 @@ impl WidgetTree {
                 .intrinsic_extent(axis, cross)
                 .or_else(|| child_extent(cross)),
             RenderKind::ProxyLayout {
-                mode: ChildLayoutMode::MaxIntrinsicSize(maximum),
+                mode: ChildLayoutMode::MaxIntrinsicSize { maximum, minimum },
             } => match kind {
-                IntrinsicKind::Min => {
-                    child_extent(cross).map(|min| min.min(axis.main_extent(*maximum)))
-                }
+                IntrinsicKind::Min => minimum
+                    .map(|size| axis.main_extent(size))
+                    .or_else(|| child_extent(cross).map(|min| min.min(axis.main_extent(*maximum)))),
                 IntrinsicKind::Max => Some(axis.main_extent(*maximum)),
             },
+            RenderKind::ProxyLayout {
+                mode:
+                    ChildLayoutMode::IntrinsicWidth {
+                        step_width,
+                        step_height,
+                    },
+            } => {
+                use incular_layout::round_intrinsic_step;
+                if axis.is_horizontal() {
+                    let width = query_child(axis, IntrinsicKind::Max, cross)?;
+                    return Some(round_intrinsic_step(width, *step_width));
+                }
+
+                let width = if cross.is_finite() {
+                    cross
+                } else {
+                    let width = query_child(Axis::Horizontal, IntrinsicKind::Max, cross)?;
+                    round_intrinsic_step(width, *step_width)
+                };
+                if !width.is_finite() {
+                    return None;
+                }
+                child_extent(width).map(|height| round_intrinsic_step(height, *step_height))
+            }
+            RenderKind::ProxyLayout {
+                mode: ChildLayoutMode::IntrinsicHeight,
+            } => {
+                if !axis.is_horizontal() {
+                    return query_child(axis, IntrinsicKind::Max, cross);
+                }
+
+                let height = if cross.is_finite() {
+                    cross
+                } else {
+                    query_child(Axis::Vertical, IntrinsicKind::Max, cross)?
+                };
+                if !height.is_finite() {
+                    return None;
+                }
+                child_extent(height)
+            }
             _ => None,
         }
     }

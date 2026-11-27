@@ -597,7 +597,10 @@ pub enum ChildLayoutMode {
     /// `RenderIntrinsicHeight`: tightens the child height to its intrinsic height.
     IntrinsicHeight,
     /// Declares maximum intrinsic extents while passing through ordinary layout.
-    MaxIntrinsicSize(Size),
+    MaxIntrinsicSize {
+        maximum: Size,
+        minimum: Option<Size>,
+    },
     /// Passes through layout without exposing the child’s baseline.
     IgnoreBaseline,
     /// A pure semantics annotation wrapper that leaves layout unchanged.

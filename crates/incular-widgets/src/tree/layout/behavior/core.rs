@@ -11,7 +11,7 @@ impl WidgetTree {
         let node = self.render_live(child, "intrinsic child remains live");
         let (sum, gap, child_probe) = match node.object.kind() {
             RenderKind::ProxyLayout {
-                mode: ChildLayoutMode::MaxIntrinsicSize(maximum),
+                mode: ChildLayoutMode::MaxIntrinsicSize { maximum, .. },
             } => return Ok(dimension.main_extent(*maximum)),
             // Alignment can expand the row, but cannot expand intrinsic width.
             RenderKind::OverflowBar { spacing, .. } if dimension == Axis::Horizontal => (
@@ -524,7 +524,7 @@ impl WidgetTree {
                             .baseline = baseline;
                         (size, ChildOffsets::One(Offset::ZERO))
                     }
-                    ChildLayoutMode::MaxIntrinsicSize(_)
+                    ChildLayoutMode::MaxIntrinsicSize { .. }
                     | ChildLayoutMode::SemanticAnnotation
                     | ChildLayoutMode::SemanticBlocker
                     | ChildLayoutMode::TableCell(_) => {
