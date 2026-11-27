@@ -1,6 +1,10 @@
 //! Scalar diagnostic properties that retain their typed value in inspector JSON.
 
-use std::fmt;
+use std::{
+    cell::{OnceCell, RefCell},
+    fmt,
+    rc::Rc,
+};
 
 use serde_json::{Value, json};
 
@@ -64,6 +68,11 @@ pub trait DiagnosticValue: PartialEq {
     /// The underlying value, before presentation formatting.
     fn to_diagnostic_json(&self) -> Value;
 
+    /// Whether a present value is exposed as a JSON value at all.
+    fn has_json_value(&self) -> bool {
+        true
+    }
+
     /// The undecorated scalar text.
     fn diagnostic_text(&self) -> String;
 
@@ -125,6 +134,84 @@ impl DiagnosticValue for f64 {
     }
 }
 
+impl DiagnosticValue for crate::Rect {
+    const TYPE_NAME: &'static str = "Rect";
+
+    fn diagnostic_text(&self) -> String {
+        let right = self.origin.x + self.size.width;
+        let bottom = self.origin.y + self.size.height;
+        format!(
+            "Rect.fromLTRB({:?}, {:?}, {right:?}, {bottom:?})",
+            self.origin.x, self.origin.y
+        )
+    }
+
+    fn to_diagnostic_json(&self) -> Value {
+        Value::Null
+    }
+
+    fn has_json_value(&self) -> bool {
+        false
+    }
+}
+
+/// A failed attempt to compute an inspector property.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DiagnosticFailure {
+    /// The human-facing error type.
+    pub kind: String,
+    /// The human-facing error message.
+    pub message: String,
+}
+
+impl DiagnosticFailure {
+    /// Describes a failed property computation without discarding its error.
+    #[must_use]
+    pub fn new(kind: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            message: message.into(),
+        }
+    }
+}
+
+type ComputedValue<T> = Result<Option<T>, DiagnosticFailure>;
+type DiagnosticComputation<T> = Box<dyn FnOnce() -> ComputedValue<T>>;
+
+struct LazyValue<T> {
+    compute: RefCell<Option<DiagnosticComputation<T>>>,
+    cached: OnceCell<ComputedValue<T>>,
+}
+
+impl<T> LazyValue<T> {
+    fn get(&self) -> Option<&ComputedValue<T>> {
+        if self.cached.get().is_none() {
+            // Take the closure and release the borrow before invoking it.
+            // Reentrant observation sees an absent value until it finishes.
+            let pending = self.compute.borrow_mut().take();
+            if let Some(pending) = pending {
+                let _ = self.cached.set(pending());
+            }
+        }
+        self.cached.get()
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for LazyValue<T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("LazyDiagnosticValue")
+            .field("cached", &self.cached.get())
+            .finish()
+    }
+}
+
+#[derive(Clone, Debug)]
+enum PropertySource<T> {
+    Eager(Option<T>),
+    Lazy(Rc<LazyValue<T>>),
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Presentation<T> {
     Plain,
@@ -147,7 +234,7 @@ enum Presentation<T> {
 #[derive(Clone, Debug)]
 pub struct DiagnosticsProperty<T> {
     name: String,
-    value: Option<T>,
+    source: PropertySource<T>,
     default: Option<Option<T>>,
     description: Option<String>,
     if_empty: Option<String>,
@@ -168,7 +255,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
     pub fn new(name: impl Into<String>, value: Option<T>) -> Self {
         Self {
             name: name.into(),
-            value,
+            source: PropertySource::Eager(value),
             default: None,
             description: None,
             if_empty: None,
@@ -184,10 +271,37 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         }
     }
 
+    /// Computes a property only when it is first observed, retaining both
+    /// successful values and failures across subsequent observation.
+    #[must_use]
+    pub fn lazy(
+        name: impl Into<String>,
+        compute: impl FnOnce() -> Result<Option<T>, DiagnosticFailure> + 'static,
+    ) -> Self {
+        let mut property = Self::new(name, None);
+        property.source = PropertySource::Lazy(Rc::new(LazyValue {
+            compute: RefCell::new(Some(Box::new(compute))),
+            cached: OnceCell::new(),
+        }));
+        property
+    }
+
     /// Returns the original value, without formatting.
     #[must_use]
     pub fn value(&self) -> Option<&T> {
-        self.value.as_ref()
+        match &self.source {
+            PropertySource::Eager(value) => value.as_ref(),
+            PropertySource::Lazy(value) => value.get()?.as_ref().ok()?.as_ref(),
+        }
+    }
+
+    /// Returns a failed computation, if this is a lazy property that failed.
+    #[must_use]
+    pub fn exception(&self) -> Option<&DiagnosticFailure> {
+        match &self.source {
+            PropertySource::Eager(_) => None,
+            PropertySource::Lazy(value) => value.get()?.as_ref().err(),
+        }
     }
 
     /// Specifies the exact value that should lower the property's verbosity.
@@ -261,7 +375,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
     }
 
     fn flag_label(&self) -> Option<&str> {
-        let value = self.value.as_ref()?.as_diagnostic_bool()?;
+        let value = self.value()?.as_diagnostic_bool()?;
         self.flag_labels[usize::from(value)].as_deref()
     }
 
@@ -277,13 +391,19 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
     pub fn effective_level(&self) -> DiagnosticLevel {
         if self.level == DiagnosticLevel::Hidden
             || (matches!(self.presentation, Presentation::Flag)
-                && self.value.is_some()
+                && self.value().is_some()
                 && self.flag_label().is_none())
         {
             DiagnosticLevel::Hidden
-        } else if self.value.is_none() && self.missing_if_null {
+        } else if self.exception().is_some() {
+            DiagnosticLevel::Error
+        } else if self.value().is_none() && self.missing_if_null {
             DiagnosticLevel::Warning
-        } else if self.default.as_ref() == Some(&self.value) {
+        } else if self
+            .default
+            .as_ref()
+            .is_some_and(|default| default.as_ref() == self.value())
+        {
             DiagnosticLevel::Fine
         } else {
             self.level
@@ -319,8 +439,13 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                 _ => empty.map_or(text, str::to_owned),
             }
         };
+        if self.description.is_none()
+            && let Some(error) = self.exception()
+        {
+            return format!("EXCEPTION ({})", error.kind);
+        }
         let text = self.description.clone().unwrap_or_else(|| {
-            self.value.as_ref().map_or_else(
+            self.value().map_or_else(
                 || self.if_null.clone().unwrap_or_else(|| "null".to_owned()),
                 raw,
             )
@@ -346,11 +471,18 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             "description": self.to_description(),
             "type": type_name,
             "name": self.name,
-            "value": self.value.as_ref().map(DiagnosticValue::to_diagnostic_json),
             "missingIfNull": self.missing_if_null,
             "propertyType": T::TYPE_NAME,
             "defaultLevel": self.level.name(),
         });
+        match self.value() {
+            Some(value) if value.has_json_value() => output["value"] = value.to_diagnostic_json(),
+            None => output["value"] = Value::Null,
+            _ => {}
+        }
+        if let Some(error) = self.exception() {
+            output["exception"] = json!(error.message);
+        }
         if !self.shows_name() {
             output["showName"] = json!(false);
         }
@@ -386,7 +518,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                 }
             }
             Presentation::Number { format, .. } => {
-                output["numberToString"] = json!(format(self.value.as_ref()));
+                output["numberToString"] = json!(format(self.value()));
                 if let Some(unit) = &self.unit {
                     output["unit"] = json!(unit);
                 }
@@ -453,13 +585,25 @@ impl DiagnosticsProperty<f64> {
     /// Constructs a floating-point property using diagnostic precision.
     #[must_use]
     pub fn double(name: impl Into<String>, value: Option<f64>) -> Self {
-        let mut property = Self::new(name, value);
-        property.presentation = Presentation::Number {
+        Self::new(name, value).as_double()
+    }
+
+    /// A lazily resolved double, with the same display as an eager double.
+    #[must_use]
+    pub fn lazy_double(
+        name: impl Into<String>,
+        compute: impl FnOnce() -> Result<Option<f64>, DiagnosticFailure> + 'static,
+    ) -> Self {
+        Self::lazy(name, compute).as_double()
+    }
+
+    fn as_double(mut self) -> Self {
+        self.presentation = Presentation::Number {
             type_name: "DoubleProperty",
             unit_separator: "",
             format: |value| crate::debug_format_double(value.copied()),
         };
-        property
+        self
     }
     /// Describes a fraction from 0 to 1 as a percentage while retaining its
     /// original (possibly out-of-range) value.

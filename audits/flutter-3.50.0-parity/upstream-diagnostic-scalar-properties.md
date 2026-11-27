@@ -32,3 +32,20 @@ strings rather than silently becoming null.
 All ten focused property cases and seven clamp/precision regressions
 passed. Lazy computation, exception metadata, and richer diagnostic
 tree styles are not part of this slice.
+
+## Lazy values and diagnostic failures
+
+Pinned `unsafe double property test` and `lazy object property test`
+both passed. The native fixtures compare numeric formatting, absent
+values and defaults, a retained rectangle value, hidden names,
+and the exact display precedence of a supplied description over
+a computation failure. Failed computation promotes the default
+level to Error and produces an exception string in JSON. Present
+non-scalar values are not serialized as null; absent ones are.
+
+A computation runs only once across display, filtering and JSON,
+including descriptor clones. An additional fixture checks that
+recursive observation sees no value until the active computation
+returns. Rust providers return a typed failure; this API does not
+catch arbitrary Rust panics. All 13 focused native cases passed
+and the no-default-features facade check passed.

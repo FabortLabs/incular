@@ -115,7 +115,8 @@ pub mod prelude {
     };
     pub use incular_core::{
         BACK_POINTER_BUTTON, BitField, ChangeImpact, ChangeNotifier, ChangeNotifierSubscription, Code, Color, ColorSpace, ColorSwatch,
-        DebugPrintBuffer, DirtyFlags, FORWARD_POINTER_BUTTON, FloatColor, HslColor, HsvColor, ImeEvent, InputEvent,
+        DebugPrintBuffer, DiagnosticFailure, DiagnosticLevel, DiagnosticValue, DiagnosticsProperty,
+        DiagnosticsTreeStyle, DirtyFlags, FORWARD_POINTER_BUTTON, FloatColor, HslColor, HsvColor, ImeEvent, InputEvent,
         Invalidation, Key, KeyState, KeyboardEvent, KeyboardKey, Lerp, LocalKey, Location,
         Modifiers, NamedKey,
         NormalizedPressure, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,

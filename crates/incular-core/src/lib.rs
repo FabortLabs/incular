@@ -51,6 +51,9 @@ pub use debug_instrumentation::{
     debug_instrument_action, debug_instrumentation_enabled, set_debug_instrumentation_enabled,
 };
 pub use debug_print::{DebugPrintBuffer, debug_print_synchronously, debug_word_wrap};
+pub use diagnostic_property::{
+    DiagnosticFailure, DiagnosticLevel, DiagnosticValue, DiagnosticsProperty, DiagnosticsTreeStyle,
+};
 pub use debug_timeline::{AggregatedTimedBlock, AggregatedTimings, DebugTimeline, DebugTimelineError, TimedBlock};
 pub use context::{BuildContext, ConsumerId, ContextGuard, DependencySnapshot};
 pub use float_color::{ColorSpace, FloatColor};

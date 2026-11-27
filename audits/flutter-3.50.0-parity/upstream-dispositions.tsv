@@ -2986,3 +2986,5 @@ packages/flutter/test/foundation/diagnostics_test.dart	1074	double.infinity seri
 packages/flutter/test/foundation/diagnostics_test.dart	1108	percent property	paired-match	upstream-diagnostic-scalar-properties.md#flags-percentages-and-special-numbers
 packages/flutter/test/foundation/diagnostics_test.dart	1418	flag property test	paired-match	upstream-diagnostic-scalar-properties.md#flags-percentages-and-special-numbers
 packages/flutter/test/foundation/diagnostics_test.dart	2018	IntProperty arguments passed to super	paired-match	upstream-diagnostic-scalar-properties.md#flags-percentages-and-special-numbers
+packages/flutter/test/foundation/diagnostics_test.dart	1084	unsafe double property test	paired-match	upstream-diagnostic-scalar-properties.md#lazy-values-and-diagnostic-failures
+packages/flutter/test/foundation/diagnostics_test.dart	1341	lazy object property test	paired-match	upstream-diagnostic-scalar-properties.md#lazy-values-and-diagnostic-failures
