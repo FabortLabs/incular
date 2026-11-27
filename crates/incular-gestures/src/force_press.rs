@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use incular_core::{Offset, PointerPhase, time::Instant};
+use incular_core::{Offset, PointerPhase, PointerSampleMetadata, time::Instant};
 
 use crate::arena_member::{ArenaLink, ArenaMember, arena_recognizer};
 use crate::slop::compute_hit_slop;
@@ -24,8 +24,8 @@ pub type ForceInterpolation = Rc<dyn Fn(f32, f32, f32) -> f32>;
 
 /// An unnormalized pressure sample for a force recognizer fed directly by
 /// a device. Keep the raw value and range so custom interpolators can use
-/// device units. The ordinary native event path still uses normalized
-/// metadata and does not need this additional payload.
+/// device units. A backend can additionally supply normalized force for
+/// the default interpolation, independently of this calibration.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ForcePressureSample {
     pub min: f32,
@@ -49,16 +49,16 @@ enum ForceState {
 /// `start_pressure` starts the gesture and one past `peak_pressure` peaks
 /// it.
 ///
-/// Incular's native adapters normalize a sensing device's pressure over its
-/// own range, so the interpolation receives a minimum of 0 and a maximum
-/// of 1; a device without pressure sensing reports none, which Flutter
-/// detects as `pressureMax <= 1.0`, and the recognizer stays out of its
-/// arena. Hosts with unnormalized device samples may use
+/// A custom interpolator receives device units when calibration is
+/// available. The default path preserves a backend's normalized force
+/// (which may include angle correction) and falls back to raw calibration.
+/// A device with neither is excluded from the arena. Hosts can also use
 /// [`Self::handle_device_sample`] or its arena-managed counterparts.
 pub struct ForcePressGestureRecognizer {
     start_pressure: f32,
     peak_pressure: f32,
     interpolation: ForceInterpolation,
+    custom_interpolation: bool,
     supported_devices: Option<Vec<PointerDeviceKind>>,
     /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides.
     gesture_settings: DeviceGestureSettings,
@@ -93,6 +93,7 @@ impl ForcePressGestureRecognizer {
             start_pressure: 0.4,
             peak_pressure: 0.85,
             interpolation: Rc::new(Self::inverse_lerp),
+            custom_interpolation: false,
             supported_devices: None,
             gesture_settings: DeviceGestureSettings::default(),
             on_start: None,
@@ -139,6 +140,7 @@ impl ForcePressGestureRecognizer {
     #[must_use]
     pub fn interpolation(mut self, interpolation: impl Fn(f32, f32, f32) -> f32 + 'static) -> Self {
         self.interpolation = Rc::new(interpolation);
+        self.custom_interpolation = true;
         self
     }
 
@@ -202,9 +204,15 @@ impl ForcePressGestureRecognizer {
         }
     }
 
+    /// Whether a platform sample can participate in force recognition.
+    #[must_use]
+    pub fn supports_pressure_sample(sample: PointerSampleMetadata) -> bool {
+        sample.pressure.is_some() || calibrated_pressure(sample).is_some()
+    }
+
     /// Flutter `addPointer` for a press.
     pub fn add_pointer(&mut self, event: RawPointerEvent) {
-        self.add_pressure_pointer(event, event.sample.pressure.is_some());
+        self.add_pressure_pointer(event, Self::supports_pressure_sample(event.sample));
     }
 
     /// Adds a press with the physical device's raw range. A raw maximum
@@ -240,16 +248,24 @@ impl ForcePressGestureRecognizer {
 
     /// Flutter `handleEvent` for a routed event.
     pub fn handle_event(&mut self, event: RawPointerEvent) {
+        let physical = calibrated_pressure(event.sample);
+        let portable = event.sample.pressure.map(|pressure| ForcePressureSample {
+            min: 0.0,
+            max: 1.0,
+            value: pressure.get(),
+        });
+        let pressure = if self.custom_interpolation {
+            physical.or(portable)
+        } else {
+            portable.or(physical)
+        };
         self.handle_pressure_event(
             event,
-            ForcePressureSample {
+            pressure.unwrap_or(ForcePressureSample {
                 min: 0.0,
                 max: 1.0,
-                value: event
-                    .sample
-                    .pressure
-                    .map_or(f32::NAN, |pressure| pressure.get()),
-            },
+                value: f32::NAN,
+            }),
         );
     }
 
@@ -428,6 +444,19 @@ impl ForcePressGestureRecognizer {
         self.accepted = false;
         self.deferred = None;
     }
+}
+
+fn calibrated_pressure(sample: PointerSampleMetadata) -> Option<ForcePressureSample> {
+    let contact = sample.contact;
+    let value = contact.raw_pressure?;
+    (contact.pressure_max.is_finite()
+        && contact.pressure_min.is_finite()
+        && contact.pressure_max > contact.pressure_min.max(1.0))
+    .then_some(ForcePressureSample {
+        min: contact.pressure_min,
+        max: contact.pressure_max,
+        value,
+    })
 }
 
 arena_recognizer!(ForcePressGestureRecognizer);

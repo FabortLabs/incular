@@ -776,9 +776,8 @@ impl WidgetTree {
         )
     }
     /// [`Self::dispatch_pointer_gesture_with_hit_buttons`] for an event that
-    /// carries the native sample: its normalized pressure reaches the
-    /// force-press recognizers of `GestureDetector` (Flutter
-    /// `PointerEvent.pressure`, with `pressureMin` 0 and `pressureMax` 1).
+    /// carries the native sample to `GestureDetector`, preserving both
+    /// mapped gesture force and any calibrated device pressure.
     /// A sample without pressure keeps force presses out of the arena.
     #[allow(clippy::too_many_arguments)]
     pub fn dispatch_pointer_gesture_with_hit_sample(
@@ -1141,7 +1140,12 @@ impl WidgetTree {
                 }
                 // Flutter `ForcePressGestureRecognizer.addAllowedPointer`: a
                 // device without pressure sensing does not join the arena.
-                if primary && callbacks.has_force_press() && sample.pressure.is_some() {
+                if primary
+                    && callbacks.has_force_press()
+                    && incular_gestures::ForcePressGestureRecognizer::supports_pressure_sample(
+                        sample,
+                    )
+                {
                     let member = self.input.gesture_arena.add(key, false);
                     let local = self
                         .render_id(candidate)

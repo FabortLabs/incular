@@ -41,3 +41,15 @@ interfaces for standalone and arena-managed calls. Platform adapters
 that already normalize keep their existing behavior and pointer
 event representation; a normalized 1.0 is not mistaken for a physical
 maximum of 1.0. Both focused widget targets passed (11 tests).
+
+## Calibration through the mounted arena
+
+The authored pinned `mounted_force_interpolation_test.dart` records
+the mounted raw detector receiving (0, 10, 4). The retained native
+factory now receives that same tuple instead of (0, 1, 0.8) when the
+sample has physical calibration. Normalized-only sources keep
+(0, 1, force). The default detector retains the backend's angle-corrected
+force when available, and a calibrated-only source can enter the arena
+and trigger a press. The latter two are intentional native behavior.
+All focused force and raw-arena checks passed. The upstream direct
+interpolator case was already paired; this does not add credit.
