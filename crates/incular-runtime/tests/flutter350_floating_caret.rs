@@ -585,3 +585,147 @@ fn floating_selection_reports_force_press_without_erasing_a_platform_range() {
         Some(&(TextSelection::collapsed(0), ForcePress)),
     );
 }
+
+#[test]
+fn a_floating_caret_moves_across_a_hard_newline_to_the_previous_line_end() {
+    use incular_config::TargetPlatform;
+    use incular_core::Rect;
+    use incular_text::{SelectionChangedCause, TextStyle, register_application_font_as};
+    use std::{cell::RefCell, rc::Rc};
+
+    const FONT: &str = "Pinned hard-break floating caret Ahem";
+    let path = std::env::var_os("INCULAR_FLUTTER_AHEM_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../.tmp/flutter/packages/flutter_tools/static/Ahem.ttf")
+        });
+    if !path.is_file() {
+        eprintln!("Pinned Flutter Ahem unavailable; exact caret comparison not run");
+        return;
+    }
+    register_application_font_as(FONT, std::fs::read(path).unwrap());
+    const TEXT: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n1234567890";
+    let controller = TextEditingController::with_text(TEXT);
+    let callbacks = Rc::new(RefCell::new(Vec::new()));
+    let editor = EditableText::new(controller.clone())
+        .autofocus(true)
+        .text_direction(TextDirection::Ltr)
+        .style(TextStyle::new().font_family(FONT).font_size(14.))
+        .max_lines(Some(2))
+        .cursor_color(CURSOR)
+        .cursor_width(2.)
+        .on_selection_changed({
+            let callbacks = callbacks.clone();
+            move |selection, cause| callbacks.borrow_mut().push((selection, cause))
+        });
+    let mut runtime = Runtime::new(editor.into()).unwrap();
+    runtime.set_debug_deterministic_cursor(true);
+    let constraints = Constraints::loose(Size::new(800., 60.));
+    runtime.run_frame(constraints).unwrap();
+    controller.set_selection(TextSelection::collapsed(0));
+    runtime.run_frame(constraints).unwrap();
+    let sender = json!(
+        runtime
+            .take_text_input_commands()
+            .into_iter()
+            .find_map(|command| match command {
+                TextInputCommand::SetClient { configuration, .. } =>
+                    Some(configuration.client.get()),
+                _ => None,
+            })
+            .unwrap()
+    );
+    let point = |runtime: &mut Runtime, phase, x, y| {
+        assert_eq!(
+            wire(runtime, sender.clone(), phase, json!({"X":x, "Y":y})),
+            Some(true),
+        );
+        runtime.run_frame(constraints).unwrap().0
+    };
+    let (top, height) = if TargetPlatform::current().is_apple() {
+        (-1., 18.)
+    } else {
+        (1., 12.)
+    };
+    let rect = |x: f32, line: f32| {
+        Rect::from_origin_size(Offset::new(x, line + top), Size::new(3., height))
+    };
+    let host_select = |runtime: &mut Runtime, base, extent| {
+        let call = json!({"method":"TextInputClient.updateEditingState", "args":[sender.clone(), {
+            "text":TEXT, "selectionBase":base, "selectionExtent":extent,
+        }]});
+        assert_eq!(
+            runtime
+                .handle_flutter_text_input_editing_call(call.to_string().as_bytes())
+                .unwrap(),
+            Some(true)
+        );
+    };
+    let settle = |runtime: &mut Runtime| {
+        runtime
+            .run_frame_at(constraints, Instant::now() + Duration::from_millis(130))
+            .unwrap();
+    };
+    let force_press = SelectionChangedCause::ForcePress;
+    assert_eq!(
+        floating_caret_rect(&point(&mut runtime, "start", 0., 0.)),
+        Some(rect(0.5, 0.))
+    );
+    assert_eq!(
+        floating_caret_rect(&point(&mut runtime, "update", 50., 0.)),
+        Some(rect(50.5, 0.))
+    );
+    point(&mut runtime, "end", 0., 0.);
+    settle(&mut runtime);
+    assert_eq!(controller.selection(), TextSelection::collapsed(4));
+    assert_eq!(
+        callbacks.borrow().last(),
+        Some(&(TextSelection::collapsed(4), force_press))
+    );
+
+    for (initial_x, offset, dragged_x) in [(56.5, -56., 0.5), (0.5, 56., 56.5)] {
+        assert_eq!(
+            floating_caret_rect(&point(&mut runtime, "start", 0., 0.)),
+            Some(rect(initial_x, 0.))
+        );
+        assert_eq!(
+            floating_caret_rect(&point(&mut runtime, "update", offset, 0.)),
+            Some(rect(dragged_x, 0.))
+        );
+        host_select(&mut runtime, 0, 4);
+        assert_eq!(
+            callbacks.borrow().last(),
+            Some(&(TextSelection::new(0, 4), force_press))
+        );
+        let before_settle = callbacks.borrow().len();
+        point(&mut runtime, "end", 0., 0.);
+        settle(&mut runtime);
+        assert_eq!(controller.selection(), TextSelection::new(0, 4));
+        assert_eq!(callbacks.borrow().len(), before_settle);
+        host_select(&mut runtime, 0, 0);
+        runtime.run_frame(constraints).unwrap();
+    }
+
+    host_select(&mut runtime, 27, 27);
+    runtime.run_frame(constraints).unwrap();
+    assert_eq!(
+        floating_caret_rect(&point(&mut runtime, "start", 0., 0.)),
+        Some(rect(0.5, 14.)),
+    );
+    assert_eq!(
+        floating_caret_rect(&point(&mut runtime, "update", 9999., -14.)),
+        Some(rect(800.5, 0.)),
+    );
+    point(&mut runtime, "end", 0., 0.);
+    assert_eq!(controller.selection(), TextSelection::collapsed(27));
+    runtime
+        .run_frame_at(constraints, Instant::now() + Duration::from_millis(130))
+        .unwrap();
+    assert_eq!(controller.selection(), TextSelection::collapsed(26));
+    assert_eq!(controller.caret_affinity(), TextAffinity::Upstream);
+    assert_eq!(
+        callbacks.borrow().last(),
+        Some(&(TextSelection::collapsed(26), force_press))
+    );
+}

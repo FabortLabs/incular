@@ -16,10 +16,10 @@ A collapsed selection moves only after settling; a selection already
 extended by the IME is not overridden. The authored pinned mounted
 sequence and native padding/timing/identity checks verify those cases.
 
-The pinned ending-with-selection widget registration remains partial:
-its final hard-break pixel and hit-side sequence is not yet paired.
-The force-press selection notification, wrapped-line affinity and
-background caret have their own checks below.
+The pinned ending-with-selection widget registration is paired
+through the retained force-press, forward/reverse range and hard-break
+geometry checks below. The wrapped-line and background-caret cases have
+their own checks.
 
 Four focused native floating-caret tests and 13 lifecycle regressions passed.
 
@@ -116,6 +116,22 @@ silent. Callback panics go through the same typed editor error reporter as
 the other editor callbacks.
 
 This implements the platform and floating routes, not all host key,
-gesture or accessibility causes. The original's final hard-break pixels
-and hit-side sequence remain open, so its disposition remains partial.
-Three focused Rust targets passed 25 tests.
+gesture or accessibility causes. Three focused Rust targets passed 25
+tests. The full pinned rendering and range sequence was subsequently
+checked below.
+
+## Ending with selection at a hard break
+
+The retained Ahem fixture now reproduces the original `:13422` sequence:
+start at x=0.5, drag to x=50.5, and settle to offset 4 with a force-press
+notification. A reverse drag starts at x=56.5 and crosses back to x=0.5;
+the forward drag does the opposite. In either direction, a platform
+range 0→4 remains intact after the animation and does not report a
+duplicate callback. The hard-break case starts at `(0.5, 15, 3, 12)`
+at byte 27, then moves to `(800.5, 1, 3, 12)` on the first line.
+
+The original checks the old offset immediately after End. The pinned
+authored hard-break probe also advances through the 125 ms reset:
+it selects the previous line's end, offset 26 with upstream affinity.
+The native case verifies both points in time and the final force-press
+notification. Nine focused native floating-caret tests passed.
