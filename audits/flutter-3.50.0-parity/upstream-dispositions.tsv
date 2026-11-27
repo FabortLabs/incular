@@ -3654,3 +3654,4 @@ packages/flutter/test/widgets/text_selection_test.dart	730	test TextSelectionGes
 packages/flutter/test/rendering/paragraph_test.dart	348	maxLines	paired-match	upstream-rich-text-layout.md#live-line-caps-alignment-and-hit-affinity
 packages/flutter/test/rendering/paragraph_test.dart	377	textAlign triggers TextPainter relayout in the paint method	paired-match	upstream-rich-text-layout.md#live-line-caps-alignment-and-hit-affinity
 packages/flutter/test/rendering/paragraph_test.dart	1173	getPositionForOffset works	paired-match	upstream-rich-text-layout.md#live-line-caps-alignment-and-hit-affinity
+packages/flutter/test/rendering/paragraph_test.dart	401	RenderParagraph hyphens control test	paired-match	upstream-rich-text-layout.md#discretionary-hyphens-on-a-mounted-paragraph

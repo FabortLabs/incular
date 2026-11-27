@@ -85,6 +85,7 @@ impl std::fmt::Debug for WidgetKind {
                 overflow,
                 text_direction,
                 text_height_behavior,
+                hyphens,
                 text_scaler,
                 spans,
                 pointer_spans,
@@ -100,6 +101,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("max_lines", max_lines)
                 .field("overflow", overflow)
                 .field("text_height_behavior", text_height_behavior)
+                .field("hyphens", hyphens)
                 .field("text_scaler", text_scaler)
                 .field("spans", &spans.as_ref().map(|runs| runs.len()))
                 .field("pointer_spans", &pointer_spans.as_ref().map(|spans| spans.ranges.len()))
@@ -1154,6 +1156,7 @@ impl PartialEq for WidgetKind {
                     overflow: f,
                     text_direction: m,
                     text_height_behavior: q,
+                    hyphens: left_hyphens,
                     text_scaler: s,
                     spans: t,
                     pointer_spans: before,
@@ -1169,6 +1172,7 @@ impl PartialEq for WidgetKind {
                     overflow: l,
                     text_direction: n,
                     text_height_behavior: r,
+                    hyphens: right_hyphens,
                     text_scaler: u,
                     spans: v,
                     pointer_spans: after,
@@ -1184,6 +1188,7 @@ impl PartialEq for WidgetKind {
                     && f == l
                     && m == n
                     && q == r
+                    && left_hyphens == right_hyphens
                     && s == u
                     && t == v
                     && before == after

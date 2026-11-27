@@ -866,6 +866,7 @@ pub enum RenderKind {
         max_lines: Option<usize>,
         overflow: TextOverflow,
         height_behavior: TextHeightBehavior,
+        hyphens: incular_text::Hyphens,
         /// Per-span styles of a rich paragraph (`text` is their flattened text).
         spans: Option<Arc<[StyledTextRun]>>,
         /// Inline `WidgetSpan` boxes; children fill them in slot order.

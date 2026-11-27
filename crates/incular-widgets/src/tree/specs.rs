@@ -661,6 +661,7 @@ pub(crate) struct TextParagraphPolicy {
     pub(crate) soft_wrap: Option<bool>,
     pub(crate) max_lines: Option<Option<usize>>,
     pub(crate) overflow: Option<TextOverflow>,
+    pub(crate) hyphens: incular_text::Hyphens,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -769,6 +770,7 @@ pub(crate) enum WidgetKind {
         /// Explicit height behavior; `None` resolves against the ambient
         /// `DefaultTextHeightBehavior`.
         text_height_behavior: Option<TextHeightBehavior>,
+        hyphens: incular_text::Hyphens,
         /// Inline `WidgetSpan` boxes of a rich paragraph and the widgets
         /// filling them (Flutter `RichText` children).
         inline: Option<Box<(InlinePlaceholders, Vec<Widget>)>>,

@@ -99,6 +99,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             overflow,
             text_direction,
             text_height_behavior,
+            hyphens,
             text_scaler,
             spans,
             inline,
@@ -126,6 +127,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 soft_wrap: soft_wrap.or(defaults.soft_wrap).unwrap_or(true),
                 max_lines: max_lines.unwrap_or(defaults.max_lines),
                 overflow: overflow.or(defaults.overflow).unwrap_or(TextOverflow::Clip),
+                hyphens: *hyphens,
                 height_behavior: text_height_behavior
                     .or(defaults.height_behavior)
                     .or_else(|| context.depend::<TextHeightBehavior>())

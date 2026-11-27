@@ -151,6 +151,7 @@ impl WidgetTree {
                 max_lines,
                 overflow,
                 height_behavior,
+                hyphens,
                 ref spans,
                 ref inline,
                 ref strut,
@@ -221,6 +222,9 @@ impl WidgetTree {
                         }
                     };
                 }
+                self.text_engine.apply_discretionary_hyphens(
+                    &mut layout, text, style, spans.as_deref().unwrap_or_default(), hyphens, width,
+                );
                 let size = constraints.constrain(layout.metrics.size);
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(layout.clone());

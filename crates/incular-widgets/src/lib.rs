@@ -305,7 +305,7 @@ pub use incular_semantics::{
     AccessibilityFocusBlockType, SemanticValidationResult, SemanticsInputType,
 };
 pub use incular_text::{
-    FontFeature, FontVariation, FontWeight, IconData, RichText, StrutStyle, TextAlign,
+    FontFeature, FontVariation, FontWeight, Hyphens, IconData, RichText, StrutStyle, TextAlign,
     TextBaseline, TextEditingController, TextEditingValue, TextHeightBehavior, TextMetricAdjustment,
     TextOverflow, TextRange, TextScaler, TextSelection, TextSpan, TextStyle, TextStyleApply,
     TextWidthBasis, WidgetSpan, lerp_font_variations,

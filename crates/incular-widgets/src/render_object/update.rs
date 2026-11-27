@@ -240,6 +240,7 @@ fn text_paint_only_change(
             max_lines: old_max_lines,
             overflow: old_overflow,
             height_behavior: old_height_behavior,
+            hyphens: old_hyphens,
             spans: old_spans,
             inline: old_inline,
             strut: old_strut,
@@ -253,6 +254,7 @@ fn text_paint_only_change(
             max_lines: new_max_lines,
             overflow: new_overflow,
             height_behavior: new_height_behavior,
+            hyphens: new_hyphens,
             spans: new_spans,
             inline: new_inline,
             strut: new_strut,
@@ -268,6 +270,7 @@ fn text_paint_only_change(
         && old_max_lines == new_max_lines
         && old_overflow == new_overflow
         && old_height_behavior == new_height_behavior
+        && old_hyphens == new_hyphens
         && (old_spans == new_spans
             || old_spans
                 .as_deref()

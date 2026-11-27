@@ -694,6 +694,7 @@ pub struct Text {
     overflow: Option<TextOverflow>,
     text_direction: Option<incular_config::TextDirection>,
     text_height_behavior: Option<TextHeightBehavior>,
+    hyphens: incular_text::Hyphens,
     text_scaler: Option<TextScaler>,
     strut: Option<StrutStyle>,
     locale: Option<incular_config::Locale>,
@@ -714,6 +715,7 @@ impl Text {
             overflow: None,
             text_direction: None,
             text_height_behavior: None,
+            hyphens: incular_text::Hyphens::Manual,
             text_scaler: None,
             strut: None,
             locale: None,
@@ -758,6 +760,13 @@ impl Text {
         self.text_scaler = Some(text_scaler);
         self
     }
+    /// Controls the painted mark at a discretionary line break.
+    #[must_use]
+    pub fn hyphens(mut self, mode: incular_text::Hyphens) -> Self {
+        self.hyphens = mode;
+        self
+    }
+
     /// Overrides the locale used for shaping and for the spoken text label.
     #[must_use]
     pub fn locale(mut self, locale: incular_config::Locale) -> Self {
@@ -851,6 +860,7 @@ impl From<Text> for Widget {
                 soft_wrap: value.soft_wrap,
                 max_lines: value.max_lines,
                 overflow: value.overflow,
+                hyphens: value.hyphens,
             },
             value.text_direction,
             value.text_height_behavior,
@@ -996,6 +1006,7 @@ fn rich_text_widget(
             soft_wrap: Some(value.soft_wrap),
             max_lines: Some(value.max_lines),
             overflow: Some(value.overflow),
+            hyphens: value.hyphens,
         },
         None,
         None,

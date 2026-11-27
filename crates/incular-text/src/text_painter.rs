@@ -1238,6 +1238,29 @@ fn paint_discretionary_hyphens(
     width
 }
 
+impl TextEngine {
+    /// Adds marks at taken soft-hyphen breaks without changing caret boxes.
+    #[doc(hidden)]
+    pub fn apply_discretionary_hyphens(
+        &mut self,
+        layout: &mut Arc<TextLayout>,
+        source: &str,
+        style: &TextStyle,
+        runs: &[crate::StyledTextRun],
+        mode: Hyphens,
+        max_width: Option<f32>,
+    ) {
+        const SOFT_HYPHEN: char = 0x00ad_u8 as char;
+        if mode == Hyphens::Manual && layout.lines.len() > 1 && source.contains(SOFT_HYPHEN) {
+            let advance = paint_discretionary_hyphens(self, source, style, runs, layout);
+            let advance = max_width.map_or(advance, |limit| advance.min(limit));
+            if advance > layout.metrics.size.width {
+                Arc::make_mut(layout).metrics.size.width = advance;
+            }
+        }
+    }
+}
+
 fn longest(layout: &TextLayout) -> f32 {
     layout
         .lines

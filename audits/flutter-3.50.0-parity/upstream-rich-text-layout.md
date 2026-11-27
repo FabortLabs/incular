@@ -171,3 +171,20 @@ stops that correspond to different logical positions.
 
 The final two focused native targets passed 63 tests (one pre-existing
 Unicode trailing-space case stayed ignored).
+
+### Discretionary hyphens on a mounted paragraph
+
+Pinned `rendering/paragraph_test.dart:401` passed: manual is the
+default, assigning the same mode does not dirty layout, and changing
+to hidden does. The authored mounted Flutter pixel probe verifies the
+hyphen appears in the first line of `abc\u00ADde` at width 49, vanishes
+in hidden mode, and returns in manual mode. Incular's mounted default
+previously drew only the letters, although standalone TextPainter
+already knew how to add the discretionary mark.
+
+The retained Text and RichText policy now forwards the mode and reuses
+the same discretionary glyph shaping. The native control inspects the
+actual recorded glyph, that its first-line advance still describes
+only the real text, and that the two-line height remains unchanged.
+Three focused native targets passed 71 tests, with the existing
+Unicode-space case ignored.

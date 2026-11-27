@@ -1,7 +1,7 @@
 //! Plain and rich text descriptions.
 
 use crate::{
-    TextAffinity, TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow,
+    Hyphens, TextAffinity, TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow,
     TextPlaceholder, TextScaler, TextStyle,
 };
 use incular_config::Locale;
@@ -757,6 +757,7 @@ pub struct RichText {
     pub max_lines: Option<usize>,
     pub soft_wrap: bool,
     pub overflow: TextOverflow,
+    pub hyphens: Hyphens,
 }
 
 impl RichText {
@@ -769,6 +770,7 @@ impl RichText {
             max_lines: None,
             soft_wrap: true,
             overflow: TextOverflow::Clip,
+            hyphens: Hyphens::Manual,
         }
     }
 
@@ -801,6 +803,13 @@ impl RichText {
         self
     }
 
+    /// Controls the painted mark at a discretionary line break.
+    #[must_use]
+    pub fn hyphens(mut self, mode: Hyphens) -> Self {
+        self.hyphens = mode;
+        self
+    }
+
     #[must_use]
     pub fn overflow(mut self, overflow: TextOverflow) -> Self {
         self.overflow = overflow;
@@ -820,15 +829,23 @@ impl RichText {
 
     #[must_use]
     pub fn layout(&self, engine: &mut TextEngine, max_width: Option<f32>) -> Arc<TextLayout> {
-        engine.layout_rich_with_options(
-            &self.plain_text(),
-            &self.flatten(),
+        let text = self.plain_text();
+        let runs = self.flatten();
+        let mut layout = engine.layout_rich_with_options(
+            &text,
+            &runs,
             &self.text.placeholders(),
             TextLayoutOptions::new(max_width, self.text_align)
                 .soft_wrap(self.soft_wrap)
                 .max_lines(self.max_lines)
                 .overflow(self.overflow),
-        )
+        );
+        if let Some(base) = runs.first() {
+            engine.apply_discretionary_hyphens(
+                &mut layout, &text, &base.style, &runs, self.hyphens, max_width,
+            );
+        }
+        layout
     }
 }
 
@@ -843,6 +860,7 @@ pub struct Text {
     pub max_lines: Option<usize>,
     pub soft_wrap: bool,
     pub overflow: TextOverflow,
+    pub hyphens: Hyphens,
 }
 
 impl Text {
@@ -856,6 +874,7 @@ impl Text {
             max_lines: None,
             soft_wrap: true,
             overflow: TextOverflow::Clip,
+            hyphens: Hyphens::Manual,
         }
     }
 
@@ -894,6 +913,13 @@ impl Text {
         self
     }
 
+    /// Controls the painted mark at a discretionary line break.
+    #[must_use]
+    pub fn hyphens(mut self, mode: Hyphens) -> Self {
+        self.hyphens = mode;
+        self
+    }
+
     #[must_use]
     pub fn overflow(mut self, overflow: TextOverflow) -> Self {
         self.overflow = overflow;
@@ -913,18 +939,24 @@ impl Text {
             .max_lines(self.max_lines)
             .soft_wrap(self.soft_wrap)
             .overflow(self.overflow)
+            .hyphens(self.hyphens)
     }
 
     #[must_use]
     pub fn layout(&self, engine: &mut TextEngine, max_width: Option<f32>) -> Arc<TextLayout> {
-        engine.layout_with_options(
+        let style = self.style.scaled(self.text_scaler);
+        let mut layout = engine.layout_with_options(
             &self.text,
-            &self.style.scaled(self.text_scaler),
+            &style,
             TextLayoutOptions::new(max_width, self.text_align)
                 .soft_wrap(self.soft_wrap)
                 .max_lines(self.max_lines)
                 .overflow(self.overflow),
-        )
+        );
+        engine.apply_discretionary_hyphens(
+            &mut layout, &self.text, &style, &[], self.hyphens, max_width,
+        );
+        layout
     }
 }
 

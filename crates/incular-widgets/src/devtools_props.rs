@@ -69,6 +69,7 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             overflow,
             text_direction,
             text_height_behavior: _,
+            hyphens: _,
             text_scaler: _,
             spans: _,
             inline: _,

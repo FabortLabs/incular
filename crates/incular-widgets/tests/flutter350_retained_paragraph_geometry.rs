@@ -331,3 +331,47 @@ fn laid_out_paragraph_maps_an_exact_glyph_boundary_to_the_next_visual_glyph() {
         }
     }
 }
+
+#[test]
+fn a_mounted_paragraph_defaults_to_manual_and_relayouts_only_when_hyphens_change() {
+    use incular_text::Hyphens;
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let span = TextSpan::new("abc\u{00ad}de").style(style.font_size(10.));
+    let initial = RichText::new(span.clone());
+    assert_eq!(initial.hyphens, Hyphens::Manual);
+    let (mut tree, key) = mount(span, engine, 49., false);
+    let field = tree.element_with_key(&key.into()).unwrap();
+    let render = tree.render_id(field).unwrap();
+    let constraints = Constraints::tight(Size::new(49., 600.));
+    for (mode, expected_glyphs, dirty) in [
+        (Hyphens::Manual, 4, false),
+        (Hyphens::Hidden, 3, true),
+        (Hyphens::Manual, 4, true),
+    ] {
+        let old_layouts = tree.diagnostics().layouts;
+        tree.update(field, Widget::from(initial.clone().hyphens(mode)).with_key(key))
+            .unwrap();
+        tree.layout(constraints).unwrap();
+        assert_eq!(tree.diagnostics().layouts > old_layouts, dirty, "{mode:?}");
+        let layout = tree.text_layout(render).unwrap();
+        assert_eq!(layout.metrics.size.height, 20.);
+        assert_eq!(layout.lines[0].width, 30.);
+        assert_eq!(
+            layout.lines[0].glyphs.iter().filter(|g| g.advance > 0.).count(),
+            expected_glyphs,
+            "{mode:?}",
+        );
+        let mut painted_mark = false;
+        let painted = tree.paint();
+        for command in painted.commands() {
+            if let incular_rendering::PaintCommand::GlyphRun { run, .. } = command {
+                painted_mark |= run.glyphs.iter().any(|g| {
+                    g.cluster == 3 && g.advance > 0. && g.offset.x + run.origin.x == 30.
+                });
+            }
+        }
+        assert_eq!(painted_mark, mode == Hyphens::Manual);
+    }
+}
