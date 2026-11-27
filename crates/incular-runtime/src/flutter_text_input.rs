@@ -9,7 +9,7 @@ use incular_platform::{
     TextInputState,
     message_codecs::{JsonMethodCodec, JsonMethodCodecError, MethodCall},
 };
-use incular_text::{FlutterTextDeltaError, FlutterTextEditingDelta};
+use incular_text::{FlutterTextDeltaError, FlutterTextEditingDelta, TextAffinity};
 use serde_json::{Map, Value, json};
 
 /// The default inbound `flutter/textinput` handler for an opt-in Flutter
@@ -283,7 +283,9 @@ fn editing_endpoint(
     }
 }
 
-fn decode_full_editing_state(data: &Value) -> Result<TextInputState, FlutterTextInputEditingError> {
+fn decode_full_editing_state(
+    data: &Value,
+) -> Result<(TextInputState, TextAffinity, bool), FlutterTextInputEditingError> {
     use FlutterTextInputEditingError::{InvalidArguments, InvalidField, ReversedComposition};
     let fields = data.as_object().ok_or(InvalidArguments)?;
     let text = fields
@@ -294,23 +296,17 @@ fn decode_full_editing_state(data: &Value) -> Result<TextInputState, FlutterText
         None | Some(Value::Null) => Ok(-1),
         Some(value) => value.as_i64().ok_or(InvalidField(field)),
     };
-    // The retained selection stores base and extent but not affinity or
-    // directionality metadata. Still enforce the incoming wire types.
-    for (field, string) in [
-        ("selectionAffinity", true),
-        ("selectionIsDirectional", false),
-    ] {
-        if fields.get(field).is_some_and(|value| {
-            !value.is_null()
-                && if string {
-                    !value.is_string()
-                } else {
-                    !value.is_boolean()
-                }
-        }) {
-            return Err(InvalidField(field));
-        }
-    }
+    let affinity = match fields.get("selectionAffinity") {
+        None | Some(Value::Null) => TextAffinity::Downstream,
+        Some(Value::String(name)) if name == "TextAffinity.upstream" => TextAffinity::Upstream,
+        Some(Value::String(_)) => TextAffinity::Downstream,
+        _ => return Err(InvalidField("selectionAffinity")),
+    };
+    let directional = match fields.get("selectionIsDirectional") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(value)) => *value,
+        _ => return Err(InvalidField("selectionIsDirectional")),
+    };
     let base = read_offset("selectionBase")?;
     let extent = read_offset("selectionExtent")?;
     let (selection_start, selection_end) = if (base, extent) == (-1, -1) {
@@ -339,12 +335,16 @@ fn decode_full_editing_state(data: &Value) -> Result<TextInputState, FlutterText
             editing_endpoint(text, end, "composing", "end")?,
         ))
     };
-    Ok(TextInputState {
-        text: text.to_owned(),
-        selection_start,
-        selection_end,
-        composing,
-    })
+    Ok((
+        TextInputState {
+            text: text.to_owned(),
+            selection_start,
+            selection_end,
+            composing,
+        },
+        affinity,
+        directional,
+    ))
 }
 
 impl crate::Runtime {
@@ -431,8 +431,9 @@ impl crate::Runtime {
         if !sender_matches(sender, active).ok_or(InvalidArguments)? {
             return Ok(Some(false));
         }
-        let state = decode_full_editing_state(args.get(1).ok_or(InvalidArguments)?)?;
-        self.handle_text_editing_state(state);
+        let (state, affinity, directional) =
+            decode_full_editing_state(args.get(1).ok_or(InvalidArguments)?)?;
+        self.handle_text_editing_state_with_metadata(state, Some((affinity, directional)));
         Ok(Some(true))
     }
 

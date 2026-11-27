@@ -131,6 +131,11 @@ fn reversed_selections_and_composition_convert_to_bytes_without_echoing_the_host
     assert_eq!(actual.text, "a😀z");
     assert_eq!(actual.selection, TextSelection::new(5, 1));
     assert_eq!(actual.composing, Some(TextRange::new(1, 5)));
+    assert_eq!(
+        controller.caret_affinity(),
+        incular_text::TextAffinity::Upstream
+    );
+    assert!(controller.selection_is_directional());
     frame(&mut runtime);
     assert!(
         !runtime
@@ -191,4 +196,71 @@ fn stale_connections_are_rejected_before_their_state_is_decoded() {
     assert_eq!(left_text.text(), "left");
     assert_eq!(right_text.text(), "right");
     assert!(right.has_primary_focus());
+}
+
+#[test]
+fn a_full_edit_only_trusts_affinity_when_the_text_or_selection_origin_changes() {
+    use incular_text::TextAffinity;
+
+    let focus = FocusNode::new();
+    let controller = TextEditingController::with_text("first line");
+    controller.set_selection(TextSelection::collapsed(1));
+    let format_calls = std::rc::Rc::new(std::cell::Cell::new(0));
+    let _formatter = controller.register_edit_transform({
+        let count = format_calls.clone();
+        move |_, incoming| {
+            count.set(count.get() + 1);
+            incoming.clone()
+        }
+    });
+    let mut runtime = Runtime::new(field(&controller, &focus, true).into()).unwrap();
+    frame(&mut runtime);
+    let client = attached(&mut runtime);
+    let set = |runtime: &mut Runtime, text: &str, offset, affinity| {
+        assert_eq!(
+            runtime
+                .handle_flutter_text_input_editing_call(&update(
+                    json!(client.get()),
+                    json!({
+                        "text": text,
+                        "selectionBase": offset,
+                        "selectionExtent": offset,
+                        "selectionAffinity": affinity,
+                    }),
+                ))
+                .unwrap(),
+            Some(true)
+        );
+    };
+
+    set(&mut runtime, "first line", 2, "TextAffinity.upstream");
+    assert_eq!(controller.selection(), TextSelection::collapsed(2));
+    assert_eq!(controller.caret_affinity(), TextAffinity::Upstream);
+    let revision = controller.revisions();
+    set(&mut runtime, "first line", 2, "TextAffinity.downstream");
+    assert_eq!(controller.caret_affinity(), TextAffinity::Upstream);
+    assert_eq!(
+        controller.revisions(),
+        revision,
+        "no redundant caret mutation"
+    );
+    assert_eq!(format_calls.get(), 0);
+    set(&mut runtime, "First line", 2, "TextAffinity.downstream");
+    assert_eq!(controller.text(), "First line");
+    assert_eq!(format_calls.get(), 1);
+    assert_eq!(controller.caret_affinity(), TextAffinity::Downstream);
+
+    set(&mut runtime, "First line", 3, "TextAffinity.upstream");
+    assert_eq!(controller.caret_affinity(), TextAffinity::Upstream);
+    // Unrecognized string names follow TextEditingValue.fromJSON's default.
+    set(&mut runtime, "First line", 4, "unknown");
+    assert_eq!(controller.selection(), TextSelection::collapsed(4));
+    assert_eq!(controller.caret_affinity(), TextAffinity::Downstream);
+    frame(&mut runtime);
+    assert!(
+        !runtime
+            .take_text_input_commands()
+            .iter()
+            .any(|command| matches!(command, TextInputCommand::Update { .. }))
+    );
 }

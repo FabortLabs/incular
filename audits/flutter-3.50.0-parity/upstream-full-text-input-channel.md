@@ -16,9 +16,26 @@ do not include the supplied editing text. A valid update uses the
 existing platform-to-controller path, so it does not echo the same
 state back to the host.
 
-The byte-addressed editor represents Flutter's absent selection as
-an unselected caret at the end of the text. It validates the wire
-types of affinity and directional flags but does not retain those
-flags in the applied native state. Floating-cursor messages are
-not covered here. Five delta-channel, three full-state, and eleven
-lifecycle tests passed.
+The byte-addressed editor represents Flutter's absent selection as a
+collapsed end caret. The initial comparison only verified affinity and
+directional wire types. The application of those flags is verified below.
+
+## Retaining the visual edge through platform edits
+
+The optional `TextInputClient.updateEditingState` adapter previously
+discarded the supplied affinity and directional flag. It now commits both
+with the UTF-8 selection and composing range in one controller change.
+For the same text, collapsed status and selection start, Flutter keeps
+the local visual edge instead of trusting an affinity-only change from
+the platform. Otherwise it uses the incoming edge. Unrecognized string
+values default to downstream, as in `TextEditingValue.fromJSON`.
+
+The pinned authored `editor_platform_selection_affinity_test.dart`
+sends the actual JSON channel messages to a focused editor. The native
+tests reproduce both the ignored duplicate and a moved selection that
+must use the new visual edge, preserve directional reverse selection
+through an astral character, and verify no formatter for selection-only
+changes, one formatter for the text change, no duplicate caret revision,
+and no echo. The default native IME and delta adapter paths were not
+changed. Four focused native targets passed 29 tests. This is authored
+coverage and adds no upstream registration count.

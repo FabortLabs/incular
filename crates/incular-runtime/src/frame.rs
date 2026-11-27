@@ -4640,7 +4640,16 @@ impl Runtime {
     /// [`TextInputCommand::Update`] goes out only when an input formatter
     /// changed it.
     pub fn handle_text_editing_state(&mut self, state: TextInputState) {
+        self.handle_text_editing_state_with_metadata(state, None);
+    }
+
+    pub(crate) fn handle_text_editing_state_with_metadata(
+        &mut self,
+        state: TextInputState,
+        metadata: Option<(incular_text::TextAffinity, bool)>,
+    ) {
         self.editing_diagnostics.ime_events += 1;
+        let had_preedit = self.ime_composition.is_some();
         self.cancel_ime_composition();
         let Some(owner) = self.ime_focused_target() else {
             return;
@@ -4657,13 +4666,33 @@ impl Runtime {
         let text_changed = controller.with_value(|current| {
             current.text != value.text || current.composing != value.composing
         });
-        let delta = controller.with_value(|current| {
-            (current != &value)
-                .then(|| incular_text::TextEditingDelta::between(&current.text, &value))
-        });
-        if let Some(delta) = delta {
-            controller.apply_delta(&delta);
-        }
+        let refresh_caret = if let Some((affinity, directional)) = metadata {
+            // EditableTextState keeps the visual caret side when an IME
+            // reports a different affinity without moving its origin.
+            let keep_affinity = controller.with_value(|current| {
+                current.text == value.text
+                    && current.selection.is_collapsed() == value.selection.is_collapsed()
+                    && current.selection.start() == value.selection.start()
+            });
+            let affinity = if keep_affinity {
+                controller.caret_affinity()
+            } else {
+                affinity
+            };
+            let before = controller.revisions();
+            controller.apply_platform_editing_value(value.clone(), true, affinity, directional);
+            // A formatter may reject a text change. Still publish the
+            // corrected state to the IME in that case.
+            had_preedit || text_changed || controller.revisions() != before
+        } else {
+            if let Some(delta) = controller.with_value(|current| {
+                (current != &value)
+                    .then(|| incular_text::TextEditingDelta::between(&current.text, &value))
+            }) {
+                controller.apply_delta(&delta);
+            }
+            true
+        };
         if text_changed {
             self.hide_text_field_overlays(owner.field);
         }
@@ -4675,8 +4704,10 @@ impl Runtime {
                 text: value.text,
             });
         }
-        controller.reset_caret(self.input_now());
-        self.frame_requested = true;
+        if refresh_caret {
+            controller.reset_caret(self.input_now());
+            self.frame_requested = true;
+        }
     }
     pub fn run_frame(
         &mut self,

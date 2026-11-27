@@ -875,6 +875,25 @@ impl TextEditingController {
         affinity: TextAffinity,
         selection_is_directional: bool,
     ) {
+        self.apply_platform_editing_value(
+            value,
+            selection_is_set,
+            affinity,
+            selection_is_directional,
+        );
+    }
+
+    /// Applies an already validated platform value in one transaction,
+    /// including its selection metadata. Selection-only changes do not run
+    /// text formatters and do not invalidate shaped content.
+    #[doc(hidden)]
+    pub fn apply_platform_editing_value(
+        &self,
+        value: TextEditingValue,
+        selection_is_set: bool,
+        affinity: TextAffinity,
+        selection_is_directional: bool,
+    ) {
         let text_or_composing_changed = self.with_value(|old| {
             old.text != value.text || old.composing != value.composing
         });
