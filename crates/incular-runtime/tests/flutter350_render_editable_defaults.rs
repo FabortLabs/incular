@@ -107,3 +107,97 @@ fn translated_raw_editor_moves_its_collapsed_selection_anchor_by_the_paint_offse
     assert_eq!(anchor(Offset::ZERO), Offset::new(0., 20.));
     assert_eq!(anchor(Offset::new(100., 200.)), Offset::new(100., 220.));
 }
+
+#[test]
+fn a_mounted_caret_can_change_color_radius_width_text_scale_and_visibility() {
+    use incular_text::TextScaler;
+    use incular_core::{Color, Rect};
+    use incular_rendering::{Brush, DisplayList, PaintCommand, RRect};
+    use incular_text::TextAffinity;
+
+    let Some(style) = ahem_style(10.) else {
+        return;
+    };
+    let style = style.height(Some(1.));
+    let controller = TextEditingController::with_text("test");
+    controller.set_selection_with_affinity(TextSelection::collapsed(4), TextAffinity::Upstream);
+
+    const RED: Color = Color::rgba(255, 0, 0, 255);
+    const BLUE: Color = Color::rgba(0, 0, 255, 255);
+    let build = |visible, color, width, radius, scale| {
+        EditableText::new(controller.clone())
+            .autofocus(true)
+            .text_direction(TextDirection::Ltr)
+            .style(style.clone())
+            .text_scaler(TextScaler::linear(scale))
+            .cursor_color(color)
+            .cursor_width(width)
+            .cursor_radius(radius)
+            .show_cursor(visible)
+    };
+    let mut runtime = Runtime::new(build(false, RED, 1., 0., 1.).into()).unwrap();
+    runtime.set_debug_deterministic_cursor(true);
+    let frame = |runtime: &mut Runtime| {
+        runtime
+            .run_frame(Constraints::loose(Size::new(100., 100.)))
+            .unwrap()
+            .0
+    };
+
+    let rectangles = |list: &DisplayList| {
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::Rect { rect, color } if *color == RED || *color == BLUE => {
+                    Some((*rect, *color))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let rounded = |list: &DisplayList| {
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::RRect {
+                    rrect,
+                    brush: Brush::Solid(color),
+                } if *color == RED || *color == BLUE => Some((*rrect, *color)),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let hidden = frame(&mut runtime);
+    assert!(rectangles(&hidden).is_empty());
+    assert!(rounded(&hidden).is_empty());
+    let field = runtime.focused_element().unwrap();
+
+    let rect = |x, w, h| Rect::from_origin_size(Offset::new(x, 0.), Size::new(w, h));
+    let mut transition = |widget: EditableText| {
+        runtime.schedule_update(field, widget.into()).unwrap();
+        let list = frame(&mut runtime);
+        assert_eq!(runtime.focused_element(), Some(field));
+        assert_eq!(controller.selection(), TextSelection::collapsed(4));
+        assert_eq!(controller.caret_affinity(), TextAffinity::Upstream);
+        list
+    };
+
+    let plain = transition(build(true, RED, 1., 0., 1.));
+    assert_eq!(rectangles(&plain), [(rect(40., 1., 10.), RED)]);
+    assert!(rounded(&plain).is_empty());
+    let round = transition(build(true, BLUE, 4., 3., 1.));
+    assert!(rectangles(&round).is_empty());
+    assert_eq!(
+        rounded(&round),
+        [(RRect::uniform(rect(40., 4., 10.), 3.), BLUE)]
+    );
+    let doubled = transition(build(true, BLUE, 4., 3., 2.));
+    assert!(rectangles(&doubled).is_empty());
+    assert_eq!(
+        rounded(&doubled),
+        [(RRect::uniform(rect(80., 4., 20.), 3.), BLUE)]
+    );
+    let hidden_again = transition(build(false, BLUE, 4., 3., 2.));
+    assert!(rectangles(&hidden_again).is_empty());
+    assert!(rounded(&hidden_again).is_empty());
+}

@@ -51,3 +51,13 @@ and does not change text layout or the selection. The authored
 the two focused Rust targets passed eight tests. This covers the background
 caret, not the remaining exact wrapped-line pixel or selection-cause checks,
 and adds no upstream count.
+
+## Live caret configuration
+
+Pinned `rendering/editable_test.dart:261`, “Can change cursor color, radius,
+visibility,” passes. The retained editor also starts hidden, then paints an
+exact red `(40, 0, 1, 10)` rectangle with pinned Ahem. The mounted blue
+rounded caret is `(40, 0, 4, 10)` with radius 3 and becomes
+`(80, 0, 4, 20)` at 2× text scaling without growing in width or radius.
+Hiding it again removes the paint command. Focus identity, selection, and
+upstream affinity are unchanged through all updates. Five native tests passed.
