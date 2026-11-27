@@ -21,8 +21,10 @@ pub enum TextPainterError {
     MissingTextDirection,
     InvalidMaxLines,
     InvalidWidth,
+    UnboundedSize,
     InvalidPlaceholderCount,
     NeedsLayout,
+    PaintNeedsLayout,
     Disposed,
 }
 
@@ -33,8 +35,10 @@ impl fmt::Display for TextPainterError {
             Self::MissingTextDirection => "TextPainter requires a text direction before layout",
             Self::InvalidMaxLines => "TextPainter max lines must be positive",
             Self::InvalidWidth => "invalid TextPainter width constraints",
+            Self::UnboundedSize => "TextPainter reports an unbounded width, not a finite Size",
             Self::InvalidPlaceholderCount => "TextPainter needs one size for each inline widget span",
             Self::NeedsLayout => "TextPainter requires a current layout",
+            Self::PaintNeedsLayout => "TextPainter.paint called when text geometry was not yet calculated. Call layout() before painting.",
             Self::Disposed => "TextPainter has already been disposed",
         })
     }
@@ -103,7 +107,7 @@ struct MeasuredText {
     engine_id: u64,
     generation: u64,
     shaped: Arc<TextLayout>,
-    size: Size,
+    content_width: f32,
     max_intrinsic_width: f32,
     preferred_line_height: f32,
     preferred_baseline: f32,
@@ -181,7 +185,7 @@ impl TextPainter {
     ) -> Result<f32, TextPainterError> {
         let mut painter = Self::with_span(text, direction);
         painter.layout(min_width, max_width)?;
-        Ok(painter.size()?.width)
+        painter.width()
     }
 
     /// Measures natural width independently of the resulting paint width.
@@ -332,7 +336,7 @@ impl TextPainter {
         let direction = self
             .direction
             .ok_or(TextPainterError::MissingTextDirection)?;
-        if !min_width.is_finite() || min_width < 0. || max_width.is_nan() || max_width < min_width {
+        if min_width.is_nan() || min_width < 0. || max_width.is_nan() || max_width < min_width {
             return Err(TextPainterError::InvalidWidth);
         }
         engine.sync_application_fonts();
@@ -403,6 +407,13 @@ impl TextPainter {
                 engine.layout_rich_with_options(&self.plain, &runs, &placeholders, options)
             }
         };
+        let fraction = match (self.alignment, direction) {
+            (TextAlign::Left, _)
+            | (TextAlign::Start | TextAlign::Justify, TextDirection::Ltr)
+            | (TextAlign::End, TextDirection::Rtl) => 0.,
+            (TextAlign::Center, _) => 0.5,
+            _ => 1.,
+        };
         let (intrinsic, shaped, shaping_width) = if max_width.is_finite() {
             let intrinsic = reusable.map_or_else(
                 || longest(&measure(engine, None, None)),
@@ -416,7 +427,12 @@ impl TextPainter {
         } else {
             let unbounded = measure(engine, None, None);
             let intrinsic = longest(&unbounded);
-            let shaped = if self
+            let shaped = if fraction != 0. && min_width.is_finite() && intrinsic > 0. {
+                // An unbounded measurement has no finite alignment target.
+                // Use its natural width for the actual paragraph positions,
+                // including the alignment gap beside hanging whitespace.
+                measure(engine, Some(intrinsic), self.max_lines)
+            } else if self
                 .max_lines
                 .is_some_and(|limit| unbounded.lines.len() > limit)
             {
@@ -435,26 +451,22 @@ impl TextPainter {
                 .fold(0., f32::max),
         }
         .clamp(min_width, max_width);
-        let fraction = match (self.alignment, direction) {
-            (TextAlign::Left, _)
-            | (TextAlign::Start | TextAlign::Justify, TextDirection::Ltr)
-            | (TextAlign::End, TextDirection::Rtl) => 0.,
-            (TextAlign::Center, _) => 0.5,
-            _ => 1.,
-        };
         self.measured = Some(MeasuredText {
             min: min_width,
             max: max_width,
             engine_id,
             generation,
-            size: Size::new(measured_width, shaped.metrics.size.height),
+            content_width: measured_width,
             shaped,
             max_intrinsic_width: intrinsic,
             preferred_line_height,
             preferred_baseline,
             strut,
             runs: OnceLock::new(),
-            paint_offset: Offset::new(fraction * (measured_width - shaping_width), 0.),
+            paint_offset: Offset::new(
+                if fraction == 0. { 0. } else { fraction * (measured_width - shaping_width) },
+                0.,
+            ),
             lines: OnceLock::new(),
         });
         Ok(())
@@ -467,8 +479,19 @@ impl TextPainter {
         self.measured.as_ref().ok_or(TextPainterError::NeedsLayout)
     }
 
+    /// The measured paragraph width, which may be infinite under an
+    /// explicitly infinite minimum. It is not necessarily a layout Size.
+    pub fn width(&self) -> Result<f32, TextPainterError> {
+        Ok(self.measured()?.content_width)
+    }
+
+    pub fn height(&self) -> Result<f32, TextPainterError> {
+        Ok(self.measured()?.shaped.metrics.size.height)
+    }
+
+    /// Returns a finite size suitable for a retained layout box.
     pub fn size(&self) -> Result<Size, TextPainterError> {
-        Ok(self.measured()?.size)
+        Size::maybe_new(self.width()?, self.height()?).ok_or(TextPainterError::UnboundedSize)
     }
 
     pub fn max_intrinsic_width(&self) -> Result<f32, TextPainterError> {
@@ -482,6 +505,24 @@ impl TextPainter {
 
     pub fn paint_offset(&self) -> Result<Offset, TextPainterError> {
         Ok(self.measured()?.paint_offset)
+    }
+
+    /// Passes the measured paragraph and its final offset to a renderer.
+    /// Nonfinite paint positions are skipped rather than emitted.
+    pub fn paint_with(
+        &self,
+        origin: Offset,
+        draw: impl FnOnce(&TextLayout, Offset),
+    ) -> Result<(), TextPainterError> {
+        let measured = self.measured().map_err(|error| match error {
+            TextPainterError::NeedsLayout => TextPainterError::PaintNeedsLayout,
+            other => other,
+        })?;
+        let offset = origin + measured.paint_offset;
+        if offset.x.is_finite() && offset.y.is_finite() {
+            draw(measured.shaped.as_ref(), offset);
+        }
+        Ok(())
     }
 
     /// Whether the line limit hid source characters. Suppressing only the
@@ -663,7 +704,7 @@ impl TextPainter {
                     last.offset + last.width - last.hanging_advance
                 };
                 return Ok(Offset::new(
-                    (x + measured.paint_offset.x).clamp(0., measured.size.width),
+                    (x + measured.paint_offset.x).clamp(0., measured.content_width),
                     last.baseline - measured.preferred_baseline,
                 ));
             }
@@ -726,7 +767,7 @@ impl TextPainter {
             0.
         };
         Ok(Offset::new(
-            (x - advance + measured.paint_offset.x).clamp(0., measured.size.width),
+            (x - advance + measured.paint_offset.x).clamp(0., measured.content_width),
             line.top,
         ))
     }

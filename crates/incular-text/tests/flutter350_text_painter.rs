@@ -974,6 +974,12 @@ fn changed_inline_widget_geometry_invalidates_paint_until_layout() {
         painter.shaped_layout().map(|_| ()),
         Err(TextPainterError::NeedsLayout)
     );
+    assert_eq!(
+        painter.paint_with(incular_core::Offset::ZERO, |_, _| panic!(
+            "stale paint geometry"
+        )),
+        Err(TextPainterError::PaintNeedsLayout),
+    );
     painter.layout(0., f32::INFINITY).unwrap();
     assert_eq!(
         painter.shaped_layout().unwrap().placeholders[1].rect.size,
@@ -989,6 +995,13 @@ fn unchanged_inline_widget_dimensions_preserve_the_existing_paint_layout() {
         .set_placeholder_dimensions(Some(&dimensions))
         .unwrap();
     assert!(Arc::ptr_eq(&first, painter.shaped_layout().unwrap()));
+    let mut painted = false;
+    painter
+        .paint_with(incular_core::Offset::ZERO, |layout, _| {
+            painted = std::ptr::eq(layout, first.as_ref());
+        })
+        .unwrap();
+    assert!(painted);
     painter.set_placeholder_dimensions(None).unwrap();
     painter.set_placeholder_dimensions(Some(&[])).unwrap();
     assert!(Arc::ptr_eq(&first, painter.shaped_layout().unwrap()));
@@ -997,4 +1010,121 @@ fn unchanged_inline_widget_dimensions_preserve_the_existing_paint_layout() {
         Err(TextPainterError::InvalidPlaceholderCount)
     );
     assert!(Arc::ptr_eq(&first, painter.shaped_layout().unwrap()));
+}
+
+fn centered_width_ahem() -> Option<(TextEngine, TextStyle)> {
+    let path = std::env::var("INCULAR_FLUTTER_AHEM_PATH").ok()?;
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("Width Ahem", std::fs::read(path).unwrap()));
+    Some((engine, TextStyle::default().font_family("Width Ahem")))
+}
+
+#[test]
+fn centered_trailing_whitespace_offsets_caret_and_clamps_the_end() {
+    let Some((mut engine, style)) = centered_width_ahem() else {
+        return;
+    };
+    let text = "test text with space at end   ";
+    let mut painter = painter(
+        TextSpan::new(text).style(style.font_size(14.)),
+        TextDirection::Ltr,
+    );
+    painter.set_text_align(TextAlign::Center);
+    painter
+        .layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(painter.size().unwrap().width, 420.);
+    for (position, x) in [(0, 21.), (1, 35.), (2, 49.), (text.len(), 420.)] {
+        assert_eq!(
+            painter
+                .caret_offset(position, incular_text::TextAffinity::Downstream, 0.)
+                .unwrap()
+                .x,
+            x,
+            "caret at {position}",
+        );
+    }
+}
+
+#[test]
+fn centered_infinite_layout_preserves_width_and_has_no_finite_paint_position() {
+    let Some((mut engine, style)) = centered_width_ahem() else {
+        return;
+    };
+    let mut painter = painter(
+        TextSpan::new("A").style(style.font_size(10.)),
+        TextDirection::Ltr,
+    );
+    painter.set_text_align(TextAlign::Center);
+    painter
+        .layout_with_engine(&mut engine, f32::INFINITY, f32::INFINITY)
+        .unwrap();
+    assert_eq!(painter.width().unwrap(), f32::INFINITY);
+    assert_eq!(painter.size(), Err(TextPainterError::UnboundedSize));
+    assert_eq!(painter.height().unwrap(), 10.);
+    assert!(!painter.paint_offset().unwrap().x.is_finite());
+
+    painter
+        .paint_with(incular_core::Offset::ZERO, |_, _| {
+            panic!("infinite centered geometry must not be passed to the renderer");
+        })
+        .unwrap();
+    for (minimum, width, offset) in [(0., 10., 0.), (100., 100., 45.)] {
+        painter
+            .layout_with_engine(&mut engine, minimum, f32::INFINITY)
+            .unwrap();
+        assert_eq!(painter.width().unwrap(), width);
+        assert_eq!(painter.paint_offset().unwrap().x, offset);
+        let mut position = None;
+        painter
+            .paint_with(incular_core::Offset::new(5., 7.), |layout, at| {
+                assert_eq!(layout.lines.len(), 1);
+                position = Some(at);
+            })
+            .unwrap();
+        assert_eq!(position, Some(incular_core::Offset::new(offset + 5., 7.)));
+    }
+}
+
+#[test]
+fn leading_justification_stays_paintable_even_with_infinite_layout_width() {
+    let Some((mut engine, style)) = centered_width_ahem() else {
+        return;
+    };
+    let mut painter = painter(
+        TextSpan::new("A").style(style.font_size(10.)),
+        TextDirection::Ltr,
+    );
+    painter.set_text_align(TextAlign::Justify);
+    for (minimum, width) in [(f32::INFINITY, f32::INFINITY), (0., 10.), (100., 100.)] {
+        painter
+            .layout_with_engine(&mut engine, minimum, f32::INFINITY)
+            .unwrap();
+        assert_eq!(painter.width().unwrap(), width);
+        assert_eq!(painter.paint_offset().unwrap().x, 0.);
+        let mut position = None;
+        painter
+            .paint_with(incular_core::Offset::ZERO, |_, offset| {
+                position = Some(offset)
+            })
+            .unwrap();
+        assert_eq!(position, Some(incular_core::Offset::ZERO));
+    }
+}
+
+#[test]
+fn painting_before_layout_reports_missing_paint_geometry() {
+    let mut painter = TextPainter::new();
+    painter.set_text_direction(Some(TextDirection::Ltr));
+    let failure = painter
+        .paint_with(incular_core::Offset::ZERO, |_, _| {
+            panic!("an unmeasured painter must not submit a draw")
+        })
+        .unwrap_err();
+    assert_eq!(failure, TextPainterError::PaintNeedsLayout);
+    assert!(
+        failure
+            .to_string()
+            .contains("TextPainter.paint called when text geometry was not yet calculated")
+    );
 }

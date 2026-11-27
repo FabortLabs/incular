@@ -173,3 +173,20 @@ layout. Reassigning an identical slice preserves the same shaped layout
 allocation; absent and empty values are also no-ops. Thirty focused
 native tests passed, including a typed error for a mismatched number of
 dimensions that leaves the previous layout untouched.
+
+## Infinite minimums, finite paint, and centered trailing whitespace
+
+Four original cases pair. An explicitly infinite minimum yields
+infinite paragraph width, while the retained layout Size stays finite
+by contract and returns a typed error for that request. Centered text
+has no finite paint position and is skipped. Left-to-right justified
+text still has a zero paint offset and can draw. Returning to finite
+minimums yields the original natural width and centered offsets.
+
+The unconstrained centered paragraph now aligns against its finite
+natural width. With pinned Ahem, the original leading carets are
+21, 35 and 49 pixels and the trailing caret clamps to the reported
+420 px width. The paint entry point reports the specific missing
+geometry error before layout, and dispatches valid shaped data with
+the supplied origin afterwards. All 34 focused native tests passed
+with the pinned Flutter Ahem font explicitly enabled.

@@ -3140,3 +3140,7 @@ packages/flutter/test/painting/decoration_test.dart	346	DecorationImage.toString
 packages/flutter/test/painting/decoration_test.dart	357	DecorationImage with null textDirection configuration should throw Error	partial-match	upstream-decoration-image-paint.md#image-options-and-diagnostics
 packages/flutter/test/painting/text_painter_test.dart	1637	TextPainter requires layout after providing different placeholder dimensions	paired-match	upstream-text-painter.md#inline-widget-dimensions-and-paint-invalidation
 packages/flutter/test/painting/text_painter_test.dart	1676	TextPainter does not require layout after providing identical placeholder dimensions	paired-match	upstream-text-painter.md#inline-widget-dimensions-and-paint-invalidation
+packages/flutter/test/painting/text_painter_test.dart	476	TextPainter caret center space test	paired-match	upstream-text-painter.md#infinite-minimums-finite-paint-and-centered-trailing-whitespace
+packages/flutter/test/painting/text_painter_test.dart	927	TextPainter error test	paired-match	upstream-text-painter.md#infinite-minimums-finite-paint-and-centered-trailing-whitespace
+packages/flutter/test/painting/text_painter_test.dart	1848	TextPainter infinite width - centered	paired-match	upstream-text-painter.md#infinite-minimums-finite-paint-and-centered-trailing-whitespace
+packages/flutter/test/painting/text_painter_test.dart	1882	TextPainter infinite width - LTR justified	paired-match	upstream-text-painter.md#infinite-minimums-finite-paint-and-centered-trailing-whitespace
