@@ -90,3 +90,18 @@ Native controls also verify that later platform deep links use
 the named generator, and that restoring a surviving startup
 prefix preserves its page by position, even when two pages
 share a route name. Three direct and 39 adjacent checks passed.
+
+## Platform Back reaches the root router
+
+Pinned `widgets/app_test.dart:286,322,409` passed. System Back now
+reaches the real mounted router delegate with a provider/parser,
+with only a delegate, and with an explicitly supplied root
+dispatcher. Each fixture starts with the visible `initial` route,
+delivers one system Back, and then exposes only `popped`.
+
+The direct WidgetsApp router constructor supplies a platform root
+dispatcher. An explicit RouterConfig retains its own choice. The
+root's platform registration now follows its callbacks even when
+the router holds it through the shared dispatcher type; a plain
+child dispatcher is not inadvertently registered as a platform
+root. Three focused and 44 adjacent checks passed.

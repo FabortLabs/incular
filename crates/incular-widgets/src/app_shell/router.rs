@@ -638,6 +638,8 @@ struct BackDispatcherState {
     children: Vec<Weak<DispatcherCell>>,
     /// Flutter `ChildBackButtonDispatcher.parent`; `None` for a root.
     parent: Option<Weak<DispatcherCell>>,
+    /// True for a root dispatcher even after conversion into the common type.
+    observes_platform_back: bool,
     /// Set by a [`RootBackButtonDispatcher`] when its first callback is
     /// added: the platform back reaches this dispatcher's callbacks while it
     /// lives. Released with the dispatcher state.
@@ -674,6 +676,13 @@ impl BackButtonDispatcher {
         let callback: Rc<dyn Fn() -> bool> = Rc::new(callback);
         let id = {
             let mut state = self.state.borrow_mut();
+            if state.observes_platform_back && state.platform_observer.is_none() {
+                state.platform_observer = Some(add_shared_back_gesture_observer(Rc::new(
+                    RootBackObserver {
+                        dispatcher: Rc::downgrade(&self.state),
+                    },
+                )));
+            }
             state.next_id = state
                 .next_id
                 .checked_add(1)
@@ -869,7 +878,7 @@ impl Drop for BackCallbackSubscription {
         let Some(dispatcher) = self.dispatcher.upgrade() else {
             return;
         };
-        let parent = {
+        let (parent, platform_observer) = {
             let mut state = dispatcher.borrow_mut();
             state.callbacks.remove(&self.id);
             let empty = !state
@@ -877,11 +886,15 @@ impl Drop for BackCallbackSubscription {
                 .values()
                 .any(|callback| callback.strong_count() > 0);
             if empty {
-                state.parent.as_ref().and_then(Weak::upgrade)
+                (
+                    state.parent.as_ref().and_then(Weak::upgrade),
+                    state.platform_observer.take(),
+                )
             } else {
-                None
+                (None, None)
             }
         };
+        drop(platform_observer);
         // Flutter `ChildBackButtonDispatcher.removeCallback`: a child left
         // without callbacks is forgotten by its parent.
         if let Some(parent) = parent {
@@ -895,9 +908,17 @@ impl Drop for BackCallbackSubscription {
 /// Like Flutter's `RootBackButtonDispatcher`, it listens to the platform
 /// back: its first callback registers it as a back gesture observer, so a
 /// system back that nothing else handled reaches its callbacks, newest first.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct RootBackButtonDispatcher {
     dispatcher: BackButtonDispatcher,
+}
+
+impl Default for RootBackButtonDispatcher {
+    fn default() -> Self {
+        let dispatcher = BackButtonDispatcher::default();
+        dispatcher.state.borrow_mut().observes_platform_back = true;
+        Self { dispatcher }
+    }
 }
 
 /// Forwards a system back to a root dispatcher's callbacks. Holds the
@@ -933,16 +954,6 @@ impl RootBackButtonDispatcher {
     /// Registers a root-level callback. The first one also registers the
     /// dispatcher with the platform back observers.
     pub fn add_callback(&self, callback: impl Fn() -> bool + 'static) -> BackCallbackSubscription {
-        {
-            let mut state = self.dispatcher.state.borrow_mut();
-            if state.platform_observer.is_none() {
-                state.platform_observer = Some(add_shared_back_gesture_observer(Rc::new(
-                    RootBackObserver {
-                        dispatcher: Rc::downgrade(&self.dispatcher.state),
-                    },
-                )));
-            }
-        }
         self.dispatcher.add_callback(callback)
     }
 
@@ -1130,6 +1141,7 @@ struct RouterRestoration {
 /// conversion to a [`Widget`].
 pub struct Router<T> {
     config: RouterConfig<T>,
+    from_explicit_config: bool,
     restoration: Option<RouterRestoration>,
     listeners: NavigationNotificationListeners,
 }
@@ -1138,6 +1150,7 @@ impl<T> Clone for Router<T> {
     fn clone(&self) -> Self {
         Self {
             config: self.config.clone(),
+            from_explicit_config: self.from_explicit_config,
             restoration: self.restoration.clone(),
             listeners: self.listeners.clone(),
         }
@@ -1158,7 +1171,7 @@ impl<T: 'static> Router<T> {
     /// Creates a delegate-only router.
     #[must_use]
     pub fn new(delegate: impl RouterDelegate<T>) -> Self {
-        Self::from_config(RouterConfig::new(delegate))
+        Self::from_parts(RouterConfig::new(delegate), false)
     }
 
     /// Creates a router with platform route information and parsing.
@@ -1168,16 +1181,22 @@ impl<T: 'static> Router<T> {
         provider: impl RouteInformationProvider,
         parser: impl RouteInformationParser<T>,
     ) -> Self {
-        Self::from_config(RouterConfig::with_provider_parser(
-            delegate, provider, parser,
-        ))
+        Self::from_parts(
+            RouterConfig::with_provider_parser(delegate, provider, parser),
+            false,
+        )
     }
 
     /// Creates a router from a validated configuration.
     #[must_use]
     pub fn from_config(config: RouterConfig<T>) -> Self {
+        Self::from_parts(config, true)
+    }
+
+    fn from_parts(config: RouterConfig<T>, from_explicit_config: bool) -> Self {
         Self {
             config,
+            from_explicit_config,
             restoration: None,
             listeners: Rc::new(RefCell::new(Vec::new())),
         }
@@ -1214,6 +1233,15 @@ impl<T: 'static> Router<T> {
         self.config
             .back_button_dispatcher()
             .is_some_and(|dispatcher| dispatcher.dispatch_back())
+    }
+
+    /// The app supplies a default dispatcher for the delegate constructor,
+    /// but an explicit RouterConfig owns that choice itself.
+    pub(crate) fn into_app_widget(mut self) -> Widget {
+        if !self.from_explicit_config && self.config.back_button_dispatcher.is_none() {
+            self.config.back_button_dispatcher = Some(RootBackButtonDispatcher::new().into());
+        }
+        self.into_widget()
     }
 
     /// Builds a retained router widget.

@@ -832,7 +832,7 @@ impl WidgetsApp {
     #[must_use]
     pub fn router<T: 'static>(router: Router<T>) -> Self {
         let mut app = Self::new(SizedBox::shrink());
-        app.router_root = Some(router.into_widget());
+        app.router_root = Some(router.into_app_widget());
         app
     }
 
