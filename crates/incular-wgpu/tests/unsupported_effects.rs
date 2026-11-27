@@ -219,7 +219,7 @@ fn composed_backdrop_filters_execute_and_morphology_reports_unsupported() {
 }
 
 #[test]
-fn sampled_backdrops_accept_all_unbounded_tile_modes_but_not_bounded_sampling() {
+fn sampled_backdrops_accept_bounded_and_unbounded_filters() {
     use incular_rendering::{ImageFilterConfig, ImageFilterContext, TileMode};
 
     let bounds = Rect::from_origin_size(Offset::new(5., 6.), Size::new(20., 15.));
@@ -238,14 +238,7 @@ fn sampled_backdrops_accept_all_unbounded_tile_modes_but_not_bounded_sampling() 
             let filter = ImageFilterConfig::blur_with_sampling(4., 2., mode, bounded);
             *image_filter = Some(filter.resolve(context).into());
             let result = unsupported_effect(&command);
-            if bounded {
-                assert!(matches!(
-                    result,
-                    Some(RendererError::UnsupportedBackdropFilter)
-                ));
-            } else {
-                assert!(result.is_none(), "{mode:?}: {result:?}");
-            }
+            assert!(result.is_none(), "{mode:?}, bounded={bounded}: {result:?}");
         }
     }
 }

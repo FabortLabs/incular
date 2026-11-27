@@ -2,8 +2,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use incular_core::{Offset, Rect, Size};
 use incular_rendering::{
-    ImageFilter, ImageFilterConfig as Config, ImageFilterContext as Context, ImageFilterTarget,
-    TileMode, backdrop_image_filter_executable,
+    ImageFilter, ImageFilterConfig as Config, ImageFilterContext as Context, TileMode,
+    backdrop_image_filter_executable,
 };
 
 fn digest(value: &impl Hash) -> u64 {
@@ -125,7 +125,5 @@ fn layout_bounds_resolve_as_sampling_metadata_at_each_stage() {
         format!("{description} -> blur(10.1, 10.1, clamp)")
     );
     assert_eq!(resolved.stages(), [sampled.clone(), blur]);
-    let unsupported = backdrop_image_filter_executable(&resolved).unwrap_err();
-    assert_eq!(unsupported.target, ImageFilterTarget::Backdrop);
-    assert_eq!(unsupported.filter, sampled);
+    assert!(backdrop_image_filter_executable(&resolved).is_ok());
 }

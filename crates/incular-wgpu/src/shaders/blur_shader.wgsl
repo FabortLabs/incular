@@ -53,6 +53,14 @@ fn pair(base: vec2<f32>, tap: vec4<f32>, side: f32) -> vec4<f32> {
   }
   return vec4<f32>(0.);
 }
+// Flutter bounded blur converts the final accumulated premultiplied colour
+// to opaque straight colour. Completely transparent input stays transparent.
+fn finish(color: vec4<f32>) -> vec4<f32> {
+  if (params.mode == 1u && color.a > 0.) {
+    return color / color.a;
+  }
+  return color;
+}
 @fragment fn fs_main(input: Out) -> @location(0) vec4<f32> {
   // Interpolated UV addresses output pixel centres (j + 0.5). Floor to the
   // pixel index: subtracting 0.5 instead can land a hair below zero and
@@ -76,7 +84,7 @@ fn pair(base: vec2<f32>, tap: vec4<f32>, side: f32) -> vec4<f32> {
       sum += (textureSampleLevel(source, source_sampler, centre + offset, 0.)
         + textureSampleLevel(source, source_sampler, centre - offset, 0.)) * (tap.z + tap.w);
     }
-    return sum;
+    return finish(sum);
   }
   var result = vec4<f32>(0.);
   if (inside(base)) {
@@ -86,5 +94,5 @@ fn pair(base: vec2<f32>, tap: vec4<f32>, side: f32) -> vec4<f32> {
     let tap = params.weights[p];
     result += pair(base, tap, 1.) + pair(base, tap, -1.);
   }
-  return result;
+  return finish(result);
 }

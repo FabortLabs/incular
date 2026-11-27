@@ -42,6 +42,27 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
   return vec2<f32>(0., 0.);
 }
 @fragment fn fs_main(input: Out) -> @location(0) vec4<f32> {
+  if (params.mode == 5u) {
+    // A bounded blur masks the pre-filter copy of the backdrop, not the
+    // output. Test texel centres in widget-local coordinates to preserve the
+    // actual quad, including rotation/skew, rather than its enclosing box.
+    let position = floor(input.uv * params.output_size) + vec2<f32>(0.5);
+    let linear = params.weights[0];
+    let offset = params.weights[1].xy;
+    let rect = params.weights[2];
+    let local = vec2<f32>(
+      linear.x * position.x + linear.z * position.y,
+      linear.y * position.x + linear.w * position.y,
+    ) + offset;
+    if (!(all(rect.xy < rect.zw) && all(local >= rect.xy) && all(local <= rect.zw))) {
+      return vec4<f32>(0.);
+    }
+    let source_px = position - params.source_origin;
+    if (any(source_px < vec2<f32>(0.)) || any(source_px >= params.source_size)) {
+      return vec4<f32>(0.);
+    }
+    return textureSampleLevel(source, source_sampler, source_px / params.source_size, 0.);
+  }
   if (params.mode == 3u) {
     // Box downsample by `direction` (the factor): the average of the
     // factor x factor source block under this output pixel, in 2x2

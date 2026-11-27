@@ -38,10 +38,8 @@ pub fn backdrop_stage_is_active(
     backdrop_filter_is_active(blur, enabled, matrix)
 }
 
-/// Whether a backend can execute `filter` over a backdrop: every stage, in
-/// application order, is an unbounded blur, a matrix or a colour filter.
-/// Bounded sampling and morphology are refused, without silently changing
-/// their treatment of the source.
+/// Whether a backend can execute every filter stage over a backdrop.
+/// Morphology does not have a backdrop pass.
 pub fn backdrop_image_filter_executable(
     filter: &ImageFilter,
 ) -> Result<(), UnsupportedImageFilter> {
@@ -49,7 +47,7 @@ pub fn backdrop_image_filter_executable(
         matches!(
             stage,
             ImageFilter::Dilate { .. } | ImageFilter::Erode { .. }
-        ) || matches!(stage, ImageFilter::SampledBlur(blur) if blur.bounds.is_some())
+        )
     }) {
         Some(stage) => Err(UnsupportedImageFilter {
             filter: stage,

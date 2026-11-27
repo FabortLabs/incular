@@ -641,6 +641,7 @@ impl WgpuRenderer {
             output: effect,
             sigma: [sigma_x_physical, sigma_y_physical],
             tile_mode: incular_painting::TileMode::Decal,
+            opaque_normalization: false,
             downsample_factor,
         };
         let mut passes = self.begin_effect_passes("incular blur passes");
@@ -730,6 +731,7 @@ impl WgpuRenderer {
             output,
             sigma,
             tile_mode,
+            opaque_normalization,
             downsample_factor: factor,
         } = *job;
         let sampling_mode = sampling_code(tile_mode);
@@ -753,6 +755,7 @@ impl WgpuRenderer {
                     [1., 0.],
                     &kernel_x,
                     sampling_mode,
+                    false,
                 ),
                 true,
             )?;
@@ -768,6 +771,7 @@ impl WgpuRenderer {
                     [0., 1.],
                     &kernel_y,
                     sampling_mode,
+                    opaque_normalization,
                 ),
                 true,
             )?;
@@ -812,6 +816,7 @@ impl WgpuRenderer {
                 [1., 0.],
                 &kernel_x,
                 sampling_mode,
+                false,
             ),
             true,
         )?;
@@ -827,6 +832,7 @@ impl WgpuRenderer {
                 [0., 1.],
                 &kernel_y,
                 sampling_mode,
+                opaque_normalization,
             ),
             true,
         )?;
@@ -1136,6 +1142,8 @@ pub(super) struct BlurJob<'a> {
     /// Physical sigma per axis.
     pub(super) sigma: [f32; 2],
     pub(super) tile_mode: incular_painting::TileMode,
+    /// Unpremultiply after both Gaussian axes, matching Flutter's bounded blur.
+    pub(super) opaque_normalization: bool,
     pub(super) downsample_factor: u32,
 }
 
@@ -1156,6 +1164,7 @@ fn blur_params(
     direction: [f32; 2],
     kernel: &BlurKernel,
     sampling_mode: u32,
+    opaque_normalization: bool,
 ) -> GpuBlurParams {
     GpuBlurParams {
         source_origin,
@@ -1163,7 +1172,7 @@ fn blur_params(
         output_size,
         direction,
         radius: kernel.pairs,
-        mode: 0,
+        mode: u32::from(opaque_normalization),
         sampling_mode,
         _padding: 0,
         weights: kernel.weights,

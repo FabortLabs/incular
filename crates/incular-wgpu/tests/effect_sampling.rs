@@ -683,3 +683,92 @@ fn blur_downsample_obeys_the_source_edge_policy() {
         }
     }
 }
+
+#[test]
+fn bounded_blur_masks_in_local_coordinates_and_normalizes_only_after_filtering() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    // The kept region is a diagonal strip. The concealed blue samples are
+    // fully opaque; the red samples are half covered, with a transparent hole.
+    let pixels: Vec<u8> = (0_i32..8)
+        .flat_map(|y| (0_i32..8).map(move |x| (x, y)))
+        .flat_map(|(x, y)| {
+            if (x, y) == (4, 3) {
+                [0, 0, 0, 0]
+            } else if (x - y).abs() <= 1 {
+                [64, 0, 0, 128]
+            } else {
+                [0, 0, 255, 255]
+            }
+        })
+        .collect();
+    let mut mask = [0_u32; PARAM_WORDS];
+    // Inverse affine: local x = device x - device y, local y = x + y.
+    // The bounds contain x=[-1, 1], y=[4, 12] in local coordinates.
+    for (word, value) in [
+        (2, 8_f32),
+        (3, 8.),
+        (4, 8.),
+        (5, 8.),
+        (12, 1.),
+        (13, 1.),
+        (14, -1.),
+        (15, 1.),
+        (20, -1.),
+        (21, 4.),
+        (22, 1.),
+        (23, 12.),
+    ] {
+        mask[word] = value.to_bits();
+    }
+    mask[9] = 5;
+    let masked = identity_pass(
+        &device,
+        &queue,
+        built_in_shaders::RESAMPLE_SHADER,
+        bytemuck::cast_slice(&mask),
+        &pixels,
+    );
+    let pixel = |bytes: &[u8], x: usize, y: usize| -> [u8; 4] {
+        let offset = (y * 8 + x) * 4;
+        bytes[offset..offset + 4].try_into().unwrap()
+    };
+    assert_eq!(pixel(&masked, 1, 3), [0, 0, 0, 0]);
+    assert_eq!(pixel(&masked, 2, 3), [64, 0, 0, 128]);
+    assert_eq!(pixel(&masked, 4, 3), [0, 0, 0, 0]);
+    assert_eq!(pixel(&masked, 5, 3), [0, 0, 0, 0]);
+    assert_eq!(pixel(&masked, 1, 1), [0, 0, 0, 0]);
+
+    let mut gaussian = [0_u32; PARAM_WORDS];
+    for (word, value) in [
+        (2, 8_f32),
+        (3, 8.),
+        (4, 8.),
+        (5, 8.),
+        (6, 1.),
+        (12, 0.5),
+        (16, 1.),
+        (17, 1.),
+        (18, 0.25),
+    ] {
+        gaussian[word] = value.to_bits();
+    }
+    gaussian[8] = 1;
+    gaussian[9] = 1;
+    let filtered = identity_pass(
+        &device,
+        &queue,
+        built_in_shaders::BLUR_SHADER,
+        bytemuck::cast_slice(&gaussian),
+        &masked,
+    );
+    // The neighboring transparent sample does not darken the result, and
+    // output is not clipped to the source bounds (x=1 appears again).
+    for x in 1..=4 {
+        let actual = pixel(&filtered, x, 3);
+        assert!(actual[0].abs_diff(128) <= 1, "x={x}: {actual:?}");
+        assert_eq!(actual[1..], [0, 0, 255], "x={x}: {actual:?}");
+    }
+    assert_eq!(pixel(&filtered, 7, 3), [0, 0, 0, 0]);
+}

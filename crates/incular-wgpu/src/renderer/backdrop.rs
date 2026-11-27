@@ -66,13 +66,29 @@ impl WgpuRenderer {
                         incular_painting::ImageFilter::Blur(blur) => BackdropStage::Blur {
                             blur,
                             tile_mode: incular_painting::TileMode::Decal,
+                            bounds: None,
                         },
-                        incular_painting::ImageFilter::SampledBlur(sampled)
-                            if sampled.bounds.is_none() =>
-                        {
+                        incular_painting::ImageFilter::SampledBlur(sampled) => {
+                            // `transform` is relative to the active target, which may
+                            // be a nonzero-origin isolated layer rather than the window.
+                            let bounds = match sampled.bounds {
+                                Some(rect) => {
+                                    let device_from_local = Transform::scale(scale).then(transform);
+                                    let Some(local_from_device) = device_from_local.inverse()
+                                    else {
+                                        return Ok(Vec::new());
+                                    };
+                                    Some(BackdropBlurBounds {
+                                        local_from_device,
+                                        rect,
+                                    })
+                                }
+                                None => None,
+                            };
                             BackdropStage::Blur {
                                 blur: sampled.blur,
                                 tile_mode: sampled.tile_mode,
+                                bounds,
                             }
                         }
                         incular_painting::ImageFilter::Matrix(matrix) => {
@@ -273,6 +289,7 @@ impl WgpuRenderer {
                     output: region.output,
                     sigma,
                     tile_mode: incular_painting::TileMode::Decal,
+                    opaque_normalization: false,
                     downsample_factor,
                 };
                 let blurred = self.encode_blur(&mut passes, &job);
@@ -308,27 +325,66 @@ impl WgpuRenderer {
                         [covered.width as f32, covered.height as f32]
                     };
                     let next = match *stage {
-                        BackdropStage::Blur { blur, tile_mode } => {
+                        BackdropStage::Blur {
+                            blur,
+                            tile_mode,
+                            bounds,
+                        } => {
                             let sigma = [
                                 normalize_sigma(blur.sigma_x * scale),
                                 normalize_sigma(blur.sigma_y * scale),
                             ];
                             let mut blur_passes =
                                 self.begin_effect_passes("incular backdrop chain");
+                            // Exact zero sigma returns the unmodified source, even for a
+                            // bounded configuration. Otherwise reject out-of-bounds scene
+                            // texels before *any* linear mixing or downsampling.
+                            let bounded =
+                                bounds.filter(|_| sigma.iter().any(|v| *v > f32::EPSILON));
+                            let masked = if let Some(bounds) = bounded {
+                                let target = self.take_effect_temp(width, height);
+                                self.record_effect_pass(
+                                    &mut blur_passes,
+                                    &input,
+                                    &target.color_view,
+                                    &bounded_source_params(
+                                        bounds,
+                                        origin,
+                                        size,
+                                        [width as f32, height as f32],
+                                    ),
+                                    false,
+                                )?;
+                                Some(target)
+                            } else {
+                                None
+                            };
                             let job = BlurJob {
-                                source: &input,
-                                source_origin: origin,
-                                source_size: size,
+                                source: masked.as_ref().map_or(&input, |target| &target.color_view),
+                                source_origin: if masked.is_some() { [0.; 2] } else { origin },
+                                source_size: if masked.is_some() {
+                                    [width as f32, height as f32]
+                                } else {
+                                    size
+                                },
                                 input: region.input,
                                 output: region.output,
                                 sigma,
-                                tile_mode,
+                                tile_mode: if masked.is_some() {
+                                    incular_painting::TileMode::Decal
+                                } else {
+                                    tile_mode
+                                },
+                                opaque_normalization: masked.is_some(),
                                 downsample_factor: choose_blur_downsample_factor(
                                     sigma[0].max(sigma[1]),
                                 ),
                             };
                             let blurred = self.encode_blur(&mut blur_passes, &job);
                             self.submit_effect_passes(blur_passes);
+                            if let Some(masked) = masked {
+                                self.recycle_effect_temp(masked);
+                            }
                             let (target, temps) = blurred?;
                             for temp in temps {
                                 self.recycle_effect_temp(temp);
@@ -441,6 +497,45 @@ fn matrix_params(
         direction: [1., 1.],
         radius: 0,
         mode: 2,
+        sampling_mode: 0,
+        _padding: 0,
+        weights,
+    }
+}
+
+fn bounded_source_params(
+    bounds: BackdropBlurBounds,
+    source_origin: [f32; 2],
+    source_size: [f32; 2],
+    output_size: [f32; 2],
+) -> GpuBlurParams {
+    let [a, b, c, d, e, f] = bounds
+        .local_from_device
+        .coefficients()
+        .map(|value| value as f32);
+    let rect = bounds.rect;
+    let mut weights = [0.; BLUR_WEIGHT_SLOTS];
+    weights[..12].copy_from_slice(&[
+        a,
+        b,
+        c,
+        d,
+        e,
+        f,
+        0.,
+        0.,
+        rect.origin.x,
+        rect.origin.y,
+        rect.origin.x + rect.size.width,
+        rect.origin.y + rect.size.height,
+    ]);
+    GpuBlurParams {
+        source_origin,
+        source_size,
+        output_size,
+        direction: [1., 1.],
+        radius: 0,
+        mode: 5,
         sampling_mode: 0,
         _padding: 0,
         weights,

@@ -197,12 +197,21 @@ pub(crate) enum BackdropStage {
     Blur {
         blur: GaussianBlur,
         tile_mode: incular_painting::TileMode,
+        bounds: Option<BackdropBlurBounds>,
     },
     /// Each output device pixel shows its input at this transform of its
     /// position.
     Matrix(Transform),
     Color(incular_painting::ColorFilter),
 }
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BackdropBlurBounds {
+    /// Inverse of the filter's local-to-target transform, including DPR.
+    pub(crate) local_from_device: Transform,
+    pub(crate) rect: Rect,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct GlyphSurface {
     pub(crate) transform: Transform,
