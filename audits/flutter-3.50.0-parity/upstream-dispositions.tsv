@@ -3670,3 +3670,4 @@ packages/flutter/test/gestures/events_test.dart	839	Ensure certain event types a
 packages/flutter/test/semantics/semantics_test.dart	521	Incompatible OrdinalSortKey throw AssertionError when compared	paired-match	upstream-semantics-binding.md#checked-sort-key-comparisons
 packages/flutter/test/semantics/semantics_test.dart	175	provides the correct isMergedIntoParent value	paired-match	upstream-semantics-visibility.md
 packages/flutter/test/semantics/semantics_test.dart	229	sendSemanticsUpdate verifies no invisible nodes	paired-match	upstream-semantics-visibility.md
+packages/flutter/test/semantics/semantics_test.dart	1357	SemanticsData.toJson and SemanticsNode.toJson generate expected maps	paired-match	upstream-semantics-visibility.md#semantic-data-and-node-json

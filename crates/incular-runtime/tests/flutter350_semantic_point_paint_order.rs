@@ -78,6 +78,23 @@ fn point_actions_use_inverse_paint_order_even_when_traversal_is_sorted_different
                     ["painted last", "painted first"]
                 }
             );
+            if nested {
+                let inspected = runtime.flutter_semantics_node_json(tree.root().unwrap()).unwrap();
+                let id_for = |label| {
+                    let id = ids.iter().find(|&&id| tree.node(id).unwrap().label.as_deref() == Some(label)).unwrap();
+                    (u64::from(id.0.generation()) << 32) | u64::from(id.0.index())
+                };
+                let first = id_for("painted first");
+                let last = id_for("painted last");
+                assert_eq!(
+                    inspected["childrenInTraversalOrder"],
+                    if bottom < top { serde_json::json!([first, last]) } else { serde_json::json!([last, first]) },
+                );
+                assert_eq!(
+                    inspected["childrenInHitTestOrder"],
+                    if swap_paint { serde_json::json!([last, first]) } else { serde_json::json!([first, last]) },
+                );
+            }
             assert!(runtime.dispatch_semantic_action_at(center, SemanticAction::Activate));
             assert_eq!(
                 calls.borrow_mut().pop(),

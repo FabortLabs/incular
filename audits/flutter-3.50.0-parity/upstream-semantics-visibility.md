@@ -29,3 +29,18 @@ mounts a real checkbox and verifies its published focus and checked
 state. The declaration does not create a keyboard target or runnable
 focus action. All ten focused descriptor and focus annotation tests
 passed; no coverage credit was added for this control.
+
+## Semantic data and node JSON
+
+Pinned `semantics/semantics_test.dart:1357` passed. The data map
+exports label, value, hint, flags, actions, and the actual rectangle
+from the retained semantic model. The node map adds the retained
+node ID and both child orders. Retained rectangles are already in
+window coordinates and do not need a separate transform field.
+
+The extra native control changes traversal order and paint order
+independently on a mounted stack and checks that the JSON arrays
+match the orders used by actual accessibility dispatch. It also
+verifies that an obscured input never exposes its retained text in
+JSON, and that actions serialize in protocol order, not callback
+registration order. Eight focused native tests passed.

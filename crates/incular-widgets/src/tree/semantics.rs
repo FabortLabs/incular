@@ -3017,6 +3017,18 @@ impl WidgetTree {
         order.sort_unstable_by_key(|&(sequence, _)| sequence);
     }
 
+    /// The child order used by semantic point dispatch, before reversing it
+    /// to test the topmost child first.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn semantic_inverse_hit_test_children(&self, parent: SemanticNodeId) -> Option<Vec<SemanticNodeId>> {
+        let node = self.semantics.node(parent)?;
+        Some(self.semantic_point_order.get(&Some(parent)).map_or_else(
+            || node.children.clone(),
+            |order| order.iter().map(|&(_, child)| child).collect(),
+        ))
+    }
+
     /// Selects a retained semantic action target at a logical window point.
     #[doc(hidden)]
     #[must_use]

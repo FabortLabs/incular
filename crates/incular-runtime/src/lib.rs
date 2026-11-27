@@ -23,6 +23,7 @@ mod request_admission;
 mod request_channel;
 mod request_registry;
 mod restoration;
+mod semantics_inspection;
 mod route_focus;
 mod route_outlet;
 mod route_tasks;
@@ -99,6 +100,7 @@ pub use reactive::{
 };
 #[cfg(target_arch = "wasm32")]
 pub use restoration::BrowserRestorationStore;
+pub use semantics_inspection::{flutter_semantics_data_json, flutter_semantics_node_json};
 pub use restoration::{
     ClaimedRestorationScope, DEFAULT_RESTORATION_DEBOUNCE, DEFAULT_RESTORATION_SNAPSHOT_LIMIT,
     FRAMEWORK_RESTORATION_FORMAT_VERSION, FileRestorationStore, InMemoryRestorationStore,
