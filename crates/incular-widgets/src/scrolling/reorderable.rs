@@ -129,7 +129,8 @@ pub(crate) fn install_listener(
         | WidgetKind::Overflow { child, .. }
         | WidgetKind::SizedOverflow { child, .. }
         | WidgetKind::Unconstrained { child, .. }
-        | WidgetKind::ClipPath { child, .. } => child
+        | WidgetKind::ClipPath { child, .. }
+        | WidgetKind::Constrained { child, .. } => child
             .as_mut()
             .and_then(|child| install_listener(child, wrap)),
         WidgetKind::SelectionArea { child, .. }
@@ -139,7 +140,6 @@ pub(crate) fn install_listener(
         | WidgetKind::SemanticsDebugger { child, .. }
         | WidgetKind::Decorated { child, .. }
         | WidgetKind::Padding { child, .. }
-        | WidgetKind::Constrained { child, .. }
         | WidgetKind::Baseline { child, .. }
         | WidgetKind::RepaintBoundary { child, .. }
         | WidgetKind::AnimationTicker { child, .. }

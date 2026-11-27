@@ -829,7 +829,7 @@ pub(crate) enum WidgetKind {
     },
     Constrained {
         constraints: Constraints,
-        child: Widget,
+        child: Option<Widget>,
     },
     Limited {
         max_width: f32,

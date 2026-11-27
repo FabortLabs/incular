@@ -1,0 +1,150 @@
+//! Flutter 3.50.0 rendering/wrap_test.dart: fixed intrinsic geometry and clips.
+use incular_config::{Axis, Clip, Constraints, TextDirection};
+use incular_core::{Color, Offset, Rect, Size};
+use incular_rendering::{ClipCoverage, PaintCommand};
+use incular_widgets::{ConstrainedBox, Widget, Wrap, internal::WidgetTree};
+
+fn wrap(axis: Axis, count: usize) -> Wrap {
+    Wrap::new(
+        (0..count).map(|_| {
+            ConstrainedBox::empty(Constraints::new(80., f32::INFINITY, 80., f32::INFINITY))
+        }),
+    )
+    .direction(axis)
+    .spacing(5.)
+    .run_spacing(5.)
+    .text_direction(TextDirection::Ltr)
+}
+
+fn verify_cross_intrinsics(axis: Axis, cases: &[(f32, f32)], count: usize) {
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(wrap(axis, count).into()).unwrap();
+    let render = tree.render_id(root).unwrap();
+    for &(limit, expected) in cases {
+        let (min, max, bounds) = if axis.is_horizontal() {
+            (
+                tree.min_intrinsic_height(render, limit),
+                tree.max_intrinsic_height(render, limit),
+                Constraints::at_most(limit, f32::INFINITY),
+            )
+        } else {
+            (
+                tree.min_intrinsic_width(render, limit),
+                tree.max_intrinsic_width(render, limit),
+                Constraints::at_most(f32::INFINITY, limit),
+            )
+        };
+        assert_eq!(min, Some(expected), "minimum at {limit}");
+        assert_eq!(max, Some(expected), "maximum at {limit}");
+        assert_eq!(
+            tree.dry_layout_size(render, bounds)
+                .map(|size| axis.cross_extent(size)),
+            Some(expected),
+            "dry at {limit}",
+        );
+        assert_eq!(tree.element_layout_size(root), None, "dry stays unmeasured");
+    }
+}
+
+#[test]
+fn horizontal_and_vertical_intrinsics_count_run_spacing_once() {
+    let cases = [
+        (245., 165.),
+        (250., 80.),
+        (80., 250.),
+        (79., 250.),
+        (f32::INFINITY, 80.),
+    ];
+    for axis in [Axis::Horizontal, Axis::Vertical] {
+        verify_cross_intrinsics(axis, &cases, 3);
+    }
+}
+
+#[test]
+fn a_single_run_has_no_trailing_run_spacing() {
+    let cases = [(100., 80.), (79., 80.), (80., 80.)];
+    for axis in [Axis::Horizontal, Axis::Vertical] {
+        verify_cross_intrinsics(axis, &cases, 1);
+    }
+}
+
+#[test]
+fn parallel_intrinsics_take_child_maximum_or_sum_without_spacing() {
+    for axis in [Axis::Horizontal, Axis::Vertical] {
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(wrap(axis, 3).into()).unwrap();
+        let render = tree.render_id(root).unwrap();
+        let (min, max) = if axis.is_horizontal() {
+            (
+                tree.min_intrinsic_width(render, 0.),
+                tree.max_intrinsic_width(render, 0.),
+            )
+        } else {
+            (
+                tree.min_intrinsic_height(render, 0.),
+                tree.max_intrinsic_height(render, 0.),
+            )
+        };
+        assert_eq!((min, max), (Some(80.), Some(240.)));
+    }
+}
+
+#[test]
+fn an_empty_constrained_child_uses_enforced_minimums_in_dry_and_live_layout() {
+    let mut tree = WidgetTree::new();
+    let widget = ConstrainedBox::empty(Constraints::new(80., 160., 80., 160.));
+    let root = tree.mount(widget.into()).unwrap();
+    assert!(tree.children(root).unwrap().is_empty());
+    let render = tree.render_id(root).unwrap();
+    let bounds = Constraints::at_most(79., 180.);
+    let expected = Size::new(79., 80.);
+    assert_eq!(tree.dry_layout_size(render, bounds), Some(expected));
+    assert_eq!(tree.element_layout_size(root), None);
+    tree.layout(bounds).unwrap();
+    assert_eq!(tree.element_layout_size(root), Some(expected));
+}
+
+#[test]
+fn a_cross_axis_overflow_uses_only_the_explicit_clip_mode() {
+    for (mode, expected) in [
+        (None, None),
+        (Some(Clip::None), None),
+        (Some(Clip::HardEdge), Some(ClipCoverage::HardEdge)),
+        (Some(Clip::AntiAlias), Some(ClipCoverage::AntiAlias)),
+        (
+            Some(Clip::AntiAliasWithSaveLayer),
+            Some(ClipCoverage::AntiAliasWithSaveLayer),
+        ),
+    ] {
+        let child = Widget::box_(Size::new(200., 200.), Color::BLACK).with_key(1_u64);
+        let wrap = Wrap::new([child]).text_direction(TextDirection::Ltr);
+        let scene: Widget = match mode {
+            Some(mode) => wrap.clip_behavior(mode).into(),
+            None => wrap.into(),
+        };
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(scene).unwrap();
+        tree.layout(Constraints::at_most(100., 100.)).unwrap();
+        assert_eq!(tree.element_layout_size(root), Some(Size::new(100., 100.)));
+        let list = tree.paint();
+        let clips: Vec<_> = list
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::PushClip { rect } => Some((*rect, ClipCoverage::HardEdge)),
+                PaintCommand::PushClipRRect {
+                    rrect, coverage, ..
+                } => Some((rrect.rect, *coverage)),
+                _ => None,
+            })
+            .collect();
+        let rect = Rect::from_origin_size(Offset::ZERO, Size::new(100., 100.));
+        assert_eq!(
+            clips,
+            expected
+                .into_iter()
+                .map(|coverage| (rect, coverage))
+                .collect::<Vec<_>>()
+        );
+    }
+}

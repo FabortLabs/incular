@@ -256,7 +256,7 @@ impl WidgetTree {
                 } else {
                     self.render_live_mut(id, "constrained render must remain live")
                         .baseline = None;
-                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
+                    (child_constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Limited {

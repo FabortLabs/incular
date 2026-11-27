@@ -127,6 +127,27 @@ impl WidgetTree {
                     natural
                 })
             }
+            RenderKind::Wrap { wrap, .. } if wrap.direction == axis => {
+                let mut extent = 0.0f32;
+                for &child in &node.children {
+                    let value = with_recursive_tree_stack(|| {
+                        self.dry_intrinsic_extent(child, axis, kind, f32::INFINITY)
+                    })?;
+                    extent = match kind {
+                        IntrinsicKind::Min => extent.max(value),
+                        IntrinsicKind::Max => extent + value,
+                    };
+                }
+                Some(extent)
+            }
+            RenderKind::Wrap { wrap, .. } => {
+                let constraints = match wrap.direction {
+                    Axis::Horizontal => Constraints::at_most(cross, f32::INFINITY),
+                    Axis::Vertical => Constraints::at_most(f32::INFINITY, cross),
+                };
+                self.dry_wrap_size(&node.children, wrap, constraints)
+                    .map(|size| axis.main_extent(size))
+            }
             RenderKind::AspectRatio { ratio } => incular_layout::AspectRatio::new(*ratio)
                 .intrinsic_extent(axis, cross)
                 .or_else(|| child_extent(cross)),
@@ -182,5 +203,87 @@ impl WidgetTree {
             kind if forwards_intrinsic_child(kind) => child_extent(cross),
             _ => None,
         }
+    }
+
+    /// Computes a built-in box's dry size without laying out the mounted
+    /// tree, changing existing geometry, or invoking a painter. Unsupported
+    /// render kinds and stale IDs return no result rather than a wet estimate.
+    #[must_use]
+    pub fn dry_layout_size(&self, id: RenderObjectId, constraints: Constraints) -> Option<Size> {
+        let node = self.renders.get(id.0)?;
+        let child = |constraints: Constraints| match node.children.first() {
+            Some(&id) => with_recursive_tree_stack(|| self.dry_layout_size(id, constraints)),
+            None => Some(constraints.smallest()),
+        };
+        match node.object.kind() {
+            RenderKind::Box { desired, .. } | RenderKind::Shape { desired, .. } => {
+                Some(constraints.constrain(*desired))
+            }
+            RenderKind::Constrained {
+                constraints: additional,
+            } => child(crate::tree::widget::enforced_constraints(
+                constraints,
+                *additional,
+            )),
+            RenderKind::Wrap { wrap, .. } => self.dry_wrap_size(&node.children, wrap, constraints),
+            kind if forwards_intrinsic_child(kind) => child(constraints),
+            _ => None,
+        }
+    }
+
+    fn dry_wrap_size(
+        &self,
+        children: &[RenderObjectId],
+        wrap: &incular_layout::Wrap,
+        constraints: Constraints,
+    ) -> Option<Size> {
+        let axis = wrap.direction;
+        let child_constraints = match axis {
+            Axis::Horizontal => Constraints::at_most(constraints.max_width(), f32::INFINITY),
+            Axis::Vertical => Constraints::at_most(f32::INFINITY, constraints.max_height()),
+        };
+        let limit = f64::from(match axis {
+            Axis::Horizontal => child_constraints.max_width(),
+            Axis::Vertical => child_constraints.max_height(),
+        });
+        let spacing = f64::from(wrap.spacing);
+        let run_spacing = f64::from(wrap.run_spacing);
+        let (mut main, mut cross) = (0.0f64, 0.0f64);
+        let (mut run_main, mut run_cross) = (0.0f64, 0.0f64);
+        let mut run_has_child = false;
+        for &child in children {
+            let size =
+                with_recursive_tree_stack(|| self.dry_layout_size(child, child_constraints))?;
+            let item_main = f64::from(axis.main_extent(size));
+            let item_cross = f64::from(axis.cross_extent(size));
+            // Flutter's dry measurement uses a strict limit; live layout's
+            // placement tolerance intentionally does not apply here.
+            if run_has_child && run_main + spacing + item_main > limit {
+                main = main.max(run_main);
+                cross += run_cross + run_spacing;
+                run_main = 0.;
+                run_cross = 0.;
+                run_has_child = false;
+            }
+            run_main += if run_has_child {
+                spacing + item_main
+            } else {
+                item_main
+            };
+            run_cross = run_cross.max(item_cross);
+            run_has_child = true;
+        }
+        let (main, cross) = (main.max(run_main), cross + run_cross);
+        let (width, height) = match axis {
+            Axis::Horizontal => (main, cross),
+            Axis::Vertical => (cross, main),
+        };
+        let clamp = |value: f64, minimum, maximum| {
+            value.clamp(f64::from(minimum), f64::from(maximum)) as f32
+        };
+        Size::maybe_new(
+            clamp(width, constraints.min_width(), constraints.max_width()),
+            clamp(height, constraints.min_height(), constraints.max_height()),
+        )
     }
 }

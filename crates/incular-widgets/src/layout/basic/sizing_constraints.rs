@@ -198,8 +198,8 @@ impl From<SizedBox> for Widget {
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct ConstrainedBox {
     constraints: Constraints,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
 impl ConstrainedBox {
@@ -208,7 +208,16 @@ impl ConstrainedBox {
     pub fn new(constraints: Constraints, child: impl Into<Widget>) -> Self {
         Self {
             constraints,
-            child: child.into(),
+            child: Some(child.into()),
+        }
+    }
+
+    /// An empty box whose size is the enforced minimum on each axis.
+    #[must_use]
+    pub const fn empty(constraints: Constraints) -> Self {
+        Self {
+            constraints,
+            child: None,
         }
     }
 

@@ -478,7 +478,9 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
                 constraints.min_height(),
                 constraints.max_height(),
             );
-            summarize_child(&mut out, child);
+            if let Some(child) = child {
+                summarize_child(&mut out, child);
+            }
         }
         WidgetKind::AnimationTicker {
             frame: Some(frame),

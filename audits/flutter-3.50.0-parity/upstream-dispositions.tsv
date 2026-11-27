@@ -3801,3 +3801,8 @@ packages/flutter/test/widgets/selectable_region_test.dart	6653	SelectableRegion 
 packages/flutter/test/widgets/selectable_region_test.dart	6728	selects all text including trailing newline using mouse drag	paired-match	upstream-selection-rectangle-order.md#empty-region-mouse-cursor-and-final-newline
 packages/flutter/test/rendering/independent_layout_test.dart	41	onscreen layout does not affect offscreen	paired-match	upstream-render-box-edges.md#independent-layout-and-paint
 packages/flutter/test/rendering/independent_layout_test.dart	75	offscreen layout does not affect onscreen	paired-match	upstream-render-box-edges.md#independent-layout-and-paint
+packages/flutter/test/rendering/wrap_test.dart	33	Compute intrinsic height test	paired-match	upstream-render-wrap-dry-intrinsics.md
+packages/flutter/test/rendering/wrap_test.dart	112	Compute intrinsic width test	paired-match	upstream-render-wrap-dry-intrinsics.md
+packages/flutter/test/rendering/wrap_test.dart	143	Compute intrinsic height for only one run	paired-match	upstream-render-wrap-dry-intrinsics.md
+packages/flutter/test/rendering/wrap_test.dart	163	Compute intrinsic width for only one run	paired-match	upstream-render-wrap-dry-intrinsics.md
+packages/flutter/test/rendering/wrap_test.dart	183	Wrap respects clipBehavior	paired-match	upstream-render-wrap-dry-intrinsics.md

@@ -2451,8 +2451,8 @@ impl WidgetKind {
             WidgetKind::Constrained { child, .. } => (
                 WidgetType::Constrained,
                 Layout,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::Limited { child, .. } => (
                 WidgetType::Limited,

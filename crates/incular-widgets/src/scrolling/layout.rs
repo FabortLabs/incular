@@ -4272,20 +4272,16 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
                     }
             })
         }
-        WidgetKind::Constrained { constraints, child } => constrained(
-            child,
-            axis,
-            if axis.is_vertical() {
-                constraints.min_height()
+        WidgetKind::Constrained { constraints, child } => {
+            let (min, max) = if axis.is_vertical() {
+                (constraints.min_height(), constraints.max_height())
             } else {
-                constraints.min_width()
-            },
-            if axis.is_vertical() {
-                constraints.max_height()
-            } else {
-                constraints.max_width()
-            },
-        ),
+                (constraints.min_width(), constraints.max_width())
+            };
+            child
+                .as_ref()
+                .map_or_else(|| finite(min), |child| constrained(child, axis, min, max))
+        }
         WidgetKind::Limited {
             max_width,
             max_height,
