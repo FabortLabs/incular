@@ -208,6 +208,17 @@ impl WidgetTree {
         self.unmount_element(id);
     }
 
+    /// Whether reconciliation temporarily detached this subtree, but a
+    /// builder in the upcoming layout pass can still take its key over.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn awaiting_global_reattachment(&self, element: ElementId) -> bool {
+        self.global_keys
+            .parked
+            .iter()
+            .any(|&root| self.is_inclusive_ancestor(root, element))
+    }
+
     /// Unmounts every parked element nobody took over.
     pub(super) fn finalize_parked_global_elements(&mut self) {
         for id in std::mem::take(&mut self.global_keys.parked) {

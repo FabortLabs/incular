@@ -3046,6 +3046,13 @@ impl Runtime {
         }) {
             self.captured_selectable_text = None;
         }
+        // A GlobalKey can move into a layout builder even after it was
+        // detached during rebuild. Keep the old focus path until layout
+        // either reattaches the target or truly unmounts it; clearing it
+        // early drops the scope history needed for fallback.
+        if self.focused.is_some_and(|id| self.tree.awaiting_global_reattachment(id)) {
+            return;
+        }
         if self.primary_focus_node_replaced() {
             self.adopt_external_focus_change();
         }
