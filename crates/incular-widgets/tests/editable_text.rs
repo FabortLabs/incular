@@ -318,7 +318,7 @@ fn cursor_height_and_radius_shape() {
 }
 
 #[test]
-fn selection_highlight_follows_focus_and_color() {
+fn raw_selection_highlight_follows_the_range_and_color_not_focus() {
     let controller = TextEditingController::with_text("hello");
     controller.set_selection(TextSelection { base: 0, extent: 2 });
     let highlight = Color::rgba(0, 255, 0, 255);
@@ -340,11 +340,20 @@ fn selection_highlight_follows_focus_and_color() {
     tree.set_focused(root, false, Instant::now())
         .expect("unfocus field");
     assert!(
+        tree.paint().commands().iter().any(|command| matches!(
+            command,
+            PaintCommand::Rect { color, .. } if *color == highlight
+        )),
+        "a valid controller range still paints after blur"
+    );
+    controller.set_selection(TextSelection::collapsed(2));
+    tree.layout(Constraints::tight(Size::new(180., 32.))).unwrap();
+    assert!(
         !tree.paint().commands().iter().any(|command| matches!(
             command,
             PaintCommand::Rect { color, .. } if *color == highlight
         )),
-        "unfocused selection paints no highlight"
+        "a collapsed range has no highlight"
     );
 }
 

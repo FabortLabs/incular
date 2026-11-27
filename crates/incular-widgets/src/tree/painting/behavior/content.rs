@@ -341,8 +341,10 @@ impl WidgetTree {
                         }
                     }
                     let selection = value_selection.range();
-                    if focused
-                        && !selection.is_empty()
+                    // Raw EditableText paints a valid configured selection
+                    // even without focus. Focus still controls the caret,
+                    // prompt, and interactive overlays.
+                    if !selection.is_empty()
                         && let Some(selection_color) = selection_color
                     {
                         let selection = TextRange::new(

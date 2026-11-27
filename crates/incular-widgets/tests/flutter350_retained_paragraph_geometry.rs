@@ -503,3 +503,34 @@ fn inline_selection_keeps_adjacent_placeholders_separate_with_tight_or_max_heigh
         }
     }
 }
+
+#[test]
+fn tight_editable_selection_through_a_hard_break_stays_on_the_short_line_without_focus() {
+    use incular_core::Color;
+    use incular_rendering::PaintCommand;
+    use incular_widgets::EditableText;
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let controller = incular_text::TextEditingController::with_text("abc\nabcdefghij");
+    let widget = EditableText::new(controller.clone())
+        .text_direction(TextDirection::Ltr)
+        .max_lines(None)
+        .style(style.font_size(10.).line_height_multiplier(1.))
+        .selection_color(Color::BLACK);
+    let mut tree = WidgetTree::with_text_engine(engine);
+    let field = tree.mount(widget.into()).unwrap();
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.focused_keyboard_element(), None);
+    controller.set_selection(TextSelection::new(0, 4));
+    tree.layout(constraints).unwrap();
+    let selection: Vec<_> = tree.paint().commands().iter().filter_map(|command| match command {
+        PaintCommand::Rect { rect, color: Color::BLACK } => Some(edges(*rect)),
+        _ => None,
+    }).collect();
+    assert_eq!(selection, [[0., 0., 30., 10.]]);
+    assert_eq!(tree.focused_keyboard_element(), None);
+    assert_eq!(tree.root(), Some(field));
+}
