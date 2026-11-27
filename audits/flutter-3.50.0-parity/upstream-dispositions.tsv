@@ -3208,3 +3208,8 @@ packages/flutter/test/widgets/editable_text_test.dart	13422	Floating cursor endi
 packages/flutter/test/services/text_input_test.dart	1078	TextInputClient showToolbar method is called	partial-match	upstream-text-input-reattach.md#host-selection-toolbar
 packages/flutter/test/services/text_input_test.dart	1056	TextInputClient showAutocorrectionPromptRect method is called	partial-match	upstream-autocorrection-prompt.md
 packages/flutter/test/widgets/editable_text_test.dart	4482	iOS autocorrection rectangle should appear on demand and dismiss when the text changes or when focus is lost	paired-match	upstream-autocorrection-prompt.md
+packages/flutter/test/services/text_input_test.dart	1303	gets attached and detached	paired-match	upstream-text-input-controls.md
+packages/flutter/test/services/text_input_test.dart	1321	receives text input state changes	paired-match	upstream-text-input-controls.md
+packages/flutter/test/services/text_input_test.dart	1347	does not interfere with platform text input	paired-match	upstream-text-input-controls.md
+packages/flutter/test/services/text_input_test.dart	1368	both input controls receive requests	paired-match	upstream-text-input-controls.md
+packages/flutter/test/services/text_input_test.dart	1526	notifies changes to the attached client	paired-match	upstream-text-input-controls.md

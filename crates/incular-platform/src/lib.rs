@@ -30,11 +30,17 @@ mod flutter_event_channel;
 mod flutter_floating_cursor;
 mod flutter_platform_channel;
 mod flutter_text_input_config;
+mod flutter_text_input_controls;
 mod flutter_text_input_style;
 mod keyboard_inserted_content;
 pub use android_text_input::flutter_android_input_type;
 pub use keyboard_inserted_content::{KeyboardInsertedContent, KeyboardInsertedContentError};
 pub use flutter_text_input_config::FlutterTextInputConfiguration;
+pub use flutter_text_input_controls::{
+    FlutterSelectionRect, FlutterTextInputClientEvent, FlutterTextInputControlUpdate,
+    FlutterTextInputControl, FlutterTextInputControls, FlutterTextInputControlsError,
+    FlutterTextInputWireCall,
+};
 pub use flutter_text_input_style::{
     FlutterTextInputAlignment, FlutterTextInputStyle, FlutterTextInputStyleSendError,
     FlutterTextInputWeight, InvalidFlutterTextInputStyleNumber,
