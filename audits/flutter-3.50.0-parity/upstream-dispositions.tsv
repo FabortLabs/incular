@@ -3361,3 +3361,7 @@ packages/flutter/test/widgets/editable_text_test.dart	18672	onTapUpOutside is no
 packages/flutter/test/widgets/editable_text_test.dart	6847	Composing text is underlined and underline is cleared when losing focus	paired-match	upstream-editable-composing-decoration.md
 packages/flutter/test/widgets/editable_text_test.dart	496	Text with selection can be shown on the screen when the keyboard shown	paired-match	upstream-editable-keyboard-inset-reveal.md
 packages/flutter/test/widgets/editable_text_test.dart	542	ScheduleShowCaretOnScreen with no animation when the view changes metrics	paired-match	upstream-editable-keyboard-inset-reveal.md
+packages/flutter/test/widgets/editable_text_test.dart	11156	autofocus:true on first frame does not throw	paired-match	upstream-editable-composing-decoration.md#combining-marks-and-first-frame-autofocus
+packages/flutter/test/widgets/editable_text_test.dart	18281	getPositionForPoint is correct when EditableText is scaled	paired-match	upstream-scaled-editable-position.md
+packages/flutter/test/widgets/editable_text_test.dart	18321	selectPositionAt is correct when EditableText is scaled	paired-match	upstream-scaled-editable-position.md
+packages/flutter/test/widgets/editable_text_test.dart	18461	Composing region can truncate grapheme	paired-match	upstream-editable-composing-decoration.md#combining-marks-and-first-frame-autofocus

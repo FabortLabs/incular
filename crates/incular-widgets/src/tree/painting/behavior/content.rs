@@ -203,6 +203,7 @@ impl WidgetTree {
                 // does not reveal the pre-existing selection. A subsequent
                 // change within the focused field can still reveal it.
                 let reveal = revealed != Some(reveal_key)
+                    && controller.selection_if_set().is_some()
                     && (!field.read_only || (focused && revealed.is_some_and(|old| old.2)));
                 let has_layout = layout.is_some();
                 let mask = obscure_text.then_some(obscuring_character);

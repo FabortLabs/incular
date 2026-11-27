@@ -620,6 +620,40 @@ impl WidgetTree {
     /// Flutter's `EditableTextState._scrollToDocumentBoundary`: brings the
     /// start or end of the text into view without moving the selection.
     pub fn text_field_scroll_to_document_boundary(&mut self, id: ElementId, forward: bool) -> bool {
+        let Some(controller) = self.text_controller(id) else {
+            return false;
+        };
+        let offset = if forward { controller.with_value(|value| value.text.len()) } else { 0 };
+        self.scroll_text_field_to_position(id, offset, incular_text::TextAffinity::Downstream)
+    }
+
+    /// Flutter's EditableText.bringIntoView: make a specific text position
+    /// visible without focusing the editor or moving its selection. The
+    /// inner edit viewport scrolls first, then its enclosing viewports.
+    pub fn text_field_bring_position_into_view(
+        &mut self,
+        id: ElementId,
+        offset: usize,
+        affinity: incular_text::TextAffinity,
+    ) -> bool {
+        if !self.text_controller(id).is_some_and(|controller| {
+            controller.with_value(|value| value.text.is_char_boundary(offset))
+        }) {
+            return false;
+        }
+        let moved = self.scroll_text_field_to_position(id, offset, affinity);
+        let outer_moved = self.editable_local_caret_rect(id, offset, affinity).is_some_and(|rect| {
+            crate::Scrollable::show_on_screen(self, id, crate::ShowOnScreen::new().rect(rect)) != 0
+        });
+        moved || outer_moved
+    }
+
+    fn scroll_text_field_to_position(
+        &mut self,
+        id: ElementId,
+        offset: usize,
+        affinity: incular_text::TextAffinity,
+    ) -> bool {
         let Some(render) = self.render_id(id) else {
             return false;
         };
@@ -632,15 +666,9 @@ impl WidgetTree {
         let Some(layout) = node.field_layout() else {
             return false;
         };
-        let value = field.controller.value();
-        let offset = if forward { value.text.len() } else { 0 };
-        let (caret, caret_y, caret_height) = text_field_caret_geometry(
-            &layout,
-            offset,
-            incular_text::TextAffinity::Downstream,
-            value.text.is_empty(),
-            field,
-        );
+        let empty = field.controller.with_value(|value| value.text.is_empty());
+        let (caret, caret_y, caret_height) =
+            text_field_caret_geometry(&layout, offset, affinity, empty, field);
         let size = node.size;
         let multiline = field.multiline;
         let available = (size.width - field.content_padding.horizontal()).max(0.);

@@ -137,3 +137,60 @@ fn transient_host_preedit_is_underlined_without_committing_it_to_the_controller(
     assert_eq!(editing.text(), "λ界");
     assert_eq!(glyphs(&committed), 2);
 }
+
+#[test]
+fn a_composing_range_can_begin_inside_a_combining_grapheme() {
+    let (mut runtime, node, editing) = mount(false, false, true);
+    let _ = frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    // Flutter's UTF-16 [1, 2) is the combining mark after ASCII 'A'.
+    // The same scalar occupies UTF-8 bytes [1, 3).
+    let value = TextEditingValue {
+        text: "A\u{301}".to_owned(),
+        selection: TextSelection { base: 1, extent: 3 },
+        composing: Some(ComposingRange::new(1, 3)),
+    };
+    editing.set_value(value.clone());
+    let display = frame(&mut runtime);
+    assert!(glyphs(&display) > 0);
+    assert_eq!(editing.value(), value);
+    assert!(node.has_primary_focus());
+}
+
+#[test]
+fn first_frame_autofocus_handles_a_preexisting_upstream_caret_in_a_multiline_editor() {
+    use incular_text::{TextAffinity, TextAlign};
+    use incular_widgets::SizedBox;
+
+    let sample = "Now is the time for\nall good people\nto come to the aid\nof their country.";
+    let editing = TextEditingController::with_text(sample);
+    editing.set_selection_with_affinity(TextSelection::collapsed(0), TextAffinity::Upstream);
+    let node = FocusNode::new();
+    let scene = EditableText::new(editing.clone())
+        .focus_node(node.clone())
+        .autofocus(true)
+        .select_all_on_focus(false)
+        .text_direction(TextDirection::Ltr)
+        .text_align(TextAlign::Right)
+        .style(TextStyle::new().font_size(16.).color(INK))
+        .cursor_color(Color::rgba(50, 100, 230, 255))
+        .max_lines(Some(10))
+        .selection_handles_builder(|_, _| SizedBox::shrink().into());
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    let display = frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    assert!(glyphs(&display) > 0);
+    assert_eq!(
+        editing.selection_if_set(),
+        Some(TextSelection::collapsed(0))
+    );
+    assert_eq!(editing.caret_affinity(), TextAffinity::Upstream);
+    let focused = runtime.focused_element().unwrap();
+    assert!(
+        runtime
+            .tree()
+            .text_field_selection_handle_geometry(focused)
+            .is_some()
+    );
+    assert_eq!(editing.text(), sample);
+}
