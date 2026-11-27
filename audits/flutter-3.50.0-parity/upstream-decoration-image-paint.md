@@ -59,3 +59,19 @@ Incular exposes decoded handles and renderer diagnostics, but does not
 expose these oversize-inversion or per-frame image-size callbacks.
 These are reference-only; paint draw count is not a substitute for
 a reported event or warning.
+
+## Translated fits, repeated tiles, and shape clipping
+
+Eight originals from pinned painting/decoration_test.dart now pair.
+Both none and scale-down preserve the complete 100×100 source at scales
+1 through 4 in a translated 250×250 box with bottom-right alignment.
+Scale-down also constrains the image to the 20 px tight axis without
+cropping. The default center is stable across six fits. A synchronous
+paint provider with scale 4 emits a 25×25 top-left destination.
+
+FitHeight with RepeatX and FitWidth with RepeatY each produce two
+complete 200×200 tiles, with the correct translated origins and source.
+After delayed decode, a circle and a rounded box clip the background
+image before drawing it. A sharp rectangle adds no clip. All 20
+targeted native tests passed. These check retained display-list
+geometry, not a framebuffer golden or exact backend command types.

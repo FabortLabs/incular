@@ -199,3 +199,45 @@ fn a_followed_decoration_stream_observes_its_new_sources_frame_but_not_progress(
     assert!(runtime.frame_requested());
     assert_eq!(draws(&frame(&mut runtime))[0].0, visible.id().0);
 }
+
+#[test]
+fn a_loaded_decoration_image_is_clipped_by_circles_and_rounded_boxes_only() {
+    use incular_widgets::{BorderRadius, BoxShape};
+
+    for (shape, radius, clips) in [
+        (BoxShape::Circle, None, true),
+        (BoxShape::Rectangle, Some(BorderRadius::circular(16.)), true),
+        (BoxShape::Rectangle, None, false),
+    ] {
+        let (provider, completion) = pending();
+        let mut decoration = BoxDecoration::new()
+            .shape(shape)
+            .image(DecorationImage::from_provider(provider));
+        decoration.border_radius = radius;
+        let child = DecoratedBox::new(SizedBox::shrink()).decoration(decoration);
+        let mut runtime = Runtime::new(child.into()).unwrap();
+        assert!(draws(&frame(&mut runtime)).is_empty());
+        assert!(!runtime.frame_requested());
+        assert!(completion.complete(pix()));
+        assert!(runtime.frame_requested());
+        let list = frame(&mut runtime);
+        let mut open_clips = 0;
+        let mut images = 0;
+        for command in list.commands() {
+            match command {
+                PaintCommand::PushClip { .. }
+                | PaintCommand::PushClipRRect { .. }
+                | PaintCommand::PushClipOval { .. }
+                | PaintCommand::PushClipPath { .. } => open_clips += 1,
+                PaintCommand::PopClip => open_clips -= 1,
+                PaintCommand::Image { .. } => {
+                    images += 1;
+                    assert_eq!(open_clips, usize::from(clips), "{shape:?} {radius:?}");
+                }
+                _ => {}
+            }
+        }
+        assert_eq!((images, open_clips), (1, 0));
+        assert!(!runtime.frame_requested());
+    }
+}
