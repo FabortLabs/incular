@@ -152,8 +152,9 @@ impl ShortcutRegistry {
         }
     }
 
-    /// Records the event's modifiers, then runs the most recently added
-    /// shortcut that accepts it. Returns whether one ran.
+    /// Records modifiers and runs the best matching shortcut.
+    /// Keyed triggers precede character fallbacks; the newest matching
+    /// registration within the same tier wins.
     pub fn handle_key(&self, event: &KeyboardEvent) -> bool {
         self.handle_key_with_lock_modes(event, event.modifiers)
     }
@@ -177,14 +178,26 @@ impl ShortcutRegistry {
                 listener(modifiers);
             }
         }
-        let callback = self
-            .inner
-            .entries
-            .borrow()
-            .iter()
-            .rev()
-            .find(|(_, activator, _)| activator.accepts_with_lock_modes(event, lock_modes))
-            .map(|(_, _, callback)| callback.clone());
+        let callback = {
+            let entries = self.inner.entries.borrow();
+            let mut character_fallback = None;
+            let keyed = entries.iter().rev().find_map(|(_, activator, callback)| {
+                match activator {
+                    RegistryActivator::Single(_) => activator
+                        .accepts_with_lock_modes(event, lock_modes)
+                        .then(|| callback.clone()),
+                    RegistryActivator::Character(_) => {
+                        if character_fallback.is_none()
+                            && activator.accepts_with_lock_modes(event, lock_modes)
+                        {
+                            character_fallback = Some(callback.clone());
+                        }
+                        None
+                    }
+                }
+            });
+            keyed.or(character_fallback)
+        };
         callback.is_some_and(|callback| {
             callback();
             true

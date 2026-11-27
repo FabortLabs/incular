@@ -97,3 +97,18 @@ registers two distinct bindings and holds their tokens while mounted.
 The autofocus target routes A and B independently, with no extra
 callback on release. All five focused registrar tests passed. The
 subsequent text-editor intent and dynamic dependency cases are separate.
+
+## Registry priority for a matching logical key and character
+
+The pinned mounted ShortcutRegistrar runs the logical-key entry ahead
+of the character fallback for a plain C producing `c`, regardless of
+which entry was registered first. Disposing the logical-key entry,
+then pumping its scheduled publication, lets the character entry run.
+The native mounted regression initially chose the character entry when
+newer. The fix gives the logical-key tier priority without changing
+newest-first ordering within a tier or executing callbacks under the
+registry borrow. CallbackShortcuts are not changed.
+
+Both authored Flutter probes and all 20 focused native tests passed.
+This is authored evidence, not an additional original-registration
+pair.

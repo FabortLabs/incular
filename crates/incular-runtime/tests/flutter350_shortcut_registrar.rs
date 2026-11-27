@@ -178,3 +178,46 @@ fn registrar_uses_hardware_num_lock_when_event_modifiers_do_not_include_it() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_logical_trigger_wins_over_a_character_fallback_in_both_registration_orders() {
+    for character_first in [false, true] {
+        let registry = ShortcutRegistry::new();
+        let keyed = Rc::new(Cell::new(0));
+        let character = Rc::new(Cell::new(0));
+        let key = || registry.add(activator("c"), increment(&keyed));
+        let fallback = || registry.add(CharacterActivator::new("c"), increment(&character));
+        let (_character, single) = if character_first {
+            let c = fallback();
+            (c, key())
+        } else {
+            let k = key();
+            (fallback(), k)
+        };
+
+        let mut runtime = mount(ShortcutRegistrar::with_registry(registry, child()).into());
+        assert!(letter(&mut runtime, "c", Code::KeyC, true));
+        assert_eq!((keyed.get(), character.get()), (1, 0));
+        let _ = letter(&mut runtime, "c", Code::KeyC, false);
+
+        drop(single);
+        assert!(letter(&mut runtime, "c", Code::KeyC, true));
+        assert_eq!((keyed.get(), character.get()), (1, 1));
+    }
+}
+
+#[test]
+fn a_newer_registration_still_wins_within_the_same_tier() {
+    let registry = ShortcutRegistry::new();
+    let old = Rc::new(Cell::new(0));
+    let newer = Rc::new(Cell::new(0));
+    let _old = registry.add(activator("c"), increment(&old));
+    let newer_handle = registry.add(activator("c"), increment(&newer));
+    let mut runtime = mount(ShortcutRegistrar::with_registry(registry, child()).into());
+    assert!(letter(&mut runtime, "c", Code::KeyC, true));
+    assert_eq!((old.get(), newer.get()), (0, 1));
+    let _ = letter(&mut runtime, "c", Code::KeyC, false);
+    drop(newer_handle);
+    assert!(letter(&mut runtime, "c", Code::KeyC, true));
+    assert_eq!((old.get(), newer.get()), (1, 1));
+}
