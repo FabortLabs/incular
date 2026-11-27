@@ -1,3 +1,4 @@
+use crate::composition_callbacks::{CompositionCallbackSubscription, CompositionObservers};
 use crate::display_list::{
     BackdropKey, ClipCoverage, ClipIsolation, DisplayList, ImageSampling, PaintCommand,
     SurfacePartitionId,
@@ -584,6 +585,7 @@ pub struct LayerTree {
     layers: Arena<Layer>,
     root: Option<LayerId>,
     diagnostics: CompositorDiagnostics,
+    composition_observers: CompositionObservers,
     flattened_pictures: Vec<FlattenedPicture>,
     flattened_annotations: Vec<FlattenedAnnotation>,
     annotation_placements: Vec<AnnotationPlacement>,
@@ -650,6 +652,7 @@ impl LayerTree {
             layers: Arena::new(),
             root: None,
             diagnostics: CompositorDiagnostics::default(),
+            composition_observers: CompositionObservers::default(),
             flattened_pictures: Vec::new(),
             flattened_annotations: Vec::new(),
             annotation_placements: Vec::new(),
@@ -691,6 +694,77 @@ impl LayerTree {
             .get(id.0)
             .map(|layer| (&layer.kind, layer.children.as_slice()))
     }
+    /// Observes composition of a live layer. The observer is notified on
+    /// scene publication even when the previous command buffer is reused.
+    #[must_use]
+    pub fn add_composition_callback(
+        &mut self,
+        layer: LayerId,
+        callback: impl Fn(LayerId) + 'static,
+    ) -> Option<CompositionCallbackSubscription> {
+        self.layers
+            .contains(layer.0)
+            .then(|| self.composition_observers.add(layer, callback))
+    }
+
+    /// Whether a layer or any live descendant has an active observer.
+    #[must_use]
+    pub fn subtree_has_composition_callbacks(&self, root: LayerId) -> bool {
+        if !self.layers.contains(root.0) {
+            return false;
+        }
+        self.composition_observers
+            .observed_layers()
+            .any(|observed| {
+                let mut current = Some(observed);
+                for _ in 0..=self.diagnostics.layers {
+                    let Some(layer) = current else {
+                        return false;
+                    };
+                    if layer == root {
+                        return true;
+                    }
+                    current = self.layers.get(layer.0).and_then(|layer| layer.parent);
+                }
+                false
+            })
+    }
+
+    fn fire_composition_callbacks(&mut self) {
+        let Some(root) = self.root else { return };
+        if !self.composition_observers.prune() {
+            return;
+        }
+        // Mark only ancestors of active observers. Most retained branches
+        // have no callbacks and need not be visited on a clean frame.
+        let mut observed_paths = std::collections::HashSet::new();
+        for layer in self.composition_observers.observed_layers() {
+            let mut current = Some(layer);
+            while let Some(id) = current
+                && observed_paths.insert(id)
+            {
+                current = self.layers.get(id.0).and_then(|layer| layer.parent);
+            }
+        }
+        let mut pending = vec![root];
+        while let Some(id) = pending.pop() {
+            if !observed_paths.remove(&id) {
+                continue;
+            }
+            self.composition_observers.notify(id);
+            if let Some(layer) = self.layers.get(id.0) {
+                pending.extend(
+                    layer
+                        .children
+                        .iter()
+                        .rev()
+                        .copied()
+                        .filter(|child| observed_paths.contains(child)),
+                );
+            }
+        }
+    }
+
     /// Visits retained descendants in depth-first paint order, excluding
     /// the starting layer. Removed handles and their branches are skipped.
     #[must_use]
@@ -1069,6 +1143,7 @@ impl LayerTree {
     }
     pub fn remove(&mut self, id: LayerId) {
         if let Some(layer) = self.layers.remove(id.0) {
+            self.composition_observers.clear_layer(id);
             self.matrix_stages.remove(&id);
             self.annotation_options.remove(&id);
             // The retained flatten result may share resources owned by the
@@ -1879,6 +1954,7 @@ impl LayerTree {
             self.partition_scratch = markers;
         }
         if !self.scene_dirty && self.leader_layers == 0 && self.follower_layers == 0 {
+            self.fire_composition_callbacks();
             return self.flatten_published.clone();
         }
         let mut out = std::mem::take(&mut self.flatten_scratch);
@@ -1915,6 +1991,7 @@ impl LayerTree {
         // keeping the buffer's capacity where it is not shared.
         out.clear();
         self.flatten_scratch = out;
+        self.fire_composition_callbacks();
         self.flatten_published.clone()
     }
     /// Exact world-space clip command for one clip layer. Translation-only

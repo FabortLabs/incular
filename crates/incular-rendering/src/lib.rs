@@ -2,6 +2,7 @@
 
 mod backdrop;
 mod color_space;
+mod composition_callbacks;
 mod compositor;
 mod display_list;
 mod effects;
@@ -17,6 +18,7 @@ pub use backdrop::{
     backdrop_matrix_sampling, backdrop_stage_is_active,
 };
 pub use color_space::{premultiplied_working_rgba, working_rgba};
+pub use composition_callbacks::CompositionCallbackSubscription;
 pub use compositor::{
     Annotation, AnnotationEntry, AnnotationSearchOptions, CompositorDiagnostics, FlattenedAnnotation, FlattenedPicture, FollowerLayer,
     LayerAnchor, LayerId, LayerKind, LayerLink, LayerTree, PublisherIdentity, normalize_opacity,

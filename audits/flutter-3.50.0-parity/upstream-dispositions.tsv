@@ -3003,3 +3003,8 @@ packages/flutter/test/rendering/layers_test.dart	358	ClipRSuperellipseLayer prin
 packages/flutter/test/rendering/layers_test.dart	366	ClipPathLayer prints clipBehavior in debug info	paired-match	upstream-layer-clip-diagnostics.md
 packages/flutter/test/rendering/layers_test.dart	280	depthFirstIterateChildren	paired-match	upstream-layer-topology.md
 packages/flutter/test/rendering/layers_test.dart	726	Layers describe clip bounds	paired-match	upstream-layer-topology.md
+packages/flutter/test/rendering/layers_test.dart	746	Subtree has composition callbacks	paired-match	upstream-layer-composition-observers.md
+packages/flutter/test/rendering/layers_test.dart	788	Subtree has composition callbacks - removeChild	paired-match	upstream-layer-composition-observers.md
+packages/flutter/test/rendering/layers_test.dart	819	No callback if removed	paired-match	upstream-layer-composition-observers.md
+packages/flutter/test/rendering/layers_test.dart	837	Observe layer tree composition - not retained	paired-match	upstream-layer-composition-observers.md
+packages/flutter/test/rendering/layers_test.dart	861	Observe layer tree composition - retained	paired-match	upstream-layer-composition-observers.md
