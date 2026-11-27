@@ -783,3 +783,49 @@ fn an_opted_out_outer_transform_does_not_bound_a_nested_hit() {
     layout_paint_loose(&mut clipped);
     assert!(clipped.hit_test(Offset::new(1020., 1010.)).is_none());
 }
+#[test]
+fn uniform_and_independent_scale_factors_share_the_child_center_pivot() {
+    use incular_config::TextDirection;
+    use incular_widgets::{Center, Directionality, GlobalKey, SizedBox};
+
+    for (uniform, expected_size) in [
+        (true, Size::new(225., 150.)),
+        (false, Size::new(225., 120.)),
+    ] {
+        let key = GlobalKey::new();
+        let child = Widget::box_(Size::new(150., 100.), Color::WHITE).with_key(key);
+        let scale = if uniform {
+            Transform::scale(1.5, child)
+        } else {
+            Transform::scale_non_uniform(1.5, 1.2, child)
+        };
+        let mut tree = WidgetTree::new();
+        tree.mount(
+            Directionality::new(
+                TextDirection::Ltr,
+                SizedBox::square(400.).child(Center::new(scale)),
+            )
+            .into(),
+        )
+        .unwrap();
+        tree.layout(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        let child_element = tree.element_with_key(&key.into()).unwrap();
+        let child_render = tree.render_id(child_element).unwrap();
+        assert_eq!(tree.render_size(child_render), Some(Size::new(150., 100.)));
+
+        let bounds = tree.element_bounds(child_element).unwrap();
+        approx_eq(bounds.size.width, expected_size.width, "visual width");
+        approx_eq(bounds.size.height, expected_size.height, "visual height");
+        approx_eq(
+            bounds.origin.x + bounds.size.width / 2.,
+            400.,
+            "paint center X",
+        );
+        approx_eq(
+            bounds.origin.y + bounds.size.height / 2.,
+            300.,
+            "paint center Y",
+        );
+    }
+}

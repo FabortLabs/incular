@@ -35,6 +35,8 @@ and background paint order. Painting in front does not block child input.
 
 `Transform::flip` mirrors a child around its center. By default its hit
 targets mirror along with its paint.
+`Transform::scale_non_uniform` also uses that pivot, with separate axis
+scales.
 
 ## Frame recursion diagnostics
 

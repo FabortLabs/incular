@@ -2093,7 +2093,14 @@ impl Transform {
     /// Flutter's `Transform.scale`: pivots about the center by default.
     #[must_use]
     pub fn scale(scale: f32, child: impl Into<Widget>) -> Self {
-        let mut transform = Self::new(CoreTransform::scale(scale), child);
+        Self::scale_non_uniform(scale, scale, child)
+    }
+
+    /// Scales X and Y independently about the child's center, corresponding
+    /// to Flutter's `Transform.scale(scaleX:, scaleY:)`.
+    #[must_use]
+    pub fn scale_non_uniform(scale_x: f32, scale_y: f32, child: impl Into<Widget>) -> Self {
+        let mut transform = Self::new(CoreTransform::scale_non_uniform(scale_x, scale_y), child);
         transform.centered = true;
         transform
     }
@@ -2127,9 +2134,7 @@ impl Transform {
     pub fn flip(flip_x: bool, flip_y: bool, child: impl Into<Widget>) -> Self {
         let scale_x = if flip_x { -1. } else { 1. };
         let scale_y = if flip_y { -1. } else { 1. };
-        let mut transform = Self::new(CoreTransform::scale_non_uniform(scale_x, scale_y), child);
-        transform.centered = true;
-        transform
+        Self::scale_non_uniform(scale_x, scale_y, child)
     }
 
     #[must_use]

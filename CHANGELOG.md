@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- `Transform::scale_non_uniform` scales horizontal and vertical axes
+  independently around the same center as uniform scaling.
+
 - `Transform::flip` mirrors either or both axes about the child's center,
   including its pointer hit targets.
 

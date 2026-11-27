@@ -56,3 +56,14 @@ that disabling hit conversion for the outer transform still allows
 the nested transform to move the target, while a surrounding ClipRect
 rejects the same outside hit. Native regressions cover both raw and
 direct retained hit paths (50 targeted tests passed).
+
+### Uniform and independent scales
+
+Both pinned `widgets/transform_test.dart` scale registrations (814 and
+843) passed. The 150×100 child retains its layout size and its world
+center at (400, 300). A uniform 1.5 scale produces 225×150 paint bounds;
+different 1.5 and 1.2 scales produce 225×120. Native checks use a small
+logical-pixel tolerance for the f32 scale representation. The two
+constructors are separate in Rust, so the invalid option combinations
+tested in Dart are not claimed as runtime assertion equivalents.
+Eighteen focused transform tests and two focus geometry tests passed.

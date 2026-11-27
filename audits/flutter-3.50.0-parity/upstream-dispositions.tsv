@@ -2778,3 +2778,5 @@ packages/flutter/test/widgets/transform_test.dart	356	Transform.rotate creates n
 packages/flutter/test/widgets/transform_test.dart	874	Transform.flip does flip child correctly	paired-match	upstream-transform-quarter-turns.md#mirrored-hits-and-zero-area
 packages/flutter/test/widgets/transform_test.dart	958	Transform does not crash at zero area	paired-match	upstream-transform-quarter-turns.md#mirrored-hits-and-zero-area
 packages/flutter/test/widgets/transform_test.dart	500	Translated child into translated box - hit test	paired-match	upstream-transform-quarter-turns.md#nested-translation-hit-testing
+packages/flutter/test/widgets/transform_test.dart	814	Transform.scale() scales widget uniformly with 'scale' parameter	paired-match	upstream-transform-quarter-turns.md#uniform-and-independent-scales
+packages/flutter/test/widgets/transform_test.dart	843	Transform.scale() scales widget according to 'scaleX' and 'scaleY'	paired-match	upstream-transform-quarter-turns.md#uniform-and-independent-scales
