@@ -5,6 +5,7 @@
 
 pub mod file_filter;
 pub mod ide_theme;
+pub mod search;
 
 use std::rc::Rc;
 

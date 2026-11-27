@@ -3539,3 +3539,4 @@ dev/integration_tests/widget_preview_scaffold/test/filter_by_selected_file_test.
 dev/integration_tests/widget_preview_scaffold/test/filter_by_selected_file_test.dart	168	Filter previews based on currently selected file (Windows)	paired-match	upstream-preview-selected-file.md
 dev/integration_tests/widget_preview_scaffold/test/filter_by_selected_file_test.dart	186	Filter previews is responsive to Editor service availability	paired-match	upstream-preview-selected-file.md
 dev/integration_tests/widget_preview_scaffold/test/filter_by_selected_file_test.dart	238	Filter by selected file preference is persisted	paired-match	upstream-preview-selected-file.md
+dev/integration_tests/widget_preview_scaffold/test/preview_search_controls_test.dart	12	Search query updates and clears correctly	paired-match	upstream-preview-search.md

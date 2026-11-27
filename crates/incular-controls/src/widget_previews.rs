@@ -163,3 +163,75 @@ pub fn preview_file_filter_toggle<T: 'static, E: 'static>(
     })
     .into()
 }
+
+/// Borderless preview search editing and its conditional clear action.
+#[derive(Clone)]
+pub struct PreviewSearchControls {
+    search: incular_widgets::widget_previews::search::PreviewSearch,
+    focus_node: incular_widgets::FocusNode,
+}
+
+impl PreviewSearchControls {
+    #[must_use]
+    pub fn new(search: incular_widgets::widget_previews::search::PreviewSearch) -> Self {
+        Self {
+            search,
+            focus_node: incular_widgets::FocusNode::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn focus_node(mut self, node: incular_widgets::FocusNode) -> Self {
+        self.focus_node = node;
+        self
+    }
+}
+
+impl From<PreviewSearchControls> for Widget {
+    fn from(controls: PreviewSearchControls) -> Self {
+        use incular_widgets::{
+            EditableText, Expanded, GestureDetector, HitTestBehavior, Semantics, TextFieldTapRegion,
+        };
+        let input = Builder::new({
+            let editor = controls.search.editing_controller();
+            let focus = controls.focus_node;
+            move |context| {
+                let theme = crate::theme::current_control_theme(context);
+                Widget::from(
+                    EditableText::new(editor.clone())
+                        .placeholder("Search previews")
+                        .placeholder_color(theme.colors.foreground_muted)
+                        .size(incular_core::Size::new(0., 26.))
+                        .content_padding(incular_config::EdgeInsets::symmetric(8., 4.))
+                        .style(theme.typography.body.clone().color(theme.colors.foreground))
+                        .cursor_color(theme.colors.foreground)
+                        .focus_node(focus.clone()),
+                )
+                .with_key("preview.search.editor")
+            }
+        });
+        let clear = Builder::new(move |context| {
+            if controls.search.query().is_empty() {
+                return SizedBox::shrink().into();
+            }
+            let theme = crate::theme::current_control_theme(context);
+            let clear_on_tap = controls.search.clone();
+            let clear_on_action = controls.search.clone();
+            let hit = GestureDetector::new(SizedBox::new().width(40.).height(26.).child(
+                incular_widgets::Center::new(Text::new("×").color(theme.colors.foreground)),
+            ))
+            .behavior(HitTestBehavior::Opaque)
+            .on_tap(move || clear_on_tap.clear());
+            let semantic = Semantics::new(hit)
+                .role(incular_semantics::Role::Button)
+                .label("Clear search")
+                .on_tap(move || clear_on_action.clear());
+            Widget::from(TextFieldTapRegion::new(RawTooltip::new(
+                "Clear search",
+                semantic,
+            )))
+            .with_key("preview.search.clear")
+        });
+        Row::new([Widget::from(Expanded::new(input)), clear.into()]).into()
+    }
+}
