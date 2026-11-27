@@ -57,3 +57,49 @@ fn blocked_subtree_clears_focus_presence_but_preserves_the_named_action() {
     }
     assert_eq!(invocations.get(), 4);
 }
+
+#[test]
+fn the_default_focus_block_does_not_annotate_or_insert_a_semantic_node() {
+    let annotation =
+        |block| Semantics::new(SizedBox::square(10.)).accessibility_focus_block_type(block);
+    assert!(Semantics::new(SizedBox::square(10.)).explicit().is_none());
+    assert!(
+        annotation(AccessibilityFocusBlockType::None)
+            .explicit()
+            .is_none()
+    );
+    let real_block = annotation(AccessibilityFocusBlockType::BlockSubtree)
+        .explicit()
+        .expect("a changed focus-block value is an explicit annotation");
+    assert_eq!(
+        real_block.state.accessibility_focus_block_type,
+        AccessibilityFocusBlockType::BlockSubtree
+    );
+
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(annotation(AccessibilityFocusBlockType::None).into())
+        .unwrap();
+    let box_size = Constraints::tight(Size::new(100., 100.));
+    for block in [
+        AccessibilityFocusBlockType::None,
+        AccessibilityFocusBlockType::BlockSubtree,
+        AccessibilityFocusBlockType::None,
+    ] {
+        tree.update(root, annotation(block).into()).unwrap();
+        tree.layout(box_size).unwrap();
+        tree.update_semantics();
+        assert_eq!(
+            tree.semantics().is_empty(),
+            block == AccessibilityFocusBlockType::None
+        );
+        if block != AccessibilityFocusBlockType::None {
+            let [id] = tree.semantics().roots() else {
+                panic!("the annotation creates one semantic boundary");
+            };
+            let state = &tree.semantics().node(*id).unwrap().state;
+            assert_eq!(state.accessibility_focus_block_type, block);
+            assert!(!state.focusable);
+        }
+    }
+}

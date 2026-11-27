@@ -45,3 +45,12 @@ runtime's logical point dispatch; it does not imply a separate paint-order
 API in every native projection, or change special synthetic pane grouping.
 The 19 selected regressions passed. This is an authored comparison and
 adds no original registration credit.
+
+## Default focus blocking is not an annotation
+
+Pinned `semantics_test.dart:1064` passed. A blank native annotation
+and one explicitly assigned the default focus-block value both
+produce no semantics node. Switching to BlockSubtree records the
+new value and creates one nonfocusable annotation; restoring None
+removes it. The native fixture uses the retained tree rather than
+only checking an enum default. Two direct and 24 adjacent cases pass.
