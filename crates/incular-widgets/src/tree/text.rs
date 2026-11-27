@@ -1015,10 +1015,18 @@ impl WidgetTree {
         let mask = field.obscure_text.then_some(field.obscuring_character);
         let local = self
             .render_world_transform(render)
-            .inverse_transform_point(point)
-            .unwrap_or(point);
+            .inverse_transform_point(point)?;
         let x = local.x - padding.left + scroll.x;
         let y = local.y - if multiline { padding.top } else { 0. } + scroll.y;
+        if !x.is_finite()
+            || !y.is_finite()
+            || layout.as_ref().is_some_and(|layout| {
+                let height = layout.metrics().line_height;
+                !height.is_finite() || height <= 0.
+            })
+        {
+            return None;
+        }
         let (index, affinity) =
             layout
                 .as_ref()
@@ -1035,6 +1043,36 @@ impl WidgetTree {
             text_field_source_offset(&field.controller, index, affinity, mask),
             affinity,
         ))
+    }
+
+    /// Snaps a selection-handle drag to whole lines in the editable's live
+    /// local coordinate system, then returns the projected global Y. An
+    /// unmeasurable viewport yields no update, not a synthetic offset.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn editable_handle_drag_y(
+        &self,
+        id: ElementId,
+        pointer: Offset,
+        previous_global_y: f32,
+    ) -> Option<f32> {
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let line_height = node.field_layout()?.metrics().line_height;
+        if !line_height.is_finite() || line_height <= 0. {
+            return None;
+        }
+        let transform = self.render_world_transform(render);
+        let inverse = transform.inverse()?;
+        let pointer = inverse.transform_point(pointer);
+        let previous = inverse.transform_point(Offset::new(0., previous_global_y));
+        if !pointer.x.is_finite() || !pointer.y.is_finite() || !previous.y.is_finite() {
+            return None;
+        }
+        let lines = ((pointer.y - previous.y) / line_height).trunc();
+        let local = Offset::new(0., previous.y + lines * line_height);
+        let global_y = transform.transform_point(local).y;
+        global_y.is_finite().then_some(global_y)
     }
 
     /// Replaces a field's selection as a pointer gesture would: the caret

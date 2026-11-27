@@ -3487,3 +3487,5 @@ packages/flutter/test/widgets/mouse_region_test.dart	1513	Changing MouseRegion's
 packages/flutter/test/widgets/mouse_region_test.dart	1609	Changing MouseRegion.opaque is effective and repaints	paired-match	upstream-mouse-region-local-motion.md#callback-changes-and-paint-ordering
 packages/flutter/test/rendering/editable_test.dart	872	getEndpointsForSelection handles empty characters	paired-match	upstream-editable-selection-endpoints.md
 packages/flutter/test/rendering/editable_test.dart	891	TextSelectionPoint can compare	paired-match	upstream-editable-selection-endpoints.md
+packages/flutter/test/widgets/text_selection_test.dart	1275	dragging selection handle does not crash when RenderObject is degenerate	paired-match	upstream-selection-handle-degenerate.md
+packages/flutter/test/widgets/text_selection_test.dart	1359	dragging selection handle does not crash when layout is degenerate (preferredLineHeight == 0)	paired-match	upstream-selection-handle-degenerate.md

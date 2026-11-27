@@ -596,3 +596,212 @@ fn dragging_rtl_start_artwork_moves_the_start_and_keeps_the_other_endpoint() {
     );
     assert_eq!(controller.selection(), TextSelection::new(0, before.extent));
 }
+
+fn drag_through_unmeasurable_editor_geometry(transform_collapses: bool) {
+    use incular_core::Transform as Affine;
+    use incular_text::{TextAffinity, TextScaler, TextStyle, register_application_font_as};
+    use incular_widgets::{Alignment, Center, FocusNode, Transform};
+
+    let text = "The quick fox jumps over the fence.";
+    let controller = TextEditingController::with_text(text);
+    let focus = FocusNode::new();
+    let mut style = TextStyle::new().font_size(14.).height(Some(1.));
+    if let Some(path) = std::env::var_os("INCULAR_FLUTTER_AHEM_PATH") {
+        let family = "Drag degeneracy pinned Ahem";
+        register_application_font_as(family, std::fs::read(path).unwrap());
+        style = style.font_family(family);
+    }
+    let scene = |scale_y, font_scale| {
+        let field = EditableText::new(controller.clone())
+            .focus_node(focus.clone())
+            .text_direction(TextDirection::Ltr)
+            .style(style.clone())
+            .text_scaler(TextScaler::linear(font_scale))
+            .max_lines(None)
+            .selection_handles_builder(|_, _| SizedBox::shrink().into());
+        let child = SizedBox::new().width(300.).height(200.).child(field);
+        Center::new(
+            Transform::new(
+                Affine::from_coefficients([1., 0., 0., scale_y, 0., 0.]),
+                child,
+            )
+            .alignment(Alignment::CENTER),
+        )
+        .into()
+    };
+    let mut runtime = Runtime::new(scene(1., 1.)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let start = Instant::now();
+    focus.request_focus();
+    runtime.run_frame_at(bounds, start).unwrap();
+    let field = runtime.focused_element().unwrap();
+    let root = runtime.tree().root().unwrap();
+    let initial = TextSelection::new(14, 19);
+    controller.set_selection(initial);
+    runtime.run_frame_at(bounds, start).unwrap();
+    let tree = runtime.tree();
+    tree.text_field_selection_handles(field)
+        .unwrap()
+        .show(tree.text_field_selection_handle_geometry(field).unwrap());
+    runtime.run_frame_at(bounds, start).unwrap();
+    let end_handle = shown_handles(&runtime).unwrap().end.unwrap();
+    let handle = knob_centre(end_handle);
+
+    let send = |runtime: &mut Runtime, phase, offset, ms| {
+        pointer(
+            runtime,
+            phase,
+            handle + Offset::new(offset, 0.),
+            PointerDeviceKind::Touch,
+            start + Duration::from_millis(ms),
+        );
+    };
+    send(&mut runtime, PointerPhase::Down, 0., 10);
+    send(&mut runtime, PointerPhase::Move, 20., 30);
+    let measured = controller.selection();
+    assert_eq!(measured.base, initial.base);
+    assert!(
+        measured.extent > initial.extent,
+        "valid drag actually extends the handle"
+    );
+
+    let degenerate = if transform_collapses {
+        scene(1e-310, 1.)
+    } else {
+        scene(1., 0.)
+    };
+    runtime.schedule_update(root, degenerate).unwrap();
+    runtime
+        .run_frame_at(bounds, start + Duration::from_millis(40))
+        .unwrap();
+    if !transform_collapses {
+        let collapsed = runtime
+            .tree()
+            .editable_selection_endpoints(
+                field,
+                TextSelection::collapsed(0),
+                TextAffinity::Downstream,
+            )
+            .unwrap();
+        assert_eq!(
+            collapsed[0].point.y, 0.,
+            "zero scaled line height reaches actual layout"
+        );
+    }
+    assert_eq!(
+        runtime
+            .tree()
+            .text_field_position_at(field, handle + Offset::new(50., 0.)),
+        None
+    );
+    send(&mut runtime, PointerPhase::Move, 50., 55);
+    send(&mut runtime, PointerPhase::Move, 70., 65);
+    assert_eq!(controller.selection(), measured);
+    assert!(focus.has_primary_focus());
+    assert_eq!(runtime.focused_element(), Some(field));
+
+    runtime.schedule_update(root, scene(1., 1.)).unwrap();
+    runtime
+        .run_frame_at(bounds, start + Duration::from_millis(80))
+        .unwrap();
+    send(&mut runtime, PointerPhase::Move, -30., 100);
+    send(&mut runtime, PointerPhase::Up, -30., 115);
+    runtime
+        .run_frame_at(bounds, start + Duration::from_millis(120))
+        .unwrap();
+    let recovered = controller.selection();
+    assert_eq!(recovered.base, initial.base);
+    assert!(recovered.extent > initial.base && recovered.extent < measured.extent);
+    assert_eq!(controller.text(), text);
+    assert!(focus.has_primary_focus());
+}
+
+#[test]
+fn subnormal_editor_transform_does_not_corrupt_an_in_flight_handle_drag() {
+    drag_through_unmeasurable_editor_geometry(true);
+}
+
+#[test]
+fn zero_line_height_does_not_corrupt_an_in_flight_handle_drag() {
+    drag_through_unmeasurable_editor_geometry(false);
+}
+
+#[test]
+fn a_live_two_x_y_transform_doubles_the_global_line_jump_distance() {
+    use incular_core::Transform as Affine;
+    use incular_text::{TextAffinity, TextStyle};
+    use incular_widgets::{Center, FocusNode, Transform};
+
+    let text = "0123456789\n0123456789\n0123456789";
+    let controller = TextEditingController::with_text(text);
+    let focus = FocusNode::new();
+    let scene = |scale_y, pivot| {
+        let editor = EditableText::new(controller.clone())
+            .focus_node(focus.clone())
+            .text_direction(TextDirection::Ltr)
+            .style(TextStyle::new().font_size(14.).height(Some(1.)))
+            .max_lines(None)
+            .selection_handles_builder(|_, _| SizedBox::shrink().into());
+        let field = SizedBox::new().width(300.).height(200.).child(editor);
+        let affine = Affine::from_coefficients([1., 0., 0., scale_y, 0., (1. - scale_y) * pivot]);
+        Center::new(Transform::new(affine, field)).into()
+    };
+    let mut runtime = Runtime::new(scene(1., 0.)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    let start = Instant::now();
+    focus.request_focus();
+    runtime.run_frame_at(constraints, start).unwrap();
+    controller.set_selection(TextSelection::new(2, 7));
+    runtime.run_frame_at(constraints, start).unwrap();
+    let field = runtime.focused_element().unwrap();
+    let root = runtime.tree().root().unwrap();
+    let tree = runtime.tree();
+    let points = tree
+        .editable_selection_endpoints(field, TextSelection::collapsed(0), TextAffinity::Downstream)
+        .unwrap();
+    let row = points[0].point.y;
+    assert!(row > 0. && row.is_finite());
+    tree.text_field_selection_handles(field)
+        .unwrap()
+        .show(tree.text_field_selection_handle_geometry(field).unwrap());
+    runtime.run_frame_at(constraints, start).unwrap();
+    let end_handle = shown_handles(&runtime).unwrap().end.unwrap();
+    let handle = knob_centre(end_handle);
+    let origin_y = runtime.tree().element_bounds(field).unwrap().origin.y;
+    let pivot = f64::from(end_handle.anchor.y - origin_y);
+    let send = |runtime: &mut Runtime, phase, x, y, ms| {
+        pointer(
+            runtime,
+            phase,
+            handle + Offset::new(x, y),
+            PointerDeviceKind::Touch,
+            start + Duration::from_millis(ms),
+        );
+    };
+    send(&mut runtime, PointerPhase::Down, 0., 0., 10);
+    send(&mut runtime, PointerPhase::Move, 20., 0., 30);
+    runtime.schedule_update(root, scene(2., pivot)).unwrap();
+    runtime
+        .run_frame_at(constraints, start + Duration::from_millis(40))
+        .unwrap();
+
+    // The first move would cross one old unscaled line; it must not yet
+    // move onto the second line in the doubled editor.
+    send(&mut runtime, PointerPhase::Move, 0., 1.4 * row, 55);
+    let first = controller.selection();
+    assert_eq!(first.base, 2);
+    assert!((3..=10).contains(&first.extent), "first row: {first:?}");
+    send(&mut runtime, PointerPhase::Move, 0., 2.1 * row, 65);
+    let second = controller.selection();
+    assert_eq!(second.base, 2);
+    assert_eq!(
+        second.extent,
+        first.extent + 11,
+        "same column one row later"
+    );
+    send(&mut runtime, PointerPhase::Up, 0., 2.1 * row, 80);
+    assert!(focus.has_primary_focus());
+    assert_eq!(runtime.focused_element(), Some(field));
+}

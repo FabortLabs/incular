@@ -1463,7 +1463,6 @@ pub(crate) struct TextHandleDrag {
     down_position: Offset,
     /// The press landed on the handle's drawn knob, where its tap lives.
     on_knob: bool,
-    line_height: f32,
     /// The contact's global y, snapped to whole lines
     /// (`_startHandleDragPosition` / `_endHandleDragPosition`).
     drag_y: f32,
@@ -1475,18 +1474,6 @@ pub(crate) struct TextHandleDrag {
     start_selection: TextSelection,
     /// Whether the press moved past touch slop, so it is a drag and not a tap.
     started: bool,
-}
-
-/// `_getHandleDy`: the handle's y after a drag from `handle_dy` to `drag_dy`.
-/// The handle jumps whole lines, once the contact has moved a full line.
-fn handle_dy(drag_dy: f32, handle_dy: f32, line_height: f32) -> f32 {
-    if line_height <= 0.0 {
-        return handle_dy;
-    }
-    let distance = drag_dy - handle_dy;
-    let direction = if distance < 0.0 { -1.0 } else { 1.0 };
-    let lines = direction * (distance.abs() / line_height).floor();
-    handle_dy + lines * line_height
 }
 
 impl Runtime {
@@ -1540,7 +1527,6 @@ impl Runtime {
             handle,
             down_position: position,
             on_knob: geometry.rect().contains(position),
-            line_height: geometry.line_height,
             drag_y: position.y,
             target: centre - position.y,
             start_selection,
@@ -1568,10 +1554,11 @@ impl Runtime {
                 menu.hide();
             }
         }
-        let now = self.input_now();
-        drag.drag_y = handle_dy(position.y, drag.drag_y, drag.line_height);
-        let target = Offset::new(position.x, drag.drag_y + drag.target);
-        self.text_handle_select(&drag, target, now);
+        if let Some(next_y) = self.tree.editable_handle_drag_y(drag.field, position, drag.drag_y) {
+            drag.drag_y = next_y;
+            let target = Offset::new(position.x, drag.drag_y + drag.target);
+            self.text_handle_select(&drag, target, self.input_now());
+        }
         self.text_handle_drag = Some(drag);
         self.frame_requested = true;
     }
