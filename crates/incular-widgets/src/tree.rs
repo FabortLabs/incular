@@ -1169,7 +1169,7 @@ struct SemanticBuild {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RetainedGestureKind {
     Pointer,
-    SharedPan,
+    SharedDrag(incular_gestures::DragAxis),
     Scale,
     /// Flutter `ForcePressGestureRecognizer`, which `GestureDetector`
     /// builds for its `onForcePress*` callbacks.
@@ -1382,7 +1382,10 @@ struct InputState {
     active_gestures: HashMap<GestureArenaKey, ActiveGesture>,
     active_trackpad_gestures: HashMap<GestureArenaKey, ActiveTrackpadGesture>,
     active_pan_zoom: HashMap<GestureArenaKey, pan_zoom::ActivePanZoom>,
-    shared_pans: HashMap<(u64, ElementId), incular_gestures::MonodragGestureRecognizer>,
+    shared_drags: HashMap<
+        (u64, ElementId, incular_gestures::DragAxis),
+        incular_gestures::MonodragGestureRecognizer,
+    >,
     raw_recognizers: HashMap<ElementId, HashMap<TypeId, Box<dyn GestureRecognizer>>>,
     raw_gesture_streams: HashMap<GestureArenaKey, ActiveRawGesture>,
     raw_pointer_routes: HashMap<GestureArenaKey, Vec<RawPointerRouteEntry>>,

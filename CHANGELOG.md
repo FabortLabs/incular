@@ -444,6 +444,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Single-axis drag detectors keep one gesture across multiple contacts
+  instead of restarting, ending, or canceling on the wrong finger.
+
 - Nested widget transforms route pointer hits to the mapped child instead
   of clipping them at an intermediate layout rectangle.
 

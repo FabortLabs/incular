@@ -2799,3 +2799,7 @@ packages/flutter/test/gestures/drag_test.dart	1951	A primary pan recognizer does
 packages/flutter/test/gestures/drag_test.dart	1965	A primary pan recognizer forms competition with a primary tap recognizer	paired-match	upstream-competing-tap-lifecycle.md#button-specific-arena-competition
 packages/flutter/test/gestures/drag_test.dart	1982	A secondary drag should not trigger primary	paired-match	upstream-competing-tap-lifecycle.md#button-specific-arena-competition
 packages/flutter/test/gestures/drag_test.dart	2018	A secondary drag should not trigger primary	paired-match	upstream-competing-tap-lifecycle.md#button-specific-arena-competition
+packages/flutter/test/gestures/drag_test.dart	2056	On multiple pointers, DragGestureRecognizer is canceled when all pointers are canceled (FIFO)	paired-match	upstream-multi-contact-drag.md
+packages/flutter/test/gestures/drag_test.dart	2120	On multiple pointers, DragGestureRecognizer is canceled when all pointers are canceled (FILO)	paired-match	upstream-multi-contact-drag.md
+packages/flutter/test/gestures/drag_test.dart	2185	On multiple pointers, DragGestureRecognizer is accepted when the first pointer is accepted	paired-match	upstream-multi-contact-drag.md
+packages/flutter/test/gestures/drag_test.dart	2253	On multiple pointers, canceled pointers (due to up) do not prevent later pointers getting accepted	paired-match	upstream-multi-contact-drag.md

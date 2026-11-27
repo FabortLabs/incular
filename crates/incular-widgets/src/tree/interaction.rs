@@ -920,7 +920,8 @@ impl WidgetTree {
                 yields_taps: inner_button.is_some(),
             };
             let mut force_press_decisions = Vec::new();
-            let mut eager_pans = Vec::new();
+            let mut eager_drags = Vec::new();
+            let mut suppressed_tap_contender = false;
             for candidate in elements {
                 let Some(callbacks) = self.gesture_callbacks(candidate) else {
                     continue;
@@ -928,15 +929,17 @@ impl WidgetTree {
                 if !callbacks.allows_pointer_device(kind) {
                     continue;
                 }
-                let shared_pan = primary && self.uses_shared_pan(candidate, &callbacks);
+                let shared_drag = primary
+                    .then(|| self.shared_application_drag(candidate, &callbacks))
+                    .flatten();
                 // A press competes only with the callbacks of its own button.
                 let mut live_tap_buttons = callbacks.on_any_tap.is_some().then_some(buttons);
                 let Some(mut callbacks) = callbacks.for_button_mask(buttons) else {
                     continue;
                 };
-                let owns_tap = callbacks.has_tap_callbacks()
-                    && inner_button.is_none()
-                    && self.register_mounted_tap_contact(candidate, key);
+                let tracks_tap = callbacks.has_tap_callbacks() && inner_button.is_none();
+                let owns_tap = tracks_tap && self.register_mounted_tap_contact(candidate, key);
+                suppressed_tap_contender |= tracks_tap && !owns_tap;
                 if !owns_tap {
                     callbacks.on_tap = None;
                     callbacks.on_tap_down = None;
@@ -957,20 +960,21 @@ impl WidgetTree {
                         .deferred_single_taps
                         .retain(|tap| tap.owner != candidate);
                 }
-                if shared_pan {
+                if let Some(binding) = shared_drag {
                     if buttons != 0 && buttons != incular_core::PRIMARY_POINTER_BUTTON {
                         continue;
                     }
                     let member = self.input.gesture_arena.add(key, false);
-                    let raw = raw_for_shared_pan(event, device, kind, buttons, synthesized);
-                    let pan = self.shared_pan(window, candidate, &callbacks);
-                    if pan.observe_raw(raw) && pan.wants_acceptance() {
-                        eager_pans.push(member);
+                    let raw = raw_for_shared_drag(event, device, kind, buttons, synthesized);
+                    let axis = binding.axis;
+                    let drag = self.shared_drag(window, candidate, binding, callbacks.drag_start_behavior);
+                    if drag.observe_raw(raw) && drag.wants_acceptance() {
+                        eager_drags.push(member);
                     }
                     active.members.push(ActiveGestureMember {
                         element: candidate,
                         member,
-                        kind: RetainedGestureKind::SharedPan,
+                        kind: RetainedGestureKind::SharedDrag(axis),
                         recognizer: None,
                         force_press: None,
                         live_tap_buttons: None,
@@ -1316,10 +1320,16 @@ impl WidgetTree {
                 .scroll_brackets
                 .get(&key)
                 .is_some_and(|bracket| !bracket.outer.is_empty());
-            let sole_press = active.members.len() == 1 && !active.yields_taps && !nested_scroll;
+            // Flutter's primary tap tracks later contacts without delivering
+            // tap callbacks for them. Their presence still prevents a drag
+            // from winning an uncontested press before it crosses slop.
+            let sole_press = active.members.len() == 1
+                && !active.yields_taps
+                && !nested_scroll
+                && !suppressed_tap_contender;
             self.input.active_gestures.insert(key, active);
             self.input.pointer_captures.insert(key, element);
-            for member in eager_pans {
+            for member in eager_drags {
                 let entries = self.input.gesture_arena.accept(key, member);
                 self.apply_arena_entries(key, entries);
             }
@@ -1451,18 +1461,18 @@ impl WidgetTree {
                             | GestureDecision::Cancelled => {}
                         }
                     }
-                    RetainedGestureKind::SharedPan => {
+                    RetainedGestureKind::SharedDrag(axis) => {
                         if matches!(
                             disposition, GestureDisposition::Rejected | GestureDisposition::Cancelled
                         ) {
                             continue;
                         }
-                        let raw = raw_for_shared_pan(event, device, kind, buttons, synthesized);
-                        if let Some(pan) = self.input.shared_pans.get_mut(&(window, candidate.element))
+                        let raw = raw_for_shared_drag(event, device, kind, buttons, synthesized);
+                        if let Some(pan) = self.input.shared_drags.get_mut(&(window, candidate.element, axis))
                             && pan.observe_raw(raw)
                             && pan.wants_acceptance()
                         {
-                            accepts.push(PendingAccept::SharedPan(candidate.member));
+                            accepts.push(PendingAccept::SharedDrag(candidate.member));
                         }
                     }
                     RetainedGestureKind::ForcePress => {
@@ -1498,7 +1508,7 @@ impl WidgetTree {
                         // this pending scale member. Do not let its contact
                         // restart a previously won scale before that loss.
                         if disposition == GestureDisposition::Pending
-                            && matches!(accepts.first(), Some(PendingAccept::Pointer(..) | PendingAccept::SharedPan(..)))
+                            && matches!(accepts.first(), Some(PendingAccept::Pointer(..) | PendingAccept::SharedDrag(..)))
                             && !dispositions.iter().any(|entry| {
                                 entry.disposition == GestureDisposition::Accepted
                             })
@@ -1556,7 +1566,7 @@ impl WidgetTree {
                         callbacks.push((member, action));
                     }
                 }
-                PendingAccept::SharedPan(member) => {
+                PendingAccept::SharedDrag(member) => {
                     let entries = self.input.gesture_arena.accept(key, member);
                     self.apply_arena_entries(key, entries);
                 }
@@ -2276,7 +2286,7 @@ impl WidgetTree {
                 .recognizer
                 .as_ref()
                 .is_some_and(|recognizer| accept_tap || recognizer.can_accept_on_press()),
-            RetainedGestureKind::Scale | RetainedGestureKind::SharedPan => true,
+            RetainedGestureKind::Scale | RetainedGestureKind::SharedDrag(_) => true,
             // The sole member wins at the arena close; a force press that
             // already claimed the arena on the press needs no second accept.
             RetainedGestureKind::ForcePress => {
@@ -2318,7 +2328,7 @@ impl WidgetTree {
                     self.dispatch_gesture_action(key, member, action);
                 }
             }
-            RetainedGestureKind::SharedPan => {} // accepted by apply_arena_entries
+            RetainedGestureKind::SharedDrag(_) => {} // accepted by apply_arena_entries
             RetainedGestureKind::Scale => {
                 // Flutter `ScaleGestureRecognizer.acceptGesture` reports
                 // only `onStart` when the arena resolves at the press; the
@@ -2406,7 +2416,7 @@ impl WidgetTree {
             return;
         };
         let action = match candidate.kind {
-            RetainedGestureKind::SharedPan => None,
+            RetainedGestureKind::SharedDrag(_) => None,
             RetainedGestureKind::Pointer => {
                 let Some(recognizer) = candidate
                     .recognizer
@@ -2458,8 +2468,8 @@ impl WidgetTree {
                 let Some(candidate) = active.members.iter_mut()
                     .find(|candidate| candidate.member == entry.member)
                 else { continue; };
-                if candidate.kind == RetainedGestureKind::SharedPan
-                    && let Some(pan) = self.input.shared_pans.get_mut(&(key.window, candidate.element))
+                if let RetainedGestureKind::SharedDrag(axis) = candidate.kind
+                    && let Some(pan) = self.input.shared_drags.get_mut(&(key.window, candidate.element, axis))
                 {
                     match entry.disposition {
                         GestureDisposition::Accepted => pan.accept_stream(key),
@@ -2945,7 +2955,7 @@ impl WidgetTree {
         }
         self.input.active_gestures.remove(&key);
         self.input.pointer_captures.remove(&key);
-        self.prune_shared_pans();
+        self.prune_shared_drags();
         self.remove_scale_recognizers_when_idle();
     }
 
@@ -4666,7 +4676,7 @@ fn adjust_for_scroll_start_threshold(
     }
 }
 
-fn raw_for_shared_pan(
+fn raw_for_shared_drag(
     event: PointerEvent,
     device: u64,
     kind: crate::raw_input::PointerDeviceKind,
@@ -4686,7 +4696,7 @@ fn raw_for_shared_pan(
 
 /// A recognizer claim gathered while routing one pointer event.
 enum PendingAccept {
-    SharedPan(GestureArenaMember),
+    SharedDrag(GestureArenaMember),
     Pointer(GestureArenaMember, GestureAction),
     /// The scale passed slop or an accepted scale is claiming new contacts.
     Scale(ElementId, Option<incular_gestures::ScaleUpdateDetails>),

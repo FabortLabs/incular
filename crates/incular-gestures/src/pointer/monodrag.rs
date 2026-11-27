@@ -7,7 +7,7 @@ use crate::{
 };
 
 /// The movement a mono-drag recognizer accepts.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DragAxis {
     Horizontal,
     Vertical,

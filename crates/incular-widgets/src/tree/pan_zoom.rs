@@ -8,7 +8,7 @@ use incular_gestures::{
 
 enum Recognizer {
     Scale,
-    SharedPan,
+    SharedDrag(TrackpadDragAxis),
     Drag(Box<TrackpadDragRecognizer>),
 }
 
@@ -35,11 +35,60 @@ impl ActivePanZoom {
     }
 }
 
+pub(super) struct ApplicationDragBinding {
+    pub(super) axis: TrackpadDragAxis,
+    callbacks: DragCallbacks,
+    down: Option<Rc<dyn Fn(incular_gestures::DragDownDetails)>>,
+    cancel: Option<Rc<dyn Fn()>>,
+}
+
+impl ApplicationDragBinding {
+    fn take_axis(callbacks: &mut GestureCallbacks, axis: TrackpadDragAxis) -> Self {
+        let (down, start, update, end, cancel) = match axis {
+            TrackpadDragAxis::Horizontal => (
+                callbacks.on_horizontal_drag_down.take(),
+                callbacks.on_horizontal_drag_start.take(),
+                callbacks.on_horizontal_drag_update.take(),
+                callbacks.on_horizontal_drag_end.take(),
+                callbacks.on_horizontal_drag_cancel.take(),
+            ),
+            TrackpadDragAxis::Vertical => (
+                callbacks.on_vertical_drag_down.take(),
+                callbacks.on_vertical_drag_start.take(),
+                callbacks.on_vertical_drag_update.take(),
+                callbacks.on_vertical_drag_end.take(),
+                callbacks.on_vertical_drag_cancel.take(),
+            ),
+            TrackpadDragAxis::Pan => (
+                callbacks.on_pan_down.take(),
+                callbacks.on_pan_start.take(),
+                callbacks.on_pan_update.take(),
+                callbacks.on_pan_end.take(),
+                callbacks.on_pan_cancel.take(),
+            ),
+        };
+        Self {
+            axis,
+            callbacks: DragCallbacks {
+                on_start: start,
+                on_update: update,
+                on_end: end,
+            },
+            down,
+            cancel,
+        }
+    }
+}
+
 impl WidgetTree {
-    /// Pure application pan detectors can use the same recognizer on both
-    /// paths. Special drag-and-drop and scroll drivers own their raw brackets
-    /// and must continue to route via their existing gesture actions.
-    pub(super) fn uses_shared_pan(&self, element: ElementId, callbacks: &GestureCallbacks) -> bool {
+    /// A pure application drag shares one recognizer across its contacts
+    /// and across physical and absolute trackpad input. Mixed detectors,
+    /// drag-and-drop and scrolling keep their existing specialized routes.
+    pub(super) fn shared_application_drag(
+        &self,
+        element: ElementId,
+        callbacks: &GestureCallbacks,
+    ) -> Option<ApplicationDragBinding> {
         if !matches!(
             self.elements
                 .get(element.0)
@@ -51,59 +100,59 @@ impl WidgetTree {
             || callbacks.on_scale_end.is_some()
             || callbacks.has_force_press()
         {
-            return false;
+            return None;
         }
-        if callbacks.on_pan_down.is_none()
-            && callbacks.on_pan_start.is_none()
-            && callbacks.on_pan_update.is_none()
-            && callbacks.on_pan_end.is_none()
-            && callbacks.on_pan_cancel.is_none()
-        {
-            return false;
-        }
-        let mut other = callbacks.clone();
-        other.on_pan_down = None;
-        other.on_pan_start = None;
-        other.on_pan_update = None;
-        other.on_pan_end = None;
-        other.on_pan_cancel = None;
-        !other.has_pointer_recognizer()
+        let horizontal = callbacks.on_horizontal_drag_down.is_some()
+            || callbacks.on_horizontal_drag_start.is_some()
+            || callbacks.on_horizontal_drag_update.is_some()
+            || callbacks.on_horizontal_drag_end.is_some()
+            || callbacks.on_horizontal_drag_cancel.is_some();
+        let vertical = callbacks.on_vertical_drag_down.is_some()
+            || callbacks.on_vertical_drag_start.is_some()
+            || callbacks.on_vertical_drag_update.is_some()
+            || callbacks.on_vertical_drag_end.is_some()
+            || callbacks.on_vertical_drag_cancel.is_some();
+        let pan = callbacks.on_pan_down.is_some()
+            || callbacks.on_pan_start.is_some()
+            || callbacks.on_pan_update.is_some()
+            || callbacks.on_pan_end.is_some()
+            || callbacks.on_pan_cancel.is_some();
+        let axis = match (horizontal, vertical, pan) {
+            (true, false, false) => TrackpadDragAxis::Horizontal,
+            (false, true, false) => TrackpadDragAxis::Vertical,
+            (false, false, true) => TrackpadDragAxis::Pan,
+            _ => return None,
+        };
+        let mut remaining = callbacks.clone();
+        let binding = ApplicationDragBinding::take_axis(&mut remaining, axis);
+        (!remaining.has_pointer_recognizer()).then_some(binding)
     }
 
-    pub(super) fn shared_pan(
+    pub(super) fn shared_drag(
         &mut self,
         window: u64,
         element: ElementId,
-        callbacks: &GestureCallbacks,
+        binding: ApplicationDragBinding,
+        behavior: incular_core::DragStartBehavior,
     ) -> &mut incular_gestures::MonodragGestureRecognizer {
         let transform = self
             .render_id(element)
             .and_then(|render| self.pointer_world_to_local(render));
         let settings = self.gesture_settings_at(element);
-        let pan = self
+        let drag = self
             .input
-            .shared_pans
-            .entry((window, element))
+            .shared_drags
+            .entry((window, element, binding.axis))
             .or_insert_with(|| {
-                TrackpadDragRecognizer::new(
-                    TrackpadDragAxis::Pan,
-                    DragCallbacks {
-                        on_start: callbacks.on_pan_start.clone(),
-                        on_update: callbacks.on_pan_update.clone(),
-                        on_end: callbacks.on_pan_end.clone(),
-                    },
-                )
-                .with_pending_callbacks(
-                    callbacks.on_pan_down.clone(),
-                    callbacks.on_pan_cancel.clone(),
-                )
-                .with_drag_start_behavior(callbacks.drag_start_behavior)
+                TrackpadDragRecognizer::new(binding.axis, binding.callbacks)
+                    .with_pending_callbacks(binding.down, binding.cancel)
+                    .with_drag_start_behavior(behavior)
             });
-        pan.set_gesture_settings(settings);
+        drag.set_gesture_settings(settings);
         if let Some(transform) = transform {
-            pan.set_local_transform(transform);
+            drag.set_local_transform(transform);
         }
-        pan
+        drag
     }
 
     /// Routes one absolute trackpad stream to mounted scale and drag
@@ -170,11 +219,11 @@ impl WidgetTree {
                         scale.dispatch(details);
                     }
                 }
-                Recognizer::SharedPan => {
+                Recognizer::SharedDrag(axis) => {
                     let wants = self
                         .input
-                        .shared_pans
-                        .get_mut(&(window, element))
+                        .shared_drags
+                        .get_mut(&(window, element, *axis))
                         .is_some_and(|pan| pan.observe(event) && pan.wants_acceptance());
                     if wants {
                         let entries = self.input.gesture_arena.accept(key, id);
@@ -215,12 +264,13 @@ impl WidgetTree {
                 continue;
             };
             let admits_drag = callbacks.allows_pointer_device(PointerDeviceKind::Trackpad);
-            if admits_drag && self.uses_shared_pan(element, &callbacks) {
-                self.shared_pan(key.window, element, &callbacks);
+            if admits_drag && let Some(binding) = self.shared_application_drag(element, &callbacks) {
+                let axis = binding.axis;
+                self.shared_drag(key.window, element, binding, callbacks.drag_start_behavior);
                 members.push(Member {
                     element,
                     id: self.input.gesture_arena.add(key, false),
-                    recognizer: Recognizer::SharedPan,
+                    recognizer: Recognizer::SharedDrag(axis),
                 });
                 continue;
             }
@@ -359,11 +409,11 @@ impl WidgetTree {
                 continue;
             };
             match (&mut member.recognizer, entry.disposition) {
-                (Recognizer::SharedPan, disposition) => {
+                (Recognizer::SharedDrag(axis), disposition) => {
                     if let Some(pan) = self
                         .input
-                        .shared_pans
-                        .get_mut(&(key.window, member.element))
+                        .shared_drags
+                        .get_mut(&(key.window, member.element, *axis))
                     {
                         match disposition {
                             GestureDisposition::Accepted => pan.accept_stream(key),
@@ -404,11 +454,11 @@ impl WidgetTree {
         let entries = self.input.gesture_arena.cancel(key);
         self.apply_pan_zoom_entries(key, &entries, false);
         self.input.active_pan_zoom.remove(&key);
-        self.prune_shared_pans();
+        self.prune_shared_drags();
         self.remove_scale_recognizers_when_idle();
     }
 
-    pub(super) fn prune_shared_pans(&mut self) {
-        self.input.shared_pans.retain(|_, pan| pan.is_tracking());
+    pub(super) fn prune_shared_drags(&mut self) {
+        self.input.shared_drags.retain(|_, pan| pan.is_tracking());
     }
 }
