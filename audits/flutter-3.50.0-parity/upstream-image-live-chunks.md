@@ -18,3 +18,16 @@ The two MultiFrame originals are partial: progress delivery matches
 the pending native source, but its one-frame stream does not stand in
 for Flutter's animated decoder. All 20 focused native tests and the
 façade check without default features passed.
+
+## Grouped listener identity
+
+Exact pinned `painting/image_stream_test.dart:845` passed. The
+native fixture reproduces all eight equality and hash comparisons:
+image callback identity, optional progress, and optional error
+callback identity all matter. The authored pinned probe also sends
+progress followed by an error through a single listener. Its native
+counterpart observes exactly that pair and verifies that dropping
+the group unregisters both kinds of callbacks. Already-ready groups
+receive the same decoded image synchronously as an `ImageInfo`.
+The owned API still models one provider resolution; animation
+playback is not claimed by this registration.

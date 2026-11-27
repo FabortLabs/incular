@@ -132,9 +132,9 @@ pub mod prelude {
     };
     pub use incular_image::{
         AnyImageProvider, AssetBundleImageKey, AssetImage, DecodedImage, ExactAssetImage, FileImage,
-        ImageAssetBundle, ImageCache, ImageCacheDiagnostics, ImageChunkEvent, ImageChunkSubscription, ImageConfiguration,
-        ImageError, ImageHandle, ImageInfo, ImageId, ImageLoadState, ImageProvider, ImageResizeOptions,
-        ImageSource, ImageStream, ImageStreamCompleter, MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy,
+        ImageAssetBundle, ImageCache, ImageCacheDiagnostics, ImageChunkEvent, ImageChunkListener, ImageChunkSubscription, ImageConfiguration,
+        ImageError, ImageErrorListener, ImageHandle, ImageInfo, ImageId, ImageListener, ImageLoadState, ImageProvider, ImageResizeOptions,
+        ImageSource, ImageStream, ImageStreamCompleter, ImageStreamListener, ImageStreamSubscription, MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy,
     };
     pub use incular_navigation::{
         BackDispatchReport, BackDispatcher, BottomSheet, Dialog, HeroController, ModalBarrier,

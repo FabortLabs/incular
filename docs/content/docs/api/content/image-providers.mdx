@@ -85,3 +85,8 @@ Related: [`Image`](/docs/api/content/image).
 Use `listen_chunks` for new progress events without replaying old ones.
 Keep the returned subscription alive; dropping it stops future reports.
 Use `listen_frame` separately for a ready image or error.
+
+Use `ImageStreamListener` with `ImageStream::listen` when one
+subscription should own image, chunk, and error handlers. Cloning
+the descriptor keeps callback identity; dropping the subscription
+drops both frame and progress observation.

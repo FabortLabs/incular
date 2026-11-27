@@ -2867,3 +2867,4 @@ packages/flutter/test/painting/image_stream_test.dart	179	Chunk events of base I
 packages/flutter/test/painting/image_stream_test.dart	207	Chunk events of base ImageStreamCompleter are not buffered before listener registration	paired-match	upstream-image-live-chunks.md
 packages/flutter/test/painting/image_stream_test.dart	235	Chunk events of MultiFrameImageStreamCompleter are delivered	partial-match	upstream-image-live-chunks.md
 packages/flutter/test/painting/image_stream_test.dart	266	Chunk events of MultiFrameImageStreamCompleter are not buffered before listener registration	partial-match	upstream-image-live-chunks.md
+packages/flutter/test/painting/image_stream_test.dart	845	ImageStreamListener hashCode and equals	paired-match	upstream-image-live-chunks.md#grouped-listener-identity
