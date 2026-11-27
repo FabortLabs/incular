@@ -3192,3 +3192,8 @@ packages/flutter/test/services/text_input_test.dart	826	TextInputClient onFocusR
 packages/flutter/test/services/text_input_test.dart	876	TextInputClient performSelectors method is called	partial-match	upstream-text-input-reattach.md#native-editing-selector-batches
 packages/flutter/test/services/text_input_test.dart	849	TextInputClient insertContent method is called	paired-match	upstream-keyboard-content-insertion.md
 packages/flutter/test/widgets/editable_text_test.dart	877	insertContent does not throw and parses data correctly	paired-match	upstream-keyboard-content-insertion.md
+packages/flutter/test/services/text_input_test.dart	1614	equality operator works correctly	paired-match	upstream-text-input-style.md
+packages/flutter/test/services/text_input_test.dart	1629	hashCode works correctly	paired-match	upstream-text-input-style.md
+packages/flutter/test/services/text_input_test.dart	1642	toJson produces expected map	paired-match	upstream-text-input-style.md
+packages/flutter/test/services/text_input_test.dart	1655	toJson handles null values	paired-match	upstream-text-input-style.md
+packages/flutter/test/services/text_input_test.dart	2079	updateStyle reports error when setStyle fails	paired-match	upstream-text-input-style.md

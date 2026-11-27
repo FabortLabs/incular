@@ -28,9 +28,14 @@ mod flutter_inbound_messenger;
 mod flutter_event_channel;
 mod flutter_platform_channel;
 mod flutter_text_input_config;
+mod flutter_text_input_style;
 mod keyboard_inserted_content;
 pub use keyboard_inserted_content::{KeyboardInsertedContent, KeyboardInsertedContentError};
 pub use flutter_text_input_config::FlutterTextInputConfiguration;
+pub use flutter_text_input_style::{
+    FlutterTextInputAlignment, FlutterTextInputStyle, FlutterTextInputStyleSendError,
+    FlutterTextInputWeight, InvalidFlutterTextInputStyleNumber,
+};
 pub mod message_codecs;
 mod operation;
 mod platform_view;
