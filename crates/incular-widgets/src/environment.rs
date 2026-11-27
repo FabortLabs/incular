@@ -164,6 +164,18 @@ impl MediaQuery {
         Self::maybe_orientation_of(context).expect("No MediaQuery widget ancestor found")
     }
 
+    /// Reads only the closest MediaQuery's animation preference.
+    #[must_use]
+    pub fn maybe_disable_animations_of(context: &BuildContext<'_>) -> Option<bool> {
+        context.media_query_disable_animations()
+    }
+
+    #[must_use]
+    #[track_caller]
+    pub fn disable_animations_of(context: &BuildContext<'_>) -> bool {
+        Self::maybe_disable_animations_of(context).expect("No MediaQuery widget ancestor found")
+    }
+
     /// Removes selected safe padding from the nearest media scope.
     #[must_use]
     pub fn remove_padding(child: impl Into<Widget>, edges: MediaQueryEdges) -> Widget {

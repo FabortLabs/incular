@@ -1,4 +1,5 @@
 use incular_core::time::Instant;
+use std::fmt;
 use std::{cell::RefCell, collections::BTreeMap, num::NonZeroUsize, rc::Rc, time::Duration};
 
 use crate::{ImageError, ImageInfo};
@@ -101,6 +102,22 @@ impl State {
 pub struct ImagePlayback {
     state: SharedState,
     request_frame: Rc<dyn Fn()>,
+}
+
+impl PartialEq for ImagePlayback {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.state, &other.state)
+    }
+}
+
+impl Eq for ImagePlayback {}
+
+impl fmt::Debug for ImagePlayback {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ImagePlayback")
+            .finish_non_exhaustive()
+    }
 }
 
 impl ImagePlayback {

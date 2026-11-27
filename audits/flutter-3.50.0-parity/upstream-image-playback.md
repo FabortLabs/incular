@@ -43,3 +43,26 @@ synthetic subimage header borrows encoded bytes, and the decoder need
 not cache any prior full output frames. This is an opt-in decoder
 that can run on a blocking pool; default provider integration remains
 open. Authored fixtures add no original registrations.
+
+## Mounted image timing and reduced motion
+
+Five exact `widgets/image_test.dart` registrations executed. The
+retained runtime tests use the real scheduled playback and decode a
+real WebP for each frame. They verify numbered frame-builder calls,
+the actual image paint commands, and no extra rebuild on an idle
+frame.
+
+| Registration | Retained runtime evidence |
+| --- | --- |
+| 1076 | Builder sees absent → 0 → 1, while render output goes empty → red → blue. |
+| 1220 | TickerMode off freezes the widget while another listener receives two further frames. Re-enabling replays the latest frame synchronously into the same widget state. |
+| 1294 | Scoped reduced motion pauses a mounted image; lifting the setting replays the current frame, then allows the next decode to display. |
+| 1942, 2012 | If either setting starts disabled, the first real frame paints, and subsequent host frames do not rebuild or prefetch another frame. |
+
+The original fixtures use a custom Flutter stream completer.
+`Image::playback` is its native counterpart for an already-resolved
+animation. Each mount owns its subscription and reads the nearest
+MediaQuery animation setting without making unrelated media aspects
+dependencies. Ordinary one-shot providers still pass their focused
+suite. Automatically recognizing animated input in the standard
+providers and supporting other animation containers remain open.

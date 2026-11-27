@@ -192,6 +192,12 @@ impl Image {
         crate::ProviderImage::new(provider)
     }
 
+    /// Displays frames from an already-resolved, possibly animated source.
+    #[must_use]
+    pub fn playback(playback: incular_image::ImagePlayback) -> crate::ProviderImage {
+        crate::ProviderImage::from_playback(playback)
+    }
+
     /// Loads a resolution-aware asset from the closest asset bundle.
     #[must_use]
     pub fn asset(path: impl Into<std::path::PathBuf>) -> crate::ProviderImage {

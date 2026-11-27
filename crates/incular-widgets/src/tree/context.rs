@@ -94,6 +94,8 @@ struct MediaQueryDevicePixelRatio(f64);
 pub(super) struct MediaQueryTextScale(pub(super) f32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct MediaQueryPlatformBrightness(Brightness);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MediaQueryDisableAnimations(bool);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct MediaQueryPadding(EdgeInsets);
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -149,6 +151,7 @@ media_query_aspects! {
     MediaQueryDevicePixelRatio from scale_factor,
     MediaQueryTextScale from text_scale,
     MediaQueryPlatformBrightness from brightness,
+    MediaQueryDisableAnimations from reduced_motion,
     MediaQueryPadding from safe_insets,
     MediaQueryViewPadding from view_padding,
     MediaQueryViewInsets from view_insets,
@@ -593,6 +596,13 @@ impl<'a> BuildContext<'a> {
         self.inner
             .depend::<MediaQueryPlatformBrightness>()
             .map(|value| value.0)
+    }
+
+    /// Flutter's scoped `MediaQuery.disableAnimationsOf`. The window's
+    /// native preference remains available separately via `reduced_motion`.
+    #[must_use]
+    pub fn media_query_disable_animations(&self) -> Option<bool> {
+        self.inner.depend::<MediaQueryDisableAnimations>().map(|value| value.0)
     }
 
     /// Flutter's `MediaQuery.paddingOf`, aspect-scoped.

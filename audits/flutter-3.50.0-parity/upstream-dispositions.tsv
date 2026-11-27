@@ -2880,3 +2880,8 @@ packages/flutter/test/painting/image_stream_test.dart	440	animation wraps back	p
 packages/flutter/test/painting/image_stream_test.dart	638	multiple stream listeners	paired-match	upstream-image-playback.md
 packages/flutter/test/painting/image_stream_test.dart	690	timer is canceled when listeners are removed	paired-match	upstream-image-playback.md
 packages/flutter/test/painting/image_stream_test.dart	728	timeDilation affects animation frame timers	paired-match	upstream-image-playback.md
+packages/flutter/test/widgets/image_test.dart	1076	Image invokes frameBuilder with correct frameNumber argument	paired-match	upstream-image-playback.md#mounted-image-timing-and-reduced-motion
+packages/flutter/test/widgets/image_test.dart	1220	Image state handles enabling and disabling of tickers	paired-match	upstream-image-playback.md#mounted-image-timing-and-reduced-motion
+packages/flutter/test/widgets/image_test.dart	1294	disableAnimations prevents the image from updating	paired-match	upstream-image-playback.md#mounted-image-timing-and-reduced-motion
+packages/flutter/test/widgets/image_test.dart	1942	the first frame is still loaded when disableAnimations is true on first load	paired-match	upstream-image-playback.md#mounted-image-timing-and-reduced-motion
+packages/flutter/test/widgets/image_test.dart	2012	the first frame is still loaded when TickerMode is disabled on first load	paired-match	upstream-image-playback.md#mounted-image-timing-and-reduced-motion

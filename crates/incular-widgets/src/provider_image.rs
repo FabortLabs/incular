@@ -10,7 +10,8 @@ use std::{
 
 use incular_core::Size;
 use incular_image::{
-    AnyImageProvider, ImageChunkEvent, ImageConfiguration, ImageError, ImageHandle, ImageLoadState,
+    AnyImageProvider, ImageChunkEvent, ImageConfiguration, ImageError, ImageHandle, ImageInfo,
+    ImageLoadState, ImagePlayback, ImagePlaybackKeepAlive, ImagePlaybackSubscription,
     ImageProvider, ImageResizeOptions, ImageStream, ResizeImage,
 };
 
@@ -21,9 +22,9 @@ use crate::{
 };
 
 /// Flutter's `ImageFrameBuilder`: wraps the image once per frame. `frame` is
-/// `None` until the first frame is ready and `Some(0)` after it (decoded
-/// images have one frame); `was_synchronously_loaded` is whether the image
-/// was ready when the provider returned it.
+/// `None` until the first frame is ready, then counts delivered frames
+/// from zero. `was_synchronously_loaded` records whether the stream
+/// provided any of those frames synchronously.
 pub type ImageFrameBuilder =
     Rc<dyn for<'a> Fn(&BuildContext<'a>, Widget, Option<u32>, bool) -> Widget>;
 
@@ -51,7 +52,7 @@ pub type ImageErrorBuilder = Rc<dyn for<'a> Fn(&BuildContext<'a>, &ImageError) -
 ///   once.
 #[derive(Clone)]
 pub struct ProviderImage {
-    provider: AnyImageProvider,
+    source: ImageWidgetSource,
     options: ImageOptions,
     cache_resize: ImageResizeOptions,
     frame_builder: Option<ImageFrameBuilder>,
@@ -62,11 +63,17 @@ pub struct ProviderImage {
     exclude_from_semantics: bool,
 }
 
+#[derive(Clone, Debug)]
+enum ImageWidgetSource {
+    Provider(AnyImageProvider),
+    Playback(ImagePlayback),
+}
+
 impl std::fmt::Debug for ProviderImage {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("ProviderImage")
-            .field("provider", &self.provider)
+            .field("source", &self.source)
             .field("options", &self.options)
             .field("cache_resize", &self.cache_resize)
             .field("gapless_playback", &self.gapless_playback)
@@ -90,9 +97,22 @@ impl ProviderImage {
         }
     }
 
+    /// An image driven by a retained playback session. Prefer
+    /// [`ImagePlayback::scheduled`] for the normal app frame clock.
+    /// The attached codec controls decoded size; cache resize options
+    /// apply to providers only.
+    #[must_use]
+    pub fn from_playback(playback: ImagePlayback) -> Self {
+        Self::with_source(ImageWidgetSource::Playback(playback))
+    }
+
     fn new_erased(provider: AnyImageProvider) -> Self {
+        Self::with_source(ImageWidgetSource::Provider(provider))
+    }
+
+    fn with_source(source: ImageWidgetSource) -> Self {
         Self {
-            provider,
+            source,
             options: ImageOptions::default(),
             cache_resize: ImageResizeOptions::default(),
             frame_builder: None,
@@ -203,14 +223,14 @@ impl ProviderImage {
 
     /// The image, or an empty box of the explicit size while there is none
     /// (Flutter's `RawImage` with a null image).
-    fn raw(&self, image: Option<ImageHandle>) -> Widget {
+    fn raw(&self, image: Option<ImageHandle>, scale_override: Option<f64>) -> Widget {
         match image {
             Some(image) => {
                 let mut options = self.options.clone();
                 // The provider's scale maps decoded pixels to logical pixels.
                 // The widget builder's scale remains an additional explicit
                 // multiplier, preserving existing custom providers.
-                let scale = options.scale * image.scale() as f32;
+                let scale = options.scale * scale_override.unwrap_or_else(|| image.scale()) as f32;
                 options.scale = if scale.is_finite() && scale > 0.0 {
                     scale
                 } else {
@@ -229,6 +249,30 @@ impl ProviderImage {
                 empty.into()
             }
         }
+    }
+    fn decorate(
+        &self,
+        context: &BuildContext<'_>,
+        mut result: Widget,
+        frame: Option<u32>,
+        synchronous: bool,
+        progress: Option<ImageChunkEvent>,
+    ) -> Widget {
+        if self.exclude_from_semantics {
+            result = ExcludeSemantics::new(result).into();
+        } else if let Some(label) = &self.semantic_label {
+            result = Semantics::new(result)
+                .label(label.clone())
+                .image(true)
+                .into();
+        }
+        if let Some(builder) = &self.frame_builder {
+            result = builder(context, result, frame, synchronous);
+        }
+        if let Some(builder) = &self.loading_builder {
+            result = builder(context, result, progress);
+        }
+        result
     }
 }
 
@@ -294,6 +338,7 @@ impl ProviderImageState {
     fn stream(
         &self,
         config: &ProviderImage,
+        requested_provider: &AnyImageProvider,
         context: &BuildContext<'_>,
         configuration: ImageConfiguration,
     ) -> ImageStream {
@@ -301,13 +346,17 @@ impl ProviderImageState {
         let mut stream = self.stream.borrow_mut();
         if let (Some((provider, current, resize)), Some(stream)) =
             (resolved.as_ref(), stream.as_ref())
-            && provider == &config.provider
+            && provider == requested_provider
             && *current == configuration
             && *resize == config.cache_resize
         {
             return stream.clone();
         }
-        let key = (config.provider.clone(), configuration, config.cache_resize);
+        let key = (
+            requested_provider.clone(),
+            configuration,
+            config.cache_resize,
+        );
         // `_updateSourceStream`: without gapless playback the old image goes
         // at once.
         if !config.gapless_playback {
@@ -329,11 +378,11 @@ impl ProviderImageState {
         let provider =
             if config.cache_resize.width.is_some() || config.cache_resize.height.is_some() {
                 AnyImageProvider::new(ResizeImage {
-                    image_provider: config.provider.clone(),
+                    image_provider: requested_provider.clone(),
                     options: config.cache_resize,
                 })
             } else {
-                config.provider.clone()
+                requested_provider.clone()
             };
         let next = ScrollAwareImageProvider::new(scroll_context, provider).resolve(&key.1);
         self.complete_on_subscribe.set(next.is_completed());
@@ -342,8 +391,13 @@ impl ProviderImageState {
         next
     }
 
-    fn build(&self, config: &ProviderImage, context: &BuildContext<'_>) -> Widget {
-        let stream = self.stream(config, context, config.configuration(context));
+    fn build(
+        &self,
+        config: &ProviderImage,
+        provider: &AnyImageProvider,
+        context: &BuildContext<'_>,
+    ) -> Widget {
+        let stream = self.stream(config, provider, context, config.configuration(context));
         let (progress, error) = match stream.state() {
             ImageLoadState::Loading(progress) => (progress, None),
             ImageLoadState::Ready(image) => {
@@ -362,32 +416,172 @@ impl ProviderImageState {
         if let (Some(error), Some(builder)) = (&error, &config.error_builder) {
             return builder(context, error);
         }
-        let mut result = config.raw(self.image.borrow().clone());
-        if config.exclude_from_semantics {
-            result = ExcludeSemantics::new(result).into();
-        } else if let Some(label) = &config.semantic_label {
-            result = Semantics::new(result)
-                .label(label.clone())
-                .image(true)
-                .into();
+        config.decorate(
+            context,
+            config.raw(self.image.borrow().clone(), None),
+            self.frame.get(),
+            self.synchronous.get(),
+            progress,
+        )
+    }
+}
+
+#[derive(Default)]
+struct PlaybackFrame {
+    image: Option<ImageInfo>,
+    frame: Option<u32>,
+    synchronous: bool,
+    error: Option<ImageError>,
+}
+
+struct PlaybackImageState {
+    source: RefCell<Option<ImagePlayback>>,
+    subscription: RefCell<Option<ImagePlaybackSubscription>>,
+    keep_alive: RefCell<Option<ImagePlaybackKeepAlive>>,
+    displayed: RefCell<PlaybackFrame>,
+    paused: Cell<bool>,
+    binding: Cell<bool>,
+    generation: Cell<u64>,
+    revision: RefCell<Rc<Cell<u64>>>,
+}
+
+impl RetainedState for PlaybackImageState {
+    fn rebind_revision(&self, revision: Rc<Cell<u64>>) {
+        *self.revision.borrow_mut() = revision;
+    }
+}
+
+impl PlaybackImageState {
+    fn new(revision: Rc<Cell<u64>>) -> Self {
+        Self {
+            source: RefCell::new(None),
+            subscription: RefCell::new(None),
+            keep_alive: RefCell::new(None),
+            displayed: RefCell::new(PlaybackFrame::default()),
+            paused: Cell::new(false),
+            binding: Cell::new(false),
+            generation: Cell::new(0),
+            revision: RefCell::new(revision),
         }
-        if let Some(builder) = &config.frame_builder {
-            result = builder(context, result, self.frame.get(), self.synchronous.get());
+    }
+
+    fn unlisten(&self) {
+        let previous = self.subscription.borrow_mut().take();
+        drop(previous);
+    }
+
+    fn on_frame(&self, result: Result<ImageInfo, ImageError>, synchronous: bool) {
+        let displayed_frame = {
+            let mut displayed = self.displayed.borrow_mut();
+            match result {
+                Ok(image) => {
+                    displayed.image = Some(image);
+                    displayed.frame = Some(displayed.frame.map_or(0, |n| n.saturating_add(1)));
+                    displayed.synchronous |= synchronous;
+                    displayed.error = None;
+                    true
+                }
+                Err(error) => {
+                    displayed.error = Some(error);
+                    false
+                }
+            }
+        };
+        if self.paused.get() && displayed_frame {
+            // Stop before the completer asks the codec for a second frame.
+            self.unlisten();
         }
-        if let Some(builder) = &config.loading_builder {
-            result = builder(context, result, progress);
+        if !self.binding.get() {
+            let revision = self.revision.borrow();
+            revision.set(revision.get().wrapping_add(1));
         }
-        result
+    }
+
+    fn build(
+        self: &Rc<Self>,
+        config: &ProviderImage,
+        source: &ImagePlayback,
+        context: &BuildContext<'_>,
+    ) -> Widget {
+        let replacing = self.source.borrow().as_ref() != Some(source);
+        if replacing {
+            self.generation.set(self.generation.get().wrapping_add(1));
+            self.unlisten();
+            let previous = self.keep_alive.replace(source.keep_alive());
+            drop(previous);
+            self.source.replace(Some(source.clone()));
+            let mut displayed = self.displayed.borrow_mut();
+            let previous = if config.gapless_playback {
+                displayed.image.take()
+            } else {
+                None
+            };
+            *displayed = PlaybackFrame {
+                image: previous,
+                ..PlaybackFrame::default()
+            };
+        }
+        self.paused.set(
+            !context.ticker_mode_enabled()
+                || context
+                    .media_query_disable_animations()
+                    .unwrap_or_else(|| context.disable_animations()),
+        );
+        if self.paused.get() && self.displayed.borrow().frame.is_some() {
+            self.unlisten();
+        } else if self.subscription.borrow().is_none() {
+            self.binding.set(true);
+            let widget = Rc::downgrade(self);
+            let generation = self.generation.get();
+            let subscription = source.listen(move |result, synchronous| {
+                if let Some(widget) = widget.upgrade()
+                    && widget.generation.get() == generation
+                {
+                    widget.on_frame(result, synchronous);
+                }
+            });
+            self.binding.set(false);
+            if !self.paused.get() || self.displayed.borrow().frame.is_none() {
+                *self.subscription.borrow_mut() = subscription;
+            }
+        }
+
+        let (image, frame, synchronous, error) = {
+            let displayed = self.displayed.borrow();
+            (
+                displayed.image.clone(),
+                displayed.frame,
+                displayed.synchronous,
+                displayed.error.clone(),
+            )
+        };
+        if let (Some(error), Some(builder)) = (&error, &config.error_builder) {
+            return builder(context, error);
+        }
+        let scale = image.as_ref().map(ImageInfo::scale);
+        let raw = config.raw(image.map(ImageInfo::into_image), scale);
+        config.decorate(context, raw, frame, synchronous, None)
     }
 }
 
 impl From<ProviderImage> for Widget {
     fn from(value: ProviderImage) -> Self {
         let config = Rc::new(value);
-        Widget::retained_builder(
-            |_| ProviderImageState::default(),
-            move |state, context, _| state.build(&config, context),
-            false,
-        )
+        match &config.source {
+            ImageWidgetSource::Provider(provider) => {
+                let provider = provider.clone();
+                Widget::retained_builder(
+                    |_| ProviderImageState::default(),
+                    move |state, context, _| state.build(&config, &provider, context),
+                    false,
+                )
+            }
+            ImageWidgetSource::Playback(playback) => {
+                let playback = playback.clone();
+                Widget::mount_scoped_builder(PlaybackImageState::new, move |state, context| {
+                    state.build(&config, &playback, context)
+                })
+            }
+        }
     }
 }
