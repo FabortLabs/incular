@@ -2962,3 +2962,8 @@ packages/flutter_tools/test/general.shard/migrations/widget_preview_gitignore_mi
 packages/flutter_tools/test/general.shard/migrations/widget_preview_gitignore_migration_test.dart	46	skipped if already migrated	paired-match	upstream-preview-gitignore.md
 packages/flutter_tools/test/general.shard/migrations/widget_preview_gitignore_migration_test.dart	64	migrates project to ignore .widget_preview directory	paired-match	upstream-preview-gitignore.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_code_generator_test.dart	316	'correctly generates ${PreviewCodeGenerator.getGeneratedPreviewFilePath(fs)}'	partial-match	upstream-preview-codegen.md#full-analyzer-generation
+packages/flutter/test/rendering/layers_test.dart	436	mutating OffsetLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md
+packages/flutter/test/rendering/layers_test.dart	443	mutating ClipRectLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md
+packages/flutter/test/rendering/layers_test.dart	453	mutating ClipRRectLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md
+packages/flutter/test/rendering/layers_test.dart	473	mutating ClipPath fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md
+packages/flutter/test/rendering/layers_test.dart	519	mutating BackdropFilterLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md
