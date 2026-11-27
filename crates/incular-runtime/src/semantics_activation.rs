@@ -59,13 +59,18 @@ impl SemanticsActivation {
     pub(crate) fn listen(
         self: &Rc<Self>,
         listener: impl Fn(bool) + 'static,
+        replay: bool,
     ) -> SemanticsEnabledSubscription {
         let listener: EnabledListener = Rc::new(listener);
         Rc::make_mut(&mut self.listeners.borrow_mut()).push(listener.clone());
-        SemanticsEnabledSubscription {
+        let subscription = SemanticsEnabledSubscription {
             activation: Rc::downgrade(self),
-            listener,
+            listener: listener.clone(),
+        };
+        if replay {
+            listener(self.enabled());
         }
+        subscription
     }
 
     fn notify_if_changed(&self, before: bool) -> bool {

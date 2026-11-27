@@ -1930,6 +1930,18 @@ impl Application {
         })
     }
 
+    /// Synchronizes a native accessibility tree with one window's
+    /// current and future effective semantics activation.
+    pub fn bind_semantics_tree_enabled(
+        &mut self,
+        window_id: WindowId,
+        update_native_tree: impl Fn(bool) + 'static,
+    ) -> Option<crate::SemanticsEnabledSubscription> {
+        self.with_window_mut(window_id, |record| {
+            record.runtime.bind_semantics_tree_enabled(update_native_tree)
+        })
+    }
+
     /// Updates one window's value-free bridge diagnostics after a lifecycle or
     /// action event that did not emit a tree update.
     pub fn set_accessibility_diagnostics(

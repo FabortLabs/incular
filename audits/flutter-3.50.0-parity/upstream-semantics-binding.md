@@ -155,3 +155,15 @@ The test separately observes the window's effective semantics state
 enter and leave. Release builds have no event storage. These changes
 do not change the retained owner/frame timing difference at :78.
 Seventeen focused native semantics tests passed.
+
+## Native tree activation handshake
+
+Both separate Flutter semantics binding registrations passed. A native
+tree binding now receives the current effective setting immediately,
+even if platform demand was enabled before it subscribed. It also
+receives exactly false → true → false across the first and final
+application handles, without treating intermediate handles as separate
+native state changes. The retained fixture drains the queued closure
+and confirms the disabled tree has no published root. The existing
+change-only observer still does not replay. Twenty targeted runtime
+tests passed.

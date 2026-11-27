@@ -656,7 +656,17 @@ impl Runtime {
         &mut self,
         listener: impl Fn(bool) + 'static,
     ) -> crate::SemanticsEnabledSubscription {
-        self.semantics_activation().listen(listener)
+        self.semantics_activation().listen(listener, false)
+    }
+
+    /// Synchronizes a newly bound native tree with the existing effective
+    /// state, then forwards later transitions. The first value is delivered
+    /// immediately even when platform demand predated the binding.
+    pub fn bind_semantics_tree_enabled(
+        &mut self,
+        update_native_tree: impl Fn(bool) + 'static,
+    ) -> crate::SemanticsEnabledSubscription {
+        self.semantics_activation().listen(update_native_tree, true)
     }
 
     /// Changes the native accessibility host's request without overriding

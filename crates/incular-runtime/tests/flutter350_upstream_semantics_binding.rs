@@ -462,12 +462,22 @@ fn semantic_geometry_rejects_unknown_windows_and_nodes_independently() {
     let mut runtime = Runtime::new(scene(Align::new(
         Alignment::TOP_LEFT,
         Semantics::new(SizedBox::new().width(100.).height(50.)).label("target"),
-    ))).unwrap();
+    )))
+    .unwrap();
     let _semantics = runtime.ensure_semantics();
     let constraints = Constraints::tight(Size::new(400., 300.));
     runtime.run_frame(constraints).unwrap();
     let target = semantic_id(&runtime, "target");
-    assert_eq!(runtime.tree().semantics().node(target).unwrap().label.as_deref(), Some("target"));
+    assert_eq!(
+        runtime
+            .tree()
+            .semantics()
+            .node(target)
+            .unwrap()
+            .label
+            .as_deref(),
+        Some("target")
+    );
 
     let app = Application::from_runtime(runtime, |_| {});
     let view = app.primary_window();
@@ -490,4 +500,48 @@ fn semantic_geometry_rejects_unknown_windows_and_nodes_independently() {
         app.semantic_rect_in_view(alias_with_wrong_generation, target),
         Err(Error::UnknownView(alias_with_wrong_generation))
     );
+}
+
+#[test]
+fn native_tree_binding_receives_enabled_state_from_before_registration() {
+    let mut runtime =
+        Runtime::new(scene(Semantics::new(SizedBox::new()).label("initial"))).unwrap();
+    runtime.set_platform_semantics_enabled(false);
+    runtime.set_platform_semantics_enabled(true);
+    let enabled = Rc::new(Cell::new(false));
+    let bridge = enabled.clone();
+    let _platform = runtime.bind_semantics_tree_enabled(move |value| bridge.set(value));
+    assert!(enabled.get());
+    assert!(runtime.semantics_enabled());
+}
+
+#[test]
+fn semantics_handle_synchronously_toggles_the_bound_native_tree() {
+    use std::cell::RefCell;
+
+    let mut runtime = Runtime::new(scene(Semantics::new(SizedBox::new()).label("native"))).unwrap();
+    runtime.set_platform_semantics_enabled(false);
+    let state = Rc::new(Cell::new(true));
+    let transitions = Rc::new(RefCell::new(Vec::new()));
+    let bridge = state.clone();
+    let observed = transitions.clone();
+    let _platform = runtime.bind_semantics_tree_enabled(move |enabled| {
+        bridge.set(enabled);
+        observed.borrow_mut().push(enabled);
+    });
+    assert!(!state.get());
+    let handle = runtime.ensure_semantics();
+    assert!(state.get());
+    let second_handle = runtime.ensure_semantics();
+    drop(handle);
+    assert!(state.get());
+    drop(second_handle);
+    assert!(!state.get());
+    assert_eq!(*transitions.borrow(), [false, true, false]);
+
+    runtime.process_runtime_work();
+    runtime
+        .run_frame(Constraints::tight(Size::new(100., 100.)))
+        .unwrap();
+    assert!(runtime.tree().semantics().root().is_none());
 }

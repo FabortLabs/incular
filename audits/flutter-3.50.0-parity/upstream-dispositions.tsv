@@ -2892,3 +2892,5 @@ packages/flutter/test/painting/image_stream_test.dart	771	error handlers can int
 packages/flutter/test/painting/image_stream_test.dart	806	remove and add listener 	paired-match	upstream-image-playback.md#callback-and-error-lifecycle
 packages/flutter/test/painting/image_stream_test.dart	909	Keep alive handles do not drive frames or prevent last listener callbacks	partial-match	upstream-image-playback.md#callback-and-error-lifecycle
 packages/flutter/test/painting/image_stream_test.dart	985	MultiFrameImageStreamCompleter - one frame image should only be decoded once	paired-match	upstream-image-playback.md#callback-and-error-lifecycle
+packages/flutter/test/semantics/semantics_binding_set_semantics_tree_enabled_1_test.dart	10	setSemanticsTreeEnabled calls when the semantics is enabled before binding initialized	paired-match	upstream-semantics-binding.md#native-tree-activation-handshake
+packages/flutter/test/semantics/semantics_binding_set_semantics_tree_enabled_test.dart	10	SemanticsHandle ensureSemantics calls setSemanticsTreeEnabled	paired-match	upstream-semantics-binding.md#native-tree-activation-handshake
