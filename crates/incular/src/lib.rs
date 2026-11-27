@@ -137,7 +137,7 @@ pub mod prelude {
         ImageChunkEvent, ImageChunkListener, ImageChunkSubscription, ImageConfiguration,
         ImageDecodeCompletion, ImageError, ImageErrorListener, ImageFrameCodec, ImageFrameDemand,
         ImageHandle, ImageId, ImageInfo, ImageListener, ImageLoadState, ImagePlayback,
-        ImagePlaybackKeepAlive, ImagePlaybackSubscription, ImageProvider, ImageResizeOptions,
+        ImagePlaybackIdleSubscription, ImagePlaybackKeepAlive, ImagePlaybackSubscription, ImageProvider, ImageResizeOptions,
         ImageSource, ImageStream, ImageStreamCompleter, ImageStreamListener, ImageStreamSubscription,
         MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy, WeakImagePlayback,
     };

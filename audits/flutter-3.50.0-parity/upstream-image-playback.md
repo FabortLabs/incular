@@ -95,3 +95,24 @@ the encoded multi-frame canvas and the requested width still contributes
 to resolution identity. Both lanes now verify red until 199 ms and
 blue at 200 ms. Ten native animated-image cases and eight regular
 provider cases passed. This probe adds no original coverage credit.
+
+### Callback and error lifecycle
+
+The pinned reference ran seven exact registrations at lines
+91, 297, 325, 771, 806, 909, and 985 of `painting/image_stream_test.dart`.
+The paired native cases intercept decoder errors with a supplied
+error callback, keep one duplicate group alive when another is
+removed, and replay a one-frame decode from a passive keep-alive
+without asking the codec again. Authored controls exercise reentrant
+last-listener callbacks, explicit removal, and last-good-image
+retention during a later decode failure. All 30 scoped native
+listener/playback tests passed.
+
+The keep-alive original remains partial: both lanes fire the last
+listener callback and keep the decoder without publishing more
+frames. Flutter nevertheless schedules a no-op transient callback
+for a decode already underway; Incular drops its stale completion
+without waking the host. Native deferred initialization, transport,
+and frame errors reach listeners or can be replayed, but the three
+originals testing Flutter's app-global uncaught-error reporter
+remain partial.

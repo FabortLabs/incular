@@ -1,9 +1,10 @@
 use incular_core::time::Instant;
-use std::fmt;
 use std::{
     cell::RefCell,
     collections::BTreeMap,
+    fmt,
     num::NonZeroUsize,
+    panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     rc::{Rc, Weak},
     time::Duration,
 };
@@ -63,6 +64,8 @@ struct State {
     disposed: bool,
     listeners: BTreeMap<u64, PlaybackObserver>,
     next_listener: u64,
+    last_listener_callbacks: BTreeMap<u64, Box<dyn FnOnce()>>,
+    next_idle_callback: u64,
     keep_alive: usize,
     generation: u64,
     decoding: bool,
@@ -296,6 +299,26 @@ impl ImagePlayback {
         true
     }
 
+    /// Runs once when the next active listener set becomes empty. This
+    /// notification is independent of keep-alive handles, which retain
+    /// the codec but do not count as active listeners.
+    pub fn on_last_listener_removed(
+        &self,
+        callback: impl FnOnce() + 'static,
+    ) -> Option<ImagePlaybackIdleSubscription> {
+        let mut state = self.state.borrow_mut();
+        if state.disposed {
+            return None;
+        }
+        let id = state.next_idle_callback;
+        state.next_idle_callback = id.checked_add(1).expect("image playback idle id exhausted");
+        state.last_listener_callbacks.insert(id, Box::new(callback));
+        Some(ImagePlaybackIdleSubscription {
+            owner: Rc::downgrade(&self.state),
+            id,
+        })
+    }
+
     /// Preserve the codec and previously shown frame while no listeners
     /// remain. The absence of listeners still prevents further scheduling.
     pub fn keep_alive(&self) -> Option<ImagePlaybackKeepAlive> {
@@ -415,32 +438,53 @@ impl ImagePlayback {
     }
 
     fn retire_if_idle(&self, remove: impl FnOnce(&mut State) -> Option<PlaybackObserver>) {
-        let (removed, source, cancel_wake) = {
+        let (removed, callbacks, cancel_wake) = {
             let mut state = self.state.borrow_mut();
             let had_listeners = !state.listeners.is_empty();
             let had_demand = state.demand().is_some();
             let removed = remove(&mut state);
-            let mut source = None;
-            if state.listeners.is_empty() {
-                if had_listeners {
-                    state.generation = state.generation.wrapping_add(1);
-                    state.decoding = false;
-                    state.decode_failed = false;
-                    state.pending = None;
-                }
-                if state.keep_alive == 0 && state.next_listener != 0 {
-                    state.disposed = true;
-                    state.current = None;
-                    state.error = None;
-                    source = state.source.take();
-                }
-            }
-            (removed, source, had_demand && state.listeners.is_empty())
+            let became_idle = had_listeners && state.listeners.is_empty();
+            let callbacks = if became_idle {
+                state.generation = state.generation.wrapping_add(1);
+                state.decoding = false;
+                state.decode_failed = false;
+                state.pending = None;
+                std::mem::take(&mut state.last_listener_callbacks)
+            } else {
+                BTreeMap::new()
+            };
+            (removed, callbacks, became_idle && had_demand)
         };
         drop(removed);
-        drop(source);
         if cancel_wake {
             (self.request_frame)();
+        }
+        let mut failure = None;
+        if !std::thread::panicking() {
+            for callback in callbacks.into_values() {
+                if let Err(panic) = catch_unwind(AssertUnwindSafe(callback)) {
+                    failure.get_or_insert(panic);
+                }
+            }
+        }
+        let (source, remaining_callbacks) = {
+            let mut state = self.state.borrow_mut();
+            if state.listeners.is_empty() && state.keep_alive == 0 && state.next_listener != 0 {
+                state.disposed = true;
+                state.current = None;
+                state.error = None;
+                (
+                    state.source.take(),
+                    std::mem::take(&mut state.last_listener_callbacks),
+                )
+            } else {
+                (None, BTreeMap::new())
+            }
+        };
+        drop(source);
+        drop(remaining_callbacks);
+        if let Some(panic) = failure {
+            resume_unwind(panic);
         }
     }
 }
@@ -455,6 +499,23 @@ impl Drop for ImagePlaybackSubscription {
     fn drop(&mut self) {
         self.playback
             .retire_if_idle(|state| state.listeners.remove(&self.id));
+    }
+}
+
+/// Owns a one-shot playback idle callback. Dropping before the last
+/// listener leaves cancels the callback.
+#[must_use = "keep the subscription until the last active listener leaves"]
+pub struct ImagePlaybackIdleSubscription {
+    owner: Weak<RefCell<State>>,
+    id: u64,
+}
+
+impl Drop for ImagePlaybackIdleSubscription {
+    fn drop(&mut self) {
+        if let Some(owner) = self.owner.upgrade() {
+            let removed = owner.borrow_mut().last_listener_callbacks.remove(&self.id);
+            drop(removed);
+        }
     }
 }
 

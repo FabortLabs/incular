@@ -617,3 +617,138 @@ fn a_chunk_transport_error_does_not_block_later_download_progress() {
     assert_eq!(*seen.borrow(), [Err(error), Ok(chunk)]);
     assert!(!has_scheduled_frame());
 }
+
+#[test]
+fn a_keep_alive_is_passive_but_last_active_listener_callbacks_run() {
+    use incular_animation::scheduler::transient_callback_count;
+
+    let source = ImagePlayback::scheduled();
+    let driver = Rc::new(Driver::default());
+    let last_removed = Rc::new(Cell::new(false));
+    let captured = last_removed.clone();
+    let _idle = source
+        .on_last_listener_removed(move || captured.set(true))
+        .unwrap();
+    let keep_alive = source.keep_alive().unwrap();
+    driver.attach(&source, 2, None);
+    assert!(!last_removed.get());
+    assert_eq!(transient_callback_count(), 0);
+    assert_eq!(driver.asked.get(), 0);
+    let t0 = Instant::now();
+    app_frame(t0);
+    let recorded = Delivered::default();
+    let listener = source.listen(recorder(&recorded)).unwrap();
+    let active_frame = image(10, 10);
+    driver.complete(&active_frame, 0);
+    assert_eq!(transient_callback_count(), 1);
+    app_frame(t0);
+    assert_eq!(recorded.borrow().len(), 1);
+    assert_frame(&recorded, 0, &active_frame, false);
+
+    drop(listener);
+    assert!(last_removed.get());
+    assert_eq!(driver.asked.get(), 2);
+    assert!(!driver.disposed.get());
+    driver.complete(&image(20, 10), 0);
+    // Unlike Flutter, cancel the stale completion rather than schedule
+    // a useless transient frame. Neither implementation publishes it.
+    assert_eq!(transient_callback_count(), 0);
+    app_frame(t0);
+    assert_eq!(recorded.borrow().len(), 1);
+    drop(keep_alive);
+    assert!(driver.disposed.get());
+}
+
+#[test]
+fn a_keep_alive_replays_one_still_frame_without_redecoding_after_a_pause() {
+    let playback = ImagePlayback::scheduled();
+    let codec = Rc::new(Driver::default());
+    let keep = playback.keep_alive().unwrap();
+    let first = Delivered::default();
+    let first_listener = playback.listen(recorder(&first)).unwrap();
+    codec.attach(&playback, 1, Some(0));
+    let frame = ImageInfo::new(
+        ImageHandle::from_bytes(include_bytes!("fixtures/webp_still.webp")).unwrap(),
+    );
+    codec.complete(&frame, 0);
+    assert_frame(&first, 0, &frame, false);
+    drop(first_listener);
+    assert_eq!(codec.asked.get(), 1);
+    let later = Delivered::default();
+    let _incoming = playback.listen(recorder(&later)).unwrap();
+    assert_frame(&later, 0, &frame, true);
+    assert_eq!(codec.asked.get(), 1);
+    drop(keep);
+}
+
+#[test]
+fn one_duplicate_listener_can_be_removed_without_disposing_the_decoder() {
+    use incular_image::ImageStreamListener;
+
+    let source = ImagePlayback::scheduled();
+    let codec = Rc::new(Driver::default());
+    let seen = Rc::new(Cell::new(0));
+    let seen_clone = seen.clone();
+    let group = ImageStreamListener::new(Rc::new(move |_, _| {
+        seen_clone.set(seen_clone.get() + 1);
+    }));
+    let first = source.listen_group(group.clone()).unwrap();
+    codec.attach(&source, 3, Some(0));
+    let second = source.listen_group(group).unwrap();
+    drop(first);
+    let t0 = Instant::now();
+    codec.complete(&image(20, 10), 200);
+    app_frame(t0);
+    app_frame(t0 + Duration::from_millis(200));
+    assert_eq!(seen.get(), 1);
+    assert!(!codec.disposed.get());
+    assert_eq!(codec.asked.get(), 2);
+    drop(second);
+    assert!(codec.disposed.get());
+}
+
+#[test]
+fn an_explicit_group_intercepts_a_frame_decoder_failure() {
+    use incular_image::ImageStreamListener;
+
+    let source = ImagePlayback::scheduled();
+    let codec = Rc::new(Driver::default());
+    let caught = Rc::new(RefCell::new(None));
+    let seen = caught.clone();
+    let _listener = source
+        .listen_group(
+            ImageStreamListener::new(Rc::new(|_, _| panic!("invalid frame was displayed")))
+                .on_error(Rc::new(move |error| *seen.borrow_mut() = Some(error))),
+        )
+        .unwrap();
+    codec.attach(&source, 1, Some(0));
+    let complete = codec.pending.borrow_mut().pop_front().unwrap();
+    let error = ImageError::Decode("frame completion error".into());
+    complete(Err(error.clone()));
+    assert_eq!(*caught.borrow(), Some(error));
+    assert!(!codec.disposed.get());
+}
+
+#[test]
+fn a_removed_idle_callback_does_not_run_and_a_live_one_can_reenter() {
+    let source = ImagePlayback::scheduled();
+    let first = source.listen(|_, _| {}).unwrap();
+    let canceled = source
+        .on_last_listener_removed(|| panic!("canceled callback ran"))
+        .unwrap();
+    drop(canceled);
+    let replacement = Rc::new(RefCell::new(None));
+    let captured = replacement.clone();
+    let weak = source.downgrade();
+    let _once = source
+        .on_last_listener_removed(move || {
+            let source = weak.upgrade().unwrap();
+            *captured.borrow_mut() = source.listen(|_, _| {});
+        })
+        .unwrap();
+    drop(first);
+    assert!(replacement.borrow().is_some());
+    let second = replacement.borrow_mut().take();
+    drop(second);
+    assert!(source.listen(|_, _| {}).is_none());
+}
