@@ -181,6 +181,13 @@ for sibling framework crates and are not part of the application Widgets API.
 `BoxDecoration::clip_path` and `hit_test` expose the outline and local hit
 geometry without painting. Circles are inscribed in the shortest side.
 
+## Sliver viewport cache extents
+
+`Viewport::scroll_cache_extent` and `CustomScrollView::scroll_cache_extent`
+accept either logical pixels or a viewport multiple. The retained cache
+uses the current main-axis extent for a multiple. The same cache window
+sets the reach of offscreen semantics.
+
 ## Focused editable text
 
 `EditableText` is the renderer-neutral Widgets primitive. Its retained editing

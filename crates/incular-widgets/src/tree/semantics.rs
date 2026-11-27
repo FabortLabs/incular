@@ -1169,12 +1169,10 @@ impl WidgetTree {
                 let visible = (config.clip_behavior != incular_config::Clip::None).then(|| {
                     world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size))
                 });
-                let main = config.axis.main_extent(render.size);
-                let cross = config.axis.cross_extent(render.size);
-                let extension = config.cache_extent.resolve(main);
-                let cache = world.transform_rect_bbox(Rect::from_origin_size(
-                    config.axis.offset(-extension, 0.),
-                    config.axis.size(main + 2. * extension, cross),
+                let cache = world.transform_rect_bbox(sliver_semantics_cache_clip(
+                    config.axis,
+                    render.size,
+                    config.cache_extent,
                 ));
                 let cache = sliver_window.map_or(cache, |outer| {
                     outer.cache.intersection(cache).unwrap_or_default()
@@ -2145,6 +2143,24 @@ impl WidgetTree {
             }
             run_start = run_end;
         }
+    }
+
+    /// Returns the laid-out sliver viewport's local semantics cache clip.
+    /// This includes cached content on both sides of the visible viewport.
+    #[must_use]
+    pub fn viewport_semantics_cache_clip(&self, element: ElementId) -> Option<Rect> {
+        let render = self.renders.get(self.render_id(element)?.0)?;
+        let RenderKind::SliverViewport { config } = render.object.kind() else {
+            return None;
+        };
+        if render.dirty.contains(DirtyFlags::LAYOUT) {
+            return None;
+        }
+        Some(sliver_semantics_cache_clip(
+            config.axis,
+            render.size,
+            config.cache_extent,
+        ))
     }
 
     /// The current viewport's physical paint clip for an overlapping sliver,
@@ -3136,6 +3152,19 @@ impl WidgetTree {
             world
         }
     }
+}
+
+fn sliver_semantics_cache_clip(
+    axis: Axis,
+    size: Size,
+    cache_extent: crate::ScrollCacheExtent,
+) -> Rect {
+    let main = axis.main_extent(size);
+    let extension = cache_extent.resolve(main);
+    Rect::from_origin_size(
+        axis.offset(-extension, 0.),
+        axis.size(main + 2. * extension, axis.cross_extent(size)),
+    )
 }
 
 fn semantic_clip_overlaps(clip: Rect, bounds: Rect) -> bool {

@@ -23,6 +23,9 @@ a version and date when publishing.
 
 ### Added
 
+- `Viewport` and `CustomScrollView` support typed pixel and
+  viewport-relative cache extents, including semantics reach.
+
 - `EditableText::fixed_scroll_offset` can fix the local viewport position
   without changing the selection or giving up clipping.
 

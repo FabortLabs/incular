@@ -3458,3 +3458,11 @@ packages/flutter/test/rendering/editable_test.dart	159	Reports the height of the
 packages/flutter/test/rendering/editable_test.dart	200	RenderEditable.paint respects offset argument	partial-match	upstream-editable-defaults.md#default-input-semantics-and-single-line-geometry
 packages/flutter/test/widgets/text_selection_test.dart	2160	'Android selection handles match endpoint direction: ${testCase.description}'	paired-match	upstream-bidi-selection-handles.md
 packages/flutter/test/widgets/text_selection_test.dart	2212	selection handles use text direction for mixed-directionality text on iOS	paired-match	upstream-bidi-selection-handles.md
+packages/flutter/test/rendering/viewport_caching_test.dart	29	Cache extent - null, pixels	paired-match	upstream-viewport-semantics-cache.md
+packages/flutter/test/rendering/viewport_caching_test.dart	42	Cache extent - 0, pixels	paired-match	upstream-viewport-semantics-cache.md
+packages/flutter/test/rendering/viewport_caching_test.dart	53	Cache extent - 500, pixels	paired-match	upstream-viewport-semantics-cache.md
+packages/flutter/test/rendering/viewport_caching_test.dart	64	Cache extent - nullx viewport	partial-match	upstream-viewport-semantics-cache.md
+packages/flutter/test/rendering/viewport_caching_test.dart	76	Cache extent - 0x viewport	paired-match	upstream-viewport-semantics-cache.md
+packages/flutter/test/rendering/viewport_caching_test.dart	89	Cache extent - .5x viewport	paired-match	upstream-viewport-semantics-cache.md
+packages/flutter/test/rendering/viewport_caching_test.dart	102	Cache extent - 1x viewport	paired-match	upstream-viewport-semantics-cache.md
+packages/flutter/test/rendering/viewport_caching_test.dart	115	Cache extent - 2.5x viewport	paired-match	upstream-viewport-semantics-cache.md

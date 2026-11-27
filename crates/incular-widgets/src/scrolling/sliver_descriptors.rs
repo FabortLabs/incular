@@ -464,8 +464,11 @@ pub struct CustomScrollView {
         Some(ScrollIncrementCalculator::new(calculator))
     }))]
     increment_calculator: Option<ScrollIncrementCalculator>,
-    #[builder(default = WidgetDefaults::DEFAULT.sliver_cache_extent, setter(transform = |extent: f32| extent.max(0.0)))]
-    cache_extent: f32,
+    #[builder(
+        default = ScrollCacheExtent::pixels(WidgetDefaults::DEFAULT.sliver_cache_extent),
+        setter(transform = |extent: f32| ScrollCacheExtent::pixels(extent.max(0.0)))
+    )]
+    cache_extent: ScrollCacheExtent,
     /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
     #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
     clip_behavior: Clip,
@@ -513,7 +516,7 @@ impl CustomScrollView {
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
             increment_calculator: None,
-            cache_extent: WidgetDefaults::DEFAULT.sliver_cache_extent,
+            cache_extent: ScrollCacheExtent::pixels(WidgetDefaults::DEFAULT.sliver_cache_extent),
             paint_order: SliverPaintOrder::FirstIsTop,
             center: 0,
             anchor: 0.,
@@ -603,8 +606,15 @@ impl CustomScrollView {
     /// visible viewport. A nonzero cache keeps scrolling from synchronously
     /// constructing the next child at the edge.
     #[must_use]
-    pub fn cache_extent(mut self, extent: f32) -> Self {
-        self.cache_extent = extent.max(0.);
+    pub fn cache_extent(self, extent: f32) -> Self {
+        self.scroll_cache_extent(ScrollCacheExtent::pixels(extent.max(0.)))
+    }
+
+    /// Sets the cache before and after the visible viewport as logical
+    /// pixels or as a multiple of its current main-axis extent.
+    #[must_use]
+    pub fn scroll_cache_extent(mut self, extent: ScrollCacheExtent) -> Self {
+        self.cache_extent = extent;
         self
     }
 
@@ -708,7 +718,7 @@ fn custom_scroll_view_widget(value: CustomScrollView, ambient_horizontal_axis: b
         axis,
         reverse,
         value.physics.unwrap_or_default(),
-        value.cache_extent,
+        value.cache_extent.value(),
         false,
         value.clip_behavior,
         value.drag_start_behavior,
@@ -718,6 +728,7 @@ fn custom_scroll_view_widget(value: CustomScrollView, ambient_horizontal_axis: b
     if let WidgetKind::SliverViewport { config } = widget.kind_mut() {
         let config = Rc::make_mut(config);
         config.paint_order = value.paint_order;
+        config.cache_extent = value.cache_extent;
         config.semantic_child_count = value.semantic_child_count;
         config.axis_resolution = axis_resolution;
     }
@@ -864,6 +875,8 @@ pub struct Viewport {
     slivers: Vec<Box<dyn Sliver>>,
     #[builder(default, setter(strip_option))]
     controller: Option<ScrollController>,
+    #[builder(default = ScrollCacheExtent::pixels(WidgetDefaults::DEFAULT.sliver_cache_extent))]
+    scroll_cache_extent: ScrollCacheExtent,
     #[builder(default = WidgetDefaults::DEFAULT.scroll_direction)]
     axis_direction: Axis,
     #[builder(default)]
@@ -909,6 +922,7 @@ impl Viewport {
         Self {
             slivers: slivers.into_iter().collect(),
             controller: None,
+            scroll_cache_extent: ScrollCacheExtent::pixels(WidgetDefaults::DEFAULT.sliver_cache_extent),
             axis_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             paint_order: SliverPaintOrder::FirstIsTop,
@@ -920,6 +934,14 @@ impl Viewport {
     #[must_use]
     pub fn controller(mut self, controller: ScrollController) -> Self {
         self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the viewport's offscreen cache and semantic reach, in
+    /// logical pixels or multiples of the viewport's main-axis extent.
+    #[must_use]
+    pub fn scroll_cache_extent(mut self, extent: ScrollCacheExtent) -> Self {
+        self.scroll_cache_extent = extent;
         self
     }
 
@@ -972,6 +994,7 @@ impl From<Viewport> for Widget {
             .scroll_direction(value.axis_direction)
             .reverse(value.reverse)
             .controller(value.controller.unwrap_or_default())
+            .scroll_cache_extent(value.scroll_cache_extent)
             .paint_order(value.paint_order)
             .center(value.center)
             .anchor(value.anchor)
