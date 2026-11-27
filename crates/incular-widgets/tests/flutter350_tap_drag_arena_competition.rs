@@ -146,7 +146,7 @@ fn raced(
     send(
         40,
         PointerPhase::Up,
-        moves.last().copied().unwrap_or((10., 10.)),
+        moves.last().copied().unwrap_or((11., 9.)),
     );
     trace.take()
 }
@@ -253,4 +253,117 @@ fn erased_factories_own_distinct_concrete_recognizer_keys() {
         TypeId::of::<ArenaGestureRecognizer<TapAndDragGestureRecognizer>>()
     );
     assert_ne!(tap.type_id(), combined.type_id());
+}
+
+#[test]
+fn horizontal_drag_cancels_vertical_then_delivers_its_own_sequence() {
+    assert_eq!(
+        raced(
+            true,
+            true,
+            Other::Vertical,
+            5,
+            PointerDeviceKind::Touch,
+            &[(45., 10.)]
+        ),
+        [
+            "verticalcancel",
+            "down#1",
+            "horizontaldragstart#1",
+            "horizontaldragupdate#1",
+            "horizontaldragend#1"
+        ]
+    );
+}
+
+#[test]
+fn diagonal_motion_over_pan_but_under_vertical_slop_is_a_combined_pan() {
+    assert_eq!(
+        raced(
+            false,
+            true,
+            Other::Vertical,
+            5,
+            PointerDeviceKind::Touch,
+            &[(45., 25.)]
+        ),
+        [
+            "verticalcancel",
+            "down#1",
+            "panstart#1",
+            "panupdate#1",
+            "panend#1"
+        ]
+    );
+}
+
+#[test]
+fn a_nearly_stationary_tap_sweeps_to_the_first_registered_combined_member() {
+    assert_eq!(
+        raced(false, true, Other::Tap, 1, PointerDeviceKind::Touch, &[]),
+        ["down#1", "up#1"]
+    );
+}
+
+#[test]
+fn motion_between_tap_and_pan_slop_cancels_the_pure_pan_without_starting_a_drag() {
+    assert_eq!(
+        raced(
+            false,
+            true,
+            Other::Pan,
+            5,
+            PointerDeviceKind::Touch,
+            &[(25., 25.)]
+        ),
+        ["pancancel"]
+    );
+}
+
+#[test]
+fn replacing_a_factory_of_the_same_concrete_type_mounts_only_the_replacement() {
+    use incular_gestures::ErasedGestureRecognizerFactory;
+
+    for bulk in [false, true] {
+        let trace = Trace::default();
+        let factory = |tag: &'static str| -> ErasedGestureRecognizerFactory {
+            let trace = trace.clone();
+            GestureRecognizerFactoryWithHandlers::new(
+                move || {
+                    let trace = trace.clone();
+                    PointerGestureRecognizer::new(GestureCallbacks {
+                        on_tap: Some(Rc::new(move || trace.borrow_mut().push(tag.to_owned()))),
+                        ..Default::default()
+                    })
+                },
+                |_| {},
+            )
+            .into()
+        };
+        let detector = RawGestureDetector::new(Widget::box_(Size::new(200., 200.), Color::WHITE));
+        let detector = if bulk {
+            detector.gestures([factory("old"), factory("replacement")])
+        } else {
+            detector
+                .gesture(factory("old"))
+                .gesture(factory("replacement"))
+        };
+        let mut tree = WidgetTree::new();
+        tree.mount(detector.into()).unwrap();
+        tree.layout(Constraints::tight(Size::new(200., 200.)))
+            .unwrap();
+        let base = Instant::now();
+        for (ms, phase, buttons) in [(0, PointerPhase::Down, 1), (20, PointerPhase::Up, 0)] {
+            tree.dispatch_raw_pointer(RawPointerEvent::new(
+                1,
+                0,
+                PointerDeviceKind::Touch,
+                buttons,
+                Offset::new(10., 10.),
+                phase,
+                base + Duration::from_millis(ms),
+            ));
+        }
+        assert_eq!(&*trace.borrow(), &["replacement"], "bulk={bulk}");
+    }
 }

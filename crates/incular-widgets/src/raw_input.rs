@@ -591,25 +591,40 @@ impl RawGestureDetector {
         self
     }
 
-    /// Replaces the complete factory set. Duplicate concrete types are
-    /// rejected by the retained synchronizer; the first factory wins.
+    /// Replaces the factory map. A later entry for the same concrete type
+    /// replaces its predecessor without changing the original key order.
     #[must_use]
     pub fn gestures<I, F>(mut self, factories: I) -> Self
     where
         I: IntoIterator<Item = F>,
         F: Into<ErasedGestureRecognizerFactory>,
     {
-        self.factories = factories.into_iter().map(Into::into).collect();
+        self.factories.clear();
+        for factory in factories {
+            self.install_factory(factory.into());
+        }
         self
     }
 
+    /// Adds a factory or replaces the one already registered for its type.
     #[must_use]
     pub fn gesture<F>(mut self, factory: F) -> Self
     where
         F: Into<ErasedGestureRecognizerFactory>,
     {
-        self.factories.push(factory.into());
+        self.install_factory(factory.into());
         self
+    }
+
+    fn install_factory(&mut self, factory: ErasedGestureRecognizerFactory) {
+        let kind = factory.type_id();
+        if let Some(index) = self.factories.iter().position(|entry| {
+            ErasedGestureRecognizerFactory::type_id(entry) == kind
+        }) {
+            self.factories[index] = factory;
+        } else {
+            self.factories.push(factory);
+        }
     }
 
     #[must_use]
