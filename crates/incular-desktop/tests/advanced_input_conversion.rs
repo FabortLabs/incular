@@ -1,7 +1,7 @@
 use incular_core::{
-    InputEvent, NormalizedPressure, PointerDeviceKind, PointerSampleMetadata,
-    SECONDARY_POINTER_BUTTON, StylusMetadata, StylusOrientation, TrackpadGesture,
-    TrackpadGesturePhase,
+    InputEvent, NormalizedPressure, PointerContactMetadata, PointerDeviceKind,
+    PointerSampleMetadata, SECONDARY_POINTER_BUTTON, StylusMetadata, StylusOrientation,
+    TrackpadGesture, TrackpadGesturePhase,
 };
 use incular_desktop::winit_adapter::{
     touch_event_with_native_sample, trackpad_pinch_event, trackpad_rotation_event,
@@ -33,6 +33,13 @@ fn native_stylus_metadata_preserves_inversion_barrel_hover_and_device_identity()
                 orientation: StylusOrientation::from_tilt_degrees(30.0, -15.0),
                 barrel_button: true,
             }),
+            contact: PointerContactMetadata {
+                pressure_min: 0.,
+                pressure_max: 1024.,
+                distance: 4.,
+                obscured: true,
+                ..PointerContactMetadata::DEFAULT
+            },
         },
         in_contact: Some(false),
     };

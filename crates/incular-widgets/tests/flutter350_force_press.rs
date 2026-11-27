@@ -66,6 +66,7 @@ fn input(
     .with_sample(PointerSampleMetadata {
         pressure: pressure.and_then(|value| NormalizedPressure::from_range(value, MAX)),
         stylus: None,
+        ..PointerSampleMetadata::EMPTY
     })
 }
 

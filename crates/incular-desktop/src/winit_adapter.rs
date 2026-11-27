@@ -239,6 +239,7 @@ pub fn touch_event_with_native_sample(
                 PointerSampleMetadata {
                     pressure: fallback_pressure,
                     stylus: None,
+                    ..PointerSampleMetadata::EMPTY
                 },
             )
         },

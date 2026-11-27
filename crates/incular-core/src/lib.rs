@@ -79,9 +79,9 @@ pub use input::{
     BACK_POINTER_BUTTON, Code, DeviceGestureSettings, DragStartBehavior, FORWARD_POINTER_BUTTON,
     ImeEvent, InputEvent, Key as KeyboardKey, KeyState, KeyboardEvent, Location, Modifiers,
     LogicalKeyboardKey, NamedKey, NormalizedPressure, PRIMARY_POINTER_BUTTON, PhysicalKeyboardKey,
-    PointerDeviceKind, PointerPanZoomEvent, PointerPanZoomPhase, PointerPhase,
-    PointerSampleMetadata, SECONDARY_POINTER_BUTTON, StylusMetadata, StylusOrientation,
-    TERTIARY_POINTER_BUTTON, TrackpadGesture, TrackpadGestureKind, TrackpadGesturePhase,
+    PointerContactMetadata, PointerDeviceKind, PointerPanZoomEvent, PointerPanZoomPhase,
+    PointerPhase, PointerSampleMetadata, SECONDARY_POINTER_BUTTON, StylusMetadata,
+    StylusOrientation, TERTIARY_POINTER_BUTTON, TrackpadGesture, TrackpadGestureKind, TrackpadGesturePhase,
     WindowResizeDirection, additional_pointer_button_mask,
 };
 pub use key::{Key, KeyHandle, KeyId, KeyObject, LocalKey, StringKey, UniqueKey, ValueKey};

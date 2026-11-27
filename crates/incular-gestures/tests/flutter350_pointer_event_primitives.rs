@@ -195,6 +195,7 @@ fn projective_pointer_delta_uses_both_positions_without_mutating_globals() {
     .with_sample(PointerSampleMetadata {
         pressure: NormalizedPressure::new(0.4),
         stylus: None,
+        ..PointerSampleMetadata::EMPTY
     });
     original.delta = Offset::new(5., 5.);
     assert_eq!(original.transformed_matrix4(None), original);

@@ -152,6 +152,7 @@ fn facade_exposes_advanced_pointer_metadata_and_trackpad_gestures() {
             orientation: StylusOrientation::from_tilt_degrees(10.0, -5.0),
             barrel_button: true,
         }),
+        ..PointerSampleMetadata::EMPTY
     };
     assert_eq!(sample.pressure, Some(pressure));
 

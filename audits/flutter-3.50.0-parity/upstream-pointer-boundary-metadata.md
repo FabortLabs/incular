@@ -39,3 +39,22 @@ to float precision. Nine primitive, nine router and ten retained
 transform tests passed. Incular's retained widget transforms are
 still affine and reject true perspective; the raw pointer math
 alone does not add a projective paint path.
+
+## Full portable contact metadata
+
+The four original constructors at :116, :143, :170 and :197 are
+now fully paired. Their exact hover and pressed input fields reach
+enter/exit without losing obscured state, source pressure bounds,
+distance, size, radii, orientation or tilt. Synthesized state and
+zero boundary pressure are also asserted. A real Runtime
+MouseRegion receives that same packet when a stylus crosses its
+bounds. Source pressure limits are distinct from normalized force,
+so force-gesture behavior is unchanged. The packet remains a
+plain copyable value; focused input allocation guards pass.
+
+The four pinned originals and 32 focused Rust checks passed.
+The shared mobile embedder type-checks. The extra Linux desktop
+adapter test could not build offline because `ab_glyph 0.2.32`
+is not cached, and specific OS acquisition of these optional
+measurements is not claimed. A producer that does not have these
+readings retains Flutter's payload defaults instead.

@@ -3381,10 +3381,10 @@ packages/flutter/test/rendering/paragraph_test.dart	165	getBoxesForSelection tes
 packages/flutter/test/rendering/paragraph_test.dart	99	getOffsetForCaret control test	paired-match	upstream-rich-text-layout.md#caret-metrics-and-word-boundaries
 packages/flutter/test/rendering/paragraph_test.dart	118	getFullHeightForCaret control test	paired-match	upstream-rich-text-layout.md#caret-metrics-and-word-boundaries
 packages/flutter/test/rendering/paragraph_test.dart	252	getWordBoundary control test	paired-match	upstream-rich-text-layout.md#caret-metrics-and-word-boundaries
-packages/flutter/test/gestures/events_test.dart	116	PointerEnterEvent.fromMouseEvent(hover)	partial-match	upstream-pointer-boundary-metadata.md
-packages/flutter/test/gestures/events_test.dart	143	PointerExitEvent.fromMouseEvent(hover)	partial-match	upstream-pointer-boundary-metadata.md
-packages/flutter/test/gestures/events_test.dart	170	PointerEnterEvent.fromMouseEvent(move)	partial-match	upstream-pointer-boundary-metadata.md
-packages/flutter/test/gestures/events_test.dart	197	PointerExitEvent.fromMouseEvent(move)	partial-match	upstream-pointer-boundary-metadata.md
+packages/flutter/test/gestures/events_test.dart	116	PointerEnterEvent.fromMouseEvent(hover)	paired-match	upstream-pointer-boundary-metadata.md#full-portable-contact-metadata
+packages/flutter/test/gestures/events_test.dart	143	PointerExitEvent.fromMouseEvent(hover)	paired-match	upstream-pointer-boundary-metadata.md#full-portable-contact-metadata
+packages/flutter/test/gestures/events_test.dart	170	PointerEnterEvent.fromMouseEvent(move)	paired-match	upstream-pointer-boundary-metadata.md#full-portable-contact-metadata
+packages/flutter/test/gestures/events_test.dart	197	PointerExitEvent.fromMouseEvent(move)	paired-match	upstream-pointer-boundary-metadata.md#full-portable-contact-metadata
 packages/flutter/test/gestures/events_test.dart	239	paintTransformToPointerEventTransform	paired-match	upstream-pointer-boundary-metadata.md#the-pointer-plane-of-a-paint-matrix
 packages/flutter/test/gestures/tap_and_drag_test.dart	424	Beats TapGestureRecognizer when mouse pointer moves past kPrecisePointerPanSlop	paired-match	upstream-tap-drag-arena-competition.md
 packages/flutter/test/gestures/tap_and_drag_test.dart	453	Recognizer declares self-victory in a non-empty arena when pointer travels minimum distance to be considered a drag	paired-match	upstream-tap-drag-arena-competition.md

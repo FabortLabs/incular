@@ -81,6 +81,7 @@ fn press(tree: &mut WidgetTree, kind: PointerDeviceKind, pressures: &[Option<f64
         let sample = PointerSampleMetadata {
             pressure: pressure.and_then(NormalizedPressure::new),
             stylus: None,
+            ..PointerSampleMetadata::EMPTY
         };
         let hit = tree.pointer_hit_test(position);
         let _ = tree.dispatch_pointer_gesture_with_hit_sample(

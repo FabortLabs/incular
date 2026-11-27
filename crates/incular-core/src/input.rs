@@ -86,18 +86,80 @@ pub struct StylusMetadata {
     pub barrel_button: bool,
 }
 
+/// Flutter-style contact measurements supplied by the pointer source.
+/// Distances and radii are in logical pixels, orientation and tilt in radians.
+/// Pressure bounds describe the source rather than the normalized force used
+/// for gesture thresholds; enter and exit events retain those bounds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PointerContactMetadata {
+    pub pressure_min: f32,
+    pub pressure_max: f32,
+    pub distance: f32,
+    pub distance_max: f32,
+    pub size: f32,
+    pub radius_major: f32,
+    pub radius_minor: f32,
+    pub radius_min: f32,
+    pub radius_max: f32,
+    pub orientation: f32,
+    pub tilt: f32,
+    pub obscured: bool,
+}
+
+impl PointerContactMetadata {
+    /// Pointer defaults when no backend measurement is supplied.
+    pub const DEFAULT: Self = Self {
+        pressure_min: 1.0,
+        pressure_max: 1.0,
+        distance: 0.0,
+        distance_max: 0.0,
+        size: 0.0,
+        radius_major: 0.0,
+        radius_minor: 0.0,
+        radius_min: 0.0,
+        radius_max: 0.0,
+        orientation: 0.0,
+        tilt: 0.0,
+        obscured: false,
+    };
+}
+
+impl Default for PointerContactMetadata {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// Optional high-fidelity data attached to one pointer sample.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PointerSampleMetadata {
     pub pressure: Option<NormalizedPressure>,
     pub stylus: Option<StylusMetadata>,
+    pub contact: PointerContactMetadata,
 }
 
 impl PointerSampleMetadata {
     pub const EMPTY: Self = Self {
         pressure: None,
         stylus: None,
+        contact: PointerContactMetadata::DEFAULT,
     };
+
+    /// Builds the original normalized-pressure and stylus sample.
+    #[must_use]
+    pub const fn new(
+        pressure: Option<NormalizedPressure>,
+        stylus: Option<StylusMetadata>,
+    ) -> Self {
+        Self { pressure, stylus, ..Self::EMPTY }
+    }
+
+    /// Replaces the source contact metadata without modifying normalized force.
+    #[must_use]
+    pub const fn with_contact(mut self, contact: PointerContactMetadata) -> Self {
+        self.contact = contact;
+        self
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

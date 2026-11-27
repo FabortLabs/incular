@@ -225,6 +225,7 @@ impl MobileEngine {
             sample: PointerSampleMetadata {
                 pressure: sample.pressure,
                 stylus: sample.stylus,
+                ..PointerSampleMetadata::EMPTY
             },
             phase: sample.phase,
             position: Offset::new(sample.x as f32 / scale, sample.y as f32 / scale),

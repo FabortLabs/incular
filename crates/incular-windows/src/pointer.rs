@@ -215,6 +215,7 @@ fn pen_sample(info: &POINTER_PEN_INFO) -> Option<(Option<usize>, NativePointerSa
                     orientation,
                     barrel_button: info.penFlags & PEN_FLAG_BARREL != 0,
                 }),
+                ..PointerSampleMetadata::EMPTY
             },
             in_contact: Some(info.pointerInfo.pointerFlags & POINTER_FLAG_INCONTACT != 0),
         },

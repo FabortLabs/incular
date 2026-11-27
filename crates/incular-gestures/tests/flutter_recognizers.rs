@@ -62,6 +62,7 @@ fn pressed(event: RawPointerEvent, pressure: f64) -> RawPointerEvent {
     event.with_sample(PointerSampleMetadata {
         pressure: NormalizedPressure::new(pressure),
         stylus: None,
+        ..PointerSampleMetadata::EMPTY
     })
 }
 
