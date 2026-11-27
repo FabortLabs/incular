@@ -395,9 +395,8 @@ impl From<Focus> for Widget {
 
 /// A widget that establishes a scoped focus tree traversal domain.
 ///
-/// Descendants are traversed in reading order by default, as Flutter's
-/// `FocusScope` inherits `ReadingOrderTraversalPolicy`; use
-/// [`Self::widget_order`] for registration order.
+/// Inherits the surrounding traversal policy, falling back to reading
+/// order. Use [`Self::widget_order`] to explicitly select registration order.
 #[derive(Clone)]
 pub struct FocusScope {
     node: Option<FocusScopeNode>,
@@ -408,7 +407,7 @@ pub struct FocusScope {
     descendants_are_traversable: Option<bool>,
     use_external_properties: bool,
     autofocus: bool,
-    policy: FocusTraversalPolicyKind,
+    policy: Option<FocusTraversalPolicyKind>,
     on_focus_change: Option<Rc<dyn Fn(bool)>>,
     child: Option<Widget>,
 }
@@ -424,7 +423,7 @@ impl Default for FocusScope {
             descendants_are_traversable: None,
             use_external_properties: false,
             autofocus: false,
-            policy: FocusTraversalPolicyKind::ReadingOrder,
+            policy: None,
             on_focus_change: None,
             child: None,
         }
@@ -597,7 +596,7 @@ impl FocusScope {
     /// Selects the traversal policy for this scope's descendants.
     #[must_use]
     pub fn policy(mut self, policy: FocusTraversalPolicyKind) -> Self {
-        self.policy = policy;
+        self.policy = Some(policy);
         self
     }
 
@@ -655,9 +654,11 @@ impl From<FocusScope> for Widget {
             }
             widget
         };
-        scope
-            .with_focus_traversal_policy(value.policy)
-            .with_focus_scope_autofocus(value.autofocus)
+        let scope = scope.with_focus_scope_autofocus(value.autofocus);
+        match value.policy {
+            Some(policy) => scope.with_focus_traversal_policy(policy),
+            None => scope,
+        }
     }
 }
 
@@ -1249,9 +1250,7 @@ impl From<RawKeyboardListener> for Widget {
     fn from(value: RawKeyboardListener) -> Self {
         let mut callbacks = value.0.to_callbacks();
         callbacks.annotates_focus = true;
-        if callbacks.focus_node.is_none() {
-            callbacks.focus_node = Some(FocusNode::new());
-        }
+        callbacks.owned_focus_permission = callbacks.focus_node.is_none().then_some(true);
         let child = value.0.child.unwrap_or_else(|| crate::SizedBox::shrink().into());
         Widget::from_kind(WidgetKind::Gesture {
             behavior: crate::gestures::HitTestBehavior::DeferToChild,
@@ -1267,6 +1266,8 @@ pub struct FocusTraversalGroup {
     policy: FocusTraversalPolicyKind,
     descendants_are_focusable: bool,
     descendants_are_traversable: bool,
+    parent_node: Option<FocusNode>,
+    on_focus_node_created: Option<Rc<dyn Fn(FocusNode)>>,
     child: Option<Widget>,
 }
 
@@ -1276,6 +1277,8 @@ impl Default for FocusTraversalGroup {
             policy: FocusTraversalPolicyKind::ReadingOrder,
             descendants_are_focusable: true,
             descendants_are_traversable: true,
+            parent_node: None,
+            on_focus_node_created: None,
             child: None,
         }
     }
@@ -1288,6 +1291,8 @@ impl FocusTraversalGroup {
             policy: FocusTraversalPolicyKind::ReadingOrder,
             descendants_are_focusable: true,
             descendants_are_traversable: true,
+            parent_node: None,
+            on_focus_node_created: None,
             child: Some(child.into()),
         }
     }
@@ -1306,6 +1311,20 @@ impl FocusTraversalGroup {
     #[must_use]
     pub fn descendants_are_traversable(mut self, traversable: bool) -> Self {
         self.descendants_are_traversable = traversable;
+        self
+    }
+
+    /// Installs an explicit parent for the group's retained focus node.
+    #[must_use]
+    pub fn parent_node(mut self, parent: impl Into<Option<FocusNode>>) -> Self {
+        self.parent_node = parent.into();
+        self
+    }
+
+    /// Called once per mount when the group creates its focus node.
+    #[must_use]
+    pub fn on_focus_node_created(mut self, callback: impl Fn(FocusNode) + 'static) -> Self {
+        self.on_focus_node_created = Some(Rc::new(callback));
         self
     }
 
@@ -1342,17 +1361,18 @@ impl FocusTraversalGroup {
 impl From<FocusTraversalGroup> for Widget {
     fn from(value: FocusTraversalGroup) -> Self {
         let policy = value.policy;
-        let mut child = value
-            .child
-            .unwrap_or_else(|| crate::SizedBox::shrink().into());
-        // Only ever add an exclusion: the child may carry its own.
-        if !value.descendants_are_focusable {
-            child = child.with_excluded_focus(true);
-        }
-        if !value.descendants_are_traversable {
-            child = child.with_excluded_focus_traversal(true);
-        }
-        child.with_focus_traversal_policy(policy)
+        let child = value.child.unwrap_or_else(|| crate::SizedBox::shrink().into());
+        Widget::from(
+            Focus::new(child)
+                .can_request_focus(false)
+                .skip_traversal(true)
+                .include_semantics(false)
+                .descendants_are_focusable(value.descendants_are_focusable)
+                .descendants_are_traversable(value.descendants_are_traversable)
+                .parent_node(value.parent_node),
+        )
+        .with_focus_traversal_policy(policy)
+        .with_owned_focus_group(value.on_focus_node_created)
     }
 }
 

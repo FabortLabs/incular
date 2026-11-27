@@ -267,6 +267,16 @@ impl Widget {
         self
     }
 
+    pub(crate) fn with_owned_focus_group(
+        mut self,
+        callback: Option<Rc<dyn Fn(incular_gestures::FocusNode)>>,
+    ) -> Self {
+        let properties = self.semantic_properties_mut();
+        properties.owns_focus_group = true;
+        properties.owned_focus_creation = callback.map(super::super::specs::OwnedFocusCreation);
+        self
+    }
+
     /// Keeps this sliver's semantics outside the viewport's scrolling pane.
     #[doc(hidden)]
     pub(crate) fn with_sliver_scroll_exclusion(mut self, excluded: bool) -> Self {

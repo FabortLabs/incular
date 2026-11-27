@@ -19,8 +19,10 @@ fn group(
         .expect("mount");
     tree.layout(Constraints::loose(Size::new(100., 100.)))
         .expect("layout");
-    let column = root;
-    let children = tree.children(column).expect("buttons").to_vec();
+    let [column] = tree.children(root).expect("group has one child") else {
+        panic!("expected the group to retain its descendant column");
+    };
+    let children = tree.children(*column).expect("buttons").to_vec();
     let focusable = children
         .iter()
         .map(|child| tree.can_request_focus(*child))

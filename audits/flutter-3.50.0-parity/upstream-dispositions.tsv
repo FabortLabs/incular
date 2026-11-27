@@ -3331,3 +3331,5 @@ packages/flutter/test/gestures/gesture_config_regression_test.dart	113	Scroll Vi
 packages/flutter/test/services/binding_test.dart	185	initInstances synchronizes keyboard state	paired-match	upstream-keyboard-startup.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3651	Raw keyboard listener introduces a Semantics node by default	paired-match	upstream-raw-keyboard-listener-semantics.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3674	Raw keyboard listener doesn't introduce a Semantics node when specified	paired-match	upstream-raw-keyboard-listener-semantics.md
+packages/flutter/test/widgets/focus_traversal_test.dart	3471	Group parentNode attaches the group to the given node instead of the enclosing scope.	paired-match	upstream-focus-group-nodes.md
+packages/flutter/test/widgets/focus_traversal_test.dart	4147	GIVEN onFocusNodeCreated is not null THEN it is called when the FocusTraversalGroup is built	paired-match	upstream-focus-group-nodes.md

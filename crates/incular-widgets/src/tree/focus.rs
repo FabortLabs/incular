@@ -161,10 +161,14 @@ pub(super) fn instantiate_owned_focus_node(widget: &mut Widget, previous: Option
     let Some(can_request) = owned_focus_permission(widget) else {
         return;
     };
+    let creation = widget.semantic_properties().owned_focus_creation.clone();
+    let is_group = widget.semantic_properties().owns_focus_group;
     let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() else {
         return;
     };
-    let previous = previous.and_then(|previous| match previous.kind() {
+    let previous = previous
+        .filter(|old| old.semantic_properties().owns_focus_group == is_group)
+        .and_then(|previous| match previous.kind() {
         WidgetKind::Gesture { callbacks: old, .. }
             if old.owned_focus_permission.is_some()
                 && old.owns_focus_scope == callbacks.owns_focus_scope =>
@@ -179,8 +183,13 @@ pub(super) fn instantiate_owned_focus_node(widget: &mut Widget, previous: Option
         callbacks.focus_node = Some(scope.scope_focus_node());
         callbacks.focus_scope = Some(scope);
     } else {
-        let node = previous.and_then(|old| old.focus_node.clone()).unwrap_or_default();
+        let retained = previous.and_then(|old| old.focus_node.clone());
+        let notify = retained.is_none();
+        let node = retained.unwrap_or_default();
         node.set_can_request_focus(can_request);
+        if notify && let Some(creation) = creation {
+            (creation.0)(node.clone());
+        }
         callbacks.focus_node = Some(node);
     }
 }

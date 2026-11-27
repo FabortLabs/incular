@@ -248,6 +248,21 @@ impl PartialEq for SemanticBoundsInsets {
     }
 }
 
+#[derive(Clone)]
+pub(super) struct OwnedFocusCreation(pub(super) Rc<dyn Fn(incular_gestures::FocusNode)>);
+
+impl std::fmt::Debug for OwnedFocusCreation {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("OwnedFocusCreation(..)")
+    }
+}
+
+impl PartialEq for OwnedFocusCreation {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct SemanticProperties {
     pub(super) label: Option<String>,
@@ -269,6 +284,8 @@ pub(crate) struct SemanticProperties {
     /// Flutter's `blockUserActions`: affects semantic action exposure only.
     pub(super) block_user_actions: bool,
     pub(super) focus_traversal_policy: Option<FocusTraversalPolicyKind>,
+    pub(super) owns_focus_group: bool,
+    pub(super) owned_focus_creation: Option<OwnedFocusCreation>,
     pub(super) focus_traversal_order: Option<incular_gestures::FocusOrder>,
     pub(super) exclude_focus: bool,
     pub(super) exclude_focus_traversal: bool,
