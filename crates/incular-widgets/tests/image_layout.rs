@@ -1058,3 +1058,40 @@ fn raw_image_hits_the_half_open_layout_box_even_when_it_has_no_pixels() {
         assert_eq!(tree.hit_test(Offset::new(0., 5.)), None);
     }
 }
+
+#[test]
+fn image_info_scale_remeasures_the_original_render_without_replacing_the_pixels() {
+    use incular_image::ImageInfo;
+    use incular_widgets::RawImage;
+
+    let original = handle(20, 10);
+    let make = |scale, label| {
+        RawImage::from_image_info(
+            ImageInfo::new(original.clone())
+                .with_scale(scale)
+                .with_debug_label(label),
+        )
+        .into()
+    };
+    let constraints = Constraints::loose(Size::new(100., 100.));
+    let (mut tree, root) = layout(|| make(1., "original"), constraints);
+    let render = tree.render_id(root).unwrap();
+    let full = Rect::from_origin_size(Offset::ZERO, Size::new(20., 10.));
+
+    for (scale, label, size) in [
+        (1., "native pixels", Size::new(20., 10.)),
+        (2., "2x image", Size::new(10., 5.)),
+        (2., "different debug label", Size::new(10., 5.)),
+        (1., "restored", Size::new(20., 10.)),
+    ] {
+        tree.update(root, make(scale, label)).unwrap();
+        tree.layout(constraints).unwrap();
+        assert_eq!(tree.render_id(root), Some(render));
+        assert_eq!(tree.render_size(render), Some(size));
+        let painted = tree.paint();
+        assert_eq!(image_commands(&painted), [(full, Rect::from_origin_size(Offset::ZERO, size))]);
+        assert!(painted.commands().iter().any(|command| {
+            matches!(command, PaintCommand::Image { image, .. } if image.id() == original.id())
+        }));
+    }
+}

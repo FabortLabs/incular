@@ -97,3 +97,7 @@ For example, a 40 × 20 pixel image at scale 2 has a natural size of 20 × 10 lo
 
 Related: [`Image Providers`](/docs/api/content/image-providers),
 [`Icon`](/docs/api/content/icon), [`BoxFit`](/docs/api/values/box-fit).
+
+Use `RawImage::from_image_info` to display decoded `ImageInfo` at
+its logical scale. The renderer shares the encoded pixel resource;
+the info's diagnostic label does not affect layout or paint.

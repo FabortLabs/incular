@@ -2,7 +2,7 @@
 
 use incular_config::Alignment;
 use incular_core::Color;
-use incular_image::ImageHandle;
+use incular_image::{ImageHandle, ImageInfo};
 use incular_rendering::{
     BlendMode, ColorFilter, FilterQuality, ImageFilter, ImageFilterTarget, UnsupportedImageFilter,
 };
@@ -155,6 +155,14 @@ impl RawImage {
             center_slice: None,
             match_text_direction: false,
         }
+    }
+
+    /// Uses a decoded image and its intended logical scale. The diagnostic
+    /// label does not affect layout, painting, or retained image identity.
+    #[must_use]
+    pub fn from_image_info(info: ImageInfo) -> Self {
+        let scale = info.scale().min(f64::from(f32::MAX)) as f32;
+        Self::new().image(info.into_image()).scale(scale)
     }
 
     #[must_use]

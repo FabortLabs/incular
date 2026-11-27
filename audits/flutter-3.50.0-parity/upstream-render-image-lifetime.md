@@ -41,3 +41,14 @@ An image owns the half-open layout box, even if no pixels are loaded.
 The right and bottom edges and zero-size boxes are not image hits.
 The authored Flutter and native hit-test probes exercise those edges;
 no extra upstream registration is counted for either authored case.
+
+## Painting shared ImageInfo at its logical scale
+
+The authored pinned and native controls put the same decoded
+20 × 10 pixels into RawImage at scale 1, scale 2, and back.
+The original render remains mounted; its logical bounds and
+paint destination change to 10 × 5 at scale 2 while the encoded
+source rectangle and image identity stay unchanged. Renaming
+only the metadata label leaves the geometry untouched. All 54
+focused image layout and paint checks pass; this authored
+comparison adds no original registration credit.
