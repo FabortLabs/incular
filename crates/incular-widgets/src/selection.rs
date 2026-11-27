@@ -26,8 +26,8 @@ pub enum SelectionStatus {
     Uncollapsed,
 }
 
-/// A content-relative selection range, matching Flutter's
-/// `SelectedContentRange` contract.
+/// A content-relative selection range in UTF-8 bytes. The endpoints preserve
+/// the anchor and extent, so a backward selection has a larger start offset.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SelectedContentRange {
     pub start_offset: usize,
@@ -50,7 +50,7 @@ impl SelectedContentRange {
 
     #[must_use]
     pub const fn is_empty(self) -> bool {
-        self.start_offset >= self.end_offset
+        self.is_collapsed()
     }
 }
 

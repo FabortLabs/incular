@@ -3560,10 +3560,9 @@ pub(super) fn static_selection_range(
     (start < end).then_some(TextRange::new(start, end))
 }
 
-/// Converts a retained endpoint pair into the byte range of the flattened
-/// selected content. Newlines use the same one-byte separator as
-/// `static_selection_text`, so listeners can use the range to address the
-/// text they receive from the clipboard path.
+/// Converts retained endpoints into offsets in the concatenated selectable
+/// text. Inter-label boundaries introduce no characters; literal newlines
+/// within a label are already counted. Preserve anchor-to-extent direction.
 pub(super) fn selection_content_range(
     tree: &WidgetTree,
     entries: &[ElementId],
@@ -3578,7 +3577,6 @@ pub(super) fn selection_content_range(
         let mut offset: usize = 0;
         for entry in &entries[..index] {
             offset = offset.saturating_add(tree.selectable_text_value(*entry)?.len());
-            offset = offset.saturating_add(1);
         }
         let text = tree.selectable_text_value(point.element)?;
         Some(offset.saturating_add(valid_boundary(text, point.byte)))
@@ -3586,10 +3584,7 @@ pub(super) fn selection_content_range(
 
     let anchor = content_offset(tree, entries, selection.anchor)?;
     let extent = content_offset(tree, entries, selection.extent)?;
-    Some(SelectedContentRange::new(
-        anchor.min(extent),
-        anchor.max(extent),
-    ))
+    Some(SelectedContentRange::new(anchor, extent))
 }
 
 pub(super) fn static_selection_text(

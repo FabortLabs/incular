@@ -61,3 +61,20 @@ region's rectangle routing; an outside point uses the snapped edge
 instead of recomputing a word at that boundary. All 25 selected
 native controls passed. This does not compare toolbar artwork or
 the behavior of individual inline fragments.
+
+## Listener offsets across labels and backward ranges
+
+The exact pinned `widgets/selectable_region_test.dart:6060` passed.
+A mounted mouse drag starts at 4, moves within the first label to
+7 and 10, then into the second and third labels at flattened offsets
+22 and 36. Incular previously counted a phantom character per label.
+The backward drag preserves 30→0, rather than sorting the reported
+endpoints. Clicks collapse at 3 and at 0. Ctrl+C still copies the
+normalized text in document order with no inserted separator; the
+test checks it through the runtime clipboard. This original uses only
+ASCII. UTF-16 listener offsets on non-ASCII text are a separate check.
+
+All five static drag and three keyboard shortcut tests passed. Six of
+seven adjacent area-lifetime cases passed; the shared-affinity case
+also fails unchanged master with this runner's font metrics, before the
+new range conversion can affect it. That fixture is not counted here.

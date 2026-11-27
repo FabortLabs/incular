@@ -286,3 +286,109 @@ fn long_press_drag_extends_whole_words_off_the_label_in_both_directions() {
         assert_eq!(controller.selected_text(), TEXT);
     }
 }
+
+#[test]
+fn listener_offsets_follow_actual_text_and_keep_backward_direction() {
+    use incular_core::{Code, KeyboardEvent, KeyboardKey, Modifiers, NamedKey};
+    use incular_platform::{TransferFormat, TransferReadRequest};
+    use incular_runtime::TextShortcutPlatform;
+    use incular_widgets::{
+        SelectedContentRange, SelectionListener, SelectionListenerNotifier, SelectionStatus,
+    };
+    use std::time::{Duration, Instant};
+
+    let texts = ["How are you?", "Good, and you?", "Fine, thank you."];
+    let controller = SelectionAreaController::new();
+    let notifier = SelectionListenerNotifier::new();
+    let labels = texts
+        .into_iter()
+        .map(|text| Widget::from(Text::new(text)).with_key(text));
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            Widget::selection_area(
+                controller.clone(),
+                SelectionListener::new(notifier.clone(), Column::new(labels)).into(),
+            ),
+        )
+        .into(),
+    )
+    .unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Windows);
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+
+    let point = |label: usize, byte: usize| {
+        let tree = runtime.tree();
+        let element = tree.element_with_key(&Key::from(texts[label])).unwrap();
+        let (world, size) = tree.element_geometry(element).unwrap();
+        let layout = tree.text_layout(tree.render_id(element).unwrap()).unwrap();
+        let caret = layout
+            .line_caret_positions(0)
+            .iter()
+            .find(|point| point.offset == byte)
+            .unwrap();
+        world.transform_point(Offset::new(caret.x + 0.1, size.height / 2.))
+    };
+    let (start, first_a, first_b, second, third, backward, three, zero) = (
+        point(0, 4),
+        point(0, 7),
+        point(0, 10),
+        point(1, 10),
+        point(2, 10),
+        point(2, 4),
+        point(0, 3),
+        point(0, 0),
+    );
+    let now = Instant::now();
+    let step = |runtime: &mut Runtime, phase, position, ms| {
+        let _ = runtime.handle_input_at(
+            InputEvent::Pointer { phase, position },
+            now + Duration::from_millis(ms),
+        );
+    };
+    let range = |status, start, end| {
+        let selection = notifier.selection();
+        assert_eq!(selection.status, status);
+        assert_eq!(selection.range, Some(SelectedContentRange::new(start, end)));
+    };
+    step(&mut runtime, PointerPhase::Down, start, 0);
+    for (index, (goal, end)) in [(first_a, 7), (first_b, 10), (second, 22), (third, 36)]
+        .into_iter()
+        .enumerate()
+    {
+        step(
+            &mut runtime,
+            PointerPhase::Move,
+            goal,
+            20 + 20 * index as u64,
+        );
+        range(SelectionStatus::Uncollapsed, 4, end);
+    }
+    step(&mut runtime, PointerPhase::Up, third, 110);
+    range(SelectionStatus::Uncollapsed, 4, 36);
+    let plain = texts.concat();
+    let mut copy = KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Unidentified), Code::KeyC);
+    copy.modifiers = Modifiers::CONTROL;
+    let _ = runtime.handle_input_at(InputEvent::Key(copy), now + Duration::from_millis(120));
+    let clipboard = runtime
+        .read_clipboard(TransferReadRequest::format(TransferFormat::PlainText))
+        .unwrap();
+    assert_eq!(
+        clipboard.plain_text_value().unwrap().as_deref(),
+        Some(&plain[4..36])
+    );
+
+    step(&mut runtime, PointerPhase::Down, three, 500);
+    step(&mut runtime, PointerPhase::Up, three, 520);
+    range(SelectionStatus::Collapsed, 3, 3);
+    step(&mut runtime, PointerPhase::Down, backward, 1000);
+    step(&mut runtime, PointerPhase::Move, zero, 1030);
+    range(SelectionStatus::Uncollapsed, 30, 0);
+    step(&mut runtime, PointerPhase::Up, zero, 1060);
+    range(SelectionStatus::Uncollapsed, 30, 0);
+    step(&mut runtime, PointerPhase::Down, zero, 1500);
+    step(&mut runtime, PointerPhase::Up, zero, 1530);
+    range(SelectionStatus::Collapsed, 0, 0);
+}

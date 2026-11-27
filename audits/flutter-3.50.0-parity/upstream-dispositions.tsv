@@ -3796,3 +3796,4 @@ packages/flutter/test/painting/strut_style_test.dart	9	StrutStyle diagnostics te
 packages/flutter/test/rendering/semantics_and_children_test.dart	22	RenderOpacity and children and semantics	paired-match	upstream-render-box-edges.md#opacity-child-semantics
 packages/flutter/test/rendering/semantics_and_children_test.dart	41	RenderOpacity and children and semantics	partial-match	upstream-render-box-edges.md#opacity-child-semantics
 packages/flutter/test/rendering/simple_semantics_test.dart	13	only send semantics update if semantics have changed	paired-match	upstream-semantic-native-updates.md#unchanged-semantics-are-not-re-published
+packages/flutter/test/widgets/selectable_region_test.dart	6060	onSelectionChanged SelectedContentRange is accurate	paired-match	upstream-selection-rectangle-order.md#listener-offsets-across-labels-and-backward-ranges
