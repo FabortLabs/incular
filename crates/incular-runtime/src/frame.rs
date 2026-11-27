@@ -1882,10 +1882,10 @@ impl Runtime {
             install_focus_scope_watch(&queue, id, &scope);
         }
     }
+    /// Queues a new configuration for a mounted element of the same type.
+    /// Update the parent instead when replacing one widget type with another.
     pub fn schedule_update(&mut self, id: ElementId, widget: Widget) -> Result<(), TreeError> {
-        if !self.tree.element_exists(id) {
-            return Err(TreeError::MissingElement(id));
-        }
+        self.tree.validate_retained_update(id, &widget)?;
         #[cfg(feature = "devtools")]
         self.tree
             .note_invalidation(id, InvalidationCause::WidgetConfigurationChanged);

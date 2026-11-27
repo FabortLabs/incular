@@ -512,10 +512,30 @@ impl WidgetTree {
         }
     }
 
-    pub fn update(&mut self, id: ElementId, widget: Widget) -> Result<(), TreeError> {
-        if !self.elements.contains(id.0) {
-            return Err(TreeError::MissingElement(id));
+    /// Requires a direct update to target the same retained widget type.
+    /// Type changes belong in the parent's child reconciliation.
+    #[doc(hidden)]
+    pub fn validate_retained_update(&self, id: ElementId, new: &Widget) -> Result<(), TreeError> {
+        let current = self
+            .elements
+            .get(id.0)
+            .ok_or(TreeError::MissingElement(id))?;
+        if current.widget.type_() != new.type_() {
+            return Err(TreeError::InvalidWidgetConfiguration {
+                widget: new.debug_type_name(),
+                reason: format!(
+                    "cannot directly update a mounted {} with a different widget type; update its parent to replace the child",
+                    current.widget.debug_type_name(),
+                ),
+            });
         }
+        Ok(())
+    }
+
+    /// Updates the configuration of an existing element. To replace it with
+    /// a different widget type, update the parent that supplies the child.
+    pub fn update(&mut self, id: ElementId, widget: Widget) -> Result<(), TreeError> {
+        self.validate_retained_update(id, &widget)?;
         // Bounded prevalidation, mirroring mount_element: reject duplicate
         // keys on the immutable description before destructive
         // reconciliation, so a failed update leaves prior retained state

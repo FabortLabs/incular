@@ -7,6 +7,10 @@ a version and date when publishing.
 
 ### Changed
 
+- Direct widget updates now return a configuration error instead of panicking
+  when the new widget type differs. Update the retained parent to replace a
+  child with a different type.
+
 - **Breaking (`incular-widgets`):** replace reads of
   `ContextMenuButtonItem.button_type` with `button_type()` or use
   `kind()` to distinguish newer actions such as Translate. Replace item

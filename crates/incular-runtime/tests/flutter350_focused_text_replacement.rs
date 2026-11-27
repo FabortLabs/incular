@@ -421,3 +421,47 @@ fn changing_a_mounted_controller_publishes_an_unset_wire_selection_and_editable_
     assert_eq!(geometry_only[0].arguments["transform"][13], json!(0.0));
     assert_eq!(runtime.focused_element(), Some(editor));
 }
+
+#[test]
+fn rejecting_an_incompatible_direct_editor_update_keeps_the_focus_and_controller() {
+    use incular_core::{InputEvent, Offset};
+    use incular_widgets::{FractionalTranslation, internal::TreeError};
+
+    let old = TextEditingController::with_text("old");
+    let replacement = TextEditingController::with_text("replacement");
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(
+        EditableText::new(old.clone())
+            .text_direction(TextDirection::Ltr)
+            .focus_node(focus.clone())
+            .into(),
+    )
+    .unwrap();
+    frame(&mut runtime);
+    focus.request_focus();
+    frame(&mut runtime);
+    let field = runtime.focused_element().unwrap();
+    let render = runtime.tree().render_id(field);
+    let new = Widget::from(FractionalTranslation::new(
+        Offset::new(0.1, 0.1),
+        EditableText::new(replacement.clone()).text_direction(TextDirection::Ltr),
+    ));
+
+    for error in [
+        runtime.schedule_update(field, new.clone()).unwrap_err(),
+        runtime.tree_mut().update(field, new).unwrap_err(),
+    ] {
+        let TreeError::InvalidWidgetConfiguration { reason, .. } = error else {
+            panic!("expected a typed incompatible update error, got {error:?}");
+        };
+        assert!(reason.contains("update its parent"), "{reason}");
+    }
+    old.set_selection(TextSelection::collapsed(3));
+    let _ = runtime.handle_input(InputEvent::Text("!".into()));
+    frame(&mut runtime);
+    assert_eq!(runtime.focused_element(), Some(field));
+    assert!(focus.has_primary_focus());
+    assert_eq!(runtime.tree().render_id(field), render);
+    assert_eq!(old.text(), "old!");
+    assert_eq!(replacement.text(), "replacement");
+}

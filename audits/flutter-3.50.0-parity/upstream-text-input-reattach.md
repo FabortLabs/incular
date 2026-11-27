@@ -281,3 +281,15 @@ composition even without a focused editor; assigning the empty
 string through the text setter still leaves an unfocused selection
 unset. All 42 focused controller, copied-value, runtime input and
 undo checks passed.
+
+## A direct update cannot replace the element's type
+
+The controller reparenting audit exposed a debug panic in the Incular
+public scheduling API when a mounted TextField itself was replaced by
+a wrapper. Flutter's element update also requires a compatible type;
+its normal parent reconciliation performs the replacement. A direct
+Incular update now rejects this misuse with a configuration error
+before touching queued work or retained state. The regression checks
+both the queued and immediate APIs, then types into the same original
+editor without losing focus. A stable parent still allows reparenting.
+All 18 targeted scheduler, focus and controller cases passed.
