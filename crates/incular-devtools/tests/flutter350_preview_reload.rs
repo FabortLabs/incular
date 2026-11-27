@@ -9,6 +9,7 @@ use std::{
 };
 
 use incular_devtools::{
+    preview_execution::{PreviewExecution, PreviewExecutionKind},
     preview_manifest::{PreviewManifest, PreviewRegeneration},
     preview_reload::{
         PreviewReload, PreviewReloadCoordinator, PreviewReloadError, PreviewReloadHost,
@@ -156,6 +157,56 @@ async fn disposal_during_lookup_discards_the_snapshot_before_publication() {
     let trace = f.trace.lock().unwrap();
     assert_eq!(trace.lookup, [path]);
     assert!(trace.published.is_empty());
+}
+
+#[tokio::test]
+async fn source_and_manifest_publications_feed_the_running_preview_gate() {
+    let f = Fixture::new();
+    let source = f.change("src/foo.rs", "first preview");
+    let manifest = f.dir.path().join("Cargo.toml");
+    let mut execution = PreviewExecution::new();
+    let requests = execution.requests();
+    let coordinator = f.coordinator.with_execution_requests(requests.clone());
+    assert!(matches!(
+        coordinator.handle(&source).await.unwrap(),
+        PreviewReload::Reloaded { .. }
+    ));
+    assert!(requests.connected());
+    assert_eq!(
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            execution.perform_next(std::future::ready)
+        )
+        .await
+        .expect("source publication must queue a host operation"),
+        Some(PreviewExecutionKind::HotReload)
+    );
+
+    fs::write(
+        &manifest,
+        "[package]\nname = 'preview-test'\nversion = '0.2.0'",
+    )
+    .unwrap();
+    assert!(matches!(
+        coordinator.handle(&manifest).await.unwrap(),
+        PreviewReload::ManifestRefreshed(_)
+    ));
+    fs::write(&source, "second preview").unwrap();
+    assert!(matches!(
+        coordinator.handle(&source).await.unwrap(),
+        PreviewReload::Reloaded { .. }
+    ));
+    assert_eq!(
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            execution.perform_next(std::future::ready)
+        )
+        .await
+        .expect("manifest refresh must queue a host operation"),
+        Some(PreviewExecutionKind::HotRestart)
+    );
+    requests.stop();
+    assert_eq!(execution.perform_next(std::future::ready).await, None);
 }
 
 struct Fixture {

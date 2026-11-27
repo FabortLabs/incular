@@ -36,7 +36,7 @@ case "$mode" in
         migrations/widget_preview_gitignore_migration_test.dart)
           fixture="$tool_root/test/general.shard/$test_file"
           ;;
-        preview_detector_regression_178472_test.dart)
+        preview_detector_regression_178472_test.dart|widget_preview_test.dart)
           fixture="$tool_root/test/commands.shard/permeable/widget_preview/$test_file"
           ;;
         *)

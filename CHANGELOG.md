@@ -28,6 +28,9 @@ a version and date when publishing.
 
 ### Added
 
+- Preview host operations now wait for the connection, coalesce bursts,
+  and keep a pending restart ahead of ordinary reloads.
+
 - Preview hosts can inspect a source without publishing a reload. Watch
   events and inspection skip a disposed analysis context.
 

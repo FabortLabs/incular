@@ -258,3 +258,25 @@ without a publication, then dispose the backend independently of
 the coordinator. Browser session setup is not part of these cases.
 
 Three direct and 12 adjacent native preview checks passed.
+
+## Running preview reloads and restarts
+
+The pinned `widget_preview_test.dart:1138` permeable original passed,
+including its generated scaffold startup. This test uses a controllable
+resident runner; it does not launch a real browser. In its exact trace,
+an edit is held before debug connection, followed by one initial reload.
+While the second reload waits for acknowledgement, three further edits
+produce just one follow-up reload. In the next burst an explicit restart
+upgrades the pending reload and cannot be downgraded by a later edit.
+Closing the preview prevents any more host work.
+
+The native gate reproduces the five host operations in order: four
+reloads followed by one full restart. An independent source/manifest
+fixture writes real files, completes publication through the existing
+analysis coordinator and produces the expected host operations. The
+native control also verifies closing before connection and that queued
+producers cannot outlive a dropped session. The Rust component takes
+connection and shutdown signals from its host; it is not a browser
+launcher or a DTD implementation.
+
+Four direct and 15 adjacent native preview tests passed.

@@ -13,6 +13,7 @@ use tokio::{
 };
 
 use crate::preview_changes::{PreviewChange, PreviewChangeRouter};
+use crate::preview_execution::{PreviewExecutionKind, PreviewExecutionRequests};
 
 /// Operations available to the host for one preview update.
 pub trait PreviewReloadHost: Send {
@@ -131,6 +132,7 @@ pub struct PreviewReloadCoordinator<Host> {
     host: Mutex<Host>,
     policy: PreviewReloadPolicy,
     stopped: watch::Sender<bool>,
+    execution_requests: Option<PreviewExecutionRequests>,
 }
 
 impl<Host: PreviewReloadHost> PreviewReloadCoordinator<Host> {
@@ -151,7 +153,16 @@ impl<Host: PreviewReloadHost> PreviewReloadCoordinator<Host> {
             host: Mutex::new(host),
             policy,
             stopped,
+            execution_requests: None,
         }
+    }
+
+    /// Sends successful source publications and manifest refreshes to a
+    /// preview session as reloads and full restarts, respectively.
+    #[must_use]
+    pub fn with_execution_requests(mut self, requests: PreviewExecutionRequests) -> Self {
+        self.execution_requests = Some(requests);
+        self
     }
 
     /// Stops active and queued reload requests, releasing their host borrows.
@@ -210,6 +221,9 @@ impl<Host: PreviewReloadHost> PreviewReloadCoordinator<Host> {
                 host.refresh_manifest(&path)
                     .await
                     .map_err(PreviewReloadError::Manifest)?;
+                if let Some(requests) = &self.execution_requests {
+                    requests.request(PreviewExecutionKind::HotRestart);
+                }
                 return Ok(PreviewReload::ManifestRefreshed(path));
             }
             PreviewChange::Source(source) => source,
@@ -222,6 +236,9 @@ impl<Host: PreviewReloadHost> PreviewReloadCoordinator<Host> {
         host.publish_previews(&source, &previews)
             .await
             .map_err(PreviewReloadError::Publish)?;
+        if let Some(requests) = &self.execution_requests {
+            requests.request(PreviewExecutionKind::HotReload);
+        }
         Ok(PreviewReload::Reloaded {
             source,
             previews,
