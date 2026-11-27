@@ -9,10 +9,11 @@ use crate::RawKeyEvent;
 #[path = "raw_key_fuchsia_catalog.rs"]
 mod fuchsia;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RawKeyPlatformData {
     Fuchsia(FuchsiaRawKeyData),
+    Web(WebRawKeyData),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,5 +161,89 @@ impl FuchsiaRawKeyData {
                 let (_, id, portable) = fuchsia::LOGICAL[index];
                 (id, portable)
             })
+    }
+}
+
+/// The legacy browser payload. Left and right modifier physical keys have
+/// their DOM `code`/location, but browser modifier flags are not sided.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WebRawKeyData {
+    pub code: String,
+    pub key: String,
+    pub location: u32,
+    pub meta_state: u32,
+    pub key_code: u32,
+}
+
+impl WebRawKeyData {
+    pub const SHIFT: u32 = 0x01;
+    pub const ALT: u32 = 0x02;
+    pub const CONTROL: u32 = 0x04;
+    pub const META: u32 = 0x08;
+    pub const NUM_LOCK: u32 = 0x10;
+    pub const CAPS_LOCK: u32 = 0x20;
+    pub const SCROLL_LOCK: u32 = 0x40;
+
+    #[must_use]
+    pub fn key_label(&self) -> Option<&str> {
+        (self.key.encode_utf16().count() == 1).then_some(self.key.as_str())
+    }
+
+    #[must_use]
+    pub fn is_modifier_pressed(
+        &self,
+        modifier: RawKeyboardModifier,
+        _side: RawKeyboardSide,
+    ) -> bool {
+        use RawKeyboardModifier as M;
+        let mask = match modifier {
+            M::Shift => Self::SHIFT,
+            M::Alt => Self::ALT,
+            M::Control => Self::CONTROL,
+            M::Meta => Self::META,
+            M::NumLock => Self::NUM_LOCK,
+            M::CapsLock => Self::CAPS_LOCK,
+            M::ScrollLock => Self::SCROLL_LOCK,
+            M::Function | M::Symbol => return false,
+        };
+        self.meta_state & mask != 0
+    }
+
+    /// Decode an explicitly supplied legacy Web message for the mounted
+    /// keyboard router, preserving the original DOM strings and flags.
+    #[must_use]
+    pub fn into_event(self, state: KeyState, repeat: bool, is_composing: bool) -> RawKeyEvent {
+        let code = self.code.parse::<Code>().unwrap_or(Code::Unidentified);
+        let key = self.key.parse::<KeyboardKey>().unwrap_or_default();
+        let location = match self.location {
+            1 => Location::Left,
+            2 => Location::Right,
+            3 => Location::Numpad,
+            _ => Location::Standard,
+        };
+        let mut modifiers = Modifiers::empty();
+        for (source, target) in [
+            (Self::SHIFT, Modifiers::SHIFT),
+            (Self::ALT, Modifiers::ALT),
+            (Self::CONTROL, Modifiers::CONTROL),
+            (Self::META, Modifiers::META),
+            (Self::NUM_LOCK, Modifiers::NUM_LOCK),
+            (Self::CAPS_LOCK, Modifiers::CAPS_LOCK),
+            (Self::SCROLL_LOCK, Modifiers::SCROLL_LOCK),
+        ] {
+            modifiers.set(target, self.meta_state & source != 0);
+        }
+        RawKeyEvent::with_platform_data(
+            KeyboardEvent {
+                key,
+                code,
+                location,
+                state,
+                modifiers,
+                repeat,
+                is_composing,
+            },
+            RawKeyPlatformData::Web(self),
+        )
     }
 }

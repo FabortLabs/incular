@@ -337,7 +337,7 @@ fn a_defunct_typed_listener_receives_no_fuchsia_events() {
     assert!(events.borrow().is_empty());
 }
 
-fn fuchsia_raw_listener() -> (
+fn explicit_raw_listener() -> (
     Runtime,
     FocusNode,
     Rc<RefCell<Vec<incular_widgets::RawKeyEvent>>>,
@@ -364,7 +364,7 @@ fn a_raw_listener_receives_the_original_fuchsia_data_and_its_typed_identity() {
     use incular_widgets::{
         FuchsiaRawKeyData, RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide,
     };
-    let (mut runtime, _, events) = fuchsia_raw_listener();
+    let (mut runtime, _, events) = explicit_raw_listener();
     send_fuchsia_left_meta(&mut runtime);
     let events = events.borrow();
     assert_eq!(events.len(), 2);
@@ -390,7 +390,7 @@ fn a_raw_listener_receives_the_original_fuchsia_data_and_its_typed_identity() {
 
 #[test]
 fn a_removed_raw_listener_cannot_receive_a_future_fuchsia_message() {
-    let (mut runtime, node, events) = fuchsia_raw_listener();
+    let (mut runtime, node, events) = explicit_raw_listener();
     send_fuchsia_left_meta(&mut runtime);
     assert_eq!(events.take().len(), 2);
     update(&mut runtime, SizedBox::shrink());
@@ -432,5 +432,64 @@ fn fuchsia_raw_conversion_keeps_printable_labels_and_unknown_numeric_identity() 
     assert_eq!(
         unknown.into_event(KeyState::Down, false).physical_key(),
         Code::Unidentified
+    );
+}
+
+fn send_web_left_meta(runtime: &mut Runtime) {
+    use incular_runtime::KeyMessage;
+    use incular_widgets::WebRawKeyData;
+    for (state, meta_state) in [(KeyState::Down, WebRawKeyData::META), (KeyState::Up, 0)] {
+        let data = WebRawKeyData {
+            code: "MetaLeft".to_owned(),
+            key: "Meta".to_owned(),
+            location: 1,
+            meta_state,
+            key_code: 91,
+        };
+        assert!(
+            !runtime.dispatch_key_message(KeyMessage::Raw(data.into_event(state, false, false)))
+        );
+    }
+    frame(runtime);
+}
+
+#[test]
+fn an_explicit_legacy_web_key_reaches_the_typed_listener_with_dom_identity() {
+    let (mut runtime, _, events) = focused_listener();
+    send_web_left_meta(&mut runtime);
+    let events = events.borrow();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].state, KeyState::Down);
+    assert_eq!(events[0].code, Code::MetaLeft);
+    assert_eq!(events[0].key, KeyboardKey::Named(NamedKey::Meta));
+    assert_eq!(events[0].location, Location::Left);
+    assert_eq!(events[1].state, KeyState::Up);
+}
+
+#[test]
+fn a_raw_web_listener_sees_dom_strings_position_and_unsided_modifier_state() {
+    use incular_widgets::{
+        RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide, WebRawKeyData,
+    };
+    let (mut runtime, _, events) = explicit_raw_listener();
+    send_web_left_meta(&mut runtime);
+    let events = events.borrow();
+    assert_eq!(events.len(), 2);
+    assert!(events[0].is_key_down());
+    let Some(RawKeyPlatformData::Web(raw)) = events[0].data() else {
+        panic!("expected preserved DOM fields");
+    };
+    assert_eq!(raw.code, "MetaLeft");
+    assert_eq!(raw.key, "Meta");
+    assert_eq!(raw.location, 1);
+    assert_eq!(raw.key_code, 91);
+    assert_eq!(raw.meta_state, WebRawKeyData::META);
+    assert!(raw.is_modifier_pressed(RawKeyboardModifier::Meta, RawKeyboardSide::Left));
+    assert!(raw.is_modifier_pressed(RawKeyboardModifier::Meta, RawKeyboardSide::Right));
+    assert!(!raw.is_modifier_pressed(RawKeyboardModifier::Function, RawKeyboardSide::Any));
+    assert_eq!(raw.key_label(), None);
+    assert!(!events[1].is_key_down());
+    assert!(
+        matches!(events[1].data(), Some(RawKeyPlatformData::Web(data)) if data.meta_state == 0)
     );
 }

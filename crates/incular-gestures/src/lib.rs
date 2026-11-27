@@ -109,7 +109,7 @@ pub use pointer_router::{
     PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter, RoutedPointerEvent,
     WeakPointerRouter,
 };
-pub use raw_key_data::{FuchsiaRawKeyData, RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide};
+pub use raw_key_data::{FuchsiaRawKeyData, RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide, WebRawKeyData};
 pub use raw::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers,

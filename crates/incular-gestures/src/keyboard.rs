@@ -29,21 +29,21 @@ pub type FocusKeyEventHandler = Rc<dyn Fn(&crate::FocusNode, KeyboardEvent) -> K
 #[derive(Clone, Debug)]
 pub struct RawKeyEvent {
     portable: KeyboardEvent,
-    data: Option<crate::RawKeyPlatformData>,
+    data: Option<Rc<crate::RawKeyPlatformData>>,
 }
 
 impl RawKeyEvent {
     #[must_use]
-    pub(crate) const fn with_platform_data(
+    pub(crate) fn with_platform_data(
         portable: KeyboardEvent,
         data: crate::RawKeyPlatformData,
     ) -> Self {
-        Self { portable, data: Some(data) }
+        Self { portable, data: Some(Rc::new(data)) }
     }
 
     #[must_use]
-    pub const fn data(&self) -> Option<crate::RawKeyPlatformData> {
-        self.data
+    pub fn data(&self) -> Option<&crate::RawKeyPlatformData> {
+        self.data.as_deref()
     }
 
     #[must_use]
