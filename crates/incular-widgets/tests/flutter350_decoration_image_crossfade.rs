@@ -5,6 +5,10 @@ use incular_rendering::{BlendMode, PaintCommand};
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{BoxDecoration, BoxFit, Container, DecorationImage, Widget};
 
+// The display list uses the normalized 8-bit alpha carried by Opacity.
+const QUARTER_ALPHA: f32 = 64.0 / 255.0;
+const HALF_ALPHA: f32 = 128.0 / 255.0;
+
 fn image(rgba: [u8; 4], opacity: f32) -> DecorationImage {
     let mut image = DecorationImage::new(ImageHandle::from_rgba8(1, 1, rgba.to_vec()).unwrap());
     image.fit = Some(BoxFit::Fill);
@@ -67,8 +71,12 @@ fn both_weighted_images_are_isolated_from_the_opaque_backdrop() {
     assert_eq!(
         images,
         [
-            (ids[0], 0.25, vec![BlendMode::SrcOver]),
-            (ids[1], 0.25, vec![BlendMode::SrcOver, BlendMode::Plus]),
+            (ids[0], QUARTER_ALPHA, vec![BlendMode::SrcOver]),
+            (
+                ids[1],
+                QUARTER_ALPHA,
+                vec![BlendMode::SrcOver, BlendMode::Plus]
+            ),
         ]
     );
 }
@@ -90,17 +98,17 @@ fn retargeted_crossfades_restore_each_nested_layer_with_source_over() {
     assert_eq!(
         mounted_images(BoxDecoration::new().image(red_then_group), Color::BLACK),
         [
-            (red_id, 0.5, vec![SrcOver]),
-            (green_id, 0.25, vec![SrcOver, SrcOver, Plus]),
-            (blue_id, 0.25, vec![SrcOver, SrcOver, Plus]),
+            (red_id, HALF_ALPHA, vec![SrcOver]),
+            (green_id, QUARTER_ALPHA, vec![SrcOver, SrcOver, Plus]),
+            (blue_id, QUARTER_ALPHA, vec![SrcOver, SrcOver, Plus]),
         ]
     );
     assert_eq!(
         mounted_images(BoxDecoration::new().image(group_then_red), Color::BLACK),
         [
-            (green_id, 0.25, vec![SrcOver, SrcOver]),
-            (blue_id, 0.25, vec![SrcOver, SrcOver, Plus]),
-            (red_id, 0.5, vec![SrcOver, Plus]),
+            (green_id, QUARTER_ALPHA, vec![SrcOver, SrcOver]),
+            (blue_id, QUARTER_ALPHA, vec![SrcOver, SrcOver, Plus]),
+            (red_id, HALF_ALPHA, vec![SrcOver, Plus]),
         ]
     );
 }

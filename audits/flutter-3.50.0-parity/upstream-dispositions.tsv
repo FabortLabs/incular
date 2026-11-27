@@ -3117,3 +3117,8 @@ packages/flutter/test/painting/decoration_test.dart	141	Decoration.lerp()	paired
 packages/flutter/test/painting/decoration_test.dart	155	Decoration.lerp identical a,b	paired-match	upstream-decoration-values.md
 packages/flutter/test/painting/decoration_test.dart	428	BoxDecoration.lerp - shapes	paired-match	upstream-decoration-values.md
 packages/flutter/test/painting/decoration_test.dart	457	BoxDecoration.lerp - gradients	paired-match	upstream-decoration-values.md
+packages/flutter/test/painting/decoration_test.dart	786	DecorationImage paints the placeholder until the image is available	paired-match	upstream-async-decoration-image.md#placeholder-images-and-painter-ownership
+packages/flutter/test/painting/decoration_test.dart	824	DecorationImage does not paint the placeholder when the image is available	paired-match	upstream-async-decoration-image.md#placeholder-images-and-painter-ownership
+packages/flutter/test/painting/decoration_test.dart	847	DecorationImagePainter releases the placeholder once the image loads	partial-match	upstream-async-decoration-image.md#placeholder-images-and-painter-ownership
+packages/flutter/test/painting/decoration_test.dart	870	DecorationImage placeholder is included in equality and toString	paired-match	upstream-async-decoration-image.md#placeholder-images-and-painter-ownership
+packages/flutter/test/painting/decoration_test.dart	885	DecorationImagePainter disposes of image when disposed	paired-match	upstream-async-decoration-image.md#placeholder-images-and-painter-ownership

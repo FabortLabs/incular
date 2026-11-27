@@ -445,12 +445,39 @@ fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDire
                         context,
                         (size.width.is_finite() && size.height.is_finite()).then_some(size),
                     );
-                    match state.stream(&provider, configuration).frame_state() {
-                        incular_image::ImageLoadState::Ready(bitmap) => {
-                            let source_scale = bitmap.scale() as f32;
-                            paint_decoration_bitmap(&image, bitmap, direction, source_scale)
+                    let fallback_stream = match &image.placeholder {
+                        Some(DecorationImageSource::Provider(fallback))
+                            if !state.primary_is_ready(&provider, &configuration) =>
+                        {
+                            Some(DecorationProviderState::stream(
+                                &state.placeholder, fallback, configuration.clone(),
+                            ))
                         }
-                        _ => crate::SizedBox::shrink().into(),
+                        _ => None,
+                    };
+                    let primary = state.primary_stream(&provider, configuration);
+                    if let incular_image::ImageLoadState::Ready(bitmap) = primary.frame_state() {
+                        state.placeholder.borrow_mut().take();
+                        let source_scale = bitmap.scale() as f32;
+                        return paint_decoration_bitmap(&image, bitmap, direction, source_scale);
+                    }
+                    match (&image.placeholder, fallback_stream) {
+                        (Some(DecorationImageSource::Decoded(bitmap)), _) => {
+                            paint_decoration_bitmap(&image, bitmap.clone(), direction, 1.)
+                        }
+                        (_, Some(stream)) => {
+                            state.watch_primary(&primary);
+                            if let incular_image::ImageLoadState::Ready(bitmap) = stream.frame_state() {
+                                let source_scale = bitmap.scale() as f32;
+                                paint_decoration_bitmap(&image, bitmap, direction, source_scale)
+                            } else {
+                                crate::SizedBox::shrink().into()
+                            }
+                        }
+                        _ => {
+                            state.placeholder.borrow_mut().take();
+                            crate::SizedBox::shrink().into()
+                        }
                     }
                 },
                 true,
@@ -462,6 +489,8 @@ fn resolved_decoration_image(image: &DecorationImage, direction: Option<TextDire
 #[derive(Default)]
 struct DecorationProviderState {
     current: RefCell<Option<ResolvedDecorationImage>>,
+    placeholder: RefCell<Option<ResolvedDecorationImage>>,
+    primary_completion: RefCell<Option<incular_image::ImageFrameSubscription>>,
 }
 
 struct ResolvedDecorationImage {
@@ -471,29 +500,79 @@ struct ResolvedDecorationImage {
 }
 
 impl crate::tree::RetainedState for DecorationProviderState {
+    const DISPOSE_ON_UNMOUNT: bool = true;
+
+    fn dispose(&self) {
+        self.primary_completion.borrow_mut().take();
+        self.current.borrow_mut().take();
+        self.placeholder.borrow_mut().take();
+    }
+
     fn rebind_revision(&self, _: Rc<Cell<u64>>) {}
 }
 
 impl DecorationProviderState {
-    fn stream(
+    fn current_stream(
+        slot: &RefCell<Option<ResolvedDecorationImage>>,
+        provider: &crate::AnyImageProvider,
+        configuration: &incular_image::ImageConfiguration,
+    ) -> Option<incular_image::ImageStream> {
+        slot.borrow().as_ref()
+            .filter(|active| active.provider == *provider && active.configuration == *configuration)
+            .map(|active| active.stream.clone())
+    }
+
+    fn primary_is_ready(
+        &self,
+        provider: &crate::AnyImageProvider,
+        configuration: &incular_image::ImageConfiguration,
+    ) -> bool {
+        Self::current_stream(&self.current, provider, configuration)
+            .is_some_and(|stream| matches!(stream.frame_state(), incular_image::ImageLoadState::Ready(_)))
+    }
+
+    fn primary_stream(
         &self,
         provider: &crate::AnyImageProvider,
         configuration: incular_image::ImageConfiguration,
     ) -> incular_image::ImageStream {
-        if let Some(active) = self.current.borrow().as_ref()
-            && active.provider == *provider
-            && active.configuration == configuration
-        {
-            return active.stream.clone();
+        if let Some(active) = Self::current_stream(&self.current, provider, &configuration) {
+            return active;
+        }
+        self.primary_completion.borrow_mut().take();
+        Self::stream(&self.current, provider, configuration)
+    }
+
+    fn stream(
+        slot: &RefCell<Option<ResolvedDecorationImage>>,
+        provider: &crate::AnyImageProvider,
+        configuration: incular_image::ImageConfiguration,
+    ) -> incular_image::ImageStream {
+        if let Some(active) = Self::current_stream(slot, provider, &configuration) {
+            return active;
         }
         let stream = provider.resolve(&configuration);
-        self.current.replace(Some(ResolvedDecorationImage {
+        slot.replace(Some(ResolvedDecorationImage {
             provider: provider.clone(),
             configuration,
             stream: stream.clone(),
         }));
         stream
     }
+
+    fn watch_primary(self: &Rc<Self>, primary: &incular_image::ImageStream) {
+        if self.primary_completion.borrow().is_some() {
+            return;
+        }
+        let state = Rc::downgrade(self);
+        let subscription = primary.listen_frame(move |result, _| {
+            if result.is_ok() && let Some(state) = state.upgrade() {
+                state.placeholder.borrow_mut().take();
+            }
+        });
+        self.primary_completion.replace(Some(subscription));
+    }
+
 }
 
 fn paint_decoration_bitmap(

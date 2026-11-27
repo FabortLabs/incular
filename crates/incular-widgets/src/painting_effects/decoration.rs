@@ -696,6 +696,9 @@ impl From<crate::AnyImageProvider> for DecorationImageSource {
 pub struct DecorationImage {
     #[builder(setter(into))]
     pub image: DecorationImageSource,
+    /// The image painted until the primary provider produces its first frame.
+    #[builder(default, setter(strip_option, into))]
+    pub placeholder: Option<DecorationImageSource>,
     /// Flutter `fit`. `None` resolves like Flutter's `paintImage`: scale-down
     /// without a center slice, fill with one. See [`Self::resolved_fit`].
     #[builder(default, setter(strip_option))]
@@ -786,6 +789,7 @@ impl DecorationImage {
     pub fn new(image: impl Into<DecorationImageSource>) -> Self {
         Self {
             image: image.into(),
+            placeholder: None,
             fit: None,
             alignment: incular_config::Alignment::CENTER,
             alignment_geometry: None,
@@ -797,6 +801,13 @@ impl DecorationImage {
             filter_quality: FilterQuality::Medium,
             blend: None,
         }
+    }
+
+    /// Specifies an already decoded image or an independent fallback provider.
+    #[must_use]
+    pub fn placeholder(mut self, placeholder: impl Into<DecorationImageSource>) -> Self {
+        self.placeholder = Some(placeholder.into());
+        self
     }
 
     /// Flutter's `DecorationImage(image: provider)`, including providers

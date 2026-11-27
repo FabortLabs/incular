@@ -20,3 +20,24 @@ valid. The public image field now distinguishes decoded handles
 from providers; code that inspects the previously decoded handle
 can use `decoration.image.decoded()`. Providers use the owning
 view's image configuration and the measured decoration size.
+
+## Placeholder images and painter ownership
+
+Five pinned originals passed; four pair with the mounted native
+implementation. A pending provider paints its 10 px fallback and
+requests one new frame when the 100 px image arrives. A synchronous
+primary never paints the fallback, even though Flutter resolves it
+first. Placeholder identity participates in value equality and appears
+in the diagnostic description. Unmount drops the painter's retained
+primary image, verified with a weak image handle.
+
+The primary's completion drops the fallback provider reference
+immediately. A display list that already painted the fallback may
+keep its own copy alive until replaced. The native regression verifies
+the fallback is released after the next draw; the original checking
+its exact handle count before a redraw remains partial.
+
+All 14 focused native cases passed. Older crossfade checks now assert
+the existing exact normalized 8-bit alpha (64/255 and 128/255) rather
+than unrounded fractions; the blend sequence and image identities
+remain exact. No GPU-image comparison is claimed.
