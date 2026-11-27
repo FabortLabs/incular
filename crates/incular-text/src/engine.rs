@@ -1910,15 +1910,31 @@ impl TextEngine {
                     // Step over the inline boxes placed before this cluster.
                     // The cluster right after a box is its placeholder's
                     // character, whose caret cell spans the box.
-                    let mut box_left = None;
+                    let mut current_box = None;
                     while let Some(placed) = line_boxes.get(next_box)
                         && placed.rect.origin.x <= cluster_x + 0.01
                     {
-                        if placed.index == cluster_range.start {
-                            box_left = Some(placed.rect.origin.x);
-                        }
                         cluster_x = placed.rect.origin.x + placed.rect.size.width;
                         next_box += 1;
+                        if placed.index == cluster_range.start {
+                            // The next box may touch this one. Leave it for its
+                            // own U+FFFC rather than absorbing a chain of boxes
+                            // into this single cluster's caret and selection.
+                            current_box = Some(placed.rect);
+                            break;
+                        }
+                    }
+                    if let Some(rect) = current_box {
+                        caret_end = caret_end.max(cluster_range.end);
+                        clusters.insert(ClusterPosition {
+                            range: cluster_range,
+                            left: rect.origin.x,
+                            right: rect.origin.x + rect.size.width,
+                            rtl,
+                            ligature_start: false,
+                            ligature_continuation: false,
+                        });
+                        continue;
                     }
                     // Glyph 0 is the font's "missing glyph" box.
                     if cluster.glyphs().any(|glyph| glyph.id == 0)
@@ -1972,7 +1988,6 @@ impl TextEngine {
                     // also grow the cluster cell beyond its raw glyphs.
                     let visible_edge = cluster_x + cluster.advance().max(glyph_advance);
                     let left = cluster_x.min(visible_edge);
-                    let left = box_left.map_or(left, |box_left: f32| box_left.min(left));
                     let right = cluster_x.max(visible_edge);
                     let position = ClusterPosition {
                         range: cluster_range.clone(),

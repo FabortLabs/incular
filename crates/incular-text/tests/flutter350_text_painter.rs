@@ -1225,3 +1225,118 @@ fn the_upstream_caret_in_thai_includes_the_final_combining_mark() {
         painter.width().unwrap()
     );
 }
+
+#[test]
+fn terminal_caret_counts_the_full_inline_widget_advance() {
+    use incular_text::{PlaceholderDimensions, TextAffinity, WidgetSpanAlignment};
+
+    let span = TextSpan::new("before").children([
+        InlineSpan::from(WidgetSpan::new(1)),
+        InlineSpan::from(TextSpan::new("after")),
+    ]);
+    let mut painter = painter(span, TextDirection::Ltr);
+    painter
+        .set_placeholder_dimensions(Some(&[PlaceholderDimensions::new(
+            Size::new(50., 30.),
+            WidgetSpanAlignment::TextBottom,
+        )
+        .baseline_offset(25.)]))
+        .unwrap();
+    painter.layout(0., f32::INFINITY).unwrap();
+    assert_eq!(painter.plain_text(), "before\u{fffc}after");
+    assert_eq!(
+        painter
+            .caret_offset_utf16(
+                painter.plain_text().encode_utf16().count(),
+                TextAffinity::Downstream,
+                0.
+            )
+            .unwrap()
+            .x,
+        painter.width().unwrap()
+    );
+}
+
+#[test]
+fn consecutive_inline_widgets_keep_distinct_carets_and_boxes_across_wrap() {
+    use incular_text::{PlaceholderDimensions, TextAffinity, WidgetSpanAlignment};
+    let Some((mut engine, style)) = centered_width_ahem() else {
+        return;
+    };
+    let mut children = Vec::new();
+    for id in 0..14 {
+        children.push(InlineSpan::from(WidgetSpan::new(id)));
+        if matches!(id, 0 | 2) {
+            children.push(InlineSpan::from(TextSpan::new("test")));
+        }
+    }
+    let mut painter = painter(
+        TextSpan::new("test")
+            .style(style.font_size(14.))
+            .children(children),
+        TextDirection::Ltr,
+    );
+    let dimensions: [_; 14] = std::array::from_fn(|id| {
+        PlaceholderDimensions::new(
+            Size::new(if id == 12 { 51. } else { 50. }, 30.),
+            WidgetSpanAlignment::TextBottom,
+        )
+        .baseline_offset(25.)
+    });
+    painter
+        .set_placeholder_dimensions(Some(&dimensions))
+        .unwrap();
+    painter.layout_with_engine(&mut engine, 0., 500.).unwrap();
+    for (offset, x) in [
+        (1, 14.),
+        (4, 56.),
+        (5, 106.),
+        (6, 120.),
+        (10, 212.),
+        (11, 262.),
+        (12, 276.),
+        (13, 290.),
+        (14, 304.),
+        (15, 318.),
+        (16, 368.),
+        (17, 418.),
+        (18, 0.),
+        (19, 50.),
+        (23, 250.),
+    ] {
+        assert_eq!(
+            painter
+                .caret_offset_utf16(offset, TextAffinity::Downstream, 0.)
+                .unwrap()
+                .x,
+            x,
+            "caret {offset}"
+        );
+    }
+    let layout = painter.shaped_layout().unwrap();
+    assert_eq!(layout.placeholders.len(), 14);
+    for (id, left, top, right) in [
+        (0, 56., 0., 106.),
+        (2, 212., 0., 262.),
+        (3, 318., 0., 368.),
+        (4, 368., 0., 418.),
+        (5, 418., 0., 468.),
+        (6, 0., 30., 50.),
+        (7, 50., 30., 100.),
+        (10, 200., 30., 250.),
+        (11, 250., 30., 300.),
+        (12, 300., 30., 351.),
+        (13, 351., 30., 401.),
+    ] {
+        let item = &layout.placeholders[id];
+        assert_eq!(item.id, id as u64);
+        assert_eq!(
+            item.rect,
+            incular_core::Rect::from_origin_size(
+                incular_core::Offset::new(left, top),
+                Size::new(right - left, 30.)
+            ),
+            "box {id}"
+        );
+    }
+}

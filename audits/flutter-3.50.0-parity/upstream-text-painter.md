@@ -201,3 +201,15 @@ positions do not reverse inside a cluster. The Thai terminal caret
 reaches the measured width. All three exact pinned registrations passed.
 This does not cover the registration for trailing breakable Unicode
 spaces, where Parley still wraps the Ogham space at a tight width.
+
+## Consecutive inline widget carets and wrap
+
+Two original widget-span cases pair. A final caret after ordinary text
+and an inline box reaches the measured paragraph width. In the 14-box
+case, each touching box now owns its own replacement-character cell:
+the cluster walker no longer consumes its neighbors when their edges
+touch. At 500 px the first row ends after the sixth box; the downstream
+caret at offset 18 starts the second row at x=0. All asserted caret and
+box coordinates match pinned Ahem, including the 51 px-wide box in
+the second row. Both pinned originals, 39 focused painter tests, and
+4 inline-placeholder tests passed.

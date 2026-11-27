@@ -3147,3 +3147,5 @@ packages/flutter/test/painting/text_painter_test.dart	1882	TextPainter infinite 
 packages/flutter/test/painting/text_painter_test.dart	376	TextPainter caret zalgo test	paired-match	upstream-text-painter.md#clustered-carets-across-scripts
 packages/flutter/test/painting/text_painter_test.dart	381	TextPainter caret Devanagari test	paired-match	upstream-text-painter.md#clustered-carets-across-scripts
 packages/flutter/test/painting/text_painter_test.dart	1522	Diacritic	paired-match	upstream-text-painter.md#clustered-carets-across-scripts
+packages/flutter/test/painting/text_painter_test.dart	221	TextPainter caret test with WidgetSpan	paired-match	upstream-text-painter.md#consecutive-inline-widget-carets-and-wrap
+packages/flutter/test/painting/text_painter_test.dart	1077	TextPainter widget span	paired-match	upstream-text-painter.md#consecutive-inline-widget-carets-and-wrap
