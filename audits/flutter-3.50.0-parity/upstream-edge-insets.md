@@ -220,3 +220,13 @@ The native widget test runs the actual stack, positioned decoration and paint
 path, with a nonempty control. Empty bounds now produce an empty path rather
 than divide by zero and emit non-finite geometry. This batch does not count
 the upstream star raster goldens.
+
+### Star outline and stroke inset
+
+A pinned Flutter path probe and native test agree on the outer and inner
+path occupancy of seven variants on a translated, non-square box: default
+star and polygon, rounded two-sided polygon, zero inner radius, and
+inside/centre/outside stroke alignment on a rounded, rotated, squashed
+fractional star. Each path is tested at 88 non-central points plus an
+outer centre check. The fixture records actual `Path.contains` results;
+it does not stand in for Flutter's painting goldens or add upstream credit.
