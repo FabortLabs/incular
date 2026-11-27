@@ -900,13 +900,17 @@ impl WidgetsApp {
             self.title_controller.bind_sink(sink);
         }
 
-        let mut child = self
+        let routing = self
             .router_root
             .clone()
             .unwrap_or_else(|| self.controller.clone().into_widget());
-        if let Some(builder) = self.builder.as_ref() {
-            child = builder(child);
-        }
+        let scope = Widget::from(crate::FocusScope::new(routing).debug_label("Navigator Scope"))
+            .with_navigation_scope_autofocus();
+        let mut child = if let Some(builder) = &self.builder {
+            builder(scope)
+        } else {
+            scope
+        };
         // Flutter's WidgetsApp puts a `ShortcutRegistrar` above the app's
         // content, so menus anywhere can add accelerators.
         child = crate::ShortcutRegistrar::new(child).into();

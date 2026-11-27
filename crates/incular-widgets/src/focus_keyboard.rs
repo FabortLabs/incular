@@ -125,7 +125,7 @@ pub(crate) fn passive_shortcut_boundary(
     include_semantics: bool,
 ) -> Widget {
     callbacks.owned_focus_permission = Some(false);
-    callbacks.owned_focus_debug_label = label;
+    callbacks.focus_debug_label = label;
     callbacks.annotates_focus = true;
     callbacks.include_semantics = false;
     callbacks.focus_node_widget_properties = Some(incular_gestures::FocusNodeWidgetProperties {
@@ -451,6 +451,7 @@ impl From<Focus> for Widget {
 #[derive(Clone)]
 pub struct FocusScope {
     node: Option<FocusScopeNode>,
+    debug_label: Option<Rc<str>>,
     parent_node: Option<FocusNode>,
     can_request_focus: Option<bool>,
     skip_traversal: Option<bool>,
@@ -474,6 +475,7 @@ impl Default for FocusScope {
             descendants_are_traversable: None,
             use_external_properties: false,
             autofocus: false,
+            debug_label: None,
             policy: None,
             on_focus_change: None,
             child: None,
@@ -489,6 +491,13 @@ impl FocusScope {
             child: Some(child.into()),
             ..Self::default()
         }
+    }
+
+    /// Sets a diagnostic name on the scope's retained focus node.
+    #[must_use]
+    pub fn debug_label(mut self, label: impl Into<Rc<str>>) -> Self {
+        self.debug_label = Some(label.into());
+        self
     }
 
     /// Resolves the nearest focus boundary above this retained element and
@@ -688,6 +697,7 @@ impl From<FocusScope> for Widget {
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
                 callbacks.focus_scope = Some(node.clone());
                 callbacks.focus_node_widget_properties = properties;
+                callbacks.focus_debug_label = value.debug_label;
             }
             widget
         } else {
@@ -702,6 +712,7 @@ impl From<FocusScope> for Widget {
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
                 callbacks.owns_focus_scope = true;
                 callbacks.focus_node_widget_properties = properties;
+                callbacks.focus_debug_label = value.debug_label;
             }
             widget
         };

@@ -415,6 +415,12 @@ impl Widget {
         self
     }
 
+    /// Requests the routing scope itself after explicit focus requests.
+    pub(crate) fn with_navigation_scope_autofocus(mut self) -> Self {
+        self.semantic_properties_mut().navigation_scope_autofocus = true;
+        self
+    }
+
     /// Attaches native text-input hints to the retained editor without making
     /// the renderer-neutral widget depend on a platform window handle.
     #[doc(hidden)]

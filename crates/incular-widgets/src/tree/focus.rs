@@ -180,17 +180,23 @@ pub(super) fn instantiate_owned_focus_node(widget: &mut Widget, previous: Option
     if callbacks.owns_focus_scope {
         let scope = previous.and_then(|old| old.focus_scope.clone()).unwrap_or_default();
         scope.set_can_request_focus(can_request);
-        callbacks.focus_node = Some(scope.scope_focus_node());
+        let node = scope.scope_focus_node();
+        if callbacks.focus_debug_label.is_some()
+            || previous.is_some_and(|old| old.focus_debug_label.is_some())
+        {
+            node.set_debug_label(callbacks.focus_debug_label.clone());
+        }
+        callbacks.focus_node = Some(node);
         callbacks.focus_scope = Some(scope);
     } else {
         let retained = previous.and_then(|old| old.focus_node.clone());
         let notify = retained.is_none();
         let node = retained.unwrap_or_default();
         node.set_can_request_focus(can_request);
-        if callbacks.owned_focus_debug_label.is_some()
-            || previous.is_some_and(|old| old.owned_focus_debug_label.is_some())
+        if callbacks.focus_debug_label.is_some()
+            || previous.is_some_and(|old| old.focus_debug_label.is_some())
         {
-            node.set_debug_label(callbacks.owned_focus_debug_label.clone());
+            node.set_debug_label(callbacks.focus_debug_label.clone());
         }
         if notify && let Some(creation) = creation {
             (creation.0)(node.clone());
@@ -291,6 +297,11 @@ impl WidgetTree {
         if let (Some(node), Some(WidgetKind::Gesture { callbacks, .. })) = (node, kind) {
             if let Some(properties) = callbacks.focus_node_widget_properties {
                 properties.apply(node);
+            }
+            if callbacks.owned_focus_permission.is_none()
+                && let Some(label) = &callbacks.focus_debug_label
+            {
+                node.set_debug_label(Some(label.clone()));
             }
             if callbacks.focus_key_handler_owner == incular_gestures::FocusKeyHandlerOwner::FocusWidget {
                 node.install_mounted_key_handlers(
@@ -2064,6 +2075,7 @@ impl WidgetTree {
         // in mounting order, including nodes excluded from traversal.
         let mut pending: Vec<_> = self.root.into_iter().collect();
         let mut autofocusing_scopes = Vec::new();
+        let mut navigation_anchor = None;
         while let Some(id) = pending.pop() {
             let Some(element) = self.elements.get(id.0) else {
                 continue;
@@ -2079,25 +2091,35 @@ impl WidgetTree {
             if element.widget.semantic_properties().focus_scope_autofocus {
                 autofocusing_scopes.push(id);
             }
+            if navigation_anchor.is_none()
+                && element.widget.semantic_properties().navigation_scope_autofocus
+                && self.can_request_focus(id)
+            {
+                navigation_anchor = Some(id);
+            }
             pending.extend(element.children.iter().rev().copied());
         }
         if autofocusing_scopes.is_empty() {
-            return None;
+            return navigation_anchor;
         }
         // Scope-level autofocus without a designated node is an Incular
         // convenience: choose the first available traversal stop.
         let focusable = self.focusable_elements();
-        autofocusing_scopes.into_iter().find_map(|scope| {
-            focusable
-                .iter()
-                .copied()
-                .find(|candidate| self.is_focus_descendant_or_self(*candidate, scope))
-        })
+        autofocusing_scopes
+            .into_iter()
+            .find_map(|scope| {
+                focusable
+                    .iter()
+                    .copied()
+                    .find(|candidate| self.is_focus_descendant_or_self(*candidate, scope))
+            })
+            .or(navigation_anchor)
     }
 
     pub(super) fn note_mounted_autofocus(&mut self, id: ElementId, widget: &Widget) {
         if self.hosted_focus_nodes.is_some()
             && (widget.semantic_properties().focus_scope_autofocus
+                || widget.semantic_properties().navigation_scope_autofocus
                 || match widget.kind() {
                     WidgetKind::Gesture { callbacks, .. } => callbacks.autofocus,
                     WidgetKind::TextField(spec) => spec.autofocus,
@@ -2243,8 +2265,15 @@ impl WidgetTree {
             return None;
         }
         let requests = std::mem::take(&mut self.mounted_autofocus);
-        requests.into_iter().find_map(|id| {
+        let mut navigation_anchor = None;
+        let explicit = requests.into_iter().find_map(|id| {
             let element = self.elements.get(id.0)?;
+            if element.widget.semantic_properties().navigation_scope_autofocus {
+                if navigation_anchor.is_none() && self.can_request_focus(id) {
+                    navigation_anchor = Some(id);
+                }
+                return None;
+            }
             if match element.widget.kind() {
                 WidgetKind::Gesture { callbacks, .. } => callbacks.autofocus,
                 WidgetKind::TextField(spec) => spec.autofocus,
@@ -2263,7 +2292,8 @@ impl WidgetTree {
                         .find(|candidate| self.is_focus_descendant_or_self(*candidate, id))
                 })
                 .flatten()
-        })
+        });
+        explicit.or(navigation_anchor)
     }
 
     /// Notifies focus-within callbacks and mirrors standalone tree focus
