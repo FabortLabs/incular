@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::text_shortcuts::{TextIntent, resolve};
+use incular_core::Modifiers;
 use incular_text::{SelectionChangedCause, TextAffinity, TextBoundaryKind};
 
 /// `TextSelection.expandTo`.
@@ -152,6 +153,7 @@ impl Runtime {
         field: ElementId,
         controller: &TextEditingController,
         event: &KeyboardEvent,
+        effective_modifiers: Modifiers,
     ) -> bool {
         let editable = self.tree.text_field_is_editable(field);
         // Enter is not a text shortcut (Flutter maps it to
@@ -177,7 +179,7 @@ impl Runtime {
             }
             return true;
         }
-        let Some(intent) = resolve(self.text_shortcut_platform, event.code, event.modifiers) else {
+        let Some(intent) = resolve(self.text_shortcut_platform, event.code, effective_modifiers) else {
             return false;
         };
         self.run_text_intent(field, controller, intent, editable)
@@ -471,6 +473,7 @@ impl Runtime {
         &mut self,
         label: ElementId,
         event: &KeyboardEvent,
+        effective_modifiers: Modifiers,
     ) -> bool {
         use TextIntent::{
             Copy, ExpandToDocumentBoundary, ExpandToLineBreak, ExtendByCharacter,
@@ -479,7 +482,7 @@ impl Runtime {
             ExtendToNextWordBoundaryOrCaretLocation, ExtendVerticallyToAdjacentLine,
             ExtendVerticallyToAdjacentPage, SelectAll,
         };
-        let Some(intent) = resolve(self.text_shortcut_platform, event.code, event.modifiers) else {
+        let Some(intent) = resolve(self.text_shortcut_platform, event.code, effective_modifiers) else {
             return false;
         };
         let Some((text, selection, foreign_anchor)) =

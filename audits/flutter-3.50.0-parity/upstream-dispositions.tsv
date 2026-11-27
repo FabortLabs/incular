@@ -3606,3 +3606,5 @@ packages/flutter/test/widgets/default_text_height_behavior_test.dart	9	Text widg
 packages/flutter/test/widgets/default_text_height_behavior_test.dart	30	DefaultTextStyle.textHeightBehavior takes precedence over DefaultTextHeightBehavior 	paired-match	upstream-text-height-defaults.md
 packages/flutter/test/widgets/default_text_height_behavior_test.dart	71	DefaultTextHeightBehavior changes propagate to Text	paired-match	upstream-text-height-defaults.md
 packages/flutter/test/widgets/default_text_height_behavior_test.dart	99	DefaultTextHeightBehavior.of(context) returns null if no DefaultTextHeightBehavior widget in tree	partial-match	upstream-text-height-defaults.md
+packages/flutter/test/widgets/default_text_editing_shortcuts_test.dart	532	are triggered when numlock is locked	partial-match	upstream-linux-numpad-editing.md
+packages/flutter/test/widgets/default_text_editing_shortcuts_test.dart	690	are triggered when numlock is unlocked	partial-match	upstream-linux-numpad-editing.md

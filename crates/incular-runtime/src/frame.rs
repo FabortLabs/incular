@@ -4123,7 +4123,7 @@ impl Runtime {
             return result == KeyEventResult::Handled;
         }
         if let Some(label) = self.focused.filter(|id| self.tree.is_selectable_text(*id)) {
-            let handled = self.run_selectable_text_key(label, &event);
+            let handled = self.run_selectable_text_key(label, &event, lock_modes);
             self.frame_requested |= handled;
             return handled;
         }
@@ -4143,7 +4143,7 @@ impl Runtime {
         };
         // Flutter's `DefaultTextEditingShortcuts` pick the intent for the
         // chord on the target platform and the field's actions run it.
-        if !self.run_text_field_key(field, &controller, &event) {
+        if !self.run_text_field_key(field, &controller, &event, lock_modes) {
             return false;
         }
         self.hide_text_field_overlays(field);

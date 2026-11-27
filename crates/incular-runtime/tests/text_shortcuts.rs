@@ -427,3 +427,93 @@ fn home_and_end_preserve_the_line_at_hard_breaks() {
         }
     }
 }
+
+#[test]
+fn linux_raw_numlock_transitions_drive_keypad_editing_without_per_event_lock_flags() {
+    let (mut runtime, controller) = mount(
+        TextShortcutPlatform::Linux,
+        "abc def",
+        TextSelection::collapsed(3),
+        false,
+    );
+    toggle_num_lock(&mut runtime);
+    press(&mut runtime, Code::Numpad6, PLAIN);
+    assert_eq!(
+        caret(&controller),
+        (3, 3),
+        "locked keypad must not navigate when Shift is absent"
+    );
+    press(&mut runtime, Code::Numpad6, Modifiers::SHIFT);
+    assert_eq!(
+        caret(&controller),
+        (3, 4),
+        "locked keypad with Shift extends"
+    );
+    toggle_num_lock(&mut runtime);
+    controller.set_selection(TextSelection::collapsed(3));
+    press(&mut runtime, Code::Numpad6, PLAIN);
+    assert_eq!(
+        caret(&controller),
+        (4, 4),
+        "unlocked keypad moves without Shift"
+    );
+    controller.set_selection(TextSelection::collapsed(0));
+    press(&mut runtime, Code::Numpad6, Modifiers::CONTROL);
+    assert_eq!(caret(&controller), (3, 3));
+    controller.set_selection(TextSelection::collapsed(0));
+    press(&mut runtime, Code::NumpadDecimal, Modifiers::CONTROL);
+    assert_eq!(controller.text(), " def");
+}
+
+fn toggle_num_lock(runtime: &mut Runtime) {
+    let down = KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::NumLock), Code::NumLock);
+    let up = KeyboardEvent::key_up(KeyboardKey::Named(NamedKey::NumLock), Code::NumLock);
+    assert!(!runtime.dispatch_keyboard_event(down));
+    assert!(!runtime.dispatch_keyboard_event(up));
+}
+
+#[test]
+fn linux_raw_numlock_also_controls_read_only_selectable_text() {
+    use incular_widgets::internal::SelectionAreaController;
+
+    let label = Widget::selectable_text_styled(
+        "abc def",
+        incular_text::TextStyle::default(),
+        incular_text::TextAlign::Start,
+    );
+    let widget = Widget::selection_area(SelectionAreaController::new(), label);
+    let mut runtime = Runtime::new(widget).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Linux);
+    let constraints = Constraints::tight(Size::new(300., 120.));
+    runtime.run_frame(constraints).unwrap();
+    let area = runtime.tree().root().unwrap();
+    let label = runtime.tree().children(area).unwrap()[0];
+    let bounds = runtime.tree().element_bounds(label).unwrap();
+    let point = bounds.origin + Offset::new(2., 4.);
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        let _ = runtime.handle_input(InputEvent::Pointer {
+            phase,
+            position: point,
+        });
+    }
+    assert_eq!(runtime.focused_element(), Some(label));
+    assert!(
+        runtime
+            .tree_mut()
+            .selectable_text_select(label, TextSelection::collapsed(3))
+    );
+
+    toggle_num_lock(&mut runtime);
+    let check = |runtime: &Runtime, selection| {
+        let (text, value, _) = runtime.tree().selectable_text_editing_value(label).unwrap();
+        assert_eq!(text, "abc def");
+        assert_eq!(value, selection);
+    };
+    press(&mut runtime, Code::Numpad6, PLAIN);
+    check(&runtime, TextSelection::collapsed(3));
+    press(&mut runtime, Code::Numpad6, Modifiers::SHIFT);
+    check(&runtime, TextSelection::new(3, 4));
+    toggle_num_lock(&mut runtime);
+    press(&mut runtime, Code::Numpad6, PLAIN);
+    check(&runtime, TextSelection::collapsed(4));
+}
