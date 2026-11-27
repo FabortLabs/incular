@@ -198,3 +198,27 @@ All four pinned authored cases, both native direct selection checks,
 six keyboard/menu regressions, and five editor-focus controls passed.
 The Unicode control selects the same logical string with Incular's
 UTF-8 offsets without changing the committed text.
+
+## Direct editor commands and clipboard shortcuts
+
+The pinned :3192 and :18708 registrations passed. A mounted neutral
+editable with a selected password still offers Paste and Select All
+but no Copy or Cut, and calling either command directly leaves the
+clipboard, text and selection unchanged. A separate editor with
+interactive selection disabled still accepts typing but cannot use
+Select All, Copy, Cut or Paste through keyboard shortcuts. Before this
+fix Paste replaced its text despite the flag. Direct commands and menu
+buttons are not blocked by the shortcut policy; ordinary direct Copy
+and Cut still work when shortcut selection is disabled.
+
+## Copy preserves selection on desktop and iOS
+
+All four pinned :2891 platform variants and both pinned :2937 variants
+passed. Native checks invoke an actual retained editor toolbar button
+with a reversed selection. Copy writes the selected substring and
+closes the toolbar without editing the text. It preserves the selection
+on desktop and iOS; on Android it collapses at the logical end rather
+than the active endpoint and hides the handles. The Android/Fuchsia
+policy is shared, not a claim about a Fuchsia clipboard backend. The
+Android collapse failed before the fix. All 25 focused native clipboard,
+retained menu and autofill tests passed.

@@ -21,3 +21,13 @@ changing any controller and isolate tags by runtime as well as retained
 element generation. Nothing here verifies an actual browser or device
 password-manager session. This is integration evidence for the
 previously paired services case, not an extra upstream registration.
+
+## Autofill leaves focus on the original editor
+
+The pinned `widgets/editable_text_test.dart:10531` registration passed.
+The native test taps the first of two mounted neutral editors, then
+sends a tagged editing value to the disconnected second editor through
+the production autofill receiver. Its password value and collapsed
+selection are updated without changing the active editor or focus
+nodes. The first editor remains untouched. This verifies the retained
+contract, not a native OS autofill UI.

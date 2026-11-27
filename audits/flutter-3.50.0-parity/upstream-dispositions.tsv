@@ -3684,3 +3684,8 @@ packages/flutter/test/gestures/events_test.dart	744	PointerMoveEvent.copyWith()	
 packages/flutter/test/gestures/events_test.dart	772	PointerUpEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
 packages/flutter/test/gestures/events_test.dart	800	PointerRemovedEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
 packages/flutter/test/gestures/events_test.dart	289	transforming events	partial-match	upstream-pointer-event-primitives.md#borrowed-event-projections
+packages/flutter/test/widgets/editable_text_test.dart	2891	Copy selection does not collapse selection on desktop and iOS	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#copy-preserves-selection-on-desktop-and-ios
+packages/flutter/test/widgets/editable_text_test.dart	2937	Copy selection collapses selection and hides the toolbar on Android and Fuchsia	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#copy-preserves-selection-on-desktop-and-ios
+packages/flutter/test/widgets/editable_text_test.dart	3192	cut and copy do nothing in obscured mode even if explicitly called	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#direct-editor-commands-and-clipboard-shortcuts
+packages/flutter/test/widgets/editable_text_test.dart	10531	Autofill does not request focus	paired-match	upstream-mounted-autofill.md#autofill-leaves-focus-on-the-original-editor
+packages/flutter/test/widgets/editable_text_test.dart	18708	Disabling interactive selection disables shortcuts	paired-match	upstream-fit-overlays-scroll-notifications-clipboard.md#direct-editor-commands-and-clipboard-shortcuts

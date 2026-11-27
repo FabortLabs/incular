@@ -228,3 +228,101 @@ fn keyboard_selection_policy_changes_without_replacing_the_focused_editor() {
         assert_eq!(controller.selection(), expected);
     }
 }
+
+fn shortcut(runtime: &mut Runtime, key: Code) {
+    let mut event = KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Unidentified), key);
+    event.modifiers = Modifiers::CONTROL;
+    let _ = runtime.handle_input(InputEvent::Key(event));
+    frame(runtime);
+}
+
+fn clipboard(runtime: &mut Runtime) -> String {
+    use incular_platform::TransferReadRequest;
+    runtime
+        .read_clipboard(TransferReadRequest::all())
+        .unwrap()
+        .plain_text_value()
+        .unwrap()
+        .unwrap()
+        .to_string()
+}
+
+#[test]
+fn disabling_interactive_selection_disables_clipboard_and_select_all_shortcuts() {
+    let (mut runtime, controller, _) =
+        mount_with_selection("Hello world", false, false, Some(false));
+    let field = runtime.focused_element().expect("focus is still allowed");
+    controller.set_selection(TextSelection::collapsed(11));
+    select_all_shortcut(&mut runtime);
+    assert_eq!(controller.selection(), TextSelection::collapsed(11));
+
+    let full = TextSelection::new(0, 11);
+    controller.set_selection(full);
+    runtime.set_clipboard_text("foo");
+    for key in [Code::KeyV, Code::KeyC, Code::KeyX] {
+        shortcut(&mut runtime, key);
+        assert_eq!(controller.text(), "Hello world", "{key:?}");
+        assert_eq!(controller.selection(), full, "{key:?}");
+        assert_eq!(clipboard(&mut runtime), "foo", "{key:?}");
+        assert_eq!(runtime.focused_element(), Some(field), "{key:?}");
+    }
+
+    // Text input itself is still allowed; only interactive selection actions
+    // are disabled.
+    let _ = runtime.handle_input(InputEvent::Text("typing".into()));
+    assert_eq!(controller.text(), "typing");
+
+    let (mut control, controller, _) = mount("Hello world", false, false);
+    control.set_clipboard_text("foo");
+    controller.set_selection(full);
+    shortcut(&mut control, Code::KeyC);
+    assert_eq!(clipboard(&mut control), "Hello world");
+    control.set_clipboard_text("foo");
+    shortcut(&mut control, Code::KeyV);
+    assert_eq!(controller.text(), "foo");
+}
+
+#[test]
+fn direct_copy_and_cut_of_obscured_text_leave_the_clipboard_and_editor_unchanged() {
+    use incular_text::SelectionChangedCause::Toolbar;
+
+    let (mut runtime, controller, shown) = mount("blah blah", false, true);
+    let field = runtime.focused_element().unwrap();
+    runtime.set_clipboard_text("available paste");
+    controller.set_selection(TextSelection::new(0, 4));
+    click(&mut runtime, SECONDARY_POINTER_BUTTON);
+    assert_eq!(
+        actions(shown.borrow().as_ref().expect("editor menu")),
+        [
+            ContextMenuButtonType::Paste,
+            ContextMenuButtonType::SelectAll
+        ],
+    );
+    assert!(runtime.select_all_text(field, Toolbar));
+    let selected = controller.selection();
+    assert_eq!(selected, TextSelection::new(0, 9));
+    for cut in [true, false] {
+        runtime.set_clipboard_text("");
+        let result = if cut {
+            runtime.cut_text_selection(field, Toolbar)
+        } else {
+            runtime.copy_text_selection(field, Toolbar)
+        };
+        assert!(!result);
+        assert_eq!(clipboard(&mut runtime), "");
+        assert_eq!(controller.text(), "blah blah");
+        assert_eq!(controller.selection(), selected);
+        assert_eq!(runtime.focused_element(), Some(field));
+    }
+
+    // These explicit actions are available on an ordinary editor even when
+    // its keyboard selection shortcuts are disabled.
+    let (mut ordinary, controller, _) =
+        mount_with_selection("blah blah", false, false, Some(false));
+    let field = ordinary.focused_element().unwrap();
+    controller.set_selection(TextSelection::new(0, 4));
+    assert!(ordinary.copy_text_selection(field, Toolbar));
+    assert_eq!(clipboard(&mut ordinary), "blah");
+    assert!(ordinary.cut_text_selection(field, Toolbar));
+    assert_eq!(controller.text(), " blah");
+}

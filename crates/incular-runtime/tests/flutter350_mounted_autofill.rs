@@ -225,3 +225,50 @@ fn a_tag_from_another_runtime_cannot_edit_the_same_local_client_id() {
     assert_eq!(first.text(), "first");
     assert_eq!(second.text(), "second");
 }
+
+#[test]
+fn a_disconnected_autofill_recipient_never_acquires_focus() {
+    use incular_core::{InputEvent, Offset, PointerPhase};
+
+    let first = TextEditingController::new();
+    let second = TextEditingController::new();
+    let first_focus = FocusNode::new();
+    let second_focus = FocusNode::new();
+    let mut runtime = Runtime::new(
+        AutofillGroup::new(Column::new([
+            field(&first, &first_focus, Some("email")).size(Size::new(300., 36.)),
+            field(&second, &second_focus, Some("password")).size(Size::new(300., 36.)),
+        ]))
+        .into(),
+    )
+    .unwrap();
+
+    runtime.run_frame(limits()).unwrap();
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        let _ = runtime.handle_input(InputEvent::Pointer {
+            phase,
+            position: Offset::new(12., 12.),
+        });
+    }
+    runtime.run_frame(limits()).unwrap();
+    assert!(first_focus.has_focus());
+    assert!(!second_focus.has_focus());
+    let active = runtime.focused_element().unwrap();
+
+    let recipient = tag(&set_client(&runtime), "password");
+    let update = message(
+        [(
+            recipient,
+            json!({"text": "password", "selectionBase": 8, "selectionExtent": 8}),
+        )]
+        .into_iter(),
+    );
+    assert_eq!(runtime.handle_flutter_autofill_update(&update).unwrap(), 1);
+    runtime.run_frame(limits()).unwrap();
+    assert_eq!(second.text(), "password");
+    assert_eq!(second.selection(), TextSelection::collapsed(8));
+    assert_eq!(first.text(), "");
+    assert_eq!(runtime.focused_element(), Some(active));
+    assert!(first_focus.has_focus());
+    assert!(!second_focus.has_focus());
+}

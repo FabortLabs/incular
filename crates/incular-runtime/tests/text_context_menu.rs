@@ -617,3 +617,51 @@ fn selectable_region_share_matches_android_long_press_and_clears_selection() {
         }
     }
 }
+
+#[test]
+fn toolbar_copy_preserves_desktop_and_ios_selection_but_collapses_android_at_the_end() {
+    use ContextMenuButtonType::Copy;
+    use incular_platform::{TransferFormat, TransferReadRequest};
+
+    for (platform, collapse) in [
+        (TextShortcutPlatform::Ios, false),
+        (TextShortcutPlatform::Linux, false),
+        (TextShortcutPlatform::MacOs, false),
+        (TextShortcutPlatform::Windows, false),
+        (TextShortcutPlatform::Android, true),
+    ] {
+        let (mut runtime, controller, shown) = mount("Hello world", platform);
+        let reversed = TextSelection::new(5, 0);
+        prepare_adaptive_menu(&mut runtime, &controller, reversed);
+        let field = runtime.focused_element().unwrap();
+        let toolbar = runtime.tree().text_field_toolbar_state(field).unwrap();
+        assert!(toolbar.is_showing());
+        let menu = last(&shown);
+        menu.button_items
+            .iter()
+            .find(|item| item.button_type() == Copy)
+            .expect("selection offers Copy")
+            .press();
+        let mut runtime = process(runtime);
+        assert!(!toolbar.is_showing(), "{platform:?}");
+        assert_eq!(runtime.focused_element(), Some(field), "{platform:?}");
+        assert_eq!(controller.text(), "Hello world", "{platform:?}");
+        assert_eq!(
+            controller.selection(),
+            if collapse {
+                TextSelection::collapsed(5)
+            } else {
+                reversed
+            },
+            "{platform:?}",
+        );
+        let transfer = runtime
+            .read_clipboard(TransferReadRequest::format(TransferFormat::PlainText))
+            .unwrap();
+        assert_eq!(
+            transfer.plain_text_value().unwrap().as_deref(),
+            Some("Hello"),
+            "{platform:?}"
+        );
+    }
+}

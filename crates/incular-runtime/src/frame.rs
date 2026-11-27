@@ -4621,7 +4621,7 @@ impl Runtime {
                     return;
                 };
                 let editable = self.tree.text_field_is_editable(field);
-                if self.run_text_intent(field, &controller, intent, editable) {
+                if self.run_text_shortcut_intent(field, &controller, intent, editable) {
                     self.hide_text_field_overlays(field);
                     controller.reset_caret(self.input_now());
                     self.frame_requested = true;

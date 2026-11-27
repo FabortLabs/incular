@@ -101,6 +101,62 @@ impl Runtime {
         true
     }
 
+    /// Copies a mounted editor's selection without invoking its keyboard
+    /// shortcuts. Obscured text never reaches the clipboard.
+    #[must_use]
+    pub fn copy_text_selection(&mut self, field: ElementId, cause: SelectionChangedCause) -> bool {
+        let Some(controller) = self.tree.text_controller(field) else {
+            return false;
+        };
+        if !self.text_field_copy_allowed(field, &controller) {
+            return false;
+        }
+        self.clipboard.set_text(controller.selected_text());
+        if cause == SelectionChangedCause::Toolbar {
+            if let Some(toolbar) = self.tree.text_field_toolbar_state(field) {
+                toolbar.hide();
+            }
+            if self.text_shortcut_platform == TextShortcutPlatform::Android {
+                // Android and Fuchsia share this platform policy. Collapse
+                // to the logical trailing edge, not the active endpoint of
+                // a backward selection.
+                let before = self.observed_editor_selection(field);
+                let mut value = controller.value();
+                value.selection = TextSelection::collapsed(value.selection.end());
+                value.composing = None;
+                controller.set_value(value);
+                self.report_editor_selection_delta(field, before, cause);
+                controller.reset_caret(self.input_now());
+                self.hide_text_field_handles(field);
+            }
+            self.caret_reveal_key = None;
+            self.frame_requested = true;
+        }
+        true
+    }
+
+    /// Cuts a mounted editor's selection directly. Read-only and obscured
+    /// fields, and collapsed selections, leave text and clipboard unchanged.
+    #[must_use]
+    pub fn cut_text_selection(&mut self, field: ElementId, cause: SelectionChangedCause) -> bool {
+        let Some(controller) = self.tree.text_controller(field) else {
+            return false;
+        };
+        let previous = self.observed_editor_selection(field);
+        let _notifications = previous.is_some().then(|| controller.batch_user_edit_notifications());
+        if !self.cut_text_field_selection(field, &controller) {
+            return false;
+        }
+        self.report_editor_selection_delta(field, previous, cause);
+        controller.reset_caret(self.input_now());
+        if cause == SelectionChangedCause::Toolbar {
+            self.hide_text_field_overlays(field);
+            self.caret_reveal_key = None;
+        }
+        self.frame_requested = true;
+        true
+    }
+
     /// Applies a user replacement to a mounted, editable field using the
     /// current text, like Flutter's `ReplaceTextIntent`. Rust ranges use
     /// UTF-8 bytes. An identical replacement still focuses an unfocused
@@ -184,6 +240,24 @@ impl Runtime {
         let Some(intent) = resolve(self.text_shortcut_platform, event.code, effective_modifiers) else {
             return false;
         };
+        self.run_text_shortcut_intent(field, controller, intent, editable)
+    }
+
+    /// Selection actions from keyboard shortcuts (including platform
+    /// selectors) stay separate from explicit editor and toolbar commands.
+    pub(super) fn run_text_shortcut_intent(
+        &mut self,
+        field: ElementId,
+        controller: &TextEditingController,
+        intent: TextIntent,
+        editable: bool,
+    ) -> bool {
+        if matches!(intent, TextIntent::Copy | TextIntent::Cut | TextIntent::Paste)
+            && (!self.tree.text_field_keyboard_selection_enabled(field)
+                || controller.selection_if_set().is_none())
+        {
+            return false;
+        }
         self.run_text_intent(field, controller, intent, editable)
     }
 
