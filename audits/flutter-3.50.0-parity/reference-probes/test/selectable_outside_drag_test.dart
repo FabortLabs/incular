@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart' show RenderBox;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -76,4 +77,45 @@ void main() {
       );
     }
   }
+
+  testWidgets('off-label selection directions follow a rotated paragraph', (
+    tester,
+  ) async {
+    final focus = FocusNode();
+    addTearDown(focus.dispose);
+    String? selected;
+    await tester.pumpWidget(
+      WidgetsApp(
+        color: const Color(0xff303030),
+        pageRouteBuilder: <T>(RouteSettings settings, WidgetBuilder builder) =>
+            PageRouteBuilder<T>(
+              settings: settings,
+              pageBuilder: (context, _, _) => builder(context),
+            ),
+        home: SelectableRegion(
+          focusNode: focus,
+          selectionControls: emptyTextSelectionControls,
+          onSelectionChanged: (content) => selected = content?.plainText,
+          child: Center(
+            child: Transform.rotate(
+              angle: 0.6,
+              child: const Text('ABCD\nEFGH', key: first, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+    final box = tester.renderObject<RenderBox>(find.byKey(first));
+    final start = box.localToGlobal(const Offset(1, 5));
+    final goal = box.localToGlobal(Offset(box.size.width + 30, 5));
+    final mouse = await tester.startGesture(
+      start,
+      kind: PointerDeviceKind.mouse,
+    );
+    await mouse.moveTo(goal);
+    await tester.pump();
+    await mouse.up();
+    await tester.pump();
+    expect(selected, 'ABCD\nEFGH');
+  });
 }
