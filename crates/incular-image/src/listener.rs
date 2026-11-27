@@ -98,10 +98,15 @@ impl ImageStream {
             on_error,
         } = listener;
         let chunks = on_chunk.map(|handle| self.listen_chunks(move |event| handle(event)));
+        let source = self.clone();
         let frame = self.listen_frame(move |result, synchronous| match result {
             Ok(image) => {
                 let scale = image.scale();
-                on_image(ImageInfo::new(image).with_scale(scale), synchronous);
+                let mut info = ImageInfo::new(image).with_scale(scale);
+                if let Some(label) = source.debug_label() {
+                    info = info.with_debug_label(label);
+                }
+                on_image(info, synchronous);
             }
             Err(error) => {
                 if let Some(handle) = on_error {

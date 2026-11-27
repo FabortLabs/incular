@@ -273,6 +273,14 @@ impl MemoryImage {
     #[must_use]
     pub fn resolve_in_cache(&self, cache: &mut ImageCache) -> ImageStream {
         ImageStream::from_result(cache.load_with_key(&self.0, || self.0.clone()))
+            .with_debug_label(self.source_label())
+    }
+
+    fn source_label(&self) -> String {
+        use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+        let hash = BuildHasherDefault::<DefaultHasher>::default()
+            .hash_one(Arc::as_ptr(&self.0).cast::<u8>());
+        format!("MemoryImage(Uint8List#{:05x})", hash & 0xfffff)
     }
 
     /// Drops this image from the current UI thread's shared provider cache.
@@ -307,8 +315,13 @@ impl ImageProvider for MemoryImage {
             return None;
         }
         MEMORY_PROVIDER_CACHE.with(|slot| {
-            let image = slot.get()?.borrow_mut().images.get(self.0.as_ref())?.clone();
-            Some(ImageStream::ready(image))
+            let image = slot
+                .get()?
+                .borrow_mut()
+                .images
+                .get(self.0.as_ref())?
+                .clone();
+            Some(ImageStream::ready(image).with_debug_label(self.source_label()))
         })
     }
 }
@@ -332,6 +345,11 @@ impl FileImage {
 impl ImageProvider for FileImage {
     fn load(&self) -> Result<ImageHandle, ImageError> {
         ImageHandle::from_file(&self.0)
+    }
+
+    fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
+        ImageStream::from_result(self.load_with(configuration))
+            .with_debug_label(self.0.to_string_lossy().into_owned())
     }
 }
 

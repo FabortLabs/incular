@@ -480,6 +480,7 @@ impl ImageProvider for ExactAssetImage {
 
     fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
         ImageStream::from_load_callback(|done| self.obtain_key(configuration).load_async(done))
+            .with_debug_label(self.key_name().into_owned())
     }
 
     fn resolve_cached(
@@ -487,10 +488,12 @@ impl ImageProvider for ExactAssetImage {
         config: &ImageConfiguration,
         resize: Option<ImageResizeOptions>,
     ) -> Option<ImageStream> {
-        shared_bundle_image_cache().resolve_cached(
-            self.obtain_key(config),
-            resize.map(|options| options.physical(config)),
-        )
+        shared_bundle_image_cache()
+            .resolve_cached(
+                self.obtain_key(config),
+                resize.map(|options| options.physical(config)),
+            )
+            .map(|stream| stream.with_debug_label(self.key_name().into_owned()))
     }
 
     fn load_resized(
@@ -512,6 +515,7 @@ impl ImageProvider for ExactAssetImage {
         ImageStream::from_load_callback(|done| {
             cache.load_async_with_size(key, Some(options.physical(config)), done)
         })
+        .with_debug_label(self.key_name().into_owned())
     }
 }
 

@@ -258,6 +258,18 @@ impl ResizeImage {
     }
 }
 
+fn label_resize(stream: ImageStream, options: ImageResizeOptions) -> ImageStream {
+    let Some(source) = stream.debug_label() else {
+        return stream;
+    };
+    let dimension = |value: Option<u32>| value.map_or_else(|| "null".into(), |v| v.to_string());
+    stream.with_debug_label(format!(
+        "{source} - Resized({}×{})",
+        dimension(options.width),
+        dimension(options.height)
+    ))
+}
+
 impl ImageProvider for ResizeImage {
     fn resolve_cached(
         &self,
@@ -269,8 +281,10 @@ impl ImageProvider for ResizeImage {
             // a cache item with only one of the effective bounds.
             return None;
         }
+        let options = self.options.physical(configuration);
         self.image_provider
-            .resolve_cached_with_bounds(configuration, Some(self.options.physical(configuration)))
+            .resolve_cached_with_bounds(configuration, Some(options))
+            .map(|stream| label_resize(stream, options))
     }
 
     fn load(&self) -> Result<ImageHandle, ImageError> {
@@ -283,8 +297,11 @@ impl ImageProvider for ResizeImage {
     }
 
     fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
-        self.image_provider
-            .resolve_resized(configuration, self.options.physical(configuration))
+        let options = self.options.physical(configuration);
+        label_resize(
+            self.image_provider.resolve_resized(configuration, options),
+            options,
+        )
     }
 }
 

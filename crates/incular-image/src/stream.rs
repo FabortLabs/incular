@@ -16,6 +16,7 @@ use std::{
     fmt,
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     rc::{Rc, Weak},
+    sync::Arc,
 };
 
 use futures_channel::oneshot;
@@ -67,6 +68,8 @@ struct StreamCell {
     /// The stream this one follows after [`ImageStreamCompleter::follow`].
     source: RefCell<Option<ImageStream>>,
     map: RefCell<Option<FrameMap>>,
+    /// Kept when a transformed frame releases its source stream.
+    mapped_label: OnceCell<Arc<str>>,
 }
 
 /// One provider resolution's loading state (Flutter `ImageStream`). Clones
@@ -75,6 +78,9 @@ struct StreamCell {
 #[derive(Clone)]
 pub struct ImageStream {
     cell: Rc<StreamCell>,
+    // A decorator can label its own view without relabeling another
+    // provider that shares the same stream cell.
+    debug_label: Option<Arc<str>>,
 }
 
 impl PartialEq for ImageStream {
@@ -90,6 +96,7 @@ impl fmt::Debug for ImageStream {
         formatter
             .debug_struct("ImageStream")
             .field("state", &*self.cell.state.borrow())
+            .field("debug_label", &self.debug_label())
             .finish()
     }
 }
@@ -107,8 +114,32 @@ impl ImageStream {
                 completed: Cell::new(completed),
                 source: RefCell::new(None),
                 map: RefCell::new(None),
+                mapped_label: OnceCell::new(),
             }),
+            debug_label: None,
         }
+    }
+
+    /// Adds diagnostic provenance without changing the loading state or identity.
+    #[must_use]
+    pub fn with_debug_label(mut self, label: impl Into<Arc<str>>) -> Self {
+        self.debug_label = Some(label.into());
+        self
+    }
+
+    /// A label for the resolved source, if provided.
+    #[must_use]
+    pub fn debug_label(&self) -> Option<Arc<str>> {
+        self.debug_label
+            .clone()
+            .or_else(|| self.cell.mapped_label.get().cloned())
+            .or_else(|| {
+                self.cell
+                    .source
+                    .borrow()
+                    .as_ref()
+                    .and_then(Self::debug_label)
+            })
     }
 
     /// A loading stream and the completer that finishes it.
@@ -186,7 +217,11 @@ impl ImageStream {
                         Ok(image) => ImageLoadState::Ready(image),
                         Err(error) => ImageLoadState::Failed(error),
                     };
-                    Self { cell }.set(state);
+                    Self {
+                        cell,
+                        debug_label: None,
+                    }
+                    .set(state);
                 }
             },
             Priority::ANIMATION,
@@ -203,11 +238,13 @@ impl ImageStream {
         map: impl FnOnce(ImageHandle) -> Result<ImageHandle, ImageError> + 'static,
     ) -> Self {
         if self.is_completed() {
-            return match self.state() {
+            let mut mapped = match self.state() {
                 ImageLoadState::Ready(image) => Self::from_result(map(image)),
                 ImageLoadState::Failed(error) => Self::failed(error),
                 ImageLoadState::Loading(_) => unreachable!("complete stream has an outcome"),
             };
+            mapped.debug_label = self.debug_label();
+            return mapped;
         }
         let mapped = Self::with(ImageLoadState::Loading(None));
         *mapped.cell.source.borrow_mut() = Some(self);
@@ -311,6 +348,9 @@ impl ImageStream {
                     },
                     other => other,
                 };
+                if let Some(label) = source.debug_label() {
+                    let _ = self.cell.mapped_label.set(label);
+                }
                 self.cell.completed.set(true);
                 *self.cell.source.borrow_mut() = None;
                 *self.cell.state.borrow_mut() = outcome.clone();

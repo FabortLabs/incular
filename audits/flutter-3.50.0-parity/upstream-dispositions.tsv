@@ -3733,3 +3733,7 @@ packages/flutter/test/widgets/animated_image_filtered_repaint_test.dart	14	Image
 packages/flutter/test/painting/text_style_test.dart	433	TextStyle.debugLabel	paired-match	upstream-text-style-diagnostics.md
 packages/flutter/test/painting/text_style_test.dart	458	TextStyle.hashCode	paired-match	upstream-text-style-diagnostics.md#hash-semantics
 packages/flutter/test/painting/text_style_test.dart	669	TextStyle fontFamily and package	paired-match	upstream-package-fonts.md#replacing-a-package-qualifier
+packages/flutter/test/painting/image_provider_test.dart	111	File image sets tag	paired-match	upstream-image-provider-labels.md
+packages/flutter/test/painting/image_provider_test.dart	124	Memory image sets tag	paired-match	upstream-image-provider-labels.md
+packages/flutter/test/painting/image_provider_test.dart	134	Asset image sets tag	paired-match	upstream-image-provider-labels.md
+packages/flutter/test/painting/image_provider_test.dart	144	Resize image sets tag	paired-match	upstream-image-provider-labels.md
