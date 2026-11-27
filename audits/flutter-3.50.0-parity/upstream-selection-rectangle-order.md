@@ -78,3 +78,20 @@ All five static drag and three keyboard shortcut tests passed. Six of
 seven adjacent area-lifetime cases passed; the shared-affinity case
 also fails unchanged master with this runner's font metrics, before the
 new range conversion can affect it. That fixture is not counted here.
+
+## Non-ASCII listener offsets
+
+The pinned authored `selection_listener_utf16_test.dart` and native
+mounted mouse fixture select across `é😀x` and `Zπ`. Flutter reports
+1→5, whereas Incular previously reported the UTF-8 byte offsets 2→8.
+The public range now uses UTF-16 code units after a single pass over
+the preceding labels; internal text boundaries remain UTF-8. No
+characters are added between labels, and Ctrl+C copies the unchanged
+`😀xZ`. This authored probe adds no upstream registration credit.
+
+The previously failing affinity fixture now locates the two distinct
+visual stops of shared byte 3 from the retained shaping layout instead
+of a fixed font's pixel coordinates. Dragging between the stops in
+either direction still produces no content and places the collapsed
+handle on the corresponding side. All 16 focused drag, keyboard
+shortcut and selection lifetime tests passed.

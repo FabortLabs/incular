@@ -26,8 +26,9 @@ pub enum SelectionStatus {
     Uncollapsed,
 }
 
-/// A content-relative selection range in UTF-8 bytes. The endpoints preserve
-/// the anchor and extent, so a backward selection has a larger start offset.
+/// A content-relative selection range in UTF-16 code units, as in Flutter.
+/// Endpoints preserve the anchor and extent, so a backward selection has a
+/// larger start offset. These offsets are not Rust string byte indices.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SelectedContentRange {
     pub start_offset: usize,

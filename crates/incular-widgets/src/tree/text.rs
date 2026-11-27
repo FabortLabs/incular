@@ -3560,31 +3560,41 @@ pub(super) fn static_selection_range(
     (start < end).then_some(TextRange::new(start, end))
 }
 
-/// Converts retained endpoints into offsets in the concatenated selectable
-/// text. Inter-label boundaries introduce no characters; literal newlines
-/// within a label are already counted. Preserve anchor-to-extent direction.
+/// Reports UTF-16 offsets in the concatenated selectable text. Internal
+/// hits and paint ranges stay byte-indexed. Inter-label boundaries add
+/// no characters, and backward selections keep their original direction.
 pub(super) fn selection_content_range(
     tree: &WidgetTree,
     entries: &[ElementId],
     selection: StaticSelection,
 ) -> Option<SelectedContentRange> {
-    fn content_offset(
-        tree: &WidgetTree,
-        entries: &[ElementId],
-        point: StaticSelectionPoint,
-    ) -> Option<usize> {
-        let index = entries.iter().position(|entry| *entry == point.element)?;
-        let mut offset: usize = 0;
-        for entry in &entries[..index] {
-            offset = offset.saturating_add(tree.selectable_text_value(*entry)?.len());
+    fn utf16_len(text: &str) -> usize {
+        if text.is_ascii() {
+            text.len()
+        } else {
+            text.encode_utf16().count()
         }
-        let text = tree.selectable_text_value(point.element)?;
-        Some(offset.saturating_add(valid_boundary(text, point.byte)))
     }
 
-    let anchor = content_offset(tree, entries, selection.anchor)?;
-    let extent = content_offset(tree, entries, selection.extent)?;
-    Some(SelectedContentRange::new(anchor, extent))
+    let (mut anchor, mut extent) = (None, None);
+    let mut offset: usize = 0;
+    for &entry in entries {
+        let text = tree.selectable_text_value(entry)?;
+        let content_offset = |point: StaticSelectionPoint| {
+            offset.saturating_add(utf16_len(&text[..valid_boundary(text, point.byte)]))
+        };
+        if entry == selection.anchor.element {
+            anchor = Some(content_offset(selection.anchor));
+        }
+        if entry == selection.extent.element {
+            extent = Some(content_offset(selection.extent));
+        }
+        if let (Some(anchor), Some(extent)) = (anchor, extent) {
+            return Some(SelectedContentRange::new(anchor, extent));
+        }
+        offset = offset.saturating_add(utf16_len(text));
+    }
+    None
 }
 
 pub(super) fn static_selection_text(

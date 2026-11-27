@@ -8,7 +8,7 @@
 use incular_config::Constraints;
 use incular_core::{Color, Offset, Size};
 use incular_rendering::PaintCommand;
-use incular_text::{TextAlign, TextStyle};
+use incular_text::{TextAffinity, TextAlign, TextStyle};
 use incular_widgets::internal::*;
 use incular_widgets::{Column, SelectionAreaController, Visibility};
 
@@ -62,8 +62,8 @@ fn shared_byte_keeps_affinity_without_creating_content() {
     // run boundary (upstream left, downstream right). Dragging between
     // those two points stays on one byte: affinity differs, content
     // stays empty, and the collapsed handle follows the anchor side.
-    // Flutter 3.41.7 painting/text_painter.dart:41 kDefaultFontSize = 14.0; the
-    // drag x positions below were measured at 16.0, so the size is explicit.
+    // Recover the two hit positions from the retained font layout rather
+    // than assuming the runner has the font used to record pixel coordinates.
     let controller = SelectionAreaController::new();
     let sized = Widget::selectable_text_styled(
         "hi שלום bye",
@@ -73,14 +73,27 @@ fn shared_byte_keeps_affinity_without_creating_content() {
     let (mut tree, _, labels) = mount_area(controller.clone(), vec![sized]);
     assert_eq!(labels.len(), 1);
     let id = labels[0];
-    let y = mid_y(&tree, id);
-    let origin_x = tree.element_bounds(id).expect("bounds").origin.x;
-    drag(
-        &mut tree,
-        id,
-        Offset::new(origin_x + 17.3, y),
-        Offset::new(origin_x + 54.07, y),
-    );
+    let (transform, size) = tree.element_geometry(id).unwrap();
+    let layout = tree.text_layout(tree.render_id(id).unwrap()).unwrap();
+    let point = |affinity| {
+        let stop = layout
+            .line_caret_positions(0)
+            .iter()
+            .find(|stop| stop.offset == 3 && stop.affinity == affinity)
+            .expect("separate stop for this bidi affinity");
+        [0., -0.1, 0.1]
+            .into_iter()
+            .map(|delta| Offset::new(stop.x + delta, size.height / 2.))
+            .find(|&local| {
+                let position = layout.closest_text_position(local);
+                position.offset == 3 && position.affinity == affinity
+            })
+            .map(|local| transform.transform_point(local))
+            .expect("each affinity can be hit without moving the logical caret")
+    };
+    let left = point(TextAffinity::Upstream);
+    let right = point(TextAffinity::Downstream);
+    drag(&mut tree, id, left, right);
     assert_eq!(controller.selected_text(), "");
     let forward = controller.selection_geometry();
     let forward_x = forward
@@ -90,12 +103,7 @@ fn shared_byte_keeps_affinity_without_creating_content() {
         .x;
     assert!(forward.end_selection_point.is_none());
 
-    drag(
-        &mut tree,
-        id,
-        Offset::new(origin_x + 54.07, y),
-        Offset::new(origin_x + 17.3, y),
-    );
+    drag(&mut tree, id, right, left);
     assert_eq!(controller.selected_text(), "");
     let backward_x = controller
         .selection_geometry()

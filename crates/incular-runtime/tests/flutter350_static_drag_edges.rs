@@ -287,50 +287,58 @@ fn long_press_drag_extends_whole_words_off_the_label_in_both_directions() {
     }
 }
 
-#[test]
-fn listener_offsets_follow_actual_text_and_keep_backward_direction() {
-    use incular_core::{Code, KeyboardEvent, KeyboardKey, Modifiers, NamedKey};
-    use incular_platform::{TransferFormat, TransferReadRequest};
-    use incular_runtime::TextShortcutPlatform;
-    use incular_widgets::{
-        SelectedContentRange, SelectionListener, SelectionListenerNotifier, SelectionStatus,
-    };
-    use std::time::{Duration, Instant};
+fn mount_selection_listener(
+    texts: &[&str],
+) -> (Runtime, incular_widgets::SelectionListenerNotifier) {
+    use incular_widgets::{SelectionListener, SelectionListenerNotifier};
 
-    let texts = ["How are you?", "Good, and you?", "Fine, thank you."];
-    let controller = SelectionAreaController::new();
     let notifier = SelectionListenerNotifier::new();
     let labels = texts
-        .into_iter()
+        .iter()
+        .copied()
         .map(|text| Widget::from(Text::new(text)).with_key(text));
     let mut runtime = Runtime::new(
         Directionality::new(
             TextDirection::Ltr,
             Widget::selection_area(
-                controller.clone(),
+                SelectionAreaController::new(),
                 SelectionListener::new(notifier.clone(), Column::new(labels)).into(),
             ),
         )
         .into(),
     )
     .unwrap();
-    runtime.set_text_shortcut_platform(TextShortcutPlatform::Windows);
     runtime
         .run_frame(Constraints::tight(Size::new(800., 600.)))
         .unwrap();
+    (runtime, notifier)
+}
 
-    let point = |label: usize, byte: usize| {
-        let tree = runtime.tree();
-        let element = tree.element_with_key(&Key::from(texts[label])).unwrap();
-        let (world, size) = tree.element_geometry(element).unwrap();
-        let layout = tree.text_layout(tree.render_id(element).unwrap()).unwrap();
-        let caret = layout
-            .line_caret_positions(0)
-            .iter()
-            .find(|point| point.offset == byte)
-            .unwrap();
-        world.transform_point(Offset::new(caret.x + 0.1, size.height / 2.))
-    };
+fn position_of_label_caret(runtime: &Runtime, label: &str, byte: usize) -> Offset {
+    let tree = runtime.tree();
+    let element = tree.element_with_key(&Key::from(label)).unwrap();
+    let (world, size) = tree.element_geometry(element).unwrap();
+    let layout = tree.text_layout(tree.render_id(element).unwrap()).unwrap();
+    let caret = layout
+        .line_caret_positions(0)
+        .iter()
+        .find(|point| point.offset == byte)
+        .unwrap();
+    world.transform_point(Offset::new(caret.x + 0.1, size.height / 2.))
+}
+
+#[test]
+fn listener_offsets_follow_actual_text_and_keep_backward_direction() {
+    use incular_core::{Code, KeyboardEvent, KeyboardKey, Modifiers, NamedKey};
+    use incular_platform::{TransferFormat, TransferReadRequest};
+    use incular_runtime::TextShortcutPlatform;
+    use incular_widgets::{SelectedContentRange, SelectionStatus};
+    use std::time::{Duration, Instant};
+
+    let texts = ["How are you?", "Good, and you?", "Fine, thank you."];
+    let (mut runtime, notifier) = mount_selection_listener(&texts);
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Windows);
+    let point = |label: usize, byte| position_of_label_caret(&runtime, texts[label], byte);
     let (start, first_a, first_b, second, third, backward, three, zero) = (
         point(0, 4),
         point(0, 7),
@@ -391,4 +399,39 @@ fn listener_offsets_follow_actual_text_and_keep_backward_direction() {
     step(&mut runtime, PointerPhase::Down, zero, 1500);
     step(&mut runtime, PointerPhase::Up, zero, 1530);
     range(SelectionStatus::Collapsed, 0, 0);
+}
+
+#[test]
+fn listener_counts_utf16_units_but_copies_the_original_unicode() {
+    use incular_core::{Code, KeyboardEvent, KeyboardKey, Modifiers, NamedKey};
+    use incular_platform::{TransferFormat, TransferReadRequest};
+    use incular_runtime::TextShortcutPlatform;
+    use incular_widgets::{SelectedContentRange, SelectionStatus};
+
+    let texts = ["é😀x", "Zπ"];
+    let (mut runtime, notifier) = mount_selection_listener(&texts);
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Windows);
+    let start = position_of_label_caret(&runtime, texts[0], "é".len());
+    let end = position_of_label_caret(&runtime, texts[1], 1);
+    for (phase, position) in [
+        (PointerPhase::Down, start),
+        (PointerPhase::Move, end),
+        (PointerPhase::Up, end),
+    ] {
+        let _ = runtime.handle_input(InputEvent::Pointer { phase, position });
+    }
+    let selection = notifier.selection();
+    assert_eq!(selection.status, SelectionStatus::Uncollapsed);
+    assert_eq!(selection.range, Some(SelectedContentRange::new(1, 5)));
+    assert!(!selection.range.unwrap().is_empty());
+    let mut copy = KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Unidentified), Code::KeyC);
+    copy.modifiers = Modifiers::CONTROL;
+    let _ = runtime.handle_input(InputEvent::Key(copy));
+    let clipboard = runtime
+        .read_clipboard(TransferReadRequest::format(TransferFormat::PlainText))
+        .unwrap();
+    assert_eq!(
+        clipboard.plain_text_value().unwrap().as_deref(),
+        Some("😀xZ")
+    );
 }
