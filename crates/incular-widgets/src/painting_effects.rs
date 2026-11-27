@@ -1,8 +1,10 @@
 //! Painting, image, masking, clipping, and compositor effect widgets.
 
 mod box_painter;
+mod box_border;
 mod box_border_stack;
 mod box_shadow_values;
+pub use box_border::BoxBorderOutline;
 pub use box_border_stack::{BoxBorderLayer, BoxBorderStack};
 mod custom_paint;
 mod custom_box_border;

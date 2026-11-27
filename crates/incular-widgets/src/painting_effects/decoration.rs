@@ -10,7 +10,8 @@ use incular_rendering::{
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
-use super::custom_box_border::{BoxBorderValue, CustomBoxBorder, CustomBoxBorderHandle};
+use super::box_border::BoxBorderOutline;
+use super::custom_box_border::{CustomBoxBorder, CustomBoxBorderHandle};
 use super::geometry::{BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry};
 use crate::{
     AlignmentGeometry,
@@ -1673,10 +1674,28 @@ impl BoxDecoration {
         self
     }
 
-    fn border_value(&self) -> Option<BoxBorderValue<'_>> {
-        self.custom_border.as_ref().map(|border| BoxBorderValue::Custom(border.behavior()))
-            .or_else(|| self.directional_border.as_deref().copied().map(BoxBorderValue::Directional))
-            .or_else(|| self.border.map(BoxBorderValue::Physical))
+    /// Installs a single physical, directional, or custom box outline.
+    #[must_use]
+    pub fn with_box_border(self, border: BoxBorderOutline) -> Self {
+        match border {
+            BoxBorderOutline::Physical(border) => self.border(border),
+            BoxBorderOutline::Directional(border) => self.directional_border(border),
+            BoxBorderOutline::Custom(border) => self.with_custom_border(border),
+        }
+    }
+
+    fn border_endpoint(&self) -> Option<BoxBorderOutline> {
+        self.custom_border
+            .as_ref()
+            .cloned()
+            .map(BoxBorderOutline::Custom)
+            .or_else(|| {
+                self.directional_border
+                    .as_deref()
+                    .copied()
+                    .map(BoxBorderOutline::Directional)
+            })
+            .or_else(|| self.border.map(BoxBorderOutline::Physical))
     }
 
     #[must_use]
@@ -1890,83 +1909,6 @@ enum AlignedGradientKind {
     Sweep,
 }
 
-fn lerp_decoration_border(
-    a: &BoxDecoration,
-    b: &BoxDecoration,
-    t: f32,
-) -> (Option<Border>, Option<Arc<BorderDirectional>>) {
-    match (a.directional_border.as_deref(), b.directional_border.as_deref()) {
-        (None, None) => (Border::lerp_optional(a.border, b.border, t), None),
-        (Some(a), Some(b)) => (None, Some(Arc::new(a.lerp(b, t)))),
-        (None, Some(logical)) => lerp_physical_and_directional(a.border, *logical, t),
-        (Some(logical), None) => lerp_physical_and_directional(b.border, *logical, 1. - t),
-    }
-}
-
-fn lerp_custom_border(
-    a: &BoxDecoration,
-    b: &BoxDecoration,
-    t: f32,
-) -> (Option<Border>, Option<Arc<BorderDirectional>>, Option<CustomBoxBorderHandle>) {
-    use BoxBorderValue::Custom;
-    if let (Some(from), Some(to)) = (&a.custom_border, &b.custom_border)
-        && from.same_instance(to)
-        && from == to
-    {
-        return (None, None, Some(from.clone()));
-    }
-    let from = a.border_value();
-    let to = b.border_value();
-    let result = to
-        .and_then(|to| match to {
-            Custom(border) => border.lerp_from(from, t),
-            _ => None,
-        })
-        .or_else(|| from.and_then(|from| match from {
-            Custom(border) => border.lerp_to(to, t),
-            _ => None,
-        }));
-    if let Some(result) = result {
-        return (None, None, Some(result));
-    }
-    let endpoint = if t < 0.5 { a } else { b };
-    if let Some(custom) = &endpoint.custom_border {
-        (None, None, Some(custom.clone()))
-    } else {
-        (endpoint.border, endpoint.directional_border.clone(), None)
-    }
-}
-
-fn lerp_physical_and_directional(
-    physical: Option<Border>,
-    logical: BorderDirectional,
-    t: f32,
-) -> (Option<Border>, Option<Arc<BorderDirectional>>) {
-    let Some(physical) = physical else {
-        return (None, Some(Arc::new(logical.scale(t))));
-    };
-    let absent = BorderSide::NONE;
-    let top = physical.top.lerp(&logical.top, t);
-    let bottom = physical.bottom.lerp(&logical.bottom, t);
-    let no_physical_sides = physical.left == absent && physical.right == absent;
-    let no_logical_sides = logical.start == absent && logical.end == absent;
-    if no_logical_sides || (!no_physical_sides && t < 0.5) {
-        let horizontal_t = if no_logical_sides { t } else { t * 2. };
-        return (Some(Border {
-            top, bottom,
-            left: physical.left.lerp(&absent, horizontal_t),
-            right: physical.right.lerp(&absent, horizontal_t),
-        }), None);
-    }
-    let horizontal_t = if no_physical_sides { t } else { (t - 0.5) * 2. };
-    (None, Some(Arc::new(BorderDirectional::only(
-        top,
-        absent.lerp(&logical.start, horizontal_t),
-        absent.lerp(&logical.end, horizontal_t),
-        bottom,
-    ))))
-}
-
 impl incular_core::Lerp for BoxDecoration {
     /// Flutter `BoxDecoration.lerp`: a part present on one side only
     /// scales in or out (`Color.lerp(null, c, t)`, `BoxBorder.lerp`,
@@ -2025,11 +1967,15 @@ impl incular_core::Lerp for BoxDecoration {
                 )
             };
         let (border, directional_border, custom_border) =
-            if self.custom_border.is_some() || other.custom_border.is_some() {
-                lerp_custom_border(self, other, t)
-            } else {
-                let (physical, logical) = lerp_decoration_border(self, other, t);
-                (physical, logical, None)
+            match BoxBorderOutline::lerp(
+                self.border_endpoint().as_ref(),
+                other.border_endpoint().as_ref(),
+                t,
+            ) {
+                Some(BoxBorderOutline::Physical(border)) => (Some(border), None, None),
+                Some(BoxBorderOutline::Directional(border)) => (None, Some(Arc::new(border)), None),
+                Some(BoxBorderOutline::Custom(border)) => (None, None, Some(border)),
+                None => (None, None, None),
             };
         Self {
             color: lerp_color(self.color, other.color, t),

@@ -3300,3 +3300,4 @@ packages/flutter/test/painting/stadium_border_test.dart	196	StadiumBorder and Ro
 packages/flutter/test/painting/stadium_border_test.dart	330	StadiumBorder and RoundedRectBorder with circular BorderRadius	paired-match	upstream-stadium-morphing.md
 packages/flutter/test/painting/stadium_border_test.dart	464	StadiumBorder and RoundedRectBorder with BorderRadiusDirectional	paired-match	upstream-stadium-morphing.md
 packages/flutter/test/painting/linear_border_test.dart	85	LinearBorderEdge, LinearBorder toString()	paired-match	upstream-linear-border.md#diagnostic-string
+packages/flutter/test/painting/border_rtl_test.dart	75	BoxBorder.lerp	paired-match	upstream-box-border-mixed-interpolation.md
