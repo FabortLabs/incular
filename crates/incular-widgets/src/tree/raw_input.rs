@@ -143,6 +143,25 @@ impl WidgetTree {
         self.dispatch_raw_gesture_stream(key, event, hit.raw())
     }
 
+    /// Whether a consuming tap region owns this pointer rather than an
+    /// arena participant that still has to compete with ordinary recognizers.
+    #[doc(hidden)]
+    pub fn tap_region_owns_pointer(&self, window: u64, event: RawPointerEvent) -> bool {
+        let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
+        self.input.consumed_tap_pointers.contains(&key)
+    }
+
+    pub(super) fn raw_gesture_contests_pointer(&self, key: GestureArenaKey) -> bool {
+        self.input.raw_gesture_streams.get(&key).is_some_and(|active| {
+            active.members.iter().any(|member| {
+                matches!(
+                    self.input.gesture_arena.disposition(key, member.member),
+                    Some(GestureDisposition::Pending | GestureDisposition::Accepted)
+                )
+            })
+        })
+    }
+
     /// Seeds a host-positioned hover device without dispatching a mouse
     /// move to regions, listeners, or recognizers.
     #[doc(hidden)]
@@ -1054,11 +1073,11 @@ impl WidgetTree {
         }
         for member in rejects {
             self.input.gesture_arena.reject(key, member);
-            self.apply_raw_arena_entries(key, self.input.gesture_arena.entries(key));
+            self.apply_arena_entries(key, self.input.gesture_arena.entries(key));
         }
         for (member, action) in accepts {
             let entries = self.input.gesture_arena.accept(key, member);
-            self.apply_raw_arena_entries(key, entries);
+            self.apply_arena_entries(key, entries);
             if disposition_for(&self.input.gesture_arena.entries(key), member)
                 == GestureDisposition::Accepted
             {
@@ -1105,13 +1124,17 @@ impl WidgetTree {
         }
     }
 
-    fn apply_raw_arena_entries(&mut self, key: GestureArenaKey, entries: Vec<GestureArenaEntry>) {
+    pub(super) fn apply_raw_arena_entries(
+        &mut self,
+        key: GestureArenaKey,
+        entries: &[GestureArenaEntry],
+    ) {
         let to_cancel = {
             let Some(active) = self.input.raw_gesture_streams.get_mut(&key) else {
                 return;
             };
             entries
-                .into_iter()
+                .iter()
                 .filter(|entry| {
                     matches!(
                         entry.disposition,
@@ -1150,12 +1173,23 @@ impl WidgetTree {
         let members = active
             .members
             .iter()
-            .map(|member| (member.element, member.type_id))
+            .map(|member| (member.member, member.element, member.type_id, member.cancelled))
             .collect::<Vec<_>>();
         let element = active.element;
-        let _ = self.input.gesture_arena.cancel(key);
+        if self.input.active_gestures.contains_key(&key) {
+            // Removing a raw recognizer cannot erase the scroll recognizer's
+            // arena entry before it receives the terminal event.
+            for &(member, _, _, _) in &members {
+                self.input.gesture_arena.reject(key, member);
+            }
+        } else {
+            let _ = self.input.gesture_arena.cancel(key);
+        }
         if notify {
-            for (member_element, type_id) in members {
+            for (_, member_element, type_id, cancelled) in members {
+                if cancelled {
+                    continue;
+                }
                 if let Some(recognizer) = self
                     .input
                     .raw_recognizers
@@ -1194,7 +1228,9 @@ impl WidgetTree {
         let Some(active) = self.input.raw_gesture_streams.remove(&key) else {
             return;
         };
-        let _ = self.input.gesture_arena.cancel(key);
+        if !self.input.active_gestures.contains_key(&key) {
+            let _ = self.input.gesture_arena.cancel(key);
+        }
         if self.input.pointer_captures.get(&key) == Some(&active.element) {
             self.input.pointer_captures.remove(&key);
         }

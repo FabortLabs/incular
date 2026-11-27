@@ -60,6 +60,11 @@ Custom recognizers implement [`GestureRecognizer`](/docs/api/input/raw-input) (`
 (`with_initializer` for `Default` types). Mismatched types raise
 `GestureRecognizerFactoryError { expected, actual }`.
 
+A raw recognizer inside a scrollable competes with its ancestor for the same
+pointer. For example, an eager pan can claim a move before the scroll starts;
+with ordinary pan slop, the scrollable can claim that same move while the
+raw pan is still waiting.
+
 ## MouseRegion
 
 ```rust

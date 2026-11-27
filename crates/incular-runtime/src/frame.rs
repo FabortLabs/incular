@@ -2202,7 +2202,9 @@ impl Runtime {
             PointerPhase::Enter | PointerPhase::Exit => false,
         };
 
-        if let Some(element) = raw_target {
+        if let Some(element) = raw_target
+            && self.tree.tap_region_owns_pointer(gesture_window, raw_event)
+        {
             if active_primary && phase != PointerPhase::Down {
                 self.cancel_pending_mobile_text_touch();
             }
@@ -2245,6 +2247,19 @@ impl Runtime {
                     .set_button_interaction(pressed, None, Some(false), None);
                 self.tree.button_ink(pressed, ButtonInk::Cancel);
             }
+            self.release_legacy_pointer(device, pointer, phase, primary_changed);
+            return Some(EventTarget {
+                element,
+                action: None,
+            });
+        }
+        // A raw detector has already been routed. If no ordinary member
+        // handles the event, preserve the raw target for runtime fallback.
+        if let Some(element) = raw_target {
+            if active_primary && phase != PointerPhase::Down {
+                self.cancel_pending_mobile_text_touch();
+            }
+            self.frame_requested = true;
             self.release_legacy_pointer(device, pointer, phase, primary_changed);
             return Some(EventTarget {
                 element,

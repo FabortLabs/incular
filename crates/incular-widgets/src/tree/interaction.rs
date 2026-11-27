@@ -914,7 +914,11 @@ impl WidgetTree {
         let key = GestureArenaKey::pointer_device(window, device, event.pointer);
         self.flush_single_tap_deadlines(event.time);
         if matches!(event.phase, PointerPhase::Down) {
-            self.cancel_gesture_stream(key, true);
+            if self.input.active_gestures.contains_key(&key)
+                || !self.input.raw_gesture_streams.contains_key(&key)
+            {
+                self.cancel_gesture_stream(key, true);
+            }
             let hit = target
                 .and_then(|render| self.element_for_render(render))
                 .or_else(|| coincident_gestures.first().copied())?;
@@ -2320,6 +2324,9 @@ impl WidgetTree {
         let [only] = active.members.as_slice() else {
             return;
         };
+        if self.raw_gesture_contests_pointer(key) {
+            return;
+        }
         let (member, element, kind) = (only.member, only.element, only.kind);
         let accept_tap = only
             .recognizer
@@ -2486,6 +2493,7 @@ impl WidgetTree {
         key: GestureArenaKey,
         entries: Vec<GestureArenaEntry>,
     ) {
+        self.apply_raw_arena_entries(key, &entries);
         let mut callbacks = Vec::new();
         // A rejected or cancelled scroll member ends that stream's
         // bracket with `End` — the gesture is over for scrolling even

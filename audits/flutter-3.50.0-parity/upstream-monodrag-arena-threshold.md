@@ -109,3 +109,23 @@ The pinned `gestures/monodrag_test.dart:41` regression passed. The mounted
 The sole vertical entrant starts without a move. Releasing 90 then 91 through
 the normal event path does not throw. As an extra native cleanup assertion,
 a third contact on the same detector starts and ends independently.
+
+## Raw pan competing with a mounted scroll view
+
+Pinned `gestures/monodrag_test.dart:134` passed with a custom raw pan
+accepting at touch slop. The native fixture uses a custom raw factory inside
+a real `CustomScrollView`; movement (30,19) crosses both the eager pan and
+vertical scroll thresholds. The eager child starts, ends once, and leaves
+the offset at 30. With ordinary pan slop the same first movement crosses
+only the scroll threshold; the follow-up move scrolls the offset to 20
+without a child callback. Both controls also passed in the authored pinned
+`raw_pan_scroll_competition_test.dart` probe.
+
+Before the repair, raw hit presence bypassed the ordinary detector entirely:
+even the default pan stole the sequence on the second move. Raw and ordinary
+recognizers now share the event's arena in the runtime, while an explicitly
+consuming `TapRegion` remains a boundary. Ending the raw stream no longer
+erases a scrolling contestant before its terminal event. The paired credit
+is for this descendant raw recognizer and ancestor scrollable; arbitrary raw
+and ordinary ancestor order or multi-button raw recognizers were not
+exercised by this pair.
