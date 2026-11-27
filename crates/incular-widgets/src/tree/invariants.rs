@@ -777,6 +777,9 @@ impl WidgetTree {
                     .mouse_hover
                     .values()
                     .flatten()
+                    // Literal spans own their exit callback and may finish
+                    // after their paragraph no longer exists.
+                    .filter(|entry| entry.span.is_none())
                     .map(|entry| entry.element),
             )
             .find(|id| !live(id))

@@ -14,6 +14,7 @@ use crate::raw_input::{
     TapRegionRouteCurrent, WindowInteraction,
 };
 
+use super::painting::MouseHit;
 use super::*;
 
 #[derive(Clone)]
@@ -29,6 +30,20 @@ struct TapRegistration<'a> {
 struct TapRegionDelivery {
     consumed_by: Option<ElementId>,
     notified: bool,
+}
+
+enum MouseTransitionCallback {
+    Region(Rc<dyn Fn(RawPointerEvent)>),
+    Span(Arc<dyn Fn(RawPointerEvent) + Send + Sync>),
+}
+
+impl MouseTransitionCallback {
+    fn call(self, event: RawPointerEvent) {
+        match self {
+            Self::Region(callback) => callback(event),
+            Self::Span(callback) => callback(event),
+        }
+    }
 }
 
 impl WidgetTree {
@@ -241,9 +256,11 @@ impl WidgetTree {
     #[must_use]
     pub fn mouse_cursor_for_hit(&self, hit: &PointerHitTest) -> MouseCursor {
         let raw = hit
-            .raw()
-            .iter()
-            .filter_map(|id| self.cursor_for_raw_input(*id))
+            .mouse_hits()
+            .filter_map(|entry| match entry {
+                MouseHit::Region(id) => self.cursor_for_raw_input(id),
+                MouseHit::Span(span) => Some(span.annotation.cursor),
+            })
             .find(|cursor| *cursor != MouseCursor::Defer)
             .unwrap_or(MouseCursor::Defer);
         if raw != MouseCursor::Defer {
@@ -721,6 +738,22 @@ impl WidgetTree {
         localize_with_transform(inverse, event)
     }
 
+    fn mouse_transition_callback(
+        &self,
+        entry: &MouseHoverEntry,
+        entering: bool,
+    ) -> Option<MouseTransitionCallback> {
+        if let Some(span) = &entry.span {
+            return if entering { &span.on_enter } else { &span.on_exit }
+                .as_ref()
+                .cloned()
+                .map(MouseTransitionCallback::Span);
+        }
+        let (callbacks, ..) = self.mouse_region_config(entry.element)?;
+        if entering { callbacks.on_enter } else { callbacks.on_exit }
+            .map(MouseTransitionCallback::Region)
+    }
+
     /// Diffs the device's hovered regions against `hit` and runs their enter
     /// and exit callbacks; `send_hover` also delivers hover callbacks for a
     /// buttonless move.
@@ -775,20 +808,27 @@ impl WidgetTree {
         // track without a second hover map.
         let mut next = Vec::new();
         if event.phase != PointerPhase::Exit {
-            next.extend(hit.raw().iter().copied().filter_map(|element| {
-                self.mouse_region_config(element)?;
-                Some(RawPointerRouteEntry {
+            next.extend(hit.mouse_hits().filter_map(|hit| {
+                let (element, span) = match hit {
+                    MouseHit::Region(element) => {
+                        self.mouse_region_config(element)?;
+                        (element, None)
+                    }
+                    MouseHit::Span(span) => (span.element, Some(span.annotation.clone())),
+                };
+                Some(MouseHoverEntry {
                     element,
-                    world_to_local: self
-                        .render_id(element)
+                    world_to_local: self.render_id(element)
                         .and_then(|id| self.pointer_world_to_local(id)),
+                    span,
                 })
             }));
             for element in self.focus_behavior_elements(hit.target()) {
-                if !next.iter().any(|entry| entry.element == element) {
-                    next.push(RawPointerRouteEntry {
+                if !next.iter().any(|entry| entry.element == element && entry.span.is_none()) {
+                    next.push(MouseHoverEntry {
                         element,
                         world_to_local: None,
+                        span: None,
                     });
                 }
             }
@@ -805,21 +845,20 @@ impl WidgetTree {
             .get(&key)
             .map_or(&[][..], Vec::as_slice);
         let exits = previous.iter().filter(|entry| {
-            self.elements.contains(entry.element.0)
-                && !next.iter().any(|next| next.element == entry.element)
+            (entry.span.is_some() || self.elements.contains(entry.element.0))
+                && !next.iter().any(|next| next.same_annotation(entry))
         });
         // Flutter sends exits in old hit-test order and enters in reverse
         // new order, so the outer region is entered before its inner one.
         let enters = next.iter().filter(|entry| {
             !previous
                 .iter()
-                .any(|previous| previous.element == entry.element)
+                .any(|previous| previous.same_annotation(entry))
         });
         let exit_callbacks = exits
             .clone()
             .filter_map(|entry| {
-                self.mouse_region_config(entry.element)
-                    .and_then(|(callbacks, ..)| callbacks.on_exit)
+                self.mouse_transition_callback(entry, false)
                     .map(|callback| (callback, entry.world_to_local))
             })
             .collect::<Vec<_>>();
@@ -827,19 +866,20 @@ impl WidgetTree {
             .clone()
             .rev()
             .filter_map(|entry| {
-                self.mouse_region_config(entry.element)
-                    .and_then(|(callbacks, ..)| callbacks.on_enter)
+                self.mouse_transition_callback(entry, true)
                     .map(|callback| (callback, entry.world_to_local))
             })
             .collect::<Vec<_>>();
         let exit_behaviors = exits
+            .filter(|entry| entry.span.is_none())
             .filter_map(|entry| self.focus_behavior_for(entry.element))
             .collect::<Vec<_>>();
         let enter_behaviors = enters
+            .filter(|entry| entry.span.is_none())
             .filter_map(|entry| self.focus_behavior_for(entry.element))
             .collect::<Vec<_>>();
         for (callback, transform) in exit_callbacks {
-            callback(localize_with_transform(
+            callback.call(localize_with_transform(
                 transform,
                 RawPointerEvent {
                     phase: PointerPhase::Exit,
@@ -851,7 +891,7 @@ impl WidgetTree {
             behavior.mouse_exit();
         }
         for (callback, transform) in enter_callbacks {
-            callback(localize_with_transform(
+            callback.call(localize_with_transform(
                 transform,
                 RawPointerEvent {
                     phase: PointerPhase::Enter,
@@ -865,6 +905,7 @@ impl WidgetTree {
         if send_hover && event.phase == PointerPhase::Move && event.buttons == 0 {
             let hover_callbacks = next
                 .iter()
+                .filter(|entry| entry.span.is_none())
                 .filter_map(|entry| {
                     self.mouse_region_config(entry.element)
                         .and_then(|(callbacks, ..)| callbacks.on_hover)
@@ -1350,10 +1391,23 @@ impl WidgetTree {
             route.listeners.retain(|candidate| candidate.element != element);
             route.tap_path.retain(|candidate| *candidate != element);
         }
+        let mut detached_span = false;
         self.input.mouse_hover.retain(|_, hover| {
-            hover.retain(|candidate| candidate.element != element);
+            hover.retain(|candidate| {
+                if candidate.element != element {
+                    return true;
+                }
+                // Unlike RenderMouseRegion, a TextSpan remains valid for its
+                // final exit after the paragraph is removed. Its callback
+                // and transform are owned by the suspended hover route.
+                detached_span |= candidate.span.is_some();
+                candidate.span.is_some()
+            });
             !hover.is_empty()
         });
+        if detached_span {
+            self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
+        }
         if let Some(mut recognizers) = self.input.raw_recognizers.remove(&element) {
             for recognizer in recognizers.values_mut() {
                 recognizer.dispose();

@@ -87,6 +87,7 @@ impl std::fmt::Debug for WidgetKind {
                 text_height_behavior,
                 text_scaler,
                 spans,
+                pointer_spans,
                 inline,
                 strut,
             } => f
@@ -101,6 +102,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("text_height_behavior", text_height_behavior)
                 .field("text_scaler", text_scaler)
                 .field("spans", &spans.as_ref().map(|runs| runs.len()))
+                .field("pointer_spans", &pointer_spans.as_ref().map(|ranges| ranges.len()))
                 .field(
                     "inline",
                     &inline.as_ref().map(|inline| inline.0.placeholders.len()),
@@ -1148,6 +1150,7 @@ impl PartialEq for WidgetKind {
                     text_height_behavior: q,
                     text_scaler: s,
                     spans: t,
+                    pointer_spans: before,
                     inline: w,
                     strut: x,
                 },
@@ -1162,6 +1165,7 @@ impl PartialEq for WidgetKind {
                     text_height_behavior: r,
                     text_scaler: u,
                     spans: v,
+                    pointer_spans: after,
                     inline: y,
                     strut: z,
                 },
@@ -1176,6 +1180,7 @@ impl PartialEq for WidgetKind {
                     && q == r
                     && s == u
                     && t == v
+                    && before == after
                     && w == y
                     && x == z
             }

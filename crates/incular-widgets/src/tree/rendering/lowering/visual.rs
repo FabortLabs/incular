@@ -94,6 +94,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             spans,
             inline,
             strut,
+            ..
         } => {
             // Unstated paragraph options inherit the nearest DefaultTextStyle.
             // Flutter: `textScaler ?? MediaQuery.textScalerOf(context)`.

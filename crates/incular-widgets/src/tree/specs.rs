@@ -749,6 +749,8 @@ pub(crate) enum WidgetKind {
         text_scaler: Option<TextScaler>,
         /// Per-span styles of a rich paragraph; `text` is their flattened text.
         spans: Option<Arc<[StyledTextRun]>>,
+        /// Mouse annotations indexed by shaped UTF-8 source ranges.
+        pointer_spans: Option<Arc<[ParagraphMouseRange]>>,
         /// Explicit paragraph direction; `None` resolves against the ambient
         /// `Directionality`, which `Text` requires (Flutter `RichText`).
         text_direction: Option<TextDirection>,

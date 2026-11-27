@@ -1392,6 +1392,29 @@ struct DeferredSingleTap {
     deadline: Instant,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ParagraphMouseRange {
+    source: std::ops::Range<usize>,
+    annotation: Arc<incular_text::TextSpanMouse>,
+}
+
+struct MouseHoverEntry {
+    element: ElementId,
+    world_to_local: Option<CoreTransform>,
+    span: Option<Arc<incular_text::TextSpanMouse>>,
+}
+
+impl MouseHoverEntry {
+    fn same_annotation(&self, other: &Self) -> bool {
+        self.element == other.element
+            && match (&self.span, &other.span) {
+                (None, None) => true,
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                _ => false,
+            }
+    }
+}
+
 /// Per-pointer and per-gesture interaction state, kept apart from the
 /// element and render arenas it refers to by id.
 #[derive(Default)]
@@ -1413,7 +1436,7 @@ struct InputState {
     raw_pointer_positions: HashMap<GestureArenaKey, Offset>,
     /// The most recent hit-transform for each hovered annotation. Exits
     /// are delivered in its previous local coordinates, even after layout.
-    mouse_hover: HashMap<GestureArenaKey, Vec<RawPointerRouteEntry>>,
+    mouse_hover: HashMap<GestureArenaKey, Vec<MouseHoverEntry>>,
     hover_hit_revision: u64,
     consumed_tap_pointers: HashSet<GestureArenaKey>,
     pointer_captures: HashMap<GestureArenaKey, ElementId>,

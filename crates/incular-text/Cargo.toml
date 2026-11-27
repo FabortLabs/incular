@@ -26,6 +26,7 @@ smallvec = { workspace = true }
 incular-assets = { workspace = true }
 incular-config = { workspace = true }
 incular-core = { workspace = true }
+incular-gestures = { workspace = true }
 incular-rendering = { workspace = true }
 bitflags = { workspace = true }
 lru = { workspace = true }

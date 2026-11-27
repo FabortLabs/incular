@@ -1004,6 +1004,13 @@ fn rich_text_widget(
         inline,
         strut.map(Box::new),
     );
+    if let WidgetKind::Text { pointer_spans, .. } = widget.kind_mut() {
+        let mut ranges = Vec::new();
+        collect_paragraph_mouse_ranges(&value.text, &mut 0, &mut ranges);
+        if !ranges.is_empty() {
+            *pointer_spans = Some(ranges.into());
+        }
+    }
     if let Some(parts) = super::semantics::paragraph::ParagraphSemanticPart::for_spans(&value.text) {
         widget.semantic_properties_mut().paragraph_parts = Some(parts);
         return widget;
@@ -1021,6 +1028,31 @@ fn rich_text_widget(
         match value.text.semantics_text() {
             Some(label) => widget.accessibility_label(label),
             None => widget,
+        }
+    }
+}
+
+fn collect_paragraph_mouse_ranges(
+    span: &incular_text::TextSpan,
+    offset: &mut usize,
+    ranges: &mut Vec<ParagraphMouseRange>,
+) {
+    let end = *offset + span.text.len();
+    if end > *offset
+        && let Some(annotation) = &span.mouse
+    {
+        ranges.push(ParagraphMouseRange {
+            source: *offset..end,
+            annotation: annotation.clone(),
+        });
+    }
+    *offset = end;
+    for child in &span.children {
+        match child {
+            incular_text::InlineSpan::Text(child) => {
+                collect_paragraph_mouse_ranges(child, offset, ranges);
+            }
+            incular_text::InlineSpan::Widget(_) => *offset += '\u{fffc}'.len_utf8(),
         }
     }
 }

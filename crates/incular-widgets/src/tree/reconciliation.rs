@@ -1090,9 +1090,17 @@ impl WidgetTree {
             ) => old != new || old_foreground != new_foreground,
             _ => false,
         };
+        let paragraph_pointer_changed = match (old.kind(), widget.kind()) {
+            (
+                WidgetKind::Text { pointer_spans: before, .. },
+                WidgetKind::Text { pointer_spans: after, .. },
+            ) => before != after,
+            _ => false,
+        };
         if before_mouse != after_mouse
             || decoration_hit_changed
             || painter_hit_changed
+            || paragraph_pointer_changed
             || control_cursor(old.kind()) != control_cursor(widget.kind())
             || resize_cursor(old.kind()) != resize_cursor(widget.kind())
         {

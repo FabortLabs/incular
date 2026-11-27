@@ -6,6 +6,7 @@ use crate::{
 };
 use incular_config::Locale;
 use incular_core::Size;
+use incular_gestures::{MouseCursor, RawPointerEvent};
 use std::{fmt, ops::Range, sync::Arc};
 
 /// A widget-independent inline child. The text crate stores a stable identity
@@ -264,6 +265,40 @@ impl std::error::Error for InvalidUtf16Span {
     }
 }
 
+/// Pointer annotation attached to the literal text of one span.
+#[derive(Clone, Default)]
+pub struct TextSpanMouse {
+    pub cursor: MouseCursor,
+    pub on_enter: Option<Arc<dyn Fn(RawPointerEvent) + Send + Sync>>,
+    pub on_exit: Option<Arc<dyn Fn(RawPointerEvent) + Send + Sync>>,
+}
+
+impl fmt::Debug for TextSpanMouse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TextSpanMouse")
+            .field("cursor", &self.cursor)
+            .field("on_enter", &self.on_enter.is_some())
+            .field("on_exit", &self.on_exit.is_some())
+            .finish()
+    }
+}
+
+impl PartialEq for TextSpanMouse {
+    fn eq(&self, other: &Self) -> bool {
+        fn same<T: ?Sized>(left: &Option<Arc<T>>, right: &Option<Arc<T>>) -> bool {
+            match (left, right) {
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                (None, None) => true,
+                _ => false,
+            }
+        }
+        self.cursor == other.cursor
+            && same(&self.on_enter, &other.on_enter)
+            && same(&self.on_exit, &other.on_exit)
+    }
+}
+impl Eq for TextSpanMouse {}
+
 /// A recursively nestable text node. Styles are inherited by descendants;
 /// inline widget spans occupy one object-replacement character in plain text.
 #[derive(Clone, Debug, PartialEq)]
@@ -277,6 +312,8 @@ pub struct TextSpan {
     pub semantics_identifier: Option<String>,
     pub locale: Option<Locale>,
     pub spell_out: Option<bool>,
+    /// Optional pointer metadata. Only this span’s literal text is hit.
+    pub mouse: Option<Arc<TextSpanMouse>>,
 }
 
 impl TextSpan {
@@ -290,7 +327,29 @@ impl TextSpan {
             semantics_identifier: None,
             locale: None,
             spell_out: None,
+            mouse: None,
         }
+    }
+
+    /// Cursor over this span's own glyphs. Descendant spans do not inherit it.
+    #[must_use]
+    pub fn mouse_cursor(mut self, cursor: MouseCursor) -> Self {
+        Arc::make_mut(self.mouse.get_or_insert_default()).cursor = cursor;
+        self
+    }
+
+    /// Called when a hover-capable pointer enters this span's glyphs.
+    #[must_use]
+    pub fn on_enter(mut self, callback: impl Fn(RawPointerEvent) + Send + Sync + 'static) -> Self {
+        Arc::make_mut(self.mouse.get_or_insert_default()).on_enter = Some(Arc::new(callback));
+        self
+    }
+
+    /// Called when a hover-capable pointer exits this span's glyphs.
+    #[must_use]
+    pub fn on_exit(mut self, callback: impl Fn(RawPointerEvent) + Send + Sync + 'static) -> Self {
+        Arc::make_mut(self.mouse.get_or_insert_default()).on_exit = Some(Arc::new(callback));
+        self
     }
 
     /// Imports a text run from a UTF-16 boundary such as a platform
@@ -390,6 +449,7 @@ impl TextSpan {
             || self.semantics_identifier != other.semantics_identifier
             || self.locale != other.locale
             || self.spell_out != other.spell_out
+            || self.mouse != other.mouse
         {
             Metadata
         } else {

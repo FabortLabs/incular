@@ -26,11 +26,24 @@ fn visible_paint_children(node: &RenderNode) -> &[RenderObjectId] {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct SpanPointerHit {
+    pub(super) element: ElementId,
+    pub(super) annotation: Arc<incular_text::TextSpanMouse>,
+    raw_before: usize,
+}
+
+pub(super) enum MouseHit<'a> {
+    Region(ElementId),
+    Span(&'a SpanPointerHit),
+}
+
 /// Both hit-test results for one pointer position, from one walk of the
 /// retained tree: see [`WidgetTree::pointer_hit_test`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PointerHitTest {
     raw: Vec<ElementId>,
+    pointer_spans: Vec<SpanPointerHit>,
     target: Option<RenderObjectId>,
     // Translucent siblings and pointer-only taps share the ordinary arena.
     coincident_gestures: Vec<ElementId>,
@@ -46,6 +59,22 @@ impl PointerHitTest {
 
     pub(super) fn coincident_gestures(&self) -> &[ElementId] {
         &self.coincident_gestures
+    }
+
+    pub(super) fn mouse_hits(&self) -> impl Iterator<Item = MouseHit<'_>> {
+        let mut raw = self.raw.iter().copied().enumerate();
+        let mut region = raw.next();
+        let mut spans = self.pointer_spans.iter().peekable();
+        std::iter::from_fn(move || {
+            if let Some(span) = spans.peek()
+                && region.is_none_or(|(index, _)| span.raw_before <= index)
+            {
+                return spans.next().map(MouseHit::Span);
+            }
+            let (_, element) = region?;
+            region = raw.next();
+            Some(MouseHit::Region(element))
+        })
     }
 
     /// Raw-input annotations in hit-test order, deepest/frontmost first.
@@ -199,6 +228,7 @@ fn self_hit_after_children(kind: Option<&WidgetKind>, size: Size, local: Offset)
 #[derive(Default)]
 pub(super) struct RawHitResult {
     elements: Vec<ElementId>,
+    pointer_spans: Vec<SpanPointerHit>,
     coincident_gestures: Vec<ElementId>,
     subtree_hit: bool,
     /// A render target accepted the hit, not just a layout box containing
@@ -209,6 +239,36 @@ pub(super) struct RawHitResult {
     /// not count.
     pub(super) content_hit: bool,
     blocks_siblings: bool,
+}
+
+fn paragraph_pointer_annotation<'a>(
+    node: &RenderNode,
+    ranges: &'a [ParagraphMouseRange],
+    local: Offset,
+) -> Option<&'a Arc<incular_text::TextSpanMouse>> {
+    let layout = node.text_layout()?;
+    let row = layout.lines.partition_point(|line| line.top <= local.y).checked_sub(1)?;
+    let line = &layout.lines[row];
+    let cluster = line.clusters.iter().find(|span| span.left <= local.x && local.x < span.right)?;
+    let byte = cluster.start as usize;
+    if byte >= layout.retained_source_end() {
+        return None;
+    }
+    let range = ranges.get(ranges.partition_point(|span| span.source.end <= byte))?;
+    if !range.source.contains(&byte) {
+        return None;
+    }
+
+    // Paragraph hit-testing uses glyph bounds, not the whole line box.
+    // In particular, inter-line spacing should not trigger the cursor.
+    let (top, bottom) = layout.font_runs.iter().find(|run| run.range.contains(&byte)).map_or(
+        (line.top, line.top + line.height),
+        |run| {
+            let top = line.baseline - run.caret_ascent;
+            (top, top + run.caret_height)
+        },
+    );
+    (top <= local.y && local.y < bottom).then_some(&range.annotation)
 }
 
 impl WidgetTree {
@@ -363,6 +423,7 @@ impl WidgetTree {
     #[must_use]
     pub fn pointer_hit_test(&self, point: Offset) -> PointerHitTest {
         let mut raw = None;
+        let mut pointer_spans = Vec::new();
         let mut target = None;
         let mut coincident_gestures = Vec::new();
         for (_, marker, _, stack, _, popup) in self.transient_portal_entries().into_iter().rev() {
@@ -390,6 +451,7 @@ impl WidgetTree {
                 );
                 if claims_overlay_hit(&marker, &result) {
                     raw = Some(result.elements);
+                    pointer_spans = result.pointer_spans;
                     coincident_gestures = result.coincident_gestures;
                     target = target.or(hit);
                 } else if !precise {
@@ -411,6 +473,7 @@ impl WidgetTree {
                     false,
                 );
                 raw = Some(result.elements);
+                pointer_spans = result.pointer_spans;
                 coincident_gestures = result.coincident_gestures;
                 target = target.or(hit);
             } else {
@@ -419,6 +482,7 @@ impl WidgetTree {
         }
         PointerHitTest {
             raw: raw.unwrap_or_default(),
+            pointer_spans,
             target,
             coincident_gestures,
         }
@@ -639,6 +703,19 @@ impl WidgetTree {
             precise,
             &mut result,
         );
+        if !result.accepts_hit
+            && let (Some(element), Some(WidgetKind::Text { pointer_spans: Some(ranges), .. })) =
+                (element, kind)
+            && let Some(annotation) = paragraph_pointer_annotation(node, ranges, point - current)
+        {
+            result.pointer_spans.push(SpanPointerHit {
+                element,
+                annotation: annotation.clone(),
+                raw_before: result.elements.len(),
+            });
+            // A hit on a literal span is a real paragraph child hit.
+            result.blocks_siblings = true;
+        }
         let self_hit = self_hit_after_children(kind, node.size, point - current);
         if want_target && target.is_none() {
             target = self_hit.then_some(id);
@@ -737,6 +814,11 @@ impl WidgetTree {
             }
             result.content_hit |= child_result.content_hit;
             result.accepts_hit |= child_result.accepts_hit;
+            let before = result.elements.len();
+            result.pointer_spans.extend(child_result.pointer_spans.into_iter().map(|mut span| {
+                span.raw_before += before;
+                span
+            }));
             result.elements.extend(child_result.elements);
             if child_target.is_some() {
                 target = child_target;

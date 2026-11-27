@@ -2531,6 +2531,7 @@ dependencies = [
  "incular-assets",
  "incular-config",
  "incular-core",
+ "incular-gestures",
  "incular-rendering",
  "lru",
  "parley",

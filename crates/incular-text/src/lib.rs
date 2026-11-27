@@ -33,7 +33,7 @@ pub use spans::{
     CombinedInlineSpanSemantics, InlineSpan, InlineSpanComparison, InlineSpanRef,
     InlineSpanSemanticsInformation, InlineSpanStringAttribute, InvalidUtf16Span, PlainTextOptions,
     RichText,
-    StyledTextRun, Text, TextSpan, TextSpanVisitor, WidgetSpan,
+    StyledTextRun, Text, TextSpan, TextSpanMouse, TextSpanVisitor, WidgetSpan,
     WidgetSpanAlignment, combine_inline_span_semantics,
 };
 pub use style::{

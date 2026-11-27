@@ -67,3 +67,22 @@ Three focused native mounted pronunciation tests and three existing
 inline-layout tests passed. Paragraphs requiring separate semantic
 fragments keep the existing presentation fallback until their native
 fragment nodes are implemented. This authored case adds no credit.
+
+## Mouse cursor and enter/exit
+
+The exact pinned `painting/text_span_test.dart:349` and `:390`
+registrations passed. The focused Incular runtime fixture runs real
+pointer input over the same three centered spans and observes the
+resolved native-boundary cursor and enter/exit callbacks. A cursor is
+recorded only over a retained shaped cluster belonging to that span;
+plain children do not inherit it.
+
+The authored pinned `text_span_mouse_order_and_clip_test.dart` and
+native controls also verify that an enclosing mouse region supplies
+the background cursor, its enter precedes the span's enter, and its
+exit follows the span's exit. A displayed ellipsis takes no cursor from
+the truncated span. Removing a hovered paragraph from under a still
+pointer delivers its span's final exit, unlike the enclosing widget's
+unmount policy. This does not implement the separate span gesture
+recognizer API or its semantics actions. All five focused native cases
+and 33 neighboring mouse routing/region/cursor cases passed.
