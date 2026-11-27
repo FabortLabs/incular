@@ -222,3 +222,19 @@ than the active endpoint and hides the handles. The Android/Fuchsia
 policy is shared, not a claim about a Fuchsia clipboard backend. The
 Android collapse failed before the fix. All 25 focused native clipboard,
 retained menu and autofill tests passed.
+
+## Editor clipboard errors preserve backend context
+
+Pinned :5916 and :2834 passed. Calling native Copy on the exact selected
+substring now reports the backend's error with the editor and the copying
+operation instead of silently swallowing it. It does not change the text,
+selection or focus. Native paste reports read failures through the same
+observer and does not mistake a missing plain-text representation for a
+failure. Existing clipboard and toolbar checks still pass (33 focused
+native tests total).
+
+The paste registration remains partial: native reporting is checked
+through the keyboard path and preserves a Rust backend error, rather than
+a Flutter method-channel PlatformException code. A backend that completes
+an OS clipboard request asynchronously after returning is outside this
+specific reporting check.

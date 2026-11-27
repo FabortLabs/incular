@@ -76,7 +76,7 @@ pub use flutter_text_input::{
 pub use semantics_activation::{SemanticsEnabledSubscription, SemanticsHandle};
 pub use focus_keys::FocusKeySubscription;
 pub use frame::{
-    EditingDiagnostics, EventTarget, FocusDiagnostics, FrameStats, HardwareKeyHandlerError,
+    EditingDiagnostics, EditorClipboardError, EditorClipboardOperation, EventTarget, FocusDiagnostics, FrameStats, HardwareKeyHandlerError,
     KeyMessage, KeyMessageHandlerError, MouseCursorUpdate, PointerPacketCancellation,
     PointerPacketDispatchError, Runtime,
 };

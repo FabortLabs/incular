@@ -63,6 +63,7 @@ pub use hover_devices::MouseCursorUpdate;
 mod system_chrome;
 mod floating_cursor;
 mod text_actions;
+pub use text_actions::{EditorClipboardError, EditorClipboardOperation};
 mod autofill;
 mod text_gestures;
 mod touch_resampling;
@@ -395,6 +396,7 @@ pub struct Runtime {
     pub(crate) lifecycle_observers: Vec<Rc<dyn Fn(LifecycleTransition)>>,
     pub(crate) error_observers: Vec<Rc<dyn Fn(RuntimeErrorReport)>>,
     editing_error_observers: Vec<Rc<dyn Fn(&incular_widgets::TextEditingCallbackError)>>,
+    editor_clipboard_error_observers: Vec<Rc<dyn Fn(&EditorClipboardError)>>,
     pub(crate) environment_generation: u64,
     pub(crate) environment_dependencies: Rc<Cell<EnvironmentFields>>,
     pub(crate) application_root: Option<ElementId>,
@@ -658,6 +660,7 @@ impl Runtime {
             lifecycle_observers: Vec::new(),
             error_observers: Vec::new(),
             editing_error_observers: Vec::new(),
+            editor_clipboard_error_observers: Vec::new(),
             environment_generation: 0,
             environment_dependencies: Rc::new(Cell::new(EnvironmentFields::empty())),
             application_root: None,
@@ -1192,6 +1195,21 @@ impl Runtime {
         observer: impl Fn(&incular_widgets::TextEditingCallbackError) + 'static,
     ) {
         self.editing_error_observers.push(Rc::new(observer));
+    }
+
+    /// Observes clipboard failures from editor commands and shortcuts.
+    /// Missing clipboard text is ordinary and does not emit a failure.
+    pub fn observe_editor_clipboard_error(&mut self, observer: impl Fn(&EditorClipboardError) + 'static) {
+        self.editor_clipboard_error_observers.push(Rc::new(observer));
+    }
+
+    fn report_editor_clipboard_error(&self, report: EditorClipboardError) {
+        if self.editor_clipboard_error_observers.is_empty() {
+            tracing::error!(operation = ?report.operation, error = %report.error, "{}", report.operation.context());
+        }
+        for observer in &self.editor_clipboard_error_observers {
+            observer(&report);
+        }
     }
 
     /// Cancels runtime-owned work and prevents later queued callbacks from
@@ -4424,7 +4442,7 @@ impl Runtime {
         {
             return false;
         }
-        self.clipboard.set_text(controller.selected_text());
+        self.write_editor_clipboard(field, EditorClipboardOperation::Cut, controller.selected_text());
         controller.replace_selection("");
         true
     }

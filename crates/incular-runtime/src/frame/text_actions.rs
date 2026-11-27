@@ -9,7 +9,35 @@
 use super::*;
 use crate::text_shortcuts::{TextIntent, resolve};
 use incular_core::Modifiers;
+use incular_platform::TransferFormat;
 use incular_text::{SelectionChangedCause, TextAffinity, TextBoundaryKind};
+
+/// The selection operation that attempted to access the system clipboard.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditorClipboardOperation {
+    Copy,
+    Cut,
+    Paste,
+}
+
+impl EditorClipboardOperation {
+    #[must_use]
+    pub const fn context(self) -> &'static str {
+        match self {
+            Self::Copy => "while copying selection to clipboard",
+            Self::Cut => "while cutting selection to clipboard",
+            Self::Paste => "while pasting text from clipboard",
+        }
+    }
+}
+
+/// A clipboard backend failure during an editor command or shortcut.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EditorClipboardError {
+    pub field: ElementId,
+    pub operation: EditorClipboardOperation,
+    pub error: ClipboardError,
+}
 
 /// `TextSelection.expandTo`.
 fn expand_to(selection: TextSelection, position: usize, extent_at_index: bool) -> TextSelection {
@@ -111,7 +139,7 @@ impl Runtime {
         if !self.text_field_copy_allowed(field, &controller) {
             return false;
         }
-        self.clipboard.set_text(controller.selected_text());
+        self.write_editor_clipboard(field, EditorClipboardOperation::Copy, controller.selected_text());
         if cause == SelectionChangedCause::Toolbar {
             if let Some(toolbar) = self.tree.text_field_toolbar_state(field) {
                 toolbar.hide();
@@ -155,6 +183,41 @@ impl Runtime {
         }
         self.frame_requested = true;
         true
+    }
+
+    pub(super) fn write_editor_clipboard(
+        &mut self,
+        field: ElementId,
+        operation: EditorClipboardOperation,
+        text: String,
+    ) {
+        let write = self.clipboard.write(DataTransfer::plain_text(text)).and_then(|report| {
+            if report.written.contains(&TransferFormat::PlainText) {
+                Ok(())
+            } else {
+                Err(ClipboardError::UnsupportedFormat(TransferFormat::PlainText))
+            }
+        });
+        if let Err(error) = write {
+            self.report_editor_clipboard_error(EditorClipboardError { field, operation, error });
+        }
+    }
+
+    fn read_editor_clipboard(&mut self, field: ElementId) -> Option<std::sync::Arc<str>> {
+        let read = self.clipboard.read(TransferReadRequest::format(TransferFormat::PlainText))
+            .and_then(|transfer| transfer.plain_text_value().map_err(ClipboardError::from));
+        match read {
+            Ok(text) => text,
+            Err(ClipboardError::Unavailable | ClipboardError::UnsupportedFormat(TransferFormat::PlainText)) => None,
+            Err(error) => {
+                self.report_editor_clipboard_error(EditorClipboardError {
+                    field,
+                    operation: EditorClipboardOperation::Paste,
+                    error,
+                });
+                None
+            }
+        }
     }
 
     /// Applies a user replacement to a mounted, editable field using the
@@ -302,15 +365,15 @@ impl Runtime {
                 if !self.text_field_copy_allowed(field, controller) {
                     return false;
                 }
-                self.clipboard.set_text(controller.selected_text());
+                self.write_editor_clipboard(field, EditorClipboardOperation::Copy, controller.selected_text());
                 true
             }
             Cut => self.cut_text_field_selection(field, controller),
             Paste => {
-                if !editable {
+                if !editable || controller.selection_if_set().is_none() {
                     return false;
                 }
-                if let Some(text) = self.clipboard.get_text() {
+                if let Some(text) = self.read_editor_clipboard(field) {
                     controller.insert(&text);
                 }
                 true
