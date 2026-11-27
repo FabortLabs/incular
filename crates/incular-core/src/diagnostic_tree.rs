@@ -1,5 +1,7 @@
 //! Structured diagnostic snapshots and serialization for inspection tools.
 
+use std::collections::VecDeque;
+
 use serde_json::{Map, Value, json};
 
 use crate::{DiagnosticValue, DiagnosticsProperty};
@@ -134,6 +136,100 @@ impl DiagnosticsNode {
         details
     }
 
+    /// Exports the compact inspector tree without recursive traversal. A
+    /// positive depth enables descendants without decrementing that depth;
+    /// the compact wire format never includes properties.
+    #[must_use]
+    pub fn to_json_iterative(
+        &self,
+        options: DiagnosticsSerializationOptions,
+        delegate: &impl DiagnosticsSerializationDelegate,
+    ) -> Map<String, Value> {
+        type PendingNode = (Option<usize>, Map<String, Value>, Option<Vec<Value>>);
+        let marker = Self::truncation_marker();
+        let mut queue = VecDeque::from([(None, self)]);
+        let mut pending: Vec<PendingNode> = Vec::new();
+        // Visit breadth first so delegates observe the same order as Flutter.
+        while let Some((parent, node)) = queue.pop_front() {
+            let description = node.details["description"]
+                .as_str()
+                .expect("description is a string");
+            let widget_type = if description == "[root]" {
+                "RootWidget"
+            } else {
+                description
+                    .split_once('-')
+                    .map_or(description, |(prefix, _)| prefix)
+            };
+            let should_indent = !matches!(
+                node.details.get("style").and_then(Value::as_str),
+                Some("flat" | "error")
+            );
+            let mut entry = Map::from_iter([
+                ("description".into(), json!(description)),
+                ("shouldIndent".into(), json!(should_indent)),
+                ("widgetRuntimeType".into(), json!(widget_type)),
+            ]);
+            let children = if options.subtree_depth > 0 && !node.children.is_empty() {
+                let mut children = delegate.filter_children(node);
+                let original_len = children.len();
+                delegate.truncate_nodes(&mut children, node);
+                if children.len() != original_len {
+                    entry.insert("truncated".into(), Value::Bool(true));
+                    children.push(&marker);
+                }
+                let len = children.len();
+                let index = pending.len();
+                queue.extend(children.into_iter().map(|child| (Some(index), child)));
+                Some(Vec::with_capacity(len))
+            } else {
+                None
+            };
+            entry.extend(delegate.additional_compact_properties(node));
+            pending.push((parent, entry, children));
+        }
+
+        // Move complete child entries into their parent bottom-up. No recursive
+        // writes or deep Value clones are needed to assemble the response.
+        while let Some((parent, mut entry, children)) = pending.pop() {
+            if let Some(mut children) = children {
+                children.reverse();
+                entry.insert("children".into(), Value::Array(children));
+            }
+            if let Some(parent) = parent {
+                pending[parent]
+                    .2
+                    .as_mut()
+                    .expect("queued parents include children")
+                    .push(Value::Object(entry));
+            } else {
+                return entry;
+            }
+        }
+        unreachable!("the root always produces an entry")
+    }
+
+    fn truncation_marker() -> Self {
+        Self {
+            details: Map::from_iter([
+                ("description".into(), json!("...")),
+                ("type".into(), json!("DiagnosticsProperty<void>")),
+                ("name".into(), json!("")),
+                ("showName".into(), json!(false)),
+                ("style".into(), json!("singleLine")),
+                ("allowNameWrap".into(), json!(true)),
+            ]),
+            specialized: Map::from_iter([
+                ("missingIfNull".into(), json!(false)),
+                ("propertyType".into(), json!("void")),
+                ("defaultLevel".into(), json!("info")),
+                ("value".into(), Value::Null),
+            ]),
+            properties: Vec::new(),
+            children: Vec::new(),
+        }
+    }
+
     fn serialize_list<'a>(
         &'a self,
         mut nodes: Vec<&'a Self>,
@@ -149,24 +245,7 @@ impl DiagnosticsNode {
             })
             .collect();
         if original_len != nodes.len() {
-            let marker = Self {
-                details: Map::from_iter([
-                    ("description".into(), json!("...")),
-                    ("type".into(), json!("DiagnosticsProperty<void>")),
-                    ("name".into(), json!("")),
-                    ("showName".into(), json!(false)),
-                    ("style".into(), json!("singleLine")),
-                    ("allowNameWrap".into(), json!(true)),
-                ]),
-                specialized: Map::from_iter([
-                    ("missingIfNull".into(), json!(false)),
-                    ("propertyType".into(), json!("void")),
-                    ("defaultLevel".into(), json!("info")),
-                    ("value".into(), Value::Null),
-                ]),
-                properties: Vec::new(),
-                children: Vec::new(),
-            };
+            let marker = Self::truncation_marker();
             let mut entry = marker.to_json(delegate.options_for_node(&marker, options), delegate);
             entry.insert("truncated".into(), Value::Bool(true));
             json.push(Value::Object(entry));
@@ -189,6 +268,12 @@ pub trait DiagnosticsSerializationDelegate {
     /// Extra keys for this node, merged before serializing its relationships.
     fn additional_properties(&self, _node: &DiagnosticsNode) -> Map<String, Value> {
         Map::new()
+    }
+
+    /// Extra keys in the reduced inspector view. Defaults to the same keys
+    /// as the detailed view, as with a delegate that ignores `fullDetails`.
+    fn additional_compact_properties(&self, node: &DiagnosticsNode) -> Map<String, Value> {
+        self.additional_properties(node)
     }
 
     /// Returns the selected children in wire order. May promote descendants.

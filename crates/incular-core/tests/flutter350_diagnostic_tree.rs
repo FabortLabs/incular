@@ -294,3 +294,78 @@ fn options_can_differ_below_root_for_both_lists() {
         assert!(nodes.iter().all(|node| node.get("properties").is_none()));
     }
 }
+
+#[test]
+fn compact_default_has_essential_but_not_detailed_fields() {
+    let actual = tree().to_json_iterative(Options::default(), &());
+    assert_eq!(
+        Value::Object(actual),
+        json!({
+            "description": "TestTree#fixture",
+            "shouldIndent": true,
+            "widgetRuntimeType": "TestTree#fixture",
+        })
+    );
+}
+
+#[test]
+fn compact_positive_depth_retains_descendants_but_omits_properties_and_leaf_lists() {
+    let actual = tree().to_json_iterative(
+        options(1, true),
+        &TestDelegate {
+            no_properties_below_root: true,
+            ..Default::default()
+        },
+    );
+    let children = actual["children"].as_array().unwrap();
+    assert_eq!(children.len(), 3);
+    assert!(children[0].get("children").is_none());
+    assert_eq!(children[1]["children"].as_array().unwrap().len(), 3);
+    assert!(children[1]["children"][2].get("properties").is_none());
+    assert!(actual.get("properties").is_none());
+    assert!(children[2].get("children").is_none());
+}
+
+#[test]
+fn compact_calls_delegates_breadth_first_and_only_marks_the_truncated_parent() {
+    use std::cell::RefCell;
+
+    struct CompactOrder(RefCell<Vec<String>>);
+    impl Delegate for CompactOrder {
+        fn additional_properties(&self, _node: &Node) -> Map<String, Value> {
+            panic!("the compact hook, not the full-detail hook, is expected");
+        }
+        fn additional_compact_properties(&self, node: &Node) -> Map<String, Value> {
+            let ty = node.node_type().to_owned();
+            self.0.borrow_mut().push(ty.clone());
+            Map::from_iter([("nodeType".into(), json!(ty))])
+        }
+        fn truncate_nodes<'a>(&'a self, nodes: &mut Vec<&'a Node>, owner: &'a Node) {
+            if owner.node_type() == "B" {
+                nodes.truncate(1);
+            }
+        }
+    }
+
+    let root = Node::new("[root]", "Root").with_children(vec![
+        Node::new("A-debugInfo", "A").with_children(vec![Node::new("X-1", "X")]),
+        Node::new("B-debugInfo", "B")
+            .with_children(vec![Node::new("Y-1", "Y"), Node::new("Z-1", "Z")]),
+    ]);
+    let delegate = CompactOrder(RefCell::new(Vec::new()));
+    let actual = root.to_json_iterative(options(1, true), &delegate);
+    assert_eq!(
+        *delegate.0.borrow(),
+        ["Root", "A", "B", "X", "Y", "DiagnosticsProperty<void>"]
+    );
+    assert_eq!(actual["widgetRuntimeType"], "RootWidget");
+    assert_eq!(actual["children"][0]["widgetRuntimeType"], "A");
+    assert_eq!(actual["children"][1]["truncated"], true);
+    assert!(actual.get("truncated").is_none());
+    assert_eq!(actual["children"][1]["children"][1]["description"], "...");
+    assert!(
+        actual["children"][1]["children"][1]
+            .get("truncated")
+            .is_none()
+    );
+}

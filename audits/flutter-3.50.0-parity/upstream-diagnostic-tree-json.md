@@ -22,5 +22,12 @@ All 12 original detailed serialization cases passed on the pinned Linux
 reference, as did 12 native cases and 10 adjacent scalar diagnostic tests.
 The property adapters represent snapshots, not Flutter's lazy diagnostic
 builder; expansion of live object values and full inspector integration are
-not claimed. The compact iterative export and the two Element-backed cases
-are separate verification work.
+not claimed. The two Element-backed cases remain open in this batch.
+
+`DiagnosticsNode::to_json_iterative` implements the separate compact export.
+It walks breadth first with no recursive serialization, returns the essential
+fields, never emits properties, and treats positive depth as enabling all
+descendants. It omits leaf child arrays and sets the truncation flag on the
+owner of a truncated list, not its sentinel. The pinned compact original and
+15 native diagnostics tests passed, including delegate ordering and the
+quirk that depth is not decremented in this mode.

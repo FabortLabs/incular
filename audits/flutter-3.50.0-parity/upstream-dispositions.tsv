@@ -3240,3 +3240,4 @@ packages/flutter/test/foundation/diagnostics_json_test.dart	211	filterChildren -
 packages/flutter/test/foundation/diagnostics_json_test.dart	224	filterChildren - replace	paired-match	upstream-diagnostic-tree-json.md
 packages/flutter/test/foundation/diagnostics_json_test.dart	238	nodeTruncator	paired-match	upstream-diagnostic-tree-json.md
 packages/flutter/test/foundation/diagnostics_json_test.dart	257	delegateForAddingNodes	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	95	iterative implementation (without full details)	paired-match	upstream-diagnostic-tree-json.md
