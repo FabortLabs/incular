@@ -3683,3 +3683,4 @@ packages/flutter/test/gestures/events_test.dart	716	PointerDownEvent.copyWith()	
 packages/flutter/test/gestures/events_test.dart	744	PointerMoveEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
 packages/flutter/test/gestures/events_test.dart	772	PointerUpEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
 packages/flutter/test/gestures/events_test.dart	800	PointerRemovedEvent.copyWith()	partial-match	upstream-pointer-event-primitives.md#copying-a-global-pointer-sample
+packages/flutter/test/gestures/events_test.dart	289	transforming events	partial-match	upstream-pointer-event-primitives.md#borrowed-event-projections

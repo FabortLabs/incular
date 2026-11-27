@@ -332,18 +332,8 @@ impl RawPointerEvent {
         let Some(transform) = transform else {
             return self;
         };
-        if let Some(affine) = transform.affine_xy_plane() {
-            return self.transformed(Some(affine));
-        }
-        let x = f64::from(self.position.x);
-        let y = f64::from(self.position.y);
-        let start = transform.transform_point(Point64::new(
-            x - f64::from(self.delta.x),
-            y - f64::from(self.delta.y),
-        ));
-        let end = transform.transform_point(Point64::new(x, y));
-        self.local_position = Offset::new(end.x as f32, end.y as f32);
-        self.local_delta = Offset::new((end.x - start.x) as f32, (end.y - start.y) as f32);
+        (self.local_position, self.local_delta) =
+            project_motion(transform, self.position, self.delta);
         self
     }
 
@@ -393,6 +383,28 @@ impl RawPointerEvent {
             time: self.time,
         }
     }
+}
+
+// Used by raw routes and borrowed projections of other pointer packet types.
+pub(crate) fn project_motion(
+    transform: Matrix4,
+    position: Offset,
+    delta: Offset,
+) -> (Offset, Offset) {
+    if let Some(affine) = transform.affine_xy_plane() {
+        return (
+            affine.transform_point(position),
+            affine.transform_vector(delta),
+        );
+    }
+    let end = Point64::new(f64::from(position.x), f64::from(position.y));
+    let start = Point64::new(end.x - f64::from(delta.x), end.y - f64::from(delta.y));
+    let end = transform.transform_point(end);
+    let start = transform.transform_point(start);
+    (
+        Offset::new(end.x as f32, end.y as f32),
+        Offset::new((end.x - start.x) as f32, (end.y - start.y) as f32),
+    )
 }
 
 impl From<PointerEvent> for RawPointerEvent {

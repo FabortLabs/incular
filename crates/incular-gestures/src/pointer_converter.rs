@@ -2,11 +2,11 @@
 //! native events continue to use the ordinary raw pointer path.
 
 use incular_core::{
-    Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPanZoomEvent, PointerPanZoomPhase,
-    PointerPhase, PointerSampleMetadata, time::Instant,
+    Matrix4, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPanZoomEvent,
+    PointerPanZoomPhase, PointerPhase, PointerSampleMetadata, time::Instant,
 };
 
-use crate::RawPointerEvent;
+use crate::{OffsetPair, RawPointerEvent, details::project_motion};
 
 /// The change in a physical input record. A contact move and a hover
 /// are distinct even when both happen to carry an empty button mask.
@@ -126,6 +126,96 @@ pub struct ConvertedPointerEvent {
     /// Opaque platform payload. Only contact motion carries it.
     pub platform_data: i64,
     pub kind: ConvertedPointerKind,
+}
+
+impl ConvertedPointerEvent {
+    /// Borrows this event in the coordinate space of a receiving target. A
+    /// projection does not replace the source or copy its contact metadata.
+    #[must_use]
+    pub const fn projection<'a>(
+        &'a self,
+        transform: Option<&'a Matrix4>,
+    ) -> PointerEventProjection<'a> {
+        PointerEventProjection {
+            source: self,
+            transform,
+        }
+    }
+}
+
+/// Local and global coordinates for one point and the motion that reached it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PointerMotionCoordinates {
+    pub position: OffsetPair,
+    pub delta: OffsetPair,
+}
+
+/// A borrowed projection of a view-scoped pointer event. Multiple listeners
+/// can project the same source without allocating or composing their matrices.
+#[derive(Clone, Copy, Debug)]
+pub struct PointerEventProjection<'a> {
+    source: &'a ConvertedPointerEvent,
+    transform: Option<&'a Matrix4>,
+}
+
+impl<'a> PointerEventProjection<'a> {
+    /// The source event, with its global coordinates and untouched metadata.
+    #[must_use]
+    pub const fn source(self) -> &'a ConvertedPointerEvent {
+        self.source
+    }
+
+    /// The original event of a transformed view, or none in global space.
+    #[must_use]
+    pub fn original(self) -> Option<&'a ConvertedPointerEvent> {
+        self.transform.map(|_| self.source)
+    }
+
+    #[must_use]
+    pub const fn transform(self) -> Option<&'a Matrix4> {
+        self.transform
+    }
+
+    /// Pointer position and movement in both source and target coordinates.
+    /// Wheel motion and cumulative pan are distinct from pointer movement.
+    #[must_use]
+    pub fn coordinates(self) -> PointerMotionCoordinates {
+        let (position, delta) = match self.source.kind {
+            ConvertedPointerKind::Contact { event, .. }
+            | ConvertedPointerKind::Scroll(event)
+            | ConvertedPointerKind::ScrollInertiaCancel(event)
+            | ConvertedPointerKind::Scale { event, .. } => (event.position, event.delta),
+            ConvertedPointerKind::PanZoom { event, .. } => (event.position, Offset::ZERO),
+        };
+        self.map_motion(position, delta)
+    }
+
+    /// Absolute pan and measured pan delta of a pan/zoom update in both
+    /// spaces. Scale and rotation remain on the original event.
+    #[must_use]
+    pub fn pan_coordinates(self) -> Option<PointerMotionCoordinates> {
+        match self.source.kind {
+            ConvertedPointerKind::PanZoom {
+                event:
+                    PointerPanZoomEvent {
+                        phase: PointerPanZoomPhase::Update { pan, .. },
+                        ..
+                    },
+                pan_delta,
+            } => Some(self.map_motion(pan, pan_delta)),
+            _ => None,
+        }
+    }
+
+    fn map_motion(self, position: Offset, delta: Offset) -> PointerMotionCoordinates {
+        let (local_position, local_delta) = self.transform.map_or((position, delta), |transform| {
+            project_motion(*transform, position, delta)
+        });
+        PointerMotionCoordinates {
+            position: OffsetPair::new(local_position, position),
+            delta: OffsetPair::new(local_delta, delta),
+        }
+    }
 }
 
 /// Converts physical events without collecting or dispatching them.

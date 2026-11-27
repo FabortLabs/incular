@@ -60,3 +60,19 @@ force measurement rather than Flutter's non-null default raw pressure,
 and a global Rust copy intentionally drops the previous local routing
 rather than carrying Flutter's transform wrapper. All 34 focused native
 copy, primitive, packet and resampler tests passed.
+
+## Borrowed event projections
+
+The original `transforming events` at :289 passed on the pinned SDK.
+The native path now exposes borrowed projections of converted contacts,
+scroll and pan/zoom without allocating or replacing the original packet.
+At the original translation and scale it reports local position (60, 100)
+and local delta (10, 10) for the moving samples, while preserving all
+source metadata. A different target projects the original, not the first
+projection. Enter/exit samples also preserve metadata via the raw value
+path. A separate projective pan control verifies that motion is mapped
+from both endpoints. All 35 targeted native tests passed.
+
+The original remains partial: the raw enter/exit value path does not
+expose Flutter's identity backlink, normalized force is not Flutter's raw
+pressure reading, and retained widget hit testing is still affine.

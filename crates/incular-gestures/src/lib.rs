@@ -103,7 +103,8 @@ pub use pointer::{
 pub use signal::{PointerSignalError, PointerSignalEvent, PointerSignalResolver};
 pub use pointer_converter::{
     ConvertedPointerChange, ConvertedPointerEvent, ConvertedPointerKind, PointerData,
-    PointerDataChange, PointerDataSignal, PointerEventConverter,
+    PointerDataChange, PointerDataSignal, PointerEventConverter, PointerEventProjection,
+    PointerMotionCoordinates,
 };
 pub use pointer_resampler::PointerEventResampler;
 pub use pointer_router::{
