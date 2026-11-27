@@ -82,6 +82,33 @@ pub trait DiagnosticValue: PartialEq {
     }
 }
 
+/// An enum whose diagnostic label is the name of the selected member.
+pub trait DiagnosticEnum: DiagnosticValue {
+    /// Returns the short name, without the enum type prefix.
+    fn variant_name(&self) -> &str;
+}
+
+/// Returns a typed enum member's short diagnostic name.
+#[must_use]
+pub fn describe_enum(value: &impl DiagnosticEnum) -> &str {
+    value.variant_name()
+}
+
+/// An older enum-like description did not have a type/member separator.
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[error("The provided object \"{0}\" is not an enum.")]
+pub struct InvalidEnumDescription(String);
+
+/// Extracts a short name from the text of a legacy enum-like object.
+/// Real Rust enums should use [describe_enum].
+pub fn describe_legacy_enum(display: &str) -> Result<&str, InvalidEnumDescription> {
+    display
+        .split_once('.')
+        .filter(|(_, name)| !name.is_empty())
+        .map(|(_, name)| name)
+        .ok_or_else(|| InvalidEnumDescription(display.to_owned()))
+}
+
 impl DiagnosticValue for String {
     const TYPE_NAME: &'static str = "String";
     fn diagnostic_text(&self) -> String {
@@ -284,6 +311,9 @@ enum Presentation<T> {
     },
     Flag,
     ObjectFlag,
+    Enum {
+        short_name: fn(&T) -> &str,
+    },
     Number {
         type_name: &'static str,
         format: fn(Option<&T>) -> String,
@@ -308,6 +338,7 @@ pub struct DiagnosticsProperty<T> {
     tooltip: Option<String>,
     unit: Option<String>,
     show_name: bool,
+    show_separator: bool,
     level: DiagnosticLevel,
     missing_if_null: bool,
     style: DiagnosticsTreeStyle,
@@ -330,6 +361,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             tooltip: None,
             unit: None,
             show_name: true,
+            show_separator: true,
             level: DiagnosticLevel::Info,
             missing_if_null: false,
             style: DiagnosticsTreeStyle::Sparse,
@@ -447,6 +479,13 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         self
     }
 
+    /// Controls the colon between the displayed property name and value.
+    #[must_use]
+    pub fn show_separator(mut self, show: bool) -> Self {
+        self.show_separator = show;
+        self
+    }
+
     /// Overrides the default visibility level.
     #[must_use]
     pub fn level(mut self, level: DiagnosticLevel) -> Self {
@@ -533,6 +572,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                 Presentation::String { quoted: true } if empty.is_none() => format!("\"{text}\""),
                 Presentation::Flag => self.flag_label().map_or(text, str::to_owned),
                 Presentation::ObjectFlag => self.if_present.as_deref().map_or(text, str::to_owned),
+                Presentation::Enum { short_name } => short_name(value).to_owned(),
                 Presentation::Number {
                     format,
                     unit_separator,
@@ -579,6 +619,10 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                 generated_type = format!("ObjectFlagProperty<{}>", T::TYPE_NAME);
                 generated_type.as_str()
             }
+            Presentation::Enum { .. } => {
+                generated_type = format!("EnumProperty<{}>", T::TYPE_NAME);
+                generated_type.as_str()
+            }
             Presentation::Number { type_name, .. } => type_name,
         };
         let level = self.effective_level();
@@ -600,6 +644,9 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         }
         if !self.shows_name() {
             output["showName"] = json!(false);
+        }
+        if !self.show_separator {
+            output["showSeparator"] = json!(false);
         }
         if self.style != DiagnosticsTreeStyle::Sparse {
             output["style"] = json!(self.style.name());
@@ -639,9 +686,21 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                     output["unit"] = json!(unit);
                 }
             }
-            Presentation::Plain | Presentation::ObjectFlag => {}
+            Presentation::Plain | Presentation::ObjectFlag | Presentation::Enum { .. } => {}
         }
         output
+    }
+}
+
+impl<T: DiagnosticEnum> DiagnosticsProperty<T> {
+    /// Constructs an enum property that displays only the selected member.
+    #[must_use]
+    pub fn enumeration(name: impl Into<String>, value: Option<T>) -> Self {
+        let mut property = Self::new(name, value);
+        property.presentation = Presentation::Enum {
+            short_name: T::variant_name,
+        };
+        property
     }
 }
 
@@ -746,7 +805,8 @@ impl DiagnosticsProperty<f64> {
 impl<T: DiagnosticValue> fmt::Display for DiagnosticsProperty<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.shows_name() {
-            write!(formatter, "{}: ", self.name)?;
+            let separator = if self.show_separator { ": " } else { " " };
+            write!(formatter, "{}{separator}", self.name)?;
         }
         formatter.write_str(&self.to_description())
     }

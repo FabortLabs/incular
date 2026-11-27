@@ -115,7 +115,7 @@ pub mod prelude {
     };
     pub use incular_core::{
         BACK_POINTER_BUTTON, BitField, ChangeImpact, ChangeNotifier, ChangeNotifierSubscription, Code, Color, ColorSpace, ColorSwatch,
-        DebugPrintBuffer, DiagnosticCallback, DiagnosticFailure, DiagnosticLevel, DiagnosticValue, DiagnosticsProperty,
+        DebugPrintBuffer, DiagnosticCallback, DiagnosticEnum, DiagnosticFailure, DiagnosticLevel, DiagnosticValue, DiagnosticsProperty,
         DiagnosticsTreeStyle, DirtyFlags, FORWARD_POINTER_BUTTON, FloatColor, HslColor, HsvColor, ImeEvent, InputEvent,
         Invalidation, Key, KeyState, KeyboardEvent, KeyboardKey, Lerp, LocalKey, Location,
         Modifiers, NamedKey,
@@ -125,6 +125,7 @@ pub mod prelude {
         TrackpadGesture, TrackpadGestureKind, TrackpadGesturePhase, Transform as AffineTransform,
         UniqueKey, ValueKey, ValueNotifier, WindowResizeDirection, additional_pointer_button_mask,
         debug_double_precision, debug_format_double, debug_print_synchronously, debug_word_wrap,
+        describe_enum, describe_legacy_enum,
         set_debug_double_precision,
     };
     pub use incular_gestures::{

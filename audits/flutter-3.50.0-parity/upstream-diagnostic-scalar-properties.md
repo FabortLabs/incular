@@ -62,3 +62,19 @@ description while remaining a non-scalar inspector value.
 All 18 focused native diagnostic tests passed. The missing-callback
 registration was exercised on Linux, where it is enabled; its browser
 branch is skipped by Flutter.
+
+## Enum members and object separators
+
+Four pinned registrations passed for enum descriptions, typed enum
+properties, ordinary integer properties, and object properties.
+The native fixtures verify short enum labels, raw member identity,
+default-value filtering, and an absent value remaining null. The
+legacy display-string helper reports the original error text for an
+invalid descriptor without weakening the typed enum API.
+
+Object descriptions can independently hide the name or use a space
+instead of a colon. The native rectangle fixture retains the same
+value through both modes and keeps it out of primitive JSON fields.
+The integer fixture compares all nine combinations of value, units,
+null/default text and filtering. All 22 focused native property tests
+passed.

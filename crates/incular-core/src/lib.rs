@@ -52,8 +52,9 @@ pub use debug_instrumentation::{
 };
 pub use debug_print::{DebugPrintBuffer, debug_print_synchronously, debug_word_wrap};
 pub use diagnostic_property::{
-    DiagnosticCallback, DiagnosticFailure, DiagnosticLevel, DiagnosticValue, DiagnosticsProperty,
-    DiagnosticsTreeStyle,
+    DiagnosticCallback, DiagnosticEnum, DiagnosticFailure, DiagnosticLevel, DiagnosticValue,
+    DiagnosticsProperty, DiagnosticsTreeStyle, InvalidEnumDescription, describe_enum,
+    describe_legacy_enum,
 };
 pub use debug_timeline::{AggregatedTimedBlock, AggregatedTimings, DebugTimeline, DebugTimelineError, TimedBlock};
 pub use context::{BuildContext, ConsumerId, ContextGuard, DependencySnapshot};
