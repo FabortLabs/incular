@@ -1187,6 +1187,16 @@ impl<T: 'static> Router<T> {
         )
     }
 
+    /// Uses the default platform route, `/`, with a parser. Hosts with a
+    /// different initial location can pass an explicit provider instead.
+    #[must_use]
+    pub fn with_default_route_information_provider(
+        delegate: impl RouterDelegate<T>,
+        parser: impl RouteInformationParser<T>,
+    ) -> Self {
+        Self::with_provider_parser(delegate, MemoryRouteInformationProvider::root(), parser)
+    }
+
     /// Creates a router from a validated configuration.
     #[must_use]
     pub fn from_config(config: RouterConfig<T>) -> Self {

@@ -105,3 +105,12 @@ root's platform registration now follows its callbacks even when
 the router holds it through the shared dispatcher type; a plain
 child dispatcher is not inadvertently registered as a platform
 root. Three focused and 44 adjacent checks passed.
+
+## Route information defaults and invalid configurations
+
+Pinned `widgets/app_test.dart:352,446` passed. A direct router with a
+parser and no supplied provider receives the ordinary startup
+location `/`, which appears in its mounted content. Rust's fallible
+configuration constructor rejects a provider with no parser before
+mounting, corresponding to Flutter's constructor assertion. The
+two direct native checks and seven adjacent routing checks passed.

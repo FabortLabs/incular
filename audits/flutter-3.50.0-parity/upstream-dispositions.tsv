@@ -3433,3 +3433,5 @@ packages/flutter/test/widgets/app_test.dart	230	WidgetsApp can customize initial
 packages/flutter/test/widgets/app_test.dart	286	WidgetsApp.router works	paired-match	upstream-widgets-app-focus-scope.md#platform-back-reaches-the-root-router
 packages/flutter/test/widgets/app_test.dart	322	WidgetsApp.router route information parser is optional	paired-match	upstream-widgets-app-focus-scope.md#platform-back-reaches-the-root-router
 packages/flutter/test/widgets/app_test.dart	409	WidgetsApp.router router config works	paired-match	upstream-widgets-app-focus-scope.md#platform-back-reaches-the-root-router
+packages/flutter/test/widgets/app_test.dart	352	WidgetsApp.router throw if route information provider is provided but no route information parser	paired-match	upstream-widgets-app-focus-scope.md#route-information-defaults-and-invalid-configurations
+packages/flutter/test/widgets/app_test.dart	446	WidgetsApp.router has correct default	paired-match	upstream-widgets-app-focus-scope.md#route-information-defaults-and-invalid-configurations
