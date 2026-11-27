@@ -246,3 +246,78 @@ fn after_latest_pointer_lifts_the_first_resumes_from_its_own_last_position() {
     h.touch(96., 97., PointerPhase::Up);
     assert_eq!(h.take(), [Pan::End]);
 }
+
+#[test]
+fn a_deferred_default_winner_can_release_before_another_contact_is_disposed() {
+    struct TapContender;
+    impl GestureArenaClient for TapContender {
+        fn accept_gesture(&self, _: GestureArenaKey) {}
+        fn reject_gesture(&self, _: GestureArenaKey) {}
+    }
+
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let starts = Rc::clone(&trace);
+    let ends = Rc::clone(&trace);
+    let drag = Rc::new(Contender {
+        drag: RefCell::new(
+            MonodragGestureRecognizer::new(
+                DragAxis::Horizontal,
+                DragCallbacks {
+                    on_start: Some(Rc::new(move |_| starts.borrow_mut().push(Pan::Start))),
+                    on_end: Some(Rc::new(move |_| ends.borrow_mut().push(Pan::End))),
+                    ..DragCallbacks::default()
+                },
+            )
+            .with_drag_start_behavior(incular_core::DragStartBehavior::Down),
+        ),
+        lost: RefCell::new(Vec::new()),
+    });
+    let arena = GestureArenaManager::new();
+    let now = Instant::now();
+    let event = |pointer, phase| {
+        RawPointerEvent::new(
+            pointer,
+            0,
+            PointerDeviceKind::Touch,
+            u32::from(phase == PointerPhase::Down),
+            Offset::new(10., 10.),
+            phase,
+            now,
+        )
+    };
+    let [(_, tap1), (drag2, tap2)] = [5, 6].map(|pointer| {
+        let key = GestureArenaKey::pointer_device(0, 0, pointer);
+        let drag_member = arena.add(key, drag.clone());
+        let tap_member = arena.add(key, Rc::new(TapContender));
+        assert!(
+            drag.drag
+                .borrow_mut()
+                .observe_raw(event(pointer, PointerPhase::Down))
+        );
+        arena.close(key);
+        (drag_member, tap_member)
+    });
+    assert!(trace.borrow().is_empty());
+
+    // Disposing the first tap leaves its drag alone in a closed arena.
+    tap1.resolve(GestureDisposition::Rejected);
+    assert!(trace.borrow().is_empty());
+    arena.flush_deferred_resolutions();
+    assert_eq!(trace.take(), [Pan::Start]);
+
+    assert!(
+        drag.drag
+            .borrow_mut()
+            .observe_raw(event(5, PointerPhase::Up))
+    );
+    assert!(drag.drag.borrow().is_tracking());
+    assert!(trace.borrow().is_empty());
+
+    drag2.resolve(GestureDisposition::Rejected);
+    tap2.resolve(GestureDisposition::Rejected);
+    arena.flush_deferred_resolutions();
+    assert!(!drag.drag.borrow().is_tracking());
+    // The remaining drag registration was disposed, not released by the
+    // pointer. Teardown does not replay the accepted start.
+    assert!(trace.borrow().is_empty());
+}

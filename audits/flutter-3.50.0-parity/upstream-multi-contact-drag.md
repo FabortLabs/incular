@@ -33,3 +33,20 @@ are one start at the button change, one update on the other pointer
 at (100, 100), then one end on its release. The invalid source does
 not win its old arena. Fifteen targeted tests passed; normal lifts
 still follow the previous cancellation and acceptance rules.
+
+### Final-contact cancellation and default arena teardown
+
+Pinned cases 2388 and 2473 passed. A vertical drag's four-contact
+native fixture mounts a tap over the first three contact positions.
+The fourth contact has only the same drag, so it wins without slop.
+Lifting the second and canceling the fourth and third do not end the
+gesture. Canceling the last tracked contact emits one end without
+a tap callback.
+
+A separate native managed-arena test uses one horizontal drag and
+two independent tap registrations for pointers at the original position.
+Retiring the first tap produces no immediate callback; the deferred
+default starts the drag once. Its accepted pointer can release while
+the other remains tracked, and rejecting the remaining drag entry and
+disposing the other tap causes no crash or replay. Four direct and
+seven mounted focused tests passed.

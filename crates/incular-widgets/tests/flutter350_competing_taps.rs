@@ -368,3 +368,64 @@ fn a_canceled_button_chord_does_not_leave_the_other_contact_waiting() {
     );
     assert_eq!(log.take(), [("H", "end")]);
 }
+
+#[test]
+fn an_accepted_vertical_drag_ends_only_after_the_last_tracked_contact_cancels() {
+    use incular_widgets::{Positioned, Stack};
+
+    let log = TapLog::default();
+    let emit = |owner, phase| {
+        let log = Rc::clone(&log);
+        move || log.borrow_mut().push((owner, phase))
+    };
+    let tap_down = emit("T", "down");
+    let tap_up = emit("T", "up");
+    let shortcut = GestureDetector::new(Widget::box_(Size::new(12.5, 12.5), Color::BLACK))
+        .on_tap_down(move |_| tap_down())
+        .on_tap_up(move |_| tap_up())
+        .on_tap_cancel(|| {});
+    // The first three contacts compete with a tap. The fourth is outside
+    // the nested tap target, but inside the same mounted vertical drag.
+    let surface = Stack::new([
+        Widget::box_(Size::new(100., 100.), Color::WHITE),
+        Positioned::new(shortcut)
+            .left(0.)
+            .top(0.)
+            .width(12.5)
+            .height(12.5)
+            .into(),
+    ]);
+    let down = emit("D", "down");
+    let start = emit("D", "start");
+    let update = emit("D", "update");
+    let end = emit("D", "end");
+    let drag = GestureDetector::new(surface)
+        .on_vertical_drag_down(move |_| down())
+        .on_vertical_drag_start(move |_| start())
+        .on_vertical_drag_update(move |_| update())
+        .on_vertical_drag_end(move |_| end())
+        .on_vertical_drag_cancel(emit("D", "cancel"));
+    let mut tree = mounted(drag);
+    let now = Instant::now();
+    let events: &[(u64, PointerPhase, &[(&str, &str)])] = &[
+        (1, PointerPhase::Down, &[("D", "down")]),
+        (2, PointerPhase::Down, &[]),
+        (3, PointerPhase::Down, &[]),
+        (4, PointerPhase::Down, &[("D", "start")]),
+        (2, PointerPhase::Up, &[]),
+        (4, PointerPhase::Cancel, &[]),
+        (3, PointerPhase::Cancel, &[]),
+        (1, PointerPhase::Cancel, &[("D", "end")]),
+    ];
+    for (time, &(pointer, phase, expected)) in events.iter().enumerate() {
+        let coordinate = 9. + pointer as f32;
+        dispatch(
+            &mut tree,
+            pointer,
+            phase,
+            Offset::new(coordinate, coordinate),
+            now + Duration::from_millis(time as u64),
+        );
+        assert_eq!(&log.take(), expected, "pointer {pointer} {phase:?}");
+    }
+}
