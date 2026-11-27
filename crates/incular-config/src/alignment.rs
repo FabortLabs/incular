@@ -182,8 +182,8 @@ impl std::ops::Neg for Alignment {
 /// extrapolates past the endpoints.
 impl incular_core::Lerp for Alignment {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let mix = |a: f32, b: f32| a + (b - a) * t;
-        Self::new(mix(self.x, other.x), mix(self.y, other.y))
+        use crate::alignment_geometry::mix;
+        Self::new(mix(self.x, other.x, t), mix(self.y, other.y, t))
     }
 }
 
@@ -315,8 +315,8 @@ impl AlignmentDirectional {
 /// Unclamped, like [`Alignment`].
 impl incular_core::Lerp for AlignmentDirectional {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let mix = |a: f32, b: f32| a + (b - a) * t;
-        Self::new(mix(self.start, other.start), mix(self.y, other.y))
+        use crate::alignment_geometry::mix;
+        Self::new(mix(self.start, other.start, t), mix(self.y, other.y, t))
     }
 }
 

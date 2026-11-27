@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Shared alignment geometry preserves physical and relative coordinates
+  through interpolation and arithmetic, and diagnoses missing direction.
+
 - Animation controllers can return an identity-preserving diagnostic when an
   already disposed controller is disposed again.
 

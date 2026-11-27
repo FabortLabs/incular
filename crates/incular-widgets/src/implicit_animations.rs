@@ -13,7 +13,7 @@ use incular_animation::{
     AnimationController, AnimationStatus, Channel, Curve, MotionValue, Transition,
 };
 use incular_config::{
-    Alignment, AlignmentDirectional, Clip, Constraints, EdgeInsets, TextDirection,
+    Alignment, Clip, Constraints, EdgeInsets, TextDirection,
 };
 use incular_core::{Color, Lerp, Offset, Transform as CoreTransform};
 use incular_text::{TextAlign, TextOverflow, TextStyle};
@@ -47,75 +47,7 @@ impl<T: Lerp + Clone> PropertyTween<T> {
     }
 }
 
-/// Flutter `AlignmentGeometry`: a physical alignment, or one whose horizontal
-/// value is relative to the text direction. Mixed geometry keeps both
-/// components until it is resolved against the ambient direction.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum AlignmentGeometry {
-    Physical(Alignment),
-    Directional(AlignmentDirectional),
-    Mixed { x: f32, start: f32, y: f32 },
-}
-
-impl AlignmentGeometry {
-    /// The physical alignment under `direction`.
-    #[must_use]
-    pub fn resolve(self, direction: TextDirection) -> Alignment {
-        match self {
-            Self::Physical(alignment) => alignment,
-            Self::Directional(alignment) => alignment.resolve(direction),
-            Self::Mixed { x, start, y } => Alignment::new(
-                x + if direction == TextDirection::Rtl {
-                    -start
-                } else {
-                    start
-                },
-                y,
-            ),
-        }
-    }
-}
-
-impl Lerp for AlignmentGeometry {
-    fn lerp(&self, other: &Self, t: f32) -> Self {
-        let mix = |a, b| a + (b - a) * t;
-        match (*self, *other) {
-            (Self::Physical(a), Self::Physical(b)) => {
-                Self::Physical(Alignment::new(mix(a.x, b.x), mix(a.y, b.y)))
-            }
-            (Self::Directional(a), Self::Directional(b)) => Self::Directional(
-                AlignmentDirectional::new(mix(a.start, b.start), mix(a.y, b.y)),
-            ),
-            (a, b) => {
-                let sum = |geometry| match geometry {
-                    Self::Physical(a) => (a.x, 0., a.y),
-                    Self::Directional(a) => (0., a.start, a.y),
-                    Self::Mixed { x, start, y } => (x, start, y),
-                };
-                let (a, b) = (sum(a), sum(b));
-                Self::Mixed {
-                    x: mix(a.0, b.0),
-                    start: mix(a.1, b.1),
-                    y: mix(a.2, b.2),
-                }
-            }
-        }
-    }
-}
-
-impl From<Alignment> for AlignmentGeometry {
-    fn from(value: Alignment) -> Self {
-        Self::Physical(value)
-    }
-}
-
-impl From<AlignmentDirectional> for AlignmentGeometry {
-    fn from(value: AlignmentDirectional) -> Self {
-        Self::Directional(value)
-    }
-}
-
-pub use incular_config::EdgeInsetsGeometry;
+pub use incular_config::{AlignmentGeometry, EdgeInsetsGeometry};
 
 /// The two walks `ImplicitlyAnimatedWidgetState` makes over its tweens. Each
 /// carries the ambient text direction, which resolves directional targets.
@@ -502,7 +434,7 @@ impl AnimatedContainer {
         self
     }
 
-    /// Accepts an [`Alignment`] or an [`AlignmentDirectional`], which follows
+    /// Accepts an [`Alignment`] or an [`incular_config::AlignmentDirectional`], which follows
     /// the text direction.
     #[must_use]
     pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
@@ -762,7 +694,7 @@ pub struct AnimatedAlign {
 }
 
 impl AnimatedAlign {
-    /// Accepts an [`Alignment`] or an [`AlignmentDirectional`], which follows
+    /// Accepts an [`Alignment`] or an [`incular_config::AlignmentDirectional`], which follows
     /// the text direction.
     #[must_use]
     pub fn new(
@@ -897,7 +829,7 @@ impl AnimatedFractionallySizedBox {
         self
     }
 
-    /// Accepts an [`Alignment`] or an [`AlignmentDirectional`].
+    /// Accepts an [`Alignment`] or an [`incular_config::AlignmentDirectional`].
     #[must_use]
     pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
         self.alignment = alignment.into();

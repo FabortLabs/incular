@@ -5,6 +5,7 @@
 //! these values without depending on each other.
 
 mod alignment;
+mod alignment_geometry;
 mod constraints;
 mod defaults;
 mod environment;
@@ -18,6 +19,7 @@ pub use alignment::{
     FractionalOffset, MainAxisAlignment, MainAxisSize, StackFit, VerticalDirection, WrapAlignment,
     WrapCrossAlignment,
 };
+pub use alignment_geometry::{AlignmentGeometry, AlignmentResolutionError};
 pub use constraints::{ConstraintError, Constraints, ViewConstraints};
 pub use defaults::{ApplicationDefaults, TransparencyMode, WidgetDefaults, WindowSizePolicy};
 pub use environment::{

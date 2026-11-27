@@ -90,8 +90,6 @@ packages/flutter/test/widgets/wrap_test.dart	811	Hit test children in wrap	paire
 packages/flutter/test/widgets/wrap_test.dart	1030	Wrap alignment flipped spaceInBetween	paired-match	upstream-wrap-geometry-comparisons.md
 packages/flutter/test/widgets/wrap_test.dart	1045	Wrap does not crash at zero area	paired-match	upstream-wrap-geometry-comparisons.md
 packages/flutter/test/painting/alignment_test.dart	117	AlignmentGeometry.resolve()	paired-match	upstream-geometry-input-gestures.md
-packages/flutter/test/painting/alignment_test.dart	338	AlignmentGeometry factories	partial-match	upstream-geometry-input-gestures.md
-packages/flutter/test/painting/alignment_test.dart	343	AlignmentGeometry static members	partial-match	upstream-geometry-input-gestures.md
 packages/flutter/test/painting/edge_insets_test.dart	12	EdgeInsets constructors	paired-match	upstream-edge-insets.md
 packages/flutter/test/painting/edge_insets_test.dart	41	EdgeInsetsDirectional constructors	paired-match	upstream-geometry-input-gestures.md
 packages/flutter/test/painting/edge_insets_test.dart	134	EdgeInsets.resolve()	paired-match	upstream-geometry-input-gestures.md
@@ -2692,3 +2690,19 @@ packages/flutter/test/widgets/system_context_menu_test.dart	1179	Default iOS Sys
 packages/flutter/test/animation/listener_helpers_test.dart	9	AnimationLocalStatusListenersMixin with AnimationLazyListenerMixin - removing unregistered listener is no-op	paired-match	upstream-lazy-animation-listeners.md
 packages/flutter/test/animation/listener_helpers_test.dart	17	AnimationLocalListenersMixin with AnimationLazyListenerMixin - removing unregistered listener is no-op	paired-match	upstream-lazy-animation-listeners.md
 packages/flutter/test/animation/animation_controller_test.dart	502	AnimationController error handling	paired-match	upstream-animation-controller-disposal.md#missing-timing-configuration-and-duplicate-disposal
+packages/flutter/test/painting/alignment_test.dart	17	Alignment control test	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	28	Alignment.lerp()	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	38	Alignment.lerp identical a,b	partial-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	44	AlignmentGeometry.lerp identical a,b	partial-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	50	AlignmentDirectional.lerp identical a,b	partial-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	56	AlignmentGeometry invariants	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	170	AlignmentGeometry.lerp ad hoc tests	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	200	lerp commutes with resolve	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	271	AlignmentGeometry add/subtract	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	280	AlignmentGeometry operators	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	309	AlignmentGeometry operators	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	322	AlignmentGeometry toString	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	338	AlignmentGeometry factories	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	343	AlignmentGeometry static members	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	361	AlignmentDirectional.resolve with null TextDirection asserts	paired-match	upstream-alignment-geometry.md
+packages/flutter/test/painting/alignment_test.dart	376	AlignmentDirectional.resolve with null TextDirection asserts	paired-match	upstream-alignment-geometry.md
