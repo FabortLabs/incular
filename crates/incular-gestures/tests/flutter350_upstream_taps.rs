@@ -563,3 +563,90 @@ fn double_tap_rapid_second_press_becomes_first_tap_of_next_pair() {
     d.expect(&[]);
     d.completes(110, 5, A, A_UP);
 }
+
+impl Double {
+    fn raw_button(&mut self, ms: u64, pointer: u64, phase: PointerPhase, xy: Point, buttons: u32) {
+        use incular_gestures::GestureRecognizer;
+        if let GestureDecision::Accept(action) =
+            self.g.observe_raw(raw(self.base, ms, pointer, phase, xy, buttons))
+        {
+            self.g.dispatch(action);
+        }
+    }
+
+    fn button_tap(&mut self, ms: u64, id: u64, xy: Point, up: Point, button: u32) {
+        self.raw_button(ms, id, Down, xy, button);
+        self.raw_button(ms, id, Up, up, 0);
+    }
+}
+
+#[test]
+fn a_custom_secondary_filter_recognizes_the_secondary_double_tap() {
+    let mut d = Double::new();
+    d.g.set_allowed_buttons_filter(Some(Rc::new(|buttons| buttons == 2)));
+    d.button_tap(0, 6, A, A_UP, 2);
+    d.expect(&[]);
+    d.raw_button(100, 7, Down, A, 2);
+    d.expect(&[DoubleEvent::Down(
+        Offset::new(10., 10.),
+        Offset::new(10., 10.),
+    )]);
+    d.raw_button(100, 7, Up, A_UP, 0);
+    d.expect(&[DoubleEvent::Done]);
+}
+
+#[test]
+fn secondary_taps_do_not_trigger_the_primary_double_tap() {
+    let mut d = Double::new();
+    d.button_tap(0, 6, A, A_UP, 2);
+    d.button_tap(100, 7, A, A_UP, 2);
+    d.expect(&[]);
+}
+
+#[test]
+fn another_button_interrupts_default_and_explicit_primary_sequences() {
+    for explicit_primary_filter in [false, true] {
+        let mut d = Double::new();
+        if explicit_primary_filter {
+            d.g.set_allowed_buttons_filter(Some(Rc::new(|buttons| buttons == 1)));
+        }
+        d.button_tap(0, 1, A, A_UP, 1);
+        d.button_tap(100, 6, A, A_UP, 2);
+        d.button_tap(200, 2, B, B_UP, 1);
+        d.expect(&[]);
+    }
+}
+
+#[test]
+fn the_first_allowed_press_after_a_button_change_starts_a_valid_sequence() {
+    let mut d = Double::new();
+    d.button_tap(0, 6, A, A_UP, 2);
+    d.button_tap(100, 1, A, A_UP, 1);
+    d.expect(&[]);
+    d.raw_button(200, 2, Down, B, 1);
+    let position = Offset::new(12., 12.);
+    d.expect(&[DoubleEvent::Down(position, position)]);
+    d.raw_button(200, 2, Up, B_UP, 0);
+    d.expect(&[DoubleEvent::Done]);
+}
+
+#[test]
+fn custom_button_mismatch_restarts_even_when_both_buttons_are_allowed() {
+    let mut d = Double::new();
+    d.g.set_allowed_buttons_filter(Some(Rc::new(|buttons| buttons == 1 || buttons == 2)));
+    d.button_tap(0, 1, A, A_UP, 1);
+    d.button_tap(100, 6, A, A_UP, 2);
+    d.expect(&[]);
+    d.button_tap(200, 7, A, A_UP, 2);
+    let position = Offset::new(10., 10.);
+    d.expect(&[DoubleEvent::Down(position, position), DoubleEvent::Done]);
+}
+
+#[test]
+fn a_filter_that_rejects_all_buttons_has_no_double_tap_callbacks() {
+    let mut d = Double::new();
+    d.g.set_allowed_buttons_filter(Some(Rc::new(|_| false)));
+    d.button_tap(0, 7, A, A_UP, 1);
+    d.button_tap(100, 6, A, A_UP, 2);
+    d.expect(&[]);
+}

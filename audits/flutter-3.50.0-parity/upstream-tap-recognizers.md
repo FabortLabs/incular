@@ -200,3 +200,16 @@ The authored pinned and retained native tests verify short and long
 first presses, both deadline and double-tap outcomes. Before the fix
 the native probe observed [down, up] on the first release; afterwards
 it waited. No original-registration credit is claimed for this probe.
+
+## Double-tap button admission
+
+Six pinned originals pair on the direct recognizer. Only an exact
+primary mask is admitted by default. A custom filter can choose the
+secondary button, or reject every button. A rejected press interrupts
+the existing sequence without an early Down or Cancel, and the next
+two matching presses still work. If the custom filter accepts both
+buttons, a changed mask starts a fresh sequence instead of completing
+a double tap. The latter is an additional native control.
+Four new native cases failed before the fix; all 57 focused native
+tests passed afterwards. This slice does not claim mounted arena
+release timing or cross-detector competition for non-primary presses.

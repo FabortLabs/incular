@@ -134,7 +134,7 @@ pub struct PointerGestureRecognizer {
     last_tap: Option<Instant>,
     /// Flutter `_firstTap`: where and when the first tap of a possible double
     /// tap went down.
-    last_tap_down: Option<(Instant, Offset)>,
+    last_tap_down: Option<(Instant, Offset, u32)>,
     /// The current press is the second tap of a double tap.
     double_tap_second: bool,
     /// The current press is too far from the first tap to join its double
@@ -203,7 +203,7 @@ pub struct PointerGestureRecognizer {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TapMemory {
     last_tap: Option<Instant>,
-    last_tap_down: Option<(Instant, Offset)>,
+    last_tap_down: Option<(Instant, Offset, u32)>,
 }
 
 /// Overrides for the fling thresholds of the drag recognizers; `None` keeps
@@ -339,6 +339,27 @@ impl PointerGestureRecognizer {
         self.allowed_buttons
             .as_ref()
             .is_none_or(|accept| accept(buttons))
+    }
+
+    fn forget_first_tap(&mut self) {
+        self.last_tap = None;
+        self.last_tap_down = None;
+    }
+
+    fn reject_double_tap_press(&mut self) {
+        // Flutter resets a pending first tap even when a second press
+        // is rejected by the device or allowed-buttons filter.
+        self.forget_first_tap();
+        self.save_tap_memory();
+    }
+
+    fn save_tap_memory(&self) {
+        if let Some(memory) = &self.tap_memory {
+            memory.set(TapMemory {
+                last_tap: self.last_tap,
+                last_tap_down: self.last_tap_down,
+            });
+        }
     }
 
     /// Overrides the tap's maximum movement before and after it wins its
@@ -991,6 +1012,7 @@ impl PointerGestureRecognizer {
             if !self.callbacks.allows_pointer_device(PointerDeviceKind::Unknown)
                 || !self.allows_buttons(PRIMARY_POINTER_BUTTON)
             {
+                self.reject_double_tap_press();
                 return GestureDecision::Reject;
             }
             if self.down.is_none_or(|press| press.pointer == event.pointer) {
@@ -1058,12 +1080,7 @@ impl PointerGestureRecognizer {
             }
         }
         let decision = self.observe_phase(routed, synthesized);
-        if let Some(memory) = &self.tap_memory {
-            memory.set(TapMemory {
-                last_tap: self.last_tap,
-                last_tap_down: self.last_tap_down,
-            });
-        }
+        self.save_tap_memory();
         decision
     }
 
@@ -1099,26 +1116,29 @@ impl PointerGestureRecognizer {
                 // earlier than `kDoubleTapMinTime` after the first press
                 // restarts the sequence.
                 let mut is_double_tap = false;
-                self.double_tap_ignored = false;
+                let button = self.down_buttons.unwrap_or(PRIMARY_POINTER_BUTTON);
+                // The default double-tap recognizer admits exactly the primary
+                // mask; a custom filter can opt into other masks. This does not
+                // prevent a combined member from handling a secondary single tap.
+                self.double_tap_ignored =
+                    self.allowed_buttons.is_none() && button != PRIMARY_POINTER_BUTTON;
                 self.double_tap_moved = false;
-                if let Some(tap) = self.last_tap {
+                if self.double_tap_ignored {
+                    self.forget_first_tap();
+                } else if let Some(tap) = self.last_tap {
                     if event.time.saturating_duration_since(tap) >= Self::DOUBLE_TAP_TIMEOUT {
-                        self.last_tap = None;
-                        self.last_tap_down = None;
-                    } else if let Some((first_down, first_position)) = self.last_tap_down {
+                        self.forget_first_tap();
+                    } else if let Some((first_down, first_position, first_button)) = self.last_tap_down {
                         let apart = event.position - first_position;
                         if apart.x.hypot(apart.y) > DOUBLE_TAP_SLOP {
                             self.double_tap_ignored = true;
-                        } else if event.time.saturating_duration_since(first_down)
-                            < DOUBLE_TAP_MIN_TIME
+                        } else if first_button != button
+                            || event.time.saturating_duration_since(first_down) < DOUBLE_TAP_MIN_TIME
                         {
-                            self.last_tap = None;
-                            self.last_tap_down = None;
+                            self.forget_first_tap();
                         } else {
                             is_double_tap = true;
                         }
-                    } else {
-                        is_double_tap = true;
                     }
                 }
                 self.double_tap_second = is_double_tap;
@@ -1416,7 +1436,11 @@ impl PointerGestureRecognizer {
                     }));
                     if !self.double_tap_ignored {
                         self.last_tap = Some(event.time);
-                        self.last_tap_down = Some((down.time, down.position));
+                        self.last_tap_down = Some((
+                            down.time,
+                            down.position,
+                            self.down_buttons.unwrap_or(PRIMARY_POINTER_BUTTON),
+                        ));
                     }
                     GestureDecision::Accept(GestureAction::Tap)
                 } else {
@@ -1424,7 +1448,11 @@ impl PointerGestureRecognizer {
                     // pending for a second one even without `onTap`.
                     if self.callbacks.on_double_tap.is_some() && !self.double_tap_ignored {
                         self.last_tap = Some(event.time);
-                        self.last_tap_down = Some((down.time, down.position));
+                        self.last_tap_down = Some((
+                            down.time,
+                            down.position,
+                            self.down_buttons.unwrap_or(PRIMARY_POINTER_BUTTON),
+                        ));
                     }
                     GestureDecision::Reject
                 }
@@ -1620,6 +1648,7 @@ impl GestureRecognizer for PointerGestureRecognizer {
             if !self.callbacks.allows_pointer_device(event.kind)
                 || !self.allows_buttons(event.buttons)
             {
+                self.reject_double_tap_press();
                 return GestureDecision::Reject;
             }
             if self.down.is_none_or(|press| press.pointer == event.pointer) {
