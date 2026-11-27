@@ -29,7 +29,7 @@ pub use listener::{
 };
 pub use playback::{
     DecodedImageFrame, ImageDecodeCompletion, ImageFrameCodec, ImageFrameDemand, ImagePlayback,
-    ImagePlaybackKeepAlive, ImagePlaybackSubscription,
+    ImagePlaybackKeepAlive, ImagePlaybackSubscription, WeakImagePlayback,
 };
 pub use resize::{ImageResizeOptions, ResizeImage, ResizeImageKey, ResizeImagePolicy};
 

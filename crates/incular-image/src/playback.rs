@@ -1,6 +1,12 @@
 use incular_core::time::Instant;
 use std::fmt;
-use std::{cell::RefCell, collections::BTreeMap, num::NonZeroUsize, rc::Rc, time::Duration};
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    num::NonZeroUsize,
+    rc::{Rc, Weak},
+    time::Duration,
+};
 
 use crate::{ImageError, ImageInfo};
 
@@ -56,7 +62,9 @@ struct State {
     generation: u64,
     decoding: bool,
     pending: Option<DecodedImageFrame>,
-    current: Option<FrameResult>,
+    current: Option<ImageInfo>,
+    error: Option<ImageError>,
+    decode_failed: bool,
     visible: Option<(Instant, Duration)>,
     frame_in_cycle: usize,
     cycles: usize,
@@ -104,6 +112,24 @@ pub struct ImagePlayback {
     request_frame: Rc<dyn Fn()>,
 }
 
+/// A non-owning reference for asynchronous codec initialization. A pending
+/// task can finish without keeping an unmounted animation alive.
+#[derive(Clone)]
+pub struct WeakImagePlayback {
+    state: Weak<RefCell<State>>,
+    request_frame: Weak<dyn Fn()>,
+}
+
+impl WeakImagePlayback {
+    #[must_use]
+    pub fn upgrade(&self) -> Option<ImagePlayback> {
+        Some(ImagePlayback {
+            state: self.state.upgrade()?,
+            request_frame: self.request_frame.upgrade()?,
+        })
+    }
+}
+
 impl PartialEq for ImagePlayback {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.state, &other.state)
@@ -130,6 +156,34 @@ impl ImagePlayback {
         }
     }
 
+    /// Does not extend the playback's lifetime.
+    #[must_use]
+    pub fn downgrade(&self) -> WeakImagePlayback {
+        WeakImagePlayback {
+            state: Rc::downgrade(&self.state),
+            request_frame: Rc::downgrade(&self.request_frame),
+        }
+    }
+
+    /// Completes deferred attachment with a codec-initialization failure.
+    /// Existing observers see it now; later observers can still replay it.
+    /// An already attached or disposed playback refuses the update.
+    pub fn attach_error(&self, error: ImageError) -> bool {
+        let listeners = {
+            let mut state = self.state.borrow_mut();
+            if state.disposed || state.attached {
+                return false;
+            }
+            state.attached = true;
+            state.error = Some(error.clone());
+            state.snapshot()
+        };
+        for listener in listeners {
+            listener(Err(error.clone()), false);
+        }
+        true
+    }
+
     /// Attach the codec once, including after listeners register. An unused
     /// playback does not request any frames. Returns false if already closed
     /// or previously attached.
@@ -153,13 +207,13 @@ impl ImagePlayback {
     }
 
     /// Observe new frames until the subscription is dropped. The current
-    /// frame (or terminal error) is replayed synchronously to new listeners.
+    /// frame and any retained error are replayed synchronously to new listeners.
     pub fn listen(
         &self,
         observer: impl Fn(Result<ImageInfo, ImageError>, bool) + 'static,
     ) -> Option<ImagePlaybackSubscription> {
         let observer: FrameObserver = Rc::new(observer);
-        let (id, current) = {
+        let (id, current, error) = {
             let mut state = self.state.borrow_mut();
             if state.disposed {
                 return None;
@@ -167,14 +221,17 @@ impl ImagePlayback {
             let id = state.next_listener;
             state.next_listener = id.checked_add(1).expect("image listener id exhausted");
             state.listeners.insert(id, Rc::clone(&observer));
-            (id, state.current.clone())
+            (id, state.current.clone(), state.error.clone())
         };
         let subscription = ImagePlaybackSubscription {
             playback: self.clone(),
             id,
         };
         if let Some(current) = current {
-            observer(current, true);
+            observer(Ok(current), true);
+        }
+        if let Some(error) = error {
+            observer(Err(error), true);
         }
         self.decode();
         Some(subscription)
@@ -211,18 +268,17 @@ impl ImagePlayback {
                 .pending
                 .take()
                 .expect("frame demand requires a decode");
-            let result = Ok(frame.image);
             state.visible = Some((now, frame.duration));
-            state.current = Some(result.clone());
+            state.current = Some(frame.image.clone());
             let finished = if state.needs_more() {
                 None
             } else {
                 state.source.take()
             };
-            (result, state.snapshot(), finished)
+            (frame.image, state.snapshot(), finished)
         };
         for listener in listeners {
-            listener(result.clone(), false);
+            listener(Ok(result.clone()), false);
         }
         drop(finished);
         (self.request_frame)();
@@ -233,7 +289,11 @@ impl ImagePlayback {
     fn decode(&self) {
         let (codec, generation) = {
             let mut state = self.state.borrow_mut();
-            if state.listeners.is_empty() || state.decoding || state.pending.is_some() {
+            if state.listeners.is_empty()
+                || state.decoding
+                || state.decode_failed
+                || state.pending.is_some()
+            {
                 return;
             }
             let Some(source) = &state.source else {
@@ -243,17 +303,10 @@ impl ImagePlayback {
             state.decoding = true;
             (codec, state.generation)
         };
-        let weak_state = Rc::downgrade(&self.state);
-        let weak_request = Rc::downgrade(&self.request_frame);
+        let weak = self.downgrade();
         codec.decode_next(Box::new(move |result| {
-            if let (Some(state), Some(request_frame)) =
-                (weak_state.upgrade(), weak_request.upgrade())
-            {
-                Self {
-                    state,
-                    request_frame,
-                }
-                .decoded(generation, result);
+            if let Some(playback) = weak.upgrade() {
+                playback.decoded(generation, result);
             }
         }));
     }
@@ -275,10 +328,20 @@ impl ImagePlayback {
                     state.pending = Some(frame);
                     (None, None)
                 }
-                result => {
-                    let result = result.map(|frame| frame.image);
-                    state.current = Some(result.clone());
-                    (Some((result, state.snapshot())), state.source.take())
+                Ok(frame) => {
+                    state.current = Some(frame.image.clone());
+                    (
+                        Some((Ok(frame.image), state.snapshot())),
+                        state.source.take(),
+                    )
+                }
+                Err(error) => {
+                    state.error = Some(error.clone());
+                    state.decode_failed = true;
+                    // Keep the last good image and codec alive while there
+                    // are owners. Adding a listener to the active set does
+                    // not trigger an automatic retry loop.
+                    (Some((Err(error), state.snapshot())), None)
                 }
             }
         };
@@ -303,11 +366,13 @@ impl ImagePlayback {
                 if had_listeners {
                     state.generation = state.generation.wrapping_add(1);
                     state.decoding = false;
+                    state.decode_failed = false;
                     state.pending = None;
                 }
                 if state.keep_alive == 0 && state.next_listener != 0 {
                     state.disposed = true;
                     state.current = None;
+                    state.error = None;
                     source = state.source.take();
                 }
             }

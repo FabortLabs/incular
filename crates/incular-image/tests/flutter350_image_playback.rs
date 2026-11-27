@@ -488,3 +488,63 @@ fn scheduled_pending_callback_never_presents_a_discarded_frame() {
     drop(relisten);
     assert!(codec.disposed.get());
 }
+
+#[test]
+fn deferred_attachment_failure_reaches_active_and_late_observers() {
+    let first = Delivered::default();
+    let late = Delivered::default();
+    let source = ImagePlayback::scheduled();
+    let _first = source.listen(recorder(&first)).unwrap();
+    let error = ImageError::Decode("bad codec header".into());
+    assert!(source.attach_error(error.clone()));
+    assert!(!source.attach_error(ImageError::Decode("unexpected second result".into())));
+    assert_eq!(first.borrow().len(), 1);
+    assert_error(&first, 0, &error, false);
+    let _late = source.listen(recorder(&late)).unwrap();
+    assert_eq!(late.borrow().len(), 1);
+    assert_error(&late, 0, &error, true);
+    assert_eq!(source.frame_demand(), None);
+}
+
+#[test]
+fn decode_error_retains_the_last_good_frame_and_does_not_retry_on_listen() {
+    let first = Delivered::default();
+    let late = Delivered::default();
+    let source = ImagePlayback::scheduled();
+    let codec = Rc::new(Driver::default());
+    let listener = source.listen(recorder(&first)).unwrap();
+    codec.attach(&source, 2, None);
+    let expected = image(20, 10);
+    codec.complete(&expected, 200);
+    app_frame(Instant::now());
+    let complete = codec.pending.borrow_mut().pop_front().unwrap();
+    let error = ImageError::Decode("corrupt second frame".into());
+    complete(Err(error.clone()));
+
+    assert_frame(&first, 0, &expected, false);
+    assert_error(&first, 1, &error, false);
+    assert!(source.frame_demand().is_none());
+    assert!(!codec.disposed.get());
+    let late_listener = source.listen(recorder(&late)).unwrap();
+    assert_frame(&late, 0, &expected, true);
+    assert_error(&late, 1, &error, true);
+    assert_eq!(codec.asked.get(), 2);
+    drop(listener);
+    drop(late_listener);
+    assert!(codec.disposed.get());
+}
+
+#[test]
+fn an_initialization_callback_can_hold_a_weak_playback_only() {
+    let source = ImagePlayback::scheduled();
+    let weak = source.downgrade();
+    assert_eq!(weak.upgrade().as_ref(), Some(&source));
+    drop(source);
+    assert!(weak.upgrade().is_none());
+}
+
+fn assert_error(delivered: &Delivered, i: usize, expected: &ImageError, synchronous: bool) {
+    let delivered = delivered.borrow();
+    assert!(matches!(&delivered[i].0, Err(error) if error == expected));
+    assert_eq!(delivered[i].1, synchronous);
+}

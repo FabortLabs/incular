@@ -139,7 +139,7 @@ pub mod prelude {
         ImageHandle, ImageId, ImageInfo, ImageListener, ImageLoadState, ImagePlayback,
         ImagePlaybackKeepAlive, ImagePlaybackSubscription, ImageProvider, ImageResizeOptions,
         ImageSource, ImageStream, ImageStreamCompleter, ImageStreamListener, ImageStreamSubscription,
-        MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy,
+        MemoryImage, ResizeImage, ResizeImageKey, ResizeImagePolicy, WeakImagePlayback,
     };
     pub use incular_navigation::{
         BackDispatchReport, BackDispatcher, BottomSheet, Dialog, HeroController, ModalBarrier,
