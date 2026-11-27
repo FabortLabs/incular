@@ -2165,6 +2165,61 @@ impl WidgetTree {
         self.text_field_input_snapshot_with(id, with_text, EditableCaret::ImeAnchor)
     }
 
+    /// The focused editor's presented typography for a Flutter protocol host.
+    /// The font size stays in the editor's authored logical units, while the
+    /// line height comes from the actual laid-out paragraph.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn flutter_text_field_style(
+        &self,
+        id: ElementId,
+    ) -> Option<incular_platform::FlutterTextInputStyle> {
+        use incular_platform::{
+            FlutterTextInputAlignment as Align, FlutterTextInputStyle,
+            FlutterTextInputWeight as Weight,
+        };
+        let node = self.renders.get(self.render_id(id)?.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let layout = node.field_layout()?;
+        let style = &field.style;
+        let weight = |number: u16| {
+            [
+                Weight::W100,
+                Weight::W200,
+                Weight::W300,
+                Weight::W400,
+                Weight::W500,
+                Weight::W600,
+                Weight::W700,
+                Weight::W800,
+                Weight::W900,
+            ][usize::from((number / 100).clamp(1, 9) - 1)]
+        };
+        Some(FlutterTextInputStyle {
+            font_family: style
+                .has_explicit_family
+                .then(|| style.family.name().into()),
+            font_size: field.input_font_size.map(f64::from),
+            font_weight: style.has_explicit_weight.then(|| weight(style.weight.0)),
+            text_direction: field.text_direction,
+            text_align: match field.text_align {
+                TextAlign::Left => Align::Left,
+                TextAlign::Right => Align::Right,
+                TextAlign::Center => Align::Center,
+                TextAlign::Justify => Align::Justify,
+                TextAlign::Start => Align::Start,
+                TextAlign::End => Align::End,
+            },
+            letter_spacing: style
+                .has_explicit_letter_spacing
+                .then_some(f64::from(style.letter_spacing)),
+            word_spacing: style.word_spacing.map(f64::from),
+            line_height: Some(f64::from(layout.metrics().line_height)),
+        })
+    }
+
     /// Whether the field's committed value is exactly this text, selection
     /// and composing range. A host that kept the last snapshot uses this to
     /// see that nothing changed without taking another copy of the text.

@@ -629,6 +629,7 @@ pub struct TextFieldRender {
     pub(crate) controller: TextEditingController,
     pub(crate) desired: Size,
     pub(crate) style: TextStyle,
+    pub(crate) input_font_size: Option<f32>,
     pub(crate) strut: Option<Box<StrutStyle>>,
     pub(crate) placeholder: String,
     pub(crate) placeholder_color: Color,

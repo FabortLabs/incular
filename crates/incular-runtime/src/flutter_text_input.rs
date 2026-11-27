@@ -390,6 +390,28 @@ impl crate::Runtime {
         ))
     }
 
+    /// Sends resolved style to an attached Flutter text input control after
+    /// layout. A host can call this on each frame, including when only a
+    /// MediaQuery preference changed; identical snapshots do not resend.
+    pub fn publish_flutter_text_input_style(
+        &self,
+        controls: &mut incular_platform::FlutterTextInputControls,
+    ) -> Result<bool, incular_platform::FlutterTextInputControlsError> {
+        let Some(client) = self.active_flutter_editable_client() else {
+            return Ok(false);
+        };
+        if !controls.is_attached(client) {
+            return Ok(false);
+        }
+        let Some(style) = self
+            .focused_element()
+            .and_then(|id| self.tree.flutter_text_field_style(id))
+        else {
+            return Ok(false);
+        };
+        controls.publish_style(client, style)
+    }
+
     fn handle_flutter_text_input_method(
         &mut self,
         call: &MethodCall<Value>,

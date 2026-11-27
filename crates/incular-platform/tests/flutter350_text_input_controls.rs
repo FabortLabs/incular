@@ -324,3 +324,28 @@ fn an_externally_bound_client_publishes_only_changes_and_does_not_echo_host_edit
     assert!(controls.close(client));
     assert_eq!(attach(&mut controls), TextInputClientId::new(8));
 }
+
+#[test]
+fn style_snapshot_replays_for_a_new_control_and_never_for_a_stale_client() {
+    let mut controls = Controls::new(false);
+    let old = controls.attach(Configuration::default(), |_| {});
+    let style = FlutterTextInputStyle::new(TextDirection::Ltr, FlutterTextInputAlignment::Left);
+    assert!(controls.publish_style(old, style.clone()).unwrap());
+    assert!(!controls.publish_style(old, style.clone()).unwrap());
+
+    let observed = Rc::new(RefCell::new(0));
+    let seen = Rc::clone(&observed);
+    controls.set_input_control(Control::custom(move |update| {
+        if matches!(update, Update::Style(_)) {
+            *seen.borrow_mut() += 1;
+        }
+    }));
+    assert!(controls.publish_style(old, style.clone()).unwrap());
+    assert_eq!(*observed.borrow(), 1);
+
+    assert!(controls.close(old));
+    let new = controls.attach(Configuration::default(), |_| {});
+    assert!(!controls.publish_style(old, style.clone()).unwrap());
+    assert!(controls.publish_style(new, style).unwrap());
+    assert_eq!(*observed.borrow(), 2);
+}

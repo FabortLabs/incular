@@ -166,6 +166,7 @@ struct Attachment {
     client: Box<dyn Fn(FlutterTextInputClientEvent)>,
     geometry: GeometryCache,
     editing: Option<AutofillEditingValue>,
+    style: Option<FlutterTextInputStyle>,
 }
 
 #[derive(Default)]
@@ -233,7 +234,9 @@ impl FlutterTextInputControls {
             return;
         }
         let old = std::mem::replace(&mut self.current, new.clone());
-        if let Some(attachment) = &self.attached {
+        if let Some(attachment) = &mut self.attached {
+            // A new control has not observed the last published style.
+            attachment.style = None;
             (attachment.client)(FlutterTextInputClientEvent::ControlChanged { old, new });
         }
     }
@@ -269,6 +272,7 @@ impl FlutterTextInputControls {
             client: Box::new(client),
             geometry: GeometryCache::default(),
             editing: None,
+            style: None,
         });
         let arguments = json!([id.get(), self.platform_configuration(&configuration)]);
         self.forward(
@@ -321,8 +325,12 @@ impl FlutterTextInputControls {
         let (method, arguments) = self.encode(&update)?;
         let attachment = self.attached.as_mut().expect("validated attachment");
         attachment.geometry.record(&update);
-        if let FlutterTextInputControlUpdate::EditingState(value) = &update {
-            attachment.editing = Some(value.clone());
+        match &update {
+            FlutterTextInputControlUpdate::EditingState(value) => {
+                attachment.editing = Some(value.clone())
+            }
+            FlutterTextInputControlUpdate::Style(style) => attachment.style = Some(style.clone()),
+            _ => {}
         }
         self.forward(update, (method, arguments));
         Ok(true)
@@ -346,6 +354,22 @@ impl FlutterTextInputControls {
             return Ok(false);
         }
         self.update(id, FlutterTextInputControlUpdate::EditingState(value))
+    }
+
+    /// Publishes an editor's resolved style only when it changed on this
+    /// attachment. A stale client cannot change the current input surface.
+    pub fn publish_style(
+        &mut self,
+        id: TextInputClientId,
+        style: FlutterTextInputStyle,
+    ) -> Result<bool, FlutterTextInputControlsError> {
+        let Some(attachment) = self.attached.as_ref().filter(|attached| attached.id == id) else {
+            return Ok(false);
+        };
+        if attachment.style.as_ref() == Some(&style) {
+            return Ok(false);
+        }
+        self.update(id, FlutterTextInputControlUpdate::Style(style))
     }
 
     /// A host edit reaches the client and custom control; it is not echoed

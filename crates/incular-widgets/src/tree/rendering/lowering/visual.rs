@@ -218,13 +218,13 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             });
             let scaler = spec.text_scaler.unwrap_or_else(|| environment_text_scaler(context));
             let resolve_field_style = |style: &incular_text::TextStyle| {
-                let mut style = text_field_style(style, context, scaler);
+                let (mut style, input_font_size) = text_field_style(style, context, scaler);
                 if style.locale.is_none() {
                     style.locale = resolved_locale.as_ref().map(ToString::to_string);
                 }
-                style
+                (style, input_font_size)
             };
-            let style = resolve_field_style(&spec.style);
+            let (style, input_font_size) = resolve_field_style(&spec.style);
             let strut = match spec.strut.as_deref() {
                 Some(strut) if strut.font_size == Some(0.) => None,
                 authored => {
@@ -249,6 +249,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 controller: spec.controller.clone(),
                 desired: spec.size,
                 style,
+                input_font_size,
                 strut,
                 placeholder: spec.placeholder.clone(),
                 placeholder_color: spec.placeholder_color,
@@ -291,7 +292,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                     .as_ref()
                     .filter(|_| !spec.spell_check_suppressed)
                     .and_then(crate::SpellCheckConfiguration::active_style)
-                    .map(resolve_field_style),
+                    .map(|style| resolve_field_style(style).0),
                 paragraph_layout: spec.paragraph_layout,
             }))
         }

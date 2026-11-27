@@ -86,10 +86,11 @@ pub(super) fn text_field_style(
     style: &TextStyle,
     context: &DependencyContext,
     scaler: TextScaler,
-) -> TextStyle {
+) -> (TextStyle, Option<f32>) {
     let mut resolved = resolve_text_style(style, context).into_owned();
+    let input_font_size = resolved.has_explicit_size.then_some(resolved.size);
     resolved.size = scaler.scale(resolved.size);
-    resolved
+    (resolved, input_font_size)
 }
 
 fn shared_text_style(
