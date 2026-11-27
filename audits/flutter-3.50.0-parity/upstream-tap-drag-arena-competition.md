@@ -105,3 +105,19 @@ widget and two runtime arbitration tests passed. These authored
 checks cover the raw long-press and combined tap/drag ports; this
 does not claim every recognizer has a frame timer, or verify
 ordering against a custom earlier deadline from a non-raw widget.
+
+## A held sweep delays the first tap
+
+The exact pinned `gestures/tap_and_drag_test.dart:797` registration
+passed. The native test puts TapAndDrag, a plain Tap, and DoubleTap
+in that order in the real explicitly managed arena. Down at
+(10, 10) and Up at (11, 9) produce no callbacks when the arena is
+swept while held and none at 299 ms. When the DoubleTap clock
+releases the arena at 300 ms, only the first contender's
+`down#1` and `up#1` are delivered. The other candidates are silent.
+
+The authored Flutter mounted probe verifies those same boundaries.
+The original exercises standalone recognizers; this pairing does
+not claim that Incular's mounted raw-detector adapter can yet hold
+a terminal contact. The adjacent native managed-arena, double-tap,
+and tap-and-drag targets passed.
