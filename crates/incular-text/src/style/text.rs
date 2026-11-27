@@ -1,4 +1,5 @@
 use super::fonts::{FontFamily, FontWeight};
+use super::text_style::TextStyle;
 use incular_rendering::Shadow;
 use std::sync::Arc;
 
@@ -143,6 +144,27 @@ impl StrutStyle {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Copies the explicitly supplied typographic attributes from a text
+    /// style. The independent leading and force flags remain unset. An
+    /// Incular absolute-pixel line height is not a strut height multiplier.
+    #[must_use]
+    pub fn from_text_style(style: &TextStyle) -> Self {
+        Self {
+            font_family: style.has_explicit_family.then(|| style.family.clone()),
+            font_family_fallback: style.fallback_families.clone(),
+            font_size: style.has_explicit_size.then_some(style.size),
+            font_weight: style.has_explicit_weight.then_some(style.weight),
+            font_style: style.has_explicit_style.then_some(style.style),
+            height: match style.line_height {
+                Some(LineHeight::Normal) => Some(0.),
+                Some(LineHeight::Multiplier(factor)) => Some(factor),
+                Some(LineHeight::Absolute(_)) | None => None,
+            },
+            leading_distribution: style.leading_distribution,
+            ..Self::default()
+        }
     }
 
     #[must_use]

@@ -237,3 +237,13 @@ python3 audits/flutter-3.50.0-parity/extract-flutter-test-font.py \
 INCULAR_FLUTTER_EMOJI_CARET_FONT_PATH="$PWD/.tmp/FlutterTest-emoji-caret.ttf" \
   cargo test --locked --offline -j1 -p incular-text --test flutter350_text_painter emoji -- --test-threads=1
 ```
+
+## Empty paragraphs, forced strut, and explicit natural height
+
+Two pinned originals pair. StrutStyle can take its typographic
+attributes from a TextStyle, leaving strut-only controls independent.
+A forced 77 px strut still supplies the preferred and measured line
+height for a glyph, an empty string and an empty span when both outer
+leading edges are trimmed. Explicit natural height in a child cancels
+the inherited 1,000× multiplier and produces a 10 px natural Ahem
+line. Two pinned and all 44 focused native cases passed.

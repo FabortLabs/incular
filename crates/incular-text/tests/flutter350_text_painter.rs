@@ -1457,3 +1457,50 @@ fn rtl_emoji_and_bold_letters_share_correct_caret_boundaries() {
         &[112., 98., 84., 70., 56., 42., 28., 0., 0., 0., 0., 0.],
     );
 }
+
+#[test]
+fn forced_strut_survives_leading_trim_in_empty_and_nonempty_paragraphs() {
+    use incular_text::{StrutStyle, TextHeightBehavior};
+    let Some((mut engine, font)) = centered_width_ahem() else {
+        return;
+    };
+    let style = font.font_size(7.).height(Some(11.));
+    let strut = StrutStyle::from_text_style(&style).force_strut_height(true);
+    let mut painter = painter(TextSpan::new("x").style(style.clone()), TextDirection::Ltr);
+    painter.set_strut_style(Some(strut));
+    painter.set_text_height_behavior(Some(TextHeightBehavior {
+        apply_height_to_first_ascent: false,
+        apply_height_to_last_descent: false,
+        ..TextHeightBehavior::default()
+    }));
+    painter
+        .layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    let height = painter.size().unwrap().height;
+    assert_eq!(height, 77.);
+    for span in [TextSpan::new("x"), TextSpan::new(""), TextSpan::empty()] {
+        painter.set_text(Some(span.style(style.clone())));
+        painter
+            .layout_with_engine(&mut engine, 0., f32::INFINITY)
+            .unwrap();
+        assert_eq!(painter.size().unwrap().height, height);
+        assert_eq!(painter.preferred_line_height(), Ok(height));
+    }
+}
+
+#[test]
+fn an_explicit_natural_height_does_not_inherit_the_root_multiplier() {
+    let Some((mut engine, font)) = centered_width_ahem() else {
+        return;
+    };
+    let span = TextSpan::empty()
+        .style(font.font_size(10.).height(Some(1000.)))
+        .children([InlineSpan::from(
+            TextSpan::new("A").style(TextStyle::default().height(Some(0.))),
+        )]);
+    let mut painter = painter(span, TextDirection::Ltr);
+    painter
+        .layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(painter.size().unwrap().height, 10.);
+}
