@@ -1254,6 +1254,7 @@ pub struct EditableText {
     collapsed_selection_handle_layout: Option<crate::TextSelectionHandleLayout>,
     edit_transform: Option<super::specs::EditTransform>,
     edit_changed: Option<super::specs::EditChanged>,
+    edit_selection_changed: Option<super::specs::EditSelectionChanged>,
     /// Flutter `spellCheckConfiguration`.
     spell_check: Option<crate::SpellCheckConfiguration>,
     /// Input formatters, applied in the order added to each user edit.
@@ -1329,6 +1330,7 @@ impl EditableText {
             collapsed_selection_handle_layout: None,
             edit_transform: None,
             edit_changed: None,
+            edit_selection_changed: None,
             input_formatters: Vec::new(),
             spell_check: None,
         }
@@ -1421,6 +1423,18 @@ impl EditableText {
     #[must_use]
     pub fn on_changed(mut self, callback: impl Fn(&str) + 'static) -> Self {
         self.edit_changed = Some(Rc::new(callback));
+        self
+    }
+
+    /// Observes selection changes made by platform editing input and
+    /// floating-cursor gestures. Changes made directly to the controller
+    /// do not call this callback.
+    #[must_use]
+    pub fn on_selection_changed(
+        mut self,
+        callback: impl Fn(incular_text::TextSelection, incular_text::SelectionChangedCause) + 'static,
+    ) -> Self {
+        self.edit_selection_changed = Some(Rc::new(callback));
         self
     }
 
@@ -2123,6 +2137,7 @@ impl From<EditableText> for Widget {
             select_all_on_focus: value.select_all_on_focus,
             edit_transform,
             edit_changed: value.edit_changed,
+            edit_selection_changed: value.edit_selection_changed,
             size: value.size,
             style: value.style,
             text_scaler: value.text_scaler,

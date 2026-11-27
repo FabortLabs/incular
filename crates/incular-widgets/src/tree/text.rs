@@ -20,6 +20,7 @@ pub enum TextEditingCallback {
     Submitted,
     AppPrivateCommand,
     ContentInserted,
+    SelectionChanged,
 }
 
 /// A caught Rust panic from an editor callback, preserving its message.
@@ -2620,6 +2621,42 @@ impl WidgetTree {
             run_editing_callback(
                 TextEditingCallback::AppPrivateCommand,
                 || callback(action, data),
+                &mut report,
+            );
+        }
+    }
+
+    /// Whether a mounted editor listens to user selection changes.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn observes_text_selection_changes(&self, target: ElementId) -> bool {
+        self.elements.get(target.0).is_some_and(|element| {
+            matches!(
+                element.widget.kind(),
+                WidgetKind::TextField(spec) if spec.edit_selection_changed.is_some()
+            )
+        })
+    }
+
+    /// Reports a user selection to the currently mounted editor callback.
+    #[doc(hidden)]
+    pub fn dispatch_text_selection_changed(
+        &self,
+        target: ElementId,
+        selection: TextSelection,
+        cause: incular_text::SelectionChangedCause,
+        mut report: impl FnMut(TextEditingCallbackError),
+    ) {
+        let Some(element) = self.elements.get(target.0) else {
+            return;
+        };
+        let WidgetKind::TextField(spec) = element.widget.kind() else {
+            return;
+        };
+        if let Some(callback) = &spec.edit_selection_changed {
+            run_editing_callback(
+                TextEditingCallback::SelectionChanged,
+                || callback(selection, cause),
                 &mut report,
             );
         }

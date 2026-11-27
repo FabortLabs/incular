@@ -487,3 +487,101 @@ fn floating_caret_start_honors_wrapped_line_affinity_at_pinned_pixels() {
         assert_eq!(controller.caret_affinity(), affinity);
     }
 }
+
+#[test]
+fn floating_selection_reports_force_press_without_erasing_a_platform_range() {
+    use incular_text::SelectionChangedCause::{ForcePress, Keyboard};
+    use std::{cell::RefCell, rc::Rc};
+
+    let (mut runtime, controller, client) = mount();
+    let field = runtime.focused_element().unwrap();
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    runtime
+        .schedule_update(
+            field,
+            EditableText::new(controller.clone())
+                .autofocus(true)
+                .text_direction(TextDirection::Ltr)
+                .size(Size::new(180., 40.))
+                .cursor_color(CURSOR)
+                .on_selection_changed({
+                    let calls = calls.clone();
+                    move |selection, cause| calls.borrow_mut().push((selection, cause))
+                })
+                .into(),
+        )
+        .unwrap();
+    controller.set_selection(TextSelection::collapsed(0));
+    runtime.run_frame(constraints()).unwrap();
+    assert!(calls.borrow().is_empty());
+
+    let sender = json!(client.get());
+    let dx = horizontal_delta(&runtime, 0, 4);
+    let input = |runtime: &mut Runtime, phase, x| {
+        assert_eq!(
+            wire(runtime, sender.clone(), phase, json!({"X": x, "Y": 0})),
+            Some(true)
+        );
+    };
+    let update_range = |runtime: &mut Runtime, base, extent| {
+        let call = json!({
+            "method": "TextInputClient.updateEditingState",
+            "args": [sender.clone(), {
+                "text": "ABCDEFGHIJ",
+                "selectionBase": base,
+                "selectionExtent": extent,
+            }],
+        });
+        assert_eq!(
+            runtime
+                .handle_flutter_text_input_editing_call(call.to_string().as_bytes())
+                .unwrap(),
+            Some(true)
+        );
+    };
+    let settle = |runtime: &mut Runtime| {
+        runtime
+            .run_frame_at(constraints(), Instant::now() + Duration::from_millis(130))
+            .unwrap();
+    };
+
+    input(&mut runtime, "start", 0.);
+    input(&mut runtime, "update", dx);
+    assert!(calls.borrow().is_empty());
+    input(&mut runtime, "end", 0.);
+    settle(&mut runtime);
+    assert_eq!(*calls.borrow(), [(TextSelection::collapsed(4), ForcePress)]);
+
+    input(&mut runtime, "start", 0.);
+    input(&mut runtime, "update", -dx);
+    update_range(&mut runtime, 0, 4);
+    assert_eq!(
+        *calls.borrow(),
+        [
+            (TextSelection::collapsed(4), ForcePress),
+            (TextSelection::new(0, 4), ForcePress),
+        ],
+    );
+    input(&mut runtime, "end", 0.);
+    settle(&mut runtime);
+    assert_eq!(calls.borrow().len(), 2);
+    assert_eq!(controller.selection(), TextSelection::new(0, 4));
+
+    update_range(&mut runtime, 2, 2);
+    assert_eq!(
+        calls.borrow().last(),
+        Some(&(TextSelection::collapsed(2), Keyboard)),
+    );
+    controller.set_selection(TextSelection::collapsed(0));
+    assert_eq!(calls.borrow().len(), 3);
+
+    // Settling at the same logical offset still completes the gesture.
+    input(&mut runtime, "start", 0.);
+    input(&mut runtime, "end", 0.);
+    settle(&mut runtime);
+    assert_eq!(calls.borrow().len(), 4);
+    assert_eq!(
+        calls.borrow().last(),
+        Some(&(TextSelection::collapsed(0), ForcePress)),
+    );
+}

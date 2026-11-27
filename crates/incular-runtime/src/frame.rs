@@ -4450,6 +4450,17 @@ impl Runtime {
         handled
     }
 
+    fn report_text_selection_changed(
+        &self,
+        field: ElementId,
+        selection: TextSelection,
+        cause: incular_text::SelectionChangedCause,
+    ) {
+        self.tree.dispatch_text_selection_changed(field, selection, cause, |error| {
+            self.report_editing_callback_error(error);
+        });
+    }
+
     fn report_editing_callback_error(&self, error: incular_widgets::TextEditingCallbackError) {
         if self.editing_error_observers.is_empty() {
             tracing::error!(callback = ?error.callback, message = %error.message, "editable text callback failed");
@@ -4666,6 +4677,13 @@ impl Runtime {
         let text_changed = controller.with_value(|current| {
             current.text != value.text || current.composing != value.composing
         });
+        let selection_snapshot = || (
+            controller.selection_if_set(),
+            controller.caret_affinity(),
+            controller.selection_is_directional(),
+        );
+        let previous_selection = self.tree.observes_text_selection_changes(owner.field)
+            .then(selection_snapshot);
         let refresh_caret = if let Some((affinity, directional)) = metadata {
             // EditableTextState keeps the visual caret side when an IME
             // reports a different affinity without moving its origin.
@@ -4703,6 +4721,18 @@ impl Runtime {
                 composing: value.composing.map(|range| (range.start, range.end)),
                 text: value.text,
             });
+        }
+        if let Some(previous) = previous_selection
+            && let current = selection_snapshot()
+            && current != previous
+            && let Some(selection) = current.0
+        {
+            let cause = if self.has_floating_caret_for(owner.field) {
+                incular_text::SelectionChangedCause::ForcePress
+            } else {
+                incular_text::SelectionChangedCause::Keyboard
+            };
+            self.report_text_selection_changed(owner.field, selection, cause);
         }
         if refresh_caret {
             controller.reset_caret(self.input_now());

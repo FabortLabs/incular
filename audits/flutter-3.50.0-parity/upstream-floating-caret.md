@@ -17,9 +17,9 @@ extended by the IME is not overridden. The authored pinned mounted
 sequence and native padding/timing/identity checks verify those cases.
 
 The pinned ending-with-selection widget registration remains partial:
-its exact sequence and the Flutter force-press selection notification
-are not fully paired. The separate wrapped-line affinity registration
-and the background caret have their own checks below.
+its final hard-break pixel and hit-side sequence is not yet paired.
+The force-press selection notification, wrapped-line affinity and
+background caret have their own checks below.
 
 Four focused native floating-caret tests and 13 lifecycle regressions passed.
 
@@ -102,3 +102,20 @@ offset 4, native UTF-8 byte 12) paint the exact 40-pixel horizontal position
 and 10-pixel height. At 2× scale those are 80 and 20, while the requested
 four-pixel caret width and radius three stay fixed. The same retained field
 has no caret before showing or after hiding it again. Nine native tests passed.
+
+## IME selection notification
+
+Pinned `widgets/editable_text_test.dart:13422`, “Floating cursor ending with
+selection,” passed. Incular now reports a `ForcePress` selection callback
+when a dragged caret settles, including a gesture that ends at the same
+logical offset. While the gesture is active, a forwarded platform range
+change also reports `ForcePress`. Ending that gesture does not erase the
+extended range or send a second notification. An ordinary platform
+selection change reports `Keyboard`; direct controller changes remain
+silent. Callback panics go through the same typed editor error reporter as
+the other editor callbacks.
+
+This implements the platform and floating routes, not all host key,
+gesture or accessibility causes. The original's final hard-break pixels
+and hit-side sequence remain open, so its disposition remains partial.
+Three focused Rust targets passed 25 tests.

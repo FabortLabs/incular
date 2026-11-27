@@ -535,6 +535,8 @@ pub(crate) type EditTransform = Rc<
     ) -> incular_text::TextEditingValue,
 >;
 pub(crate) type EditChanged = Rc<dyn Fn(&str)>;
+pub(crate) type EditSelectionChanged =
+    Rc<dyn Fn(incular_text::TextSelection, incular_text::SelectionChangedCause)>;
 pub(crate) type EditableOutsideTap = Rc<dyn Fn(incular_gestures::RawPointerEvent)>;
 
 pub(crate) type AppPrivateCommandCallback =
@@ -549,6 +551,7 @@ pub struct TextFieldSpec {
     pub(crate) select_all_on_focus: Option<bool>,
     pub(crate) edit_transform: Option<EditTransform>,
     pub(crate) edit_changed: Option<EditChanged>,
+    pub(crate) edit_selection_changed: Option<EditSelectionChanged>,
     pub(crate) size: Size,
     pub(crate) style: TextStyle,
     pub(crate) text_scaler: Option<TextScaler>,

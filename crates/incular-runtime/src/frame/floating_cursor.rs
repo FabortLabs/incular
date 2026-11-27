@@ -59,6 +59,14 @@ impl FloatingCaretRun {
 }
 
 impl Runtime {
+    pub(super) fn has_floating_caret_for(&self, field: ElementId) -> bool {
+        self.floating_caret.as_ref().is_some_and(|run| {
+            run.field == field
+                && self.active_flutter_editable_client() == Some(run.client)
+                && self.tree.text_controller(field).as_ref() == Some(&run.controller)
+        })
+    }
+
     pub(crate) fn dispatch_flutter_floating_cursor(
         &mut self,
         client: TextInputClientId,
@@ -192,8 +200,13 @@ impl Runtime {
                     .selection_if_set()
                     .is_some_and(TextSelection::is_collapsed)
             {
-                controller
-                    .set_selection_with_affinity(TextSelection::collapsed(run.text.0), run.text.1);
+                let selection = TextSelection::collapsed(run.text.0);
+                controller.set_selection_with_affinity(selection, run.text.1);
+                self.report_text_selection_changed(
+                    run.field,
+                    controller.selection(),
+                    incular_text::SelectionChangedCause::ForcePress,
+                );
                 controller.reset_caret(now);
             }
             return false;

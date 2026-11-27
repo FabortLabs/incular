@@ -450,6 +450,8 @@ pub enum SelectionChangedCause {
     DoubleTap,
     LongPress,
     Drag,
+    /// Selection made by an IME's floating-cursor gesture.
+    ForcePress,
     /// A command invoked through the editor selection toolbar.
     Toolbar,
     Accessibility,

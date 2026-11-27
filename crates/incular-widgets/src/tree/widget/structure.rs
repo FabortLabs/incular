@@ -803,6 +803,7 @@ impl PartialEq for TextFieldSpec {
             && self.content_insertion == other.content_insertion
             && same_rc(&self.edit_transform, &other.edit_transform)
             && same_rc(&self.edit_changed, &other.edit_changed)
+            && same_rc(&self.edit_selection_changed, &other.edit_selection_changed)
             && self.has_context_menu_builder == other.has_context_menu_builder
             && self.legacy_selection_controls == other.legacy_selection_controls
             && self.toolbar_options == other.toolbar_options
