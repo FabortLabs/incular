@@ -1340,3 +1340,120 @@ fn consecutive_inline_widgets_keep_distinct_carets_and_boxes_across_wrap() {
         );
     }
 }
+
+fn emoji_caret_fixture() -> Option<(TextEngine, TextStyle)> {
+    let path = std::env::var("INCULAR_FLUTTER_EMOJI_CARET_FONT_PATH").ok()?;
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("Flutter Emoji Caret", std::fs::read(path).unwrap()));
+    Some((
+        engine,
+        TextStyle::default()
+            .font_family("Flutter Emoji Caret")
+            .font_size(14.),
+    ))
+}
+
+#[test]
+fn family_and_modified_emoji_snap_every_utf16_caret_to_their_full_advance() {
+    let Some((mut engine, style)) = emoji_caret_fixture() else {
+        return;
+    };
+    let text = "👩‍👩‍👦👩‍👩‍👧‍👧👏🏽";
+    let segmenter = icu_segmenter::GraphemeClusterSegmenter::new();
+    assert_ltr_prefix_carets(&mut engine, &style, text, segmenter.segment_str(text));
+    let mut painter = painter(TextSpan::new(text).style(style), TextDirection::Ltr);
+    painter.layout_with_engine(&mut engine, 0., 10000.).unwrap();
+    assert_eq!(text.encode_utf16().count(), 23);
+    assert_eq!(painter.width(), Ok(126.));
+    for offset in 0..=23 {
+        let x = match offset {
+            0 => 0.,
+            1..=8 => 42.,
+            9..=19 => 98.,
+            _ => 126.,
+        };
+        assert_eq!(
+            painter
+                .caret_offset_utf16(offset, incular_text::TextAffinity::Downstream, 0.)
+                .unwrap()
+                .x,
+            x,
+            "caret {offset}"
+        );
+    }
+}
+
+fn assert_emoji_carets_across_style_boundary(
+    direction: TextDirection,
+    words: &str,
+    first: &[f32],
+    second: &[f32],
+) {
+    let Some((mut engine, style)) = emoji_caret_fixture() else {
+        return;
+    };
+    let words_style = style.clone().font_weight(incular_text::FontWeight::BOLD);
+    for (before, after, expected) in [
+        (
+            TextSpan::new("👩‍🚀"),
+            TextSpan::new(format!(" {words}")).style(words_style.clone()),
+            first,
+        ),
+        (
+            TextSpan::new(format!("{words} ")).style(words_style),
+            TextSpan::new("👩‍🚀"),
+            second,
+        ),
+    ] {
+        let mut painter = painter(
+            TextSpan::empty()
+                .style(style.clone())
+                .children([InlineSpan::Text(before), InlineSpan::Text(after)]),
+            direction,
+        );
+        painter
+            .layout_with_engine(&mut engine, 0., f32::INFINITY)
+            .unwrap();
+        assert_eq!(
+            painter.plain_text().encode_utf16().count() + 1,
+            expected.len()
+        );
+        let positions: Vec<_> = (0..expected.len())
+            .map(|i| {
+                painter
+                    .caret_offset_utf16(i, incular_text::TextAffinity::Downstream, 0.)
+                    .unwrap()
+                    .x
+            })
+            .collect();
+        assert_eq!(positions, expected);
+        let terminal = if direction == TextDirection::Ltr {
+            positions.last()
+        } else {
+            positions.first()
+        };
+        assert_eq!(terminal.copied(), Some(painter.width().unwrap()));
+    }
+}
+
+#[test]
+fn ltr_emoji_and_bold_letters_share_correct_caret_boundaries() {
+    assert_emoji_carets_across_style_boundary(
+        TextDirection::Ltr,
+        "words",
+        &[0., 28., 28., 28., 28., 28., 42., 56., 70., 84., 98., 112.],
+        &[
+            0., 14., 28., 42., 56., 70., 84., 112., 112., 112., 112., 112.,
+        ],
+    );
+}
+
+#[test]
+fn rtl_emoji_and_bold_letters_share_correct_caret_boundaries() {
+    assert_emoji_carets_across_style_boundary(
+        TextDirection::Rtl,
+        "מילים",
+        &[112., 84., 84., 84., 84., 84., 70., 56., 42., 28., 14., 0.],
+        &[112., 98., 84., 70., 56., 42., 28., 0., 0., 0., 0., 0.],
+    );
+}

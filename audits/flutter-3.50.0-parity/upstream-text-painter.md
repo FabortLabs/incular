@@ -213,3 +213,27 @@ caret at offset 18 starts the second row at x=0. All asserted caret and
 box coordinates match pinned Ahem, including the 51 px-wide box in
 the second row. Both pinned originals, 39 focused painter tests, and
 4 inline-placeholder tests passed.
+
+## Exact emoji and styled bidi carets
+
+Three more pinned originals pair. Across all 23 UTF-16 positions in
+the combined emoji string, the caret snaps to the 42, 98, and 126 px
+grapheme edges (never to a UTF-16 surrogate or joiner midpoint).
+Starting or ending a paragraph with an astronaut emoji next to a bold
+script run produces the exact pinned caret arrays in LTR and RTL,
+including the bidi boundary and terminal width.
+
+The exact comparisons use the extracted Flutter tester font whose
+test-only cmap maps the relevant unsupported scalars to its pinned
+full-em missing-glyph advance, and the joiner to its zero-advance glyph.
+This retains the original Unicode scalars and grapheme/bidi properties
+while removing host emoji fallback from the numeric fixture. The
+production font selection is unchanged. All three pinned originals and
+all 42 focused native tests passed with the font fixtures enabled.
+
+```sh
+python3 audits/flutter-3.50.0-parity/extract-flutter-test-font.py \
+  --emoji-caret-fixture .tmp/flutter .tmp/FlutterTest-emoji-caret.ttf
+INCULAR_FLUTTER_EMOJI_CARET_FONT_PATH="$PWD/.tmp/FlutterTest-emoji-caret.ttf" \
+  cargo test --locked --offline -j1 -p incular-text --test flutter350_text_painter emoji -- --test-threads=1
+```

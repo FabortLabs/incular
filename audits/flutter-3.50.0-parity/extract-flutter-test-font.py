@@ -18,6 +18,11 @@ parser.add_argument(
     action="store_true",
     help="map U+0644 to the test face's full-width square instead of using system fallback",
 )
+parser.add_argument(
+    "--emoji-caret-fixture",
+    action="store_true",
+    help="give the caret test's emoji and Hebrew scalars the pinned missing-glyph advance",
+)
 args = parser.parse_args()
 
 source = subprocess.check_output(
@@ -33,21 +38,36 @@ if match is None:
 font = bytes(int(value, 16) for value in re.findall(r"0x([\da-fA-F]{2})", match[1]))
 if len(font) != int(match[2]) or not font.startswith(b"\0\x01\0\0"):
     raise SystemExit("Unexpected embedded FlutterTest font size or header")
-if not args.arabic_lam_fixture:
+if not (args.arabic_lam_fixture or args.emoji_caret_fixture):
     args.output_ttf.write_bytes(font)
 else:
     try:
         from fontTools.ttLib import TTFont
+        from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
     except ImportError:
-        parser.error("--arabic-lam-fixture requires the optional Python fontTools package")
-    # The original Linux Flutter test sizes an unsupported lam with the
-    # full-width missing glyph. Parley searches system fallback instead.
-    # Keep the script character and bidi behavior, but give it that same
-    # test advance without changing production font selection.
+        parser.error("the optional fixture switches require Python fontTools")
+    # flutter_tester sizes unsupported scalars using the full-width
+    # missing glyph. Keep their original Unicode properties while
+    # removing platform-specific system fallback in exact caret tests.
+    characters = ("ل" if args.arabic_lam_fixture else "") + (
+        "👩👦👧👏🏽🚀מילים" if args.emoji_caret_fixture else ""
+    )
     with TTFont(io.BytesIO(font)) as face:
         square = face.getBestCmap()[ord("a")]
         assert face["hmtx"][square][0] == face["hmtx"][".notdef"][0]
-        for encoding in face["cmap"].tables:
+        cmap = face["cmap"]
+        if args.emoji_caret_fixture and not any(
+            encoding.isUnicode() and encoding.format == 12 for encoding in cmap.tables
+        ):
+            encoding = CmapSubtable.newSubtable(12)
+            encoding.platformID, encoding.platEncID, encoding.language = 3, 10, 0
+            encoding.cmap = dict(face.getBestCmap())
+            cmap.tables.append(encoding)
+        for encoding in cmap.tables:
             if encoding.isUnicode():
-                encoding.cmap[0x0644] = square
+                if args.emoji_caret_fixture:
+                    encoding.cmap[0x200D] = "Zero Advance"
+                for character in characters:
+                    if ord(character) <= 0xFFFF or encoding.format == 12:
+                        encoding.cmap[ord(character)] = square
         face.save(args.output_ttf)
