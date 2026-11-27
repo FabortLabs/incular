@@ -1354,7 +1354,7 @@ fn overlaps_band(candidate: Rect, topmost: Rect) -> bool {
 
 /// Direction of a directional focus move or a keyboard scroll, matching
 /// Flutter's `TraversalDirection` and the arrow keys it is bound to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TraversalDirection {
     Up,
     Down,

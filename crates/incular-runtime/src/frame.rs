@@ -3237,6 +3237,22 @@ impl Runtime {
         }
     }
 
+    /// Runs a directional focus intent against the mounted focus scope.
+    /// Returns whether it actually moved focus.
+    pub fn invoke_directional_focus(&mut self, intent: incular_widgets::DirectionalFocusIntent) -> bool {
+        use incular_widgets::TraversalDirection;
+        if intent.ignore_text_fields && self.focused.is_some_and(|focused| self.tree.is_text_field(focused)) {
+            return false;
+        }
+        let code = match intent.direction {
+            TraversalDirection::Up => Code::ArrowUp,
+            TraversalDirection::Down => Code::ArrowDown,
+            TraversalDirection::Left => Code::ArrowLeft,
+            TraversalDirection::Right => Code::ArrowRight,
+        };
+        self.move_directional_focus(code)
+    }
+
     fn move_directional_focus(&mut self, direction: Code) -> bool {
         let previous = self.focused;
         let toward_start = matches!(direction, Code::ArrowUp | Code::ArrowLeft);
@@ -3523,7 +3539,7 @@ impl Runtime {
             return true;
         }
         let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
-        let focus_result = self.tree.route_keyboard_with_raw_payload(
+        let (focus_result, directional_intent) = self.tree.route_keyboard_with_focus_intent(
             self.focused,
             event.clone(),
             lock_modes,
@@ -3534,6 +3550,9 @@ impl Runtime {
         } else {
             KeyEventResult::Ignored
         };
+        if let Some(intent) = directional_intent {
+            self.invoke_directional_focus(intent);
+        }
         if hardware.handled
             || focus_result == KeyEventResult::Handled
             || late_result == KeyEventResult::Handled

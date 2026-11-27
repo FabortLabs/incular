@@ -213,14 +213,14 @@ pub use fade_in_image::FadeInImage;
 pub use flutter_logo::{FlutterLogo, FlutterLogoLayout, FlutterLogoStyle};
 pub use incular_gestures::{
     FocusExtent, FocusKeyEventHandler, FocusRawKeyEventHandler, FocusRect, RawKeyEvent,
-    TapCallbackError, TapCallbackErrorHandler, TapCallbackKind, TapCancelReason, TraversalEdgeBehavior,
+    TapCallbackError, TapCallbackErrorHandler, TapCallbackKind, TapCancelReason, TraversalDirection, TraversalEdgeBehavior,
     set_tap_callback_error_handler,
 };
 #[doc(hidden)]
 pub use incular_gestures::RawKeyDelivery;
 pub use focus_keyboard::{
     Action, ActionInvocationPhase, ActionListener, ActionResult, Actions, CallbackShortcuts,
-    Command, CommandId, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
+    Command, CommandId, DirectionalFocusIntent, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
     FocusOrder, FocusScope, FocusScopeNode, FocusScopeSubscription, FocusTraversalGroup,
     FocusTraversalOrder, FocusTraversalPolicy, FocusTraversalPolicyKind, FocusableActionDetector,
     Intent, KeyEventResult, KeyboardListener, LockState, LogicalKeySet, LogicalShortcutKey,

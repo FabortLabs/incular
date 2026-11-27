@@ -2957,3 +2957,4 @@ packages/flutter/test/widgets/focus_traversal_test.dart	2336	Can find first focu
 packages/flutter/test/widgets/focus_traversal_test.dart	3977	Edge cases for inDirection	paired-match	upstream-directional-focus-edge-policies.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3817	FocusScopeNode.traversalEdgeBehavior takes effect after update	paired-match	upstream-sequential-focus-edge-policies.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3749	Default route edge traversal behavior	partial-match	upstream-sequential-focus-edge-policies.md
+packages/flutter/test/widgets/focus_traversal_test.dart	3112	Arrow focus traversal actions can be re-enabled for text fields.	paired-match	upstream-editable-directional-shortcuts.md

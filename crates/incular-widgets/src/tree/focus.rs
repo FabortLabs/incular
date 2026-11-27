@@ -997,7 +997,24 @@ impl WidgetTree {
         lock_modes: incular_core::Modifiers,
         raw_delivery: incular_gestures::RawKeyDelivery<'_>,
     ) -> KeyEventResult {
-        self.dispatch_keyboard_where(focused, event, lock_modes, raw_delivery, |_| true)
+        self.dispatch_keyboard_where(focused, event, lock_modes, raw_delivery, |_| true, None)
+    }
+
+    /// Routes a key and returns a built-in focus intent for the runtime, if
+    /// no application action already handled that shortcut.
+    #[doc(hidden)]
+    pub fn route_keyboard_with_focus_intent(
+        &self,
+        focused: Option<ElementId>,
+        event: KeyboardEvent,
+        lock_modes: incular_core::Modifiers,
+        raw_delivery: incular_gestures::RawKeyDelivery<'_>,
+    ) -> (KeyEventResult, Option<crate::DirectionalFocusIntent>) {
+        let mut intent = None;
+        let result = self.dispatch_keyboard_where(
+            focused, event, lock_modes, raw_delivery, |_| true, Some(&mut intent),
+        );
+        (result, intent)
     }
 
     /// Shared ancestor walk behind keyboard dispatch. The `serve`
@@ -1013,6 +1030,7 @@ impl WidgetTree {
         lock_modes: incular_core::Modifiers,
         raw_delivery: incular_gestures::RawKeyDelivery<'_>,
         mut serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
+        mut directional_intent: Option<&mut Option<crate::DirectionalFocusIntent>>,
     ) -> KeyEventResult {
         self.notify_key_observers(focused, &event);
         let menu_escape = event.key == KeyboardKey::Named(NamedKey::Escape)
@@ -1033,6 +1051,14 @@ impl WidgetTree {
                 let result = callbacks.route_keyboard_with_raw_payload(event.clone(), lock_modes, raw_delivery);
                 if result != KeyEventResult::Ignored {
                     return result;
+                }
+                if let Some(slot) = directional_intent.as_deref_mut()
+                    && let Some(incular_gestures::ShortcutMatch::Intent(matched)) =
+                        callbacks.shortcut_scope.as_ref().and_then(|scope| scope.find(event.clone()))
+                    && let Some(intent) = matched.downcast_command::<crate::DirectionalFocusIntent>()
+                {
+                    *slot = Some(*intent);
+                    return KeyEventResult::Handled;
                 }
             }
             if menu_escape
@@ -1073,6 +1099,7 @@ impl WidgetTree {
             incular_core::Modifiers::empty(),
             incular_gestures::RawKeyDelivery::Absent,
             incular_gestures::GestureCallbacks::services_semantic_keys,
+            None,
         ) == KeyEventResult::Handled
     }
 

@@ -563,6 +563,27 @@ impl From<FocusScope> for Widget {
     }
 }
 
+/// Requests spatial keyboard focus traversal.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct DirectionalFocusIntent {
+    pub direction: incular_gestures::TraversalDirection,
+    pub ignore_text_fields: bool,
+}
+
+impl DirectionalFocusIntent {
+    #[must_use]
+    pub const fn new(direction: incular_gestures::TraversalDirection) -> Self {
+        Self { direction, ignore_text_fields: true }
+    }
+
+    /// Set false to traverse away from an active editable control.
+    #[must_use]
+    pub const fn ignore_text_fields(mut self, ignore: bool) -> Self {
+        self.ignore_text_fields = ignore;
+        self
+    }
+}
+
 /// A widget that listens for keyboard events routed from platform input.
 #[derive(Clone, Default)]
 pub struct KeyboardListener {
@@ -571,6 +592,7 @@ pub struct KeyboardListener {
     on_key_repeat: Option<Rc<dyn Fn(KeyboardEvent)>>,
     on_key_up: Option<Rc<dyn Fn(KeyboardEvent)>>,
     shortcut_dispatch: Option<Rc<dyn Fn(KeyboardEvent) -> bool>>,
+    shortcut_scope: Option<Rc<incular_gestures::ErasedShortcutScope>>,
     focus_node: Option<FocusNode>,
     autofocus: bool,
     include_semantics: bool,
@@ -587,6 +609,7 @@ impl KeyboardListener {
             on_key_repeat: None,
             on_key_up: None,
             shortcut_dispatch: None,
+            shortcut_scope: None,
             focus_node: None,
             autofocus: false,
             include_semantics: true,
@@ -643,6 +666,7 @@ impl KeyboardListener {
         shortcuts: Rc<Shortcuts<C>>,
         actions: Rc<Actions<C>>,
     ) -> Self {
+        self.shortcut_scope = Some(shortcuts.erased_scope());
         self.shortcut_dispatch = Some(Rc::new(move |event| {
             shortcuts.handle_actions(event, &actions)
         }));
@@ -1007,6 +1031,7 @@ impl KeyboardListener {
             on_key_repeat: self.on_key_repeat.clone(),
             on_key_up: self.on_key_up.clone(),
             on_shortcut: self.shortcut_dispatch.clone(),
+            shortcut_scope: self.shortcut_scope.clone(),
             focus_node: self.focus_node.clone(),
             autofocus: self.autofocus,
             include_semantics: self.include_semantics,
