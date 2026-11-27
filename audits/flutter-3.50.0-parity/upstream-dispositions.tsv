@@ -2761,3 +2761,4 @@ packages/flutter/test/widgets/grid_paper_test.dart	10	GridPaper control test	pai
 packages/flutter/test/widgets/grid_paper_test.dart	18	GridPaper does not crash at zero area	paired-match	upstream-grid-paper.md
 packages/flutter/test/painting/border_radius_test.dart	348	BorderRadiusDirectional.resolve with null throws detailed error	paired-match	upstream-border-radius-direction.md
 packages/flutter/test/painting/border_radius_test.dart	363	resolve method throws detailed error when TextDirection is null	paired-match	upstream-border-radius-direction.md
+packages/flutter/test/painting/border_rtl_test.dart	977	BoxDecoration.border takes a BorderDirectional	paired-match	upstream-logical-box-border-decoration.md#public-padding-and-a-start-only-border

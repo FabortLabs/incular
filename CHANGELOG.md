@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- `BoxDecoration::padding()` exposes border insets without resolving logical
+  start and end edges prematurely.
+
 - Directional and mixed border radii can resolve an optional text direction
   without silently guessing how to map start and end corners.
 

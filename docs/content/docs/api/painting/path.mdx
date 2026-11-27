@@ -85,6 +85,8 @@ fn main() {
 Widget-level extras: [`BorderSide`](/docs/api/painting/path), [`BoxBorder`](/docs/api/painting/path), `BoxShape::Rectangle`
 (default) / `Circle`, [`BlurStyle`](/docs/api/painting/path), [`BoxShadow`](/docs/api/painting/path), [`TileMode`](/docs/api/painting/path), [`DecorationImage`](/docs/api/painting/path),
 full [`BoxDecoration`](/docs/api/painting/path) with `is_valid()`, `change_impact()`, `invalidation()`.
+Its `padding()` returns the border's insets, or `None` for a decoration
+without a border. Logical insets retain start and end until resolved.
 [`PathBuilder`](/docs/api/painting/path) constructs paths (`move_to` / `line_to` / `quadratic_to` /
 `cubic_to` / `close` / `build`). `BorderDirectional` mirrors [`Border`](/docs/api/painting/path) with
 start/end edges; [`BorderRadiusDirectional`](/docs/api/painting/path) mirrors corner radii;

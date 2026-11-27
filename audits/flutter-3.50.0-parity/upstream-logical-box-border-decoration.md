@@ -15,3 +15,16 @@ existing container/gradient/radius controls passed.
 The authored mount case is separate from the pinned registration
 counter. BoxDecoration-to-ShapeDecoration conversion is a separate
 case; this change preserves the original logical border to enable it.
+
+### Public padding and a start-only border
+
+The pinned `painting/border_rtl_test.dart:977` passed. An untranslated
+20×20 native border path has the same membership at the points relative
+to the original painter origin (30, 0): RTL includes (49, 10) and
+excludes (31, 10), and LTR reverses them. The border's public padding
+stays directional (start 2, others 0) until resolved. Scaling the 2-wide
+decoration by 2 equals the 4-wide decoration; halfway interpolation
+from 2 to 6 yields the same object value. A borderless decoration
+reports no padding. Twelve focused logical/custom/mounted border
+cases passed, including the pre-existing direction-only Container
+layout and paint control.

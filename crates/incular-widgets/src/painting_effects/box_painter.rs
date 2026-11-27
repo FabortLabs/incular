@@ -9,7 +9,7 @@ use std::{
     sync::Arc,
 };
 
-use incular_config::{Clip, EdgeInsets, TextDirection};
+use incular_config::{Clip, EdgeInsets, EdgeInsetsGeometry, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::{BlendMode, Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, RRect};
 
@@ -58,14 +58,19 @@ impl BoxDecoration {
                 })
     }
 
-    /// Flutter `BoxDecoration.padding`: the border's `dimensions`.
+    /// Returns the space reserved by the border inside this decoration.
+    ///
+    /// A logical border keeps its start and end edges until the caller
+    /// resolves the returned geometry. No border returns `None`.
     #[must_use]
-    pub(crate) fn padding(&self) -> EdgeInsets {
+    pub fn padding(&self) -> Option<EdgeInsetsGeometry> {
         if let Some(border) = &self.custom_border {
-            return border.dimensions(None);
+            return Some(border.dimensions(None).into());
         }
-        self.border
-            .map_or(EdgeInsets::ZERO, |border| border.stroke_insets())
+        if let Some(border) = self.directional_border.as_deref() {
+            return Some(border.dimensions().into());
+        }
+        self.border.map(|border| border.stroke_insets().into())
     }
 
     /// `_BoxDecorationPainter._paintShadows` for one shadow: its box,

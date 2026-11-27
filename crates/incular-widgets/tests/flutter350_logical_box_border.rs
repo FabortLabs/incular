@@ -136,3 +136,58 @@ fn physical_to_directional_borders_switch_sides_only_after_they_fade_out() {
     );
     assert_eq!(three_quarters, directional.lerp(&physical, 0.25));
 }
+
+#[test]
+fn a_decoration_preserves_directional_start_padding_and_interpolation() {
+    use incular_config::{EdgeInsets, EdgeInsetsDirectional, EdgeInsetsGeometry};
+
+    let decoration = |width| {
+        BoxDecoration::new().directional_border(BorderDirectional::only(
+            BorderSide::NONE,
+            BorderSide::solid(Color::BLACK, width),
+            BorderSide::NONE,
+            BorderSide::NONE,
+        ))
+    };
+    let base = decoration(2.);
+    for (direction, sample, non_sample, expected_padding) in [
+        (
+            TextDirection::Rtl,
+            49.,
+            31.,
+            EdgeInsets::only(0., 0., 2., 0.),
+        ),
+        (
+            TextDirection::Ltr,
+            31.,
+            49.,
+            EdgeInsets::only(2., 0., 0., 0.),
+        ),
+    ] {
+        let list = base
+            .paint_border_for_direction(Size::new(20., 20.), Some(direction))
+            .unwrap();
+        let origin = Offset::new(30., 0.);
+        let mut paths = list.commands().iter().filter_map(|command| match command {
+            PaintCommand::FillPath {
+                path, fill_rule, ..
+            } => Some((path, *fill_rule)),
+            _ => None,
+        });
+        let (path, rule) = paths.next().unwrap();
+        assert!(paths.next().is_none());
+        assert!(path.contains(Offset::new(sample, 10.) - origin, rule));
+        assert!(!path.contains(Offset::new(non_sample, 10.) - origin, rule));
+        assert_eq!(base.padding().unwrap().resolve(direction), expected_padding);
+    }
+
+    assert_eq!(
+        base.padding(),
+        Some(EdgeInsetsGeometry::from(EdgeInsetsDirectional::only(
+            2., 0., 0., 0.
+        )))
+    );
+    assert_eq!(base.scale(2.), decoration(4.));
+    assert_eq!(base.lerp(&decoration(6.), 0.5), decoration(4.));
+    assert_eq!(BoxDecoration::new().padding(), None);
+}

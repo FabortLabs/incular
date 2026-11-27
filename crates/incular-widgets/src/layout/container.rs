@@ -7,7 +7,7 @@
 
 use std::rc::Rc;
 
-use incular_config::{Alignment, Clip, Constraints, EdgeInsets};
+use incular_config::{Alignment, Clip, Constraints, EdgeInsets, TextDirection};
 use incular_core::{Color, Transform as CoreTransform};
 use incular_rendering::{Border, Brush, CornerRadii};
 use smart_default::SmartDefault;
@@ -284,7 +284,9 @@ impl Container {
         // Padding is independent of painting. A decoration border can have
         // an inset even when its style is invisible.
         let border_padding = if let Some(decoration) = decoration {
-            decoration.padding()
+            decoration.padding().map_or(EdgeInsets::ZERO, |geometry| {
+                geometry.resolve(direction.unwrap_or(TextDirection::Ltr))
+            })
         } else {
             value
                 .border

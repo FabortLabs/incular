@@ -27,6 +27,9 @@ Its line spacing and widths are retained across identical rebuilds.
 Physical corners need no direction; mixed and directional corners report
 a typed error when one is missing.
 
+`BoxDecoration::padding()` returns the border's insets, retaining any
+logical start or end edges until they are resolved for text direction.
+
 ## Frame recursion diagnostics
 
 Build, layout, paint, semantics, and compositor traversal track their active
