@@ -39,3 +39,16 @@ Two dedicated native module tests and nine nearby generator/manifest
 tests passed. Metadata is written to the local scaffold, not used to
 open a socket or upload project paths. No running DTD connection is
 claimed.
+
+## Full analyzer generation
+
+The exact pinned :316 registration completed successfully before the
+bounded runner stopped later registrations. Flutter starts from source
+discovery and checks generated factories, builders, annotated theme and
+wrapper transformations, collection arguments, and dependency errors.
+
+The six focused native generator and connection-info tests passed again
+with `INCULAR_PREVIEW_RUSTC_SMOKE`, compiling and executing the generated
+Rust. Only the already-discovered, importable zero-argument factory case
+is implemented at this boundary. The broader analyzer registration is
+now recorded as a partial match rather than adding paired credit.

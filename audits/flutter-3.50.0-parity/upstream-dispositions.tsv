@@ -2961,3 +2961,4 @@ packages/flutter/test/widgets/focus_traversal_test.dart	3112	Arrow focus travers
 packages/flutter_tools/test/general.shard/migrations/widget_preview_gitignore_migration_test.dart	34	skipped if .gitignore file is missing	paired-match	upstream-preview-gitignore.md
 packages/flutter_tools/test/general.shard/migrations/widget_preview_gitignore_migration_test.dart	46	skipped if already migrated	paired-match	upstream-preview-gitignore.md
 packages/flutter_tools/test/general.shard/migrations/widget_preview_gitignore_migration_test.dart	64	migrates project to ignore .widget_preview directory	paired-match	upstream-preview-gitignore.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_code_generator_test.dart	316	'correctly generates ${PreviewCodeGenerator.getGeneratedPreviewFilePath(fs)}'	partial-match	upstream-preview-codegen.md#full-analyzer-generation
