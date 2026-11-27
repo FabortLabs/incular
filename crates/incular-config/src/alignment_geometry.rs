@@ -8,7 +8,7 @@ use std::{
 
 use incular_core::Lerp;
 
-use crate::{Alignment, AlignmentDirectional, TextDirection, hash_layout_floats};
+use crate::{Alignment, AlignmentDirectional, FractionalOffset, TextDirection, hash_layout_floats};
 
 /// A physical, directional, or combined alignment. The two horizontal
 /// components remain distinct until text direction resolves the geometry.
@@ -395,6 +395,82 @@ impl Rem<f32> for Alignment {
     type Output = Self;
     fn rem(self, rhs: f32) -> Self {
         Self::new(self.x.rem_euclid(rhs), self.y.rem_euclid(rhs))
+    }
+}
+
+impl FractionalOffset {
+    /// Divides each fraction, then truncates towards zero.
+    #[must_use]
+    pub fn truncating_div(self, divisor: f32) -> Self {
+        Self::new(
+            truncating_quotient(self.dx, divisor),
+            truncating_quotient(self.dy, divisor),
+        )
+    }
+}
+
+impl Hash for FractionalOffset {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        hash_layout_floats([self.dx, self.dy], state);
+    }
+}
+
+impl fmt::Display for FractionalOffset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "FractionalOffset({}, {})",
+            FixedCoordinate(self.dx),
+            FixedCoordinate(self.dy)
+        )
+    }
+}
+
+impl Add for FractionalOffset {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        Self::new(self.dx + rhs.dx, self.dy + rhs.dy)
+    }
+}
+
+impl Sub for FractionalOffset {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
+        Self::new(self.dx - rhs.dx, self.dy - rhs.dy)
+    }
+}
+
+impl Mul<f32> for FractionalOffset {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self {
+        Self::new(self.dx * rhs, self.dy * rhs)
+    }
+}
+
+impl Div<f32> for FractionalOffset {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self {
+        Self::new(self.dx / rhs, self.dy / rhs)
+    }
+}
+
+impl Neg for FractionalOffset {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        Self::new(-self.dx, -self.dy)
+    }
+}
+
+impl Rem<f32> for FractionalOffset {
+    type Output = Self;
+
+    fn rem(self, rhs: f32) -> Self {
+        Self::new(self.dx.rem_euclid(rhs), self.dy.rem_euclid(rhs))
     }
 }
 

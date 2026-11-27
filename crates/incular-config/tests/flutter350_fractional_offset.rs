@@ -43,3 +43,28 @@ fn equal_operands_preserve_value_without_requiring_object_identity() {
     assert_eq!(Fraction::lerp_optional(None, None, 0.), None);
     assert_eq!(Fraction::lerp_optional(value, value, 0.5), value);
 }
+
+#[test]
+fn fractional_operators_and_description_keep_the_top_left_origin() {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+
+    let a = Fraction::new(0.5, 0.25);
+    let b = Fraction::new(1.25, 0.75);
+    assert_eq!(a.to_string(), "FractionalOffset(0.5, 0.3)");
+    assert_eq!(Fraction::TOP_LEFT.to_string(), "FractionalOffset(0.0, 0.0)");
+    let hash = |value: Fraction| {
+        let mut state = DefaultHasher::new();
+        value.hash(&mut state);
+        state.finish()
+    };
+    assert_eq!(hash(a), hash(Fraction::new(0.5, 0.25)));
+    assert_eq!(hash(Fraction::new(-0., 0.)), hash(Fraction::TOP_LEFT));
+    assert_eq!(-a, Fraction::new(-0.5, -0.25));
+    assert_eq!(a - b, Fraction::new(-0.75, -0.5));
+    assert_eq!(a + b, Fraction::new(1.75, 1.));
+    assert_eq!(a * 2., Fraction::CENTER_RIGHT);
+    assert_eq!(a / 2., Fraction::new(0.25, 0.125));
+    assert_eq!(a.truncating_div(2.), Fraction::TOP_LEFT);
+    assert_eq!(a % 5., a);
+    assert_eq!(-a % 1., Fraction::new(0.5, 0.75));
+}
