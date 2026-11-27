@@ -6,6 +6,7 @@
 pub mod file_filter;
 pub mod ide_theme;
 pub mod search;
+pub mod restart;
 
 use std::rc::Rc;
 

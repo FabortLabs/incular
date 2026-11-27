@@ -235,3 +235,12 @@ impl From<PreviewSearchControls> for Widget {
         Row::new([Widget::from(Expanded::new(input)), clear.into()]).into()
     }
 }
+
+/// Restarts just the mounted preview, not the host or any other preview.
+pub fn preview_soft_restart_button(
+    restart: incular_widgets::widget_previews::restart::PreviewSoftRestart,
+) -> Widget {
+    button("Hot restart", "preview.restart.soft", true, move || {
+        restart.request();
+    })
+}
