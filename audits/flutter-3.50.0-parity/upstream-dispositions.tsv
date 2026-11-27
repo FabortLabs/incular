@@ -3036,3 +3036,8 @@ packages/flutter/test/rendering/intrinsic_width_test.dart	208	Shrink-wrapping wi
 packages/flutter/test/rendering/intrinsic_width_test.dart	306	Shrink-wrapping height	paired-match	upstream-render-intrinsic-constraints.md#stepped-and-shrink-wrapped-proxy-measurements
 packages/flutter/test/rendering/intrinsic_width_test.dart	95	IntrinsicWidth without a child	paired-match	upstream-render-intrinsic-constraints.md#childless-intrinsic-proxies
 packages/flutter/test/rendering/intrinsic_width_test.dart	344	IntrinsicHeight without a child	paired-match	upstream-render-intrinsic-constraints.md#childless-intrinsic-proxies
+packages/flutter/test/widgets/editable_text_cursor_test.dart	71	cursor has expected width, height, and radius	paired-match	upstream-editable-cursor-visibility.md
+packages/flutter/test/widgets/editable_text_cursor_test.dart	402	Cursor does not show when showCursor set to false	paired-match	upstream-editable-cursor-visibility.md
+packages/flutter/test/widgets/editable_text_cursor_test.dart	423	Cursor does not show when not focused	paired-match	upstream-editable-cursor-visibility.md
+packages/flutter/test/widgets/editable_text_cursor_test.dart	738	Turning showCursor off stops the cursor	paired-match	upstream-editable-cursor-visibility.md
+packages/flutter/test/widgets/editable_text_cursor_test.dart	860	autofocus sets cursor to the end of text	paired-match	upstream-editable-cursor-visibility.md

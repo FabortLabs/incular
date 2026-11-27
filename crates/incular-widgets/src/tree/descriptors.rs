@@ -1464,6 +1464,24 @@ impl EditableText {
         self
     }
 
+    /// The configured caret width in logical pixels.
+    #[must_use]
+    pub const fn configured_cursor_width(&self) -> f32 {
+        self.cursor_width
+    }
+
+    /// The configured caret height in logical pixels, or `None` for line height.
+    #[must_use]
+    pub const fn configured_cursor_height(&self) -> Option<f32> {
+        self.cursor_height
+    }
+
+    /// The configured circular corner radius; zero means a rectangular caret.
+    #[must_use]
+    pub const fn configured_cursor_radius(&self) -> f32 {
+        self.cursor_radius
+    }
+
     /// Sets the caret width in logical pixels.
     #[must_use]
     pub fn cursor_width(mut self, width: f32) -> Self {
