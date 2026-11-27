@@ -362,8 +362,8 @@ packages/flutter/test/animation/animations_test.dart	60	ProxyAnimation set paren
 packages/flutter/test/animation/animations_test.dart	77	ReverseAnimation calls listeners	paired-match	upstream-curve-animation-lifecycle.md
 packages/flutter/test/animation/animations_test.dart	97	TrainHoppingAnimation	paired-match	upstream-curve-animation-lifecycle.md#wrapper-diagnostics-and-object-lifetimes
 packages/flutter/test/animation/animations_test.dart	136	TrainHoppingAnimation notifies status listeners	paired-match	upstream-raw-menu-animation-observer-and-shadow.md
-packages/flutter/test/painting/box_painter_test.dart	101	BoxShadow control test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
-packages/flutter/test/painting/box_painter_test.dart	138	BoxShadow BlurStyle test	partial-match	upstream-raw-menu-animation-observer-and-shadow.md
+packages/flutter/test/painting/box_painter_test.dart	101	BoxShadow control test	paired-match	upstream-decoration-values.md#shadow-values
+packages/flutter/test/painting/box_painter_test.dart	138	BoxShadow BlurStyle test	paired-match	upstream-decoration-values.md#shadow-values
 packages/flutter/test/rendering/limited_box_test.dart	13	LimitedBox: parent max size is unconstrained	partial-match	upstream-limited-box-and-decoration-contracts.md
 packages/flutter/test/rendering/limited_box_test.dart	59	LimitedBox: parent maxWidth is unconstrained	paired-match	upstream-limited-box-and-decoration-contracts.md
 packages/flutter/test/rendering/limited_box_test.dart	75	LimitedBox: parent maxHeight is unconstrained	paired-match	upstream-limited-box-and-decoration-contracts.md
@@ -3122,3 +3122,7 @@ packages/flutter/test/painting/decoration_test.dart	824	DecorationImage does not
 packages/flutter/test/painting/decoration_test.dart	847	DecorationImagePainter releases the placeholder once the image loads	partial-match	upstream-async-decoration-image.md#placeholder-images-and-painter-ownership
 packages/flutter/test/painting/decoration_test.dart	870	DecorationImage placeholder is included in equality and toString	paired-match	upstream-async-decoration-image.md#placeholder-images-and-painter-ownership
 packages/flutter/test/painting/decoration_test.dart	885	DecorationImagePainter disposes of image when disposed	paired-match	upstream-async-decoration-image.md#placeholder-images-and-painter-ownership
+packages/flutter/test/painting/box_painter_test.dart	126	BoxShadow.lerp identical a,b	paired-match	upstream-decoration-values.md#shadow-values
+packages/flutter/test/painting/box_painter_test.dart	132	BoxShadowList.lerp identical a,b	paired-match	upstream-decoration-values.md#shadow-values
+packages/flutter/test/painting/box_painter_test.dart	178	BoxShadow toString test	paired-match	upstream-decoration-values.md#shadow-values
+packages/flutter/test/painting/decoration_test.dart	912	BoxShadow.copyWith	paired-match	upstream-decoration-values.md#shadow-values

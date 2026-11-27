@@ -2,6 +2,7 @@
 
 mod box_painter;
 mod box_border_stack;
+mod box_shadow_values;
 pub use box_border_stack::{BoxBorderLayer, BoxBorderStack};
 mod custom_paint;
 mod custom_box_border;

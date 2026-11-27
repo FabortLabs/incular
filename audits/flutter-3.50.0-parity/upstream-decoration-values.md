@@ -17,3 +17,14 @@ gradient scales the stored alpha values without destroying the
 transparent endpoint's RGB; the native assertions match the original
 gradient at negative, fractional, and extrapolated values using the
 renderer-neutral RGBA8 representation.
+
+## Shadow values
+
+Six pinned originals and nine focused native tests passed. Optional
+shadow and list interpolation preserve an identical source object,
+return no value for two absent endpoints, and scale unmatched ends.
+The controls verify exact blur radii, style arbitration, one-line
+diagnostics, and hash changes. The public copy operation replaces each
+field independently without changing the other four. Both older partial
+controls are now paired. The shadow value cases do not check GPU
+blur-style golden pixels.

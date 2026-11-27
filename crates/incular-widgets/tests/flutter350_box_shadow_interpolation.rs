@@ -1,6 +1,12 @@
 //! Value checkpoints from Flutter 3.50 painting/box_painter_test.dart and
 //! the pinned box_shadow_extrapolation_test.dart probe.
 
+use std::{
+    borrow::Cow,
+    hash::{Hash, Hasher},
+    ptr,
+};
+
 use incular_core::{Color, Lerp, Offset};
 use incular_widgets::{BlurStyle, BoxShadow};
 
@@ -15,9 +21,20 @@ fn shadow(blur: f32, style: BlurStyle) -> BoxShadow {
 #[test]
 fn upstream_box_shadow_control_values() {
     let one = shadow(4., BlurStyle::Normal);
-    // Flutter lerp(null, one, .25) and lerp(one, null, .25) delegate to scale.
-    let two = one.scale(0.25);
-    let three = one.scale(0.75);
+    let two = BoxShadow::lerp_ref(None, Some(&one), 0.25)
+        .unwrap()
+        .into_owned();
+    let three = BoxShadow::lerp_ref(Some(&one), None, 0.25)
+        .unwrap()
+        .into_owned();
+    let fingerprint = |value: BoxShadow| {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    };
+    assert_eq!(one.to_string().lines().count(), 1);
+    assert_ne!(fingerprint(one), fingerprint(two));
+    assert_eq!(one, shadow(4., BlurStyle::Normal));
     assert_eq!([two.blur_radius, three.blur_radius], [1., 3.]);
     let four = two.lerp(&three, 0.5);
     assert_eq!(four.blur_radius, 2.);
@@ -30,8 +47,12 @@ fn upstream_box_shadow_control_values() {
 fn upstream_box_shadow_blur_style_values() {
     let one = shadow(4., BlurStyle::Normal);
     let two = shadow(4., BlurStyle::Outer);
-    let three = one.scale(0.75);
-    let four = one.scale(0.25);
+    let three = BoxShadow::lerp_ref(Some(&one), None, 0.25)
+        .unwrap()
+        .into_owned();
+    let four = BoxShadow::lerp_ref(None, Some(&one), 0.25)
+        .unwrap()
+        .into_owned();
     let five = one.lerp(&two, 0.25);
     let six = shadow(0., BlurStyle::Solid).lerp(&two, 0.25);
     for (sample, expected) in [
@@ -92,4 +113,74 @@ fn flutter_350_box_shadow_extrapolates_color_alongside_geometry() {
             Color::rgba(160, 160, 32, 255)
         ]
     );
+}
+
+#[test]
+fn optional_shadow_and_shadow_list_borrow_the_identical_originals() {
+    assert!(BoxShadow::lerp_ref(None, None, 0.).is_none());
+    assert!(BoxShadow::lerp_list_ref(None, None, 0.).is_none());
+    let shadow = BoxShadow::default();
+    let Some(Cow::Borrowed(same)) = BoxShadow::lerp_ref(Some(&shadow), Some(&shadow), 0.5) else {
+        panic!("expected a borrowed shadow");
+    };
+    assert!(ptr::eq(same, &shadow));
+    let shadows = [shadow];
+    let Some(Cow::Borrowed(same)) = BoxShadow::lerp_list_ref(Some(&shadows), Some(&shadows), 0.5)
+    else {
+        panic!("expected a borrowed shadow list");
+    };
+    assert!(ptr::eq(same, &shadows[..]));
+}
+
+#[test]
+fn a_shadow_description_keeps_blur_style_and_geometry() {
+    let color = "Color(alpha: 1.0000, red: 0.0000, green: 0.0000, blue: 0.0000, colorSpace: ColorSpace.sRGB)";
+    for (style, name) in [(BlurStyle::Normal, "normal"), (BlurStyle::Solid, "solid")] {
+        assert_eq!(
+            shadow(4., style).to_string(),
+            format!("BoxShadow({color}, Offset(0.0, 0.0), 4.0, 0.0, BlurStyle.{name})")
+        );
+    }
+}
+
+#[test]
+fn copying_each_shadow_property_leaves_all_others_untouched() {
+    let original = BoxShadow::default();
+    let color = Color::rgba(0x11, 0x22, 0x33, 0xff);
+    let offset = Offset::new(1., 2.);
+    let cases = [
+        (
+            original.copy_with(Some(color), None, None, None, None),
+            BoxShadow { color, ..original },
+        ),
+        (
+            original.copy_with(None, Some(offset), None, None, None),
+            BoxShadow { offset, ..original },
+        ),
+        (
+            original.copy_with(None, None, Some(123.), None, None),
+            BoxShadow {
+                blur_radius: 123.,
+                ..original
+            },
+        ),
+        (
+            original.copy_with(None, None, None, Some(123.), None),
+            BoxShadow {
+                spread_radius: 123.,
+                ..original
+            },
+        ),
+        (
+            original.copy_with(None, None, None, None, Some(BlurStyle::Outer)),
+            BoxShadow {
+                blur_style: BlurStyle::Outer,
+                ..original
+            },
+        ),
+    ];
+    for (actual, expected) in cases {
+        assert_ne!(expected, original);
+        assert_eq!(actual, expected);
+    }
 }
