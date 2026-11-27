@@ -26,3 +26,15 @@ unchanged parent constraints without replacing the child render.
 All 21 focused native intrinsic and proxy tests passed. These six
 pairs cover mounted layout; direct minimum/maximum intrinsic queries
 and their cross-extent matrices are not counted by this batch.
+
+## Padding around a measured child
+
+Two authored Flutter cases verify the child and parent sizes when
+asymmetric padding surrounds a box whose ordinary layout differs from
+its maximum intrinsic size. The native test started at 75×140 on both
+axes. Flutter and corrected native layout use 120×140 for the width
+proxy (100×110 child) and 75×230 for the height proxy (55×200 child).
+Padding now subtracts the insets for the child's cross-axis measurement,
+then adds its insets to the returned extent on the measured axis.
+All 28 focused native regressions passed. These authored cases do not
+add paired credit to the original manifest.

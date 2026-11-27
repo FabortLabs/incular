@@ -45,6 +45,25 @@ impl WidgetTree {
                     self.probe_intrinsic_extent(grandchild, dimension, probe)
                 });
             }
+            RenderKind::Padding { padding } => {
+                let horizontal = padding.horizontal();
+                let vertical = padding.vertical();
+                let main = if dimension.is_horizontal() {
+                    horizontal
+                } else {
+                    vertical
+                };
+                let Some(&grandchild) = node.children.first() else {
+                    return Ok(main);
+                };
+                // The child's cross constraint is measured inside the insets,
+                // but the main-axis padding contributes to the parent's extent.
+                let child_probe = probe.deflate(horizontal, vertical);
+                let intrinsic = with_recursive_tree_stack(|| {
+                    self.probe_intrinsic_extent(grandchild, dimension, child_probe)
+                })?;
+                return Ok(intrinsic + main);
+            }
             RenderKind::Colored { .. } | RenderKind::Decorated { desired: None, .. } => {
                 let Some(&grandchild) = node.children.first() else {
                     return Ok(0.0);
