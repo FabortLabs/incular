@@ -95,3 +95,15 @@ of a fixed font's pixel coordinates. Dragging between the stops in
 either direction still produces no content and places the collapsed
 handle on the corresponding side. All 16 focused drag, keyboard
 shortcut and selection lifetime tests passed.
+
+## Empty-region mouse cursor and final newline
+
+Both exact pinned `widgets/selectable_region_test.dart` registrations
+passed. At :6653 the same pressed mouse visits the outside, empty
+bordered region, and inner mouse annotation, activating grab,
+grab, forbidden, and grab in order. This compares the runtime's
+active cursor per device, not the OS cursor image. At :6728 a
+top-left to bottom-right drag over a paragraph at line height
+1.4 keeps the final newline, selected range 0→12 and the complete
+plain text. Both native fixtures and all ten adjacent mouse cursor
+session tests passed.
