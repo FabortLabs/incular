@@ -32,7 +32,14 @@ case "$mode" in
     if [[ "$mode" == tooling ]]; then
       [[ "$test_file" =~ ^([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
       tool_root="$flutter_root/packages/flutter_tools"
-      fixture="$tool_root/test/commands.shard/hermetic/widget_preview/$test_file"
+      case "$test_file" in
+        migrations/widget_preview_gitignore_migration_test.dart)
+          fixture="$tool_root/test/general.shard/$test_file"
+          ;;
+        *)
+          fixture="$tool_root/test/commands.shard/hermetic/widget_preview/$test_file"
+          ;;
+      esac
     else
       [[ "$test_file" =~ ^(animation|foundation|gestures|painting|physics|rendering|scheduler|semantics|services|widget_previews|widgets)/([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
       fixture="$flutter_root/packages/flutter/test/$test_file"

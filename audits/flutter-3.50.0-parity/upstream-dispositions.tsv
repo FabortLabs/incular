@@ -2958,3 +2958,6 @@ packages/flutter/test/widgets/focus_traversal_test.dart	3977	Edge cases for inDi
 packages/flutter/test/widgets/focus_traversal_test.dart	3817	FocusScopeNode.traversalEdgeBehavior takes effect after update	paired-match	upstream-sequential-focus-edge-policies.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3749	Default route edge traversal behavior	partial-match	upstream-sequential-focus-edge-policies.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3112	Arrow focus traversal actions can be re-enabled for text fields.	paired-match	upstream-editable-directional-shortcuts.md
+packages/flutter_tools/test/general.shard/migrations/widget_preview_gitignore_migration_test.dart	34	skipped if .gitignore file is missing	paired-match	upstream-preview-gitignore.md
+packages/flutter_tools/test/general.shard/migrations/widget_preview_gitignore_migration_test.dart	46	skipped if already migrated	paired-match	upstream-preview-gitignore.md
+packages/flutter_tools/test/general.shard/migrations/widget_preview_gitignore_migration_test.dart	64	migrates project to ignore .widget_preview directory	paired-match	upstream-preview-gitignore.md
