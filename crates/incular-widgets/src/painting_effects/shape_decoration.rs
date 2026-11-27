@@ -11,7 +11,7 @@ use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Gradi
 
 use super::box_painter::DecorationPosition;
 use super::decoration::{
-    BorderSide, BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape,
+    BorderSide, BorderStyle, BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape,
     BoxSweepGradient, DecorationImage, faded_brush, faded_decoration_image,
     lerp_raw_brush,
 };
@@ -324,7 +324,8 @@ impl ShapeDecoration {
         canvas.finish()
     }
 
-    /// The interior color or gradient over the outer path.
+    /// The interior color or gradient, inset behind an opaque outline where
+    /// Flutter's specialized solid-fill path avoids antialiasing leaks.
     #[must_use]
     pub fn paint_fill(&self, size: Size) -> DisplayList {
         self.paint_fill_with_direction(size, None)
@@ -365,6 +366,28 @@ impl ShapeDecoration {
             .or_else(|| self.gradient.clone())
             .or_else(|| self.color.map(Brush::Solid));
         if let Some(brush) = brush {
+            // Match _adjustedRectOnOutlinedBorder only for the specialized
+            // solid-color interior. The stroke, gradient coordinates, image
+            // clip and shadow still use the original box.
+            let rect = if self.color.is_some()
+                && self.shape.prefer_paint_interior()
+                && let Some(outline) = self.shape.rounded_circle_outline()
+                && outline.side().style == BorderStyle::Solid
+                && outline.side().color.alpha == 255
+            {
+                let inset = outline.side().stroke_inset() / 2.0;
+                let width = rect.size.width - 2.0 * inset;
+                let height = rect.size.height - 2.0 * inset;
+                if !(width > 0.0 && height > 0.0) {
+                    return;
+                }
+                Rect::from_origin_size(
+                    rect.origin + Offset::new(inset, inset),
+                    Size::new(width, height),
+                )
+            } else {
+                rect
+            };
             self.paint_interior_or_path(canvas, rect, brush, direction);
         }
     }
