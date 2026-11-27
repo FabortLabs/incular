@@ -452,3 +452,42 @@ fn blocked_label_merge_refreshes_after_edits_and_preserves_explicit_children() {
         );
     }
 }
+
+#[test]
+fn semantic_geometry_rejects_unknown_windows_and_nodes_independently() {
+    use incular_core::ArenaId;
+    use incular_platform::WindowId;
+    use incular_runtime::{Application, SemanticViewLookupError as Error};
+
+    let mut runtime = Runtime::new(scene(Align::new(
+        Alignment::TOP_LEFT,
+        Semantics::new(SizedBox::new().width(100.).height(50.)).label("target"),
+    ))).unwrap();
+    let _semantics = runtime.ensure_semantics();
+    let constraints = Constraints::tight(Size::new(400., 300.));
+    runtime.run_frame(constraints).unwrap();
+    let target = semantic_id(&runtime, "target");
+    assert_eq!(runtime.tree().semantics().node(target).unwrap().label.as_deref(), Some("target"));
+
+    let app = Application::from_runtime(runtime, |_| {});
+    let view = app.primary_window();
+    let unknown_view = WindowId::from_parts(999, view.generation());
+    let absent = SemanticNodeId(ArenaId::from_parts(u32::MAX, 0));
+    assert_eq!(
+        app.semantic_rect_in_view(view, target),
+        Ok(Rect::from_origin_size(Offset::ZERO, Size::new(100., 50.)))
+    );
+    assert_eq!(
+        app.semantic_rect_in_view(unknown_view, target),
+        Err(Error::UnknownView(unknown_view))
+    );
+    assert_eq!(
+        app.semantic_rect_in_view(view, absent),
+        Err(Error::UnknownNode { view, node: absent })
+    );
+    let alias_with_wrong_generation = WindowId::from_parts(view.index(), view.generation() + 1);
+    assert_eq!(
+        app.semantic_rect_in_view(alias_with_wrong_generation, target),
+        Err(Error::UnknownView(alias_with_wrong_generation))
+    );
+}

@@ -46,6 +46,11 @@ impl SemanticsActivation {
         );
         let handle = SemanticsHandle {
             activation: Rc::downgrade(self),
+            #[cfg(debug_assertions)]
+            _allocation: incular_core::memory::allocations::ObjectLifetime::new(
+                "semantics",
+                "SemanticsHandle",
+            ),
         };
         self.notify_if_changed(before);
         handle
@@ -82,6 +87,8 @@ impl SemanticsActivation {
 #[must_use = "keep the handle while the application needs semantics"]
 pub struct SemanticsHandle {
     activation: Weak<SemanticsActivation>,
+    #[cfg(debug_assertions)]
+    _allocation: incular_core::memory::allocations::ObjectLifetime,
 }
 
 impl Drop for SemanticsHandle {

@@ -139,3 +139,19 @@ while Incular retains its owner and rebuilds or releases its nodes
 on the frame boundary.
 
 All 21 focused native accessibility activation, owner and restart checks passed.
+
+## Unknown geometry targets and handle allocation events
+
+Pinned `semantics_binding_test.dart:93,103` passed. The native geometry
+query reads a mounted label's real 100-by-50 view rectangle, rejects an
+unknown alternative view before lookup, and reports a distinct unknown
+node error for a valid view. A separate control rejects the live window's
+slot with a stale generation. Rust reports typed errors rather than
+Dart assertions; the retained single-view geometry test still covers DPR.
+
+A real scoped semantics handle emits one creation and one disposal
+with the same non-address identity in the debug allocation registry.
+The test separately observes the window's effective semantics state
+enter and leave. Release builds have no event storage. These changes
+do not change the retained owner/frame timing difference at :78.
+Seventeen focused native semantics tests passed.

@@ -69,6 +69,18 @@ use std::{
 };
 use tokio::sync::oneshot;
 
+/// The view or semantic node named by a geometry query is not retained.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum SemanticViewLookupError {
+    #[error("unknown semantics view {0:?}")]
+    UnknownView(WindowId),
+    #[error("unknown semantic node {node:?} in view {view:?}")]
+    UnknownNode {
+        view: WindowId,
+        node: incular_semantics::SemanticNodeId,
+    },
+}
+
 /// Flutter's GestureBinding queues pointer packets while a warm-up frame
 /// rebuilds. Key events and window/lifecycle operations are separate.
 fn is_pointer_packet(event: &PlatformEvent) -> bool {
@@ -1868,6 +1880,20 @@ impl Application {
                 .dispatch_semantic_action(request.node, request.action)
         })
         .unwrap_or(false)
+    }
+
+    /// Reads the current semantic node rectangle in the view's logical
+    /// coordinate space. Unknown IDs do not resolve against another view.
+    pub fn semantic_rect_in_view(
+        &self,
+        view: WindowId,
+        node: incular_semantics::SemanticNodeId,
+    ) -> Result<incular_core::Rect, SemanticViewLookupError> {
+        let registry = self.registry.borrow();
+        let window = registry.get(view).ok_or(SemanticViewLookupError::UnknownView(view))?;
+        window.runtime.tree().semantics().node(node)
+            .map(|value| value.bounds)
+            .ok_or(SemanticViewLookupError::UnknownNode { view, node })
     }
 
     /// Turns one window's per-frame semantics pass on or off. Native hosts

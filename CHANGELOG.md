@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Window semantics queries report unknown view and node IDs separately.
+  Debug allocation listeners can observe matching semantics-handle lifetimes.
+
 - Widget preview tooling can generate Rust factory registrations with
   stable import aliases, omitting sources outside importable packages. It can
   also write local scaffold connection metadata as escaped Rust constants.

@@ -173,3 +173,35 @@ fn handles_and_listeners_are_local_to_the_original_window_generation() {
     drop(new_handle);
     assert_eq!(app.semantics_enabled(replacement), Some(false));
 }
+
+#[cfg(debug_assertions)]
+#[test]
+fn semantics_handle_emits_one_creation_and_disposal_for_the_same_identity() {
+    use incular_core::memory::allocations::{MemoryAllocations, ObjectEventKind};
+
+    let mut app = app();
+    let owner = app.primary_window();
+    app.set_semantics_enabled(owner, false);
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let _subscription = MemoryAllocations::current().add_listener({
+        let events = events.clone();
+        move |event| {
+            if event.class_name == "SemanticsHandle" {
+                events.borrow_mut().push(event);
+            }
+        }
+    });
+    {
+        let handle = app.ensure_semantics(owner).unwrap();
+        assert_eq!(events.borrow().len(), 1);
+        assert_eq!(events.borrow()[0].kind, ObjectEventKind::Created);
+        assert!(app.semantics_enabled(owner).unwrap());
+        drop(handle);
+    }
+    assert!(!app.semantics_enabled(owner).unwrap());
+    let events = events.borrow();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].library, "semantics");
+    assert_eq!(events[1].kind, ObjectEventKind::Disposed);
+    assert_eq!(events[0].id, events[1].id);
+}
