@@ -769,6 +769,27 @@ impl Lerp for f64 {
     }
 }
 
+/// Flutter's IntTween rounds to the nearest integer, with ties away from zero.
+impl Lerp for i32 {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        let begin = f64::from(*self);
+        (begin + (f64::from(*other) - begin) * f64::from(t)).round() as Self
+    }
+}
+
+impl Lerp for i64 {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        if t == 0. || self == other {
+            *self
+        } else if t == 1. {
+            *other
+        } else {
+            let delta = i128::from(*other) - i128::from(*self);
+            (*self as f64 + delta as f64 * f64::from(t)).round() as Self
+        }
+    }
+}
+
 /// Pairs interpolate component-wise, so one implicit animation can carry
 /// values that change together.
 impl<A: Lerp, B: Lerp> Lerp for (A, B) {
@@ -793,6 +814,16 @@ impl Lerp for Size {
         Self {
             width: self.width.lerp(&other.width, t),
             height: self.height.lerp(&other.height, t),
+        }
+    }
+}
+
+/// Flutter's nullable SizeTween treats one null endpoint as a zero size.
+impl Lerp for Option<Size> {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        match (self, other) {
+            (None, None) => None,
+            (begin, end) => Some(begin.unwrap_or(Size::ZERO).lerp(&end.unwrap_or(Size::ZERO), t)),
         }
     }
 }

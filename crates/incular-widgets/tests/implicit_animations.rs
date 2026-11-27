@@ -557,11 +557,10 @@ fn sliver_opacity_keeps_animating_across_rebuilds() {
     assert_eq!(harness.opacities(), [0.]);
 }
 
-/// `didUpdateWidget` with only a new curve keeps the running tween and the
-/// curve it started with until the next target change (Flutter's
-/// `AnimatedWidgetBaseState`).
+/// `didUpdateWidget` installs a new curve on the current controller without
+/// restarting the tween or its time budget.
 #[test]
-fn a_curve_only_update_keeps_the_running_curve_until_the_target_changes() {
+fn a_curve_only_update_re_evaluates_the_running_tween_without_restarting() {
     let widget = |end: f32, curve: Curve| -> Widget {
         AnimatedOpacity::new(end, DURATION, square())
             .curve(curve)
@@ -573,8 +572,7 @@ fn a_curve_only_update_keeps_the_running_curve_until_the_target_changes() {
     approx(harness.opacities()[0], 1. - Curve::EaseIn.apply(0.5));
     harness.update(widget(0., Curve::Linear), 1_100);
     harness.frame(1_150);
-    // The fade still follows the curve it started with.
-    approx(harness.opacities()[0], 1. - Curve::EaseIn.apply(0.75));
+    approx(harness.opacities()[0], 0.25);
 }
 
 /// Flutter's `AnimatedPhysicalModel.shape` is immediate and selects a circle

@@ -204,9 +204,10 @@ struct ImplicitState<W: ImplicitlyAnimated> {
     tweens: RefCell<W::Tweens>,
     controller: AnimationController,
     listening: Cell<bool>,
-    /// The curve in effect since the last target change. A curve-only update
-    /// keeps it until the next target change (`AnimatedWidgetBaseState`).
     curve: RefCell<Curve>,
+    /// Latest controller position, sampled without subscribing the builder to
+    /// synchronous assignments made during its own retargeting pass.
+    controller_progress: Cell<f32>,
     revision: RefCell<Rc<Cell<u64>>>,
     /// `.transition()` progress from 0 to 1 (springs may overshoot).
     progress: MotionValue,
@@ -260,7 +261,7 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
         if config.timing().transition.is_some() {
             self.progress.get()
         } else {
-            self.curve.borrow().apply(self.controller.value())
+            self.curve.borrow().apply(self.controller_progress.get())
         }
     }
 
@@ -277,7 +278,11 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
             // A rebuild for an animation tick: the widget is unchanged.
             return;
         }
-        // `didUpdateWidget`.
+        // `didUpdateWidget` replaces the curve independently of whether
+        // the endpoints changed. Only a new target restarts the controller.
+        if config.timing().transition.is_none() && *self.curve.borrow() != config.timing().curve {
+            self.curve.replace(config.timing().curve.clone());
+        }
         self.controller.set_duration(config.timing().duration);
         let mut construct = TweenPass::Construct {
             start: false,
@@ -303,11 +308,11 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
                 incular_animation::schedule_frame();
                 return;
             }
-            // The new curve takes effect with the new target.
-            self.curve.replace(config.timing().curve.clone());
-            let t = self.curve.borrow().apply(self.controller.value());
+            let t = self.curve.borrow().apply(self.controller_progress.get());
             config.for_each_tween(&mut tweens, &mut TweenPass::Retarget { t, direction });
-            // `controller.forward(from: 0.0)`.
+            // `controller.forward(from: 0.0)`. The build already consumes
+            // this reset. Publishing it must not dirty a second build.
+            self.controller_progress.set(0.0);
             self.controller.set_value(0.0);
             self.controller.forward_on_next_tick();
         }
@@ -351,6 +356,7 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
                 controller: AnimationController::new(config.timing().duration),
                 listening: Cell::new(false),
                 curve: RefCell::new(config.timing().curve.clone()),
+                controller_progress: Cell::new(0.),
                 revision: RefCell::new(revision),
                 progress: MotionValue::new(1.),
                 delegate: RefCell::new(None),
@@ -359,22 +365,30 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
         move |state, context, _| {
             if !state.listening.replace(true) {
                 let weak = Rc::downgrade(state);
-                state.controller.add_listener(move |_| {
+                state.controller.add_listener(move |progress| {
+                    if let Some(state) = weak.upgrade()
+                        && state.controller_progress.replace(progress) != progress
+                    {
+                        let revision = state.revision.borrow().clone();
+                        revision.set(revision.get().wrapping_add(1));
+                    }
+                });
+                let weak = Rc::downgrade(state);
+                state.controller.add_status_listener(move |status| {
+                    if status != AnimationStatus::Completed {
+                        return;
+                    }
                     let Some(state) = weak.upgrade() else {
                         return;
                     };
-                    let revision = state.revision.borrow().clone();
-                    revision.set(revision.get().wrapping_add(1));
-                    if state.controller.status() == AnimationStatus::Completed {
-                        // Take the callback out first so the config borrow ends before it runs.
-                        let on_end = state
-                            .config
-                            .borrow()
-                            .as_ref()
-                            .and_then(|config| config.timing().on_end.clone());
-                        if let Some(on_end) = on_end {
-                            on_end();
-                        }
+                    // Take the callback out first so the config borrow ends before it runs.
+                    let on_end = state
+                        .config
+                        .borrow()
+                        .as_ref()
+                        .and_then(|config| config.timing().on_end.clone());
+                    if let Some(on_end) = on_end {
+                        on_end();
                     }
                 });
             }

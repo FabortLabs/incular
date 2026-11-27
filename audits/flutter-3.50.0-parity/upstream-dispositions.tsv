@@ -3254,3 +3254,18 @@ packages/flutter/test/rendering/mouse_tracker_test.dart	591	should not schedule 
 packages/flutter/test/rendering/mouse_tracker_test.dart	607	should not flip out if not all mouse events are listened to	paired-match	upstream-mouse-tracker-callbacks.md
 packages/flutter/test/rendering/mouse_tracker_test.dart	635	should trigger callbacks between parents and children in correct order	paired-match	upstream-mouse-tracker-callbacks.md
 packages/flutter/test/rendering/mouse_tracker_test.dart	695	should trigger callbacks between disjoint siblings in correctly order	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	9	Animates forward when built	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	40	No initial animation when begin=null	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	63	No initial animation when begin=end	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	86	Replace tween animates new tween	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	114	Curve is respected	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	148	Duration is respected	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	180	Child is integrated into tree	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	199	running forward	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	230	running forward and then reverse with same tween instance	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	258	Changing tween while gapless tween change is in progress	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	294	Changing curve while no animation is running does not trigger animation	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	321	Setting same tween and direction does not trigger animation	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	348	Setting same tween and direction while gapless animation is in progress works	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	380	Works with nullable tweens	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/tween_animation_builder_test.dart	397	TweenAnimationBuilder does not crash at zero area	paired-match	upstream-tween-animation-builder.md
