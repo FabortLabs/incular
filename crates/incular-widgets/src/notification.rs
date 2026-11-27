@@ -105,6 +105,19 @@ impl NotificationDispatcher {
         }
     }
 
+    pub(crate) fn route(&self) -> NotificationRoute {
+        NotificationRoute(self.ancestors().collect())
+    }
+
+    fn ancestors(&self) -> impl Iterator<Item = Rc<ListenerNode>> {
+        let mut node = self.nearest.clone();
+        std::iter::from_fn(move || {
+            let current = node.take()?;
+            node = current.parent.borrow().clone();
+            Some(current)
+        })
+    }
+
     /// Bubbles `notification` to each enclosing listener with a handler for
     /// its type, innermost first, stopping at the first that returns `true`.
     /// Layout-change listeners can receive qualifying concrete notifications.
@@ -122,6 +135,20 @@ impl NotificationDispatcher {
             node = current.parent.borrow().clone();
         }
         false
+    }
+}
+
+/// The exact chain at dispatch time, before a retained nearest listener may
+/// have been moved under a different outer listener.
+pub(crate) struct NotificationRoute(Vec<Rc<ListenerNode>>);
+
+impl NotificationRoute {
+    pub(crate) fn matches(&self, dispatcher: &NotificationDispatcher) -> bool {
+        let mut ancestors = dispatcher.ancestors();
+        self.0
+            .iter()
+            .all(|bound| ancestors.next().is_some_and(|now| Rc::ptr_eq(bound, &now)))
+            && ancestors.next().is_none()
     }
 }
 

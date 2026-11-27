@@ -55,7 +55,26 @@ the jump, the original first row's identity, exactly 23 mounted even
 rows after jumping to 3025 pixels, and the presence of row 73 rather
 than rows 1 and 3 in the viewport. Visible geometry is distinguished
 from mounted cache children; this is not an accessibility assertion
-for every cache edge. Keyed moves between different parked rows and
-the standalone sliver mixin fixture remain open.
+for every cache edge. Keyed moves between different parked rows were
+checked separately below. The standalone sliver mixin fixture remains open.
 
 Forty-two focused Rust regressions passed for this delegate batch.
+
+## Reparenting an active client
+
+Pinned line 295, `AutomaticKeepAlive double 2`, is paired. A GlobalKey
+moves an active client out of a parked 400-pixel row into the visible
+last row while the scroll position stays put. The old row is released,
+the moved element retains its identity, and the destination remains
+parked after scrolling away until its request is released. Two subsequent
+descriptor moves and the presence of the original six leaves match.
+A second native variant retains a notification listener inside the
+moving subtree, so the nearest listener's identity can stay unchanged
+while its outer keep-alive ancestor changes.
+
+`AutomaticKeepAliveClient` binds a keep-alive controller to mounted
+lifetime. Controller changes apply even while parked. The client
+remembers the full notification route for its lease, releases the old
+route after reparenting, and unregisters on unmount.
+
+Fifteen focused runtime and notification regressions passed.

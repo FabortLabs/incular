@@ -135,8 +135,8 @@ pub use advanced_scrolling::{
 pub use advanced_slivers::{
     AnimatedGrid, AnimatedGridController, AnimatedItem, AnimatedItemBuilder, AnimatedItemPhase,
     AnimatedList, AnimatedListController, AnimatedRemovedItemBuilder, AutomaticKeepAlive,
-    KeepAlive, KeepAliveHandle, KeepAliveNotification, KeepAliveRegistry, SliverAnimatedGrid,
-    SliverAnimatedGridController, TreeRowAnimation, TreeSliver, TreeSliverController,
+    AutomaticKeepAliveClient, AutomaticKeepAliveClientController, KeepAlive, KeepAliveHandle,
+    KeepAliveNotification, KeepAliveRegistry, SliverAnimatedGrid, SliverAnimatedGridController, TreeRowAnimation, TreeSliver, TreeSliverController,
     TreeSliverIndentation, TreeSliverNode, TreeSliverNodeId,
 };
 pub use animated_cross_fade::{AnimatedCrossFade, AnimatedCrossFadeBuilder, CrossFadeState};

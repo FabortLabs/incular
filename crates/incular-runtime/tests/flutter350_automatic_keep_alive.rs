@@ -531,3 +531,102 @@ fn flutter_original_initial_keep_alive_survives_a_jump_past_many_rows() {
     assert!(!visible(&runtime, 3));
     assert!(visible(&runtime, 73));
 }
+
+#[test]
+fn flutter_original_global_key_moves_the_request_between_parked_rows() {
+    use incular_widgets::{
+        AutomaticKeepAliveClient, AutomaticKeepAliveClientController, GlobalKey,
+        NotificationListener, SizedBox, Stack,
+    };
+
+    for nested_listener in [false, true] {
+        let keys = [(); 6].map(|_| GlobalKey::new());
+        let clients = [(); 6].map(|_| AutomaticKeepAliveClientController::default());
+        let controller = ScrollController::new();
+        let scene = |rows: [&[usize]; 3]| {
+            let children = rows.map(|row| {
+                let children = row.iter().map(|&index| {
+                    let leaf = Semantics::new(Widget::box_(Size::new(800., 400.), Color::WHITE))
+                        .container(true)
+                        .label(format!("leaf {index}"));
+                    let client =
+                        Widget::from(AutomaticKeepAliveClient::new(clients[index].clone(), leaf));
+                    let widget = if nested_listener {
+                        NotificationListener::new(client)
+                            .on(|_: &KeepAliveNotification| false)
+                            .into()
+                    } else {
+                        client
+                    };
+                    widget.with_key(keys[index])
+                });
+                AutomaticKeepAlive::new(SizedBox::new().height(400.).child(Stack::new(children)))
+            });
+            let list = ListView::new(children)
+                .cache_extent(0.)
+                .controller(controller.clone())
+                .add_automatic_keep_alives(false);
+            Widget::from(Directionality::new(TextDirection::Ltr, list))
+        };
+        let bounds = Constraints::tight(Size::new(800., 600.));
+        let mut runtime = Runtime::new(scene([&[0, 1], &[2, 3], &[4, 5]])).unwrap();
+        let mut time = Instant::now();
+        let get = |runtime: &Runtime, index: usize| {
+            runtime.tree().element_with_key(&Key::from(keys[index]))
+        };
+        let check = |runtime: &Runtime, present: &[usize], visible: &[usize]| {
+            for index in 0..6 {
+                assert_eq!(
+                    get(runtime, index).is_some(),
+                    present.contains(&index),
+                    "mount: leaf={index}, offset={}, nested={nested_listener}",
+                    controller.offset()
+                );
+                let label = format!("leaf {index}");
+                assert_eq!(
+                    runtime
+                        .tree()
+                        .semantics()
+                        .iter()
+                        .any(|(_, node)| node.label.as_deref() == Some(label.as_str())),
+                    visible.contains(&index),
+                    "visible: leaf={index}, offset={}, nested={nested_listener}",
+                    controller.offset()
+                );
+            }
+        };
+        runtime.run_frame_at(bounds, time).unwrap();
+        check(&runtime, &[0, 1, 2, 3], &[0, 1, 2, 3]);
+        let moved = get(&runtime, 0).unwrap();
+        clients[0].set_want_keep_alive(true);
+        drag(&mut runtime, bounds, &mut time, 1, -1000.);
+        check(&runtime, &[0, 1, 2, 3, 4, 5], &[2, 3, 4, 5]);
+
+        let root = runtime.tree().root().unwrap();
+        runtime
+            .schedule_update(root, scene([&[1], &[2, 3], &[4, 5, 0]]))
+            .unwrap();
+        for _ in 0..2 {
+            time += Duration::from_millis(16);
+            runtime.run_frame_at(bounds, time).unwrap();
+        }
+        check(&runtime, &[0, 2, 3, 4, 5], &[0, 2, 3, 4, 5]);
+        assert_eq!(get(&runtime, 0), Some(moved));
+
+        drag(&mut runtime, bounds, &mut time, 2, 1000.);
+        check(&runtime, &[0, 1, 2, 3, 4, 5], &[1, 2, 3]);
+        clients[0].set_want_keep_alive(false);
+        time += Duration::from_millis(16);
+        runtime.run_frame_at(bounds, time).unwrap();
+        check(&runtime, &[1, 2, 3], &[1, 2, 3]);
+
+        runtime
+            .schedule_update(root, scene([&[1, 2], &[], &[3, 4, 5, 0]]))
+            .unwrap();
+        for _ in 0..2 {
+            time += Duration::from_millis(16);
+            runtime.run_frame_at(bounds, time).unwrap();
+        }
+        check(&runtime, &[1, 2], &[1, 2]);
+    }
+}

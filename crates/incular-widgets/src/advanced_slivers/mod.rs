@@ -26,6 +26,7 @@ use super::internal::{
 
 mod animated;
 mod keep_alive;
+mod keep_alive_client;
 mod tree_sliver;
 
 pub use animated::{
@@ -37,6 +38,7 @@ pub(crate) use keep_alive::{AutomaticKeepAliveQueue, ImplicitAutomaticKeepAlive}
 pub use keep_alive::{
     AutomaticKeepAlive, KeepAlive, KeepAliveHandle, KeepAliveNotification, KeepAliveRegistry,
 };
+pub use keep_alive_client::{AutomaticKeepAliveClient, AutomaticKeepAliveClientController};
 pub use tree_sliver::{
     TreeRowAnimation, TreeSliver, TreeSliverController, TreeSliverIndentation, TreeSliverNode,
     TreeSliverNodeId,
