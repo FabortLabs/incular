@@ -4,7 +4,7 @@ use incular_config::TextDirection;
 use incular_core::{Color, Lerp, Offset, Rect};
 use incular_image::ImageHandle;
 use incular_rendering::{
-    BlendMode, Brush, FilterQuality, GradientStops, LinearGradient, Paint, RadialGradient,
+    BlendMode, Brush, ColorFilter, FilterQuality, GradientStops, LinearGradient, Paint, RadialGradient,
     SweepGradient,
 };
 use smart_default::SmartDefault;
@@ -723,6 +723,12 @@ pub struct DecorationImage {
     pub scale: f32,
     #[builder(default = 1.0)]
     pub opacity: f32,
+    /// A color filter applied to the image and its fallback, not the box fill.
+    #[builder(default, setter(strip_option))]
+    pub color_filter: Option<ColorFilter>,
+    /// Inverts the filtered image colors while preserving alpha.
+    #[builder(default)]
+    pub invert_colors: bool,
     /// Flutter `filterQuality`, default [`FilterQuality::Medium`].
     #[builder(default = FilterQuality::Medium)]
     pub filter_quality: FilterQuality,
@@ -798,9 +804,25 @@ impl DecorationImage {
             match_text_direction: false,
             scale: 1.0,
             opacity: 1.0,
+            color_filter: None,
+            invert_colors: false,
             filter_quality: FilterQuality::Medium,
             blend: None,
         }
+    }
+
+    /// Filters the painted image without altering its bounds or source pixels.
+    #[must_use]
+    pub fn color_filter(mut self, filter: ColorFilter) -> Self {
+        self.color_filter = Some(filter);
+        self
+    }
+
+    /// Inverts the image after applying its color filter.
+    #[must_use]
+    pub fn invert_colors(mut self, invert_colors: bool) -> Self {
+        self.invert_colors = invert_colors;
+        self
     }
 
     /// Specifies an already decoded image or an independent fallback provider.

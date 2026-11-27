@@ -75,3 +75,14 @@ After delayed decode, a circle and a rounded box clip the background
 image before drawing it. A sharp rectangle adds no clip. All 20
 targeted native tests passed. These check retained display-list
 geometry, not a framebuffer golden or exact backend command types.
+
+## Decoration image color effects
+
+Four authored Flutter pixel controls passed. The retained native paint
+commands now apply the image's color filter before inversion and
+multiply the resulting alpha by its opacity once. Neither effect
+changes the box background. A source-color filter capable of painting
+transparent input is bounded to the actual image draw, not the
+allocated box. The same path handles fallback images and nine-slices.
+All 19 focused native tests passed. The native comparison evaluates
+the emitted effects and bounds without claiming a wgpu pixel readback.

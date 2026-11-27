@@ -608,6 +608,16 @@ fn paint_decoration_bitmap(
             .filter_quality(image.filter_quality)
             .into()
     };
+    let filter = if image.invert_colors {
+        Some(image.color_filter
+            .unwrap_or_else(incular_rendering::ColorFilter::identity)
+            .then(incular_rendering::ColorFilter::invert(1.0)))
+    } else {
+        image.color_filter
+    };
+    if let Some(filter) = filter.filter(|filter| !filter.is_identity()) {
+        painted = crate::ColorFiltered::new(filter, painted).into();
+    }
     if image.opacity < 1.0 {
         painted = Opacity::new(image.opacity, painted).into();
     }
