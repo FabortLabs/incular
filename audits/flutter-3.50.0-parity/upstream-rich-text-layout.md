@@ -198,3 +198,21 @@ then under an active selection area. It confirms the label really
 participates in selection and verifies a 20-pixel source advance with
 or without the rendered mark, rather than relying only on descriptor
 values. All 12 retained-paragraph tests passed.
+
+### Selection box height, width, and inline identity
+
+Pinned `rendering/paragraph_test.dart:210`, `:621`, and `:660`
+passed. The retained layout now supports tight or maximum height and
+width for selection queries. It preserves run boundaries when max
+height equalizes the boxes, uses the actual dimensions of each
+placed inline child, and does not merge adjacent placeholders.
+At width 160, the middle line gains a distinct x=130–156 extension;
+the final line and an interior partial selection do not gain one.
+The inline selection has exactly five boxes in both styles, with
+text at y=4 in tight mode and y=0 in max mode.
+
+The behavior checks use the
+[pinned engine's selection-box implementation](https://raw.githubusercontent.com/google/skia/0e5d8d1be81b22f5529a41cf4810dd89b63527ba/modules/skparagraph/src/TextLine.cpp#L1125-L1317).
+Four focused native targets passed 75 tests; the existing
+Unicode-space case stayed ignored. The explicit spacing and strut
+height styles are separate from these three registrations.

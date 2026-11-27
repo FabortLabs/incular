@@ -1163,12 +1163,26 @@ impl WidgetTree {
         id: ElementId,
         range: TextRange,
     ) -> Option<Vec<incular_text::TextPainterBox>> {
+        self.paragraph_selection_boxes_with_style(
+            id, range, incular_text::BoxHeightStyle::Tight, incular_text::BoxWidthStyle::Tight,
+        )
+    }
+
+    /// Selection boxes with caller-chosen line and run bounds.
+    #[must_use]
+    pub fn paragraph_selection_boxes_with_style(
+        &self,
+        id: ElementId,
+        range: TextRange,
+        height_style: incular_text::BoxHeightStyle,
+        width_style: incular_text::BoxWidthStyle,
+    ) -> Option<Vec<incular_text::TextPainterBox>> {
         let render = self.render_id(id)?;
         let node = self.renders.get(render.0)?;
         let RenderKind::Text { .. } = node.object.kind() else {
             return None;
         };
-        Some(node.text_layout()?.tight_selection_boxes(range))
+        Some(node.text_layout()?.boxes_for_selection(range, height_style, width_style))
     }
 
     /// Local caret origin and full height for a laid-out paragraph. Uses

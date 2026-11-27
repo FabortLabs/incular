@@ -91,6 +91,26 @@ pub enum Hyphens {
     Hidden,
 }
 
+/// Vertical bounds of selection boxes, independent of their horizontal extent.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BoxHeightStyle {
+    /// Each shaped run or inline box keeps its own height.
+    #[default]
+    Tight,
+    /// All boxes on the same visual line use the line bounds.
+    Max,
+}
+
+/// Horizontal extent of selection boxes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BoxWidthStyle {
+    /// Only the selected content receives a box.
+    #[default]
+    Tight,
+    /// Adds edge boxes on nonfinal lines to fill uncovered line width.
+    Max,
+}
+
 /// A paragraph paint operation, in the caller's drawing coordinates.
 pub enum TextPainterPaint<'a> {
     DebugBox {
@@ -145,7 +165,7 @@ pub struct TextPainterLine {
     pub height: f32,
 }
 
-/// One tight layout box of a selection, in painter coordinates.
+/// One layout box of a selection, in painter coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextPainterBox {
     pub rect: Rect,
@@ -166,10 +186,21 @@ pub struct ParagraphCaretContext<'a> {
 }
 
 impl TextLayout {
-    /// Tight visual boxes for complete clusters in the UTF-8 range. Boxes
-    /// use each run's natural height and this layout's own coordinate space.
+    /// Tight visual boxes for complete clusters in the UTF-8 range.
     #[must_use]
     pub fn tight_selection_boxes(&self, range: TextRange) -> Vec<TextPainterBox> {
+        self.boxes_for_selection(range, BoxHeightStyle::Tight, BoxWidthStyle::Tight)
+    }
+
+    /// Visual boxes in this layout's coordinates. The range selects whole
+    /// source clusters; synthetic ellipsis and soft-hyphen glyphs are excluded.
+    #[must_use]
+    pub fn boxes_for_selection(
+        &self,
+        range: TextRange,
+        height_style: BoxHeightStyle,
+        width_style: BoxWidthStyle,
+    ) -> Vec<TextPainterBox> {
         let end = range.end.min(self.retained_source_end());
         if range.start >= end {
             return Vec::new();
@@ -177,30 +208,53 @@ impl TextLayout {
         let range = TextRange::new(range.start, end);
         let mut result: Vec<TextPainterBox> = Vec::new();
         let lines = &self.lines;
+        let widest = (width_style == BoxWidthStyle::Max)
+            .then(|| lines.iter().map(|line| line.width).fold(0., f32::max));
         let first = lines.partition_point(|line| line.end <= range.start);
-        for line in lines[first..]
-            .iter()
-            .take_while(|line| line.start < range.end)
-        {
+        let mut placeholders = self.placeholders.as_ref();
+        placeholders = &placeholders[placeholders.partition_point(|child| child.line < first)..];
+        for (index, line) in lines.iter().enumerate().skip(first).take_while(|(_, line)| {
+            line.start < range.end
+        }) {
             let first_box = result.len();
+            let count = placeholders.partition_point(|child| child.line == index);
+            let (children, tail) = placeholders.split_at(count);
+            placeholders = tail;
+            let mut previous_run = None;
+            let mut previous_was_inline = false;
             for span in line.clusters.iter() {
                 let source = span.range();
-                if source.start < range.start || source.end > range.end || span.left >= span.right {
+                if source.start < range.start || source.end > range.end {
                     continue;
                 }
                 let left = span.left;
                 let right = span.right;
-                let (top, height) = self
-                    .font_run_at(source.start)
-                    .map_or((line.top, line.height), |run| {
-                        (line.baseline - run.caret_ascent, run.caret_height)
-                    });
-                let direction = if span.rtl {
-                    TextDirection::Rtl
+                let at_left = children.partition_point(|child| child.rect.origin.x < left);
+                let inline = children[at_left..]
+                    .iter()
+                    .take_while(|child| child.rect.origin.x == left)
+                    .find(|child| child.index == source.start);
+                if left >= right && !inline.is_some_and(|child| child.rect.size.height > 0.) {
+                    continue;
+                }
+                let run = self.font_run_at(source.start);
+                let (tight_top, tight_height) = if let Some(inline) = inline {
+                    (inline.rect.origin.y, inline.rect.size.height)
                 } else {
-                    TextDirection::Ltr
+                    run.map_or((line.top, line.height), |run| {
+                        (line.baseline - run.caret_ascent, run.caret_height)
+                    })
                 };
+                let (top, height) = match height_style {
+                    BoxHeightStyle::Tight => (tight_top, tight_height),
+                    BoxHeightStyle::Max => (line.top, line.height),
+                };
+                let direction = if span.rtl { TextDirection::Rtl } else { TextDirection::Ltr };
+                let run_key = run.map(|run| (run.font, run.caret_ascent, run.caret_height));
                 if result.len() > first_box
+                    && inline.is_none()
+                    && !previous_was_inline
+                    && run_key == previous_run
                     && let Some(previous) = result.last_mut()
                     && previous.direction == direction
                     && previous.rect.origin.x + previous.rect.size.width == left
@@ -216,6 +270,33 @@ impl TextLayout {
                         ),
                         direction,
                     });
+                }
+                previous_run = run_key;
+                previous_was_inline = inline.is_some();
+            }
+            if let Some(widest) = widest
+                && index + 1 < lines.len()
+                && let Some(left) = result.get(first_box).copied()
+            {
+                let right = *result.last().expect("line supplied a selection box");
+                if left.direction == TextDirection::Rtl
+                    && left.rect.origin.x > line.offset
+                    && left.rect.origin.x > 0.
+                {
+                    let mut extension = left;
+                    extension.rect.origin.x = 0.;
+                    extension.rect.size.width = left.rect.origin.x;
+                    result.insert(first_box + 1, extension);
+                }
+                let right_edge = right.rect.origin.x + right.rect.size.width;
+                if right.direction == TextDirection::Ltr
+                    && right_edge >= line.offset + line.width - line.hanging_advance
+                    && right_edge < widest
+                {
+                    let mut extension = right;
+                    extension.rect.origin.x = right_edge;
+                    extension.rect.size.width = widest - right_edge;
+                    result.push(extension);
                 }
             }
         }
@@ -1003,8 +1084,18 @@ impl TextPainter {
         &self,
         range: TextRange,
     ) -> Result<Vec<TextPainterBox>, TextPainterError> {
+        self.boxes_for_selection(range, BoxHeightStyle::Tight, BoxWidthStyle::Tight)
+    }
+
+    /// Selection boxes in paint coordinates with caller-chosen bounds.
+    pub fn boxes_for_selection(
+        &self,
+        range: TextRange,
+        height_style: BoxHeightStyle,
+        width_style: BoxWidthStyle,
+    ) -> Result<Vec<TextPainterBox>, TextPainterError> {
         let measured = self.measured()?;
-        let mut boxes = measured.shaped.tight_selection_boxes(range);
+        let mut boxes = measured.shaped.boxes_for_selection(range, height_style, width_style);
         for selection in &mut boxes {
             selection.rect.origin = selection.rect.origin + measured.paint_offset;
         }

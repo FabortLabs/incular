@@ -12,7 +12,7 @@ mod spans;
 mod style;
 mod text_painter;
 pub use text_painter::{
-    ParagraphCaretContext,
+    BoxHeightStyle, BoxWidthStyle, ParagraphCaretContext,
     Hyphens, PlaceholderDimensions, TextPainter, TextPainterBox, TextPainterError, TextPainterLine,
     TextPainterPaint, TextPainterPosition, TextPainterPositionError,
 };

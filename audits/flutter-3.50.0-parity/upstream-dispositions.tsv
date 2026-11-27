@@ -3658,3 +3658,6 @@ packages/flutter/test/rendering/paragraph_test.dart	401	RenderParagraph hyphens 
 packages/flutter/test/widgets/text_test.dart	1797	Text forwards hyphens to RenderParagraph	paired-match	upstream-rich-text-layout.md#plain-and-selectable-text-forwarding
 packages/flutter/test/widgets/text_test.dart	1808	Text defaults hyphens to Hyphens.manual	paired-match	upstream-rich-text-layout.md#plain-and-selectable-text-forwarding
 packages/flutter/test/widgets/text_test.dart	1816	Selectable Text forwards hyphens to RenderParagraph	paired-match	upstream-rich-text-layout.md#plain-and-selectable-text-forwarding
+packages/flutter/test/rendering/paragraph_test.dart	210	getBoxesForSelection test with boxHeightStyle and boxWidthStyle set to max	paired-match	upstream-rich-text-layout.md#selection-box-height-width-and-inline-identity
+packages/flutter/test/rendering/paragraph_test.dart	621	inline widgets test	paired-match	upstream-rich-text-layout.md#selection-box-height-width-and-inline-identity
+packages/flutter/test/rendering/paragraph_test.dart	660	getBoxesForSelection with boxHeightStyle for inline widgets	paired-match	upstream-rich-text-layout.md#selection-box-height-width-and-inline-identity

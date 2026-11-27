@@ -414,3 +414,92 @@ fn ordinary_and_selectable_text_forward_the_discretionary_hyphen_policy() {
         );
     }
 }
+
+#[test]
+fn max_selection_boxes_preserve_shaped_runs_and_add_only_the_intermediate_line_extension() {
+    use incular_text::{BoxHeightStyle, BoxWidthStyle};
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let span = TextSpan::new("First ")
+        .style(style.font_size(10.))
+        .child(TextSpan::new("smallsecond ").style(TextStyle::new().font_size(8.)))
+        .child(TextSpan::new("third fourth fifth"));
+    let (tree, key) = mount(span, engine, 160., false);
+    let element = tree.element_with_key(&key.into()).unwrap();
+    let boxes = |range, width| {
+        tree.paragraph_selection_boxes_with_style(element, range, BoxHeightStyle::Max, width)
+            .unwrap()
+            .into_iter()
+            .map(|box_| {
+                assert_eq!(box_.direction, TextDirection::Ltr);
+                edges(box_.rect)
+            })
+            .collect::<Vec<_>>()
+    };
+    let range = TextRange::new(0, 36);
+    assert_eq!(
+        boxes(range, BoxWidthStyle::Max),
+        [
+            [0., 0., 60., 10.],
+            [60., 0., 156., 10.],
+            [0., 10., 130., 20.],
+            [130., 10., 156., 20.],
+            [0., 20., 50., 30.],
+        ],
+    );
+    assert_eq!(boxes(range, BoxWidthStyle::Tight).len(), 4);
+    assert_eq!(
+        boxes(TextRange::new(18, 21), BoxWidthStyle::Max),
+        [[0., 10., 30., 20.]],
+    );
+    assert!(boxes(TextRange::collapsed(18), BoxWidthStyle::Max).is_empty());
+}
+
+#[test]
+fn inline_selection_keeps_adjacent_placeholders_separate_with_tight_or_max_height() {
+    use incular_text::{BoxHeightStyle, BoxWidthStyle};
+    use incular_widgets::{RichParagraph, SizedBox, WidgetSpan};
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let span = TextSpan::new("a")
+        .style(style.font_size(10.))
+        .child(WidgetSpan::new(1))
+        .child(WidgetSpan::new(2))
+        .child(TextSpan::new("a"))
+        .child(WidgetSpan::new(3));
+    let source_end = span.plain_text().len();
+    let key = GlobalKey::new();
+    let content = RichParagraph::new(RichText::new(span))
+        .child(1, SizedBox::square(14.))
+        .child(2, SizedBox::square(14.))
+        .child(3, SizedBox::square(14.));
+    let node = Widget::from(content).with_key(key);
+    let mut tree = WidgetTree::with_text_engine(engine);
+    tree.mount(Directionality::new(TextDirection::Ltr, node).into())
+        .unwrap();
+    tree.layout(Constraints::loose(Size::new(100., 100.))).unwrap();
+    let field = tree.element_with_key(&key.into()).unwrap();
+    let range = TextRange::new(0, source_end);
+    for (style, text_y) in [(BoxHeightStyle::Tight, 4.), (BoxHeightStyle::Max, 0.)] {
+        let boxes = tree
+            .paragraph_selection_boxes_with_style(field, range, style, BoxWidthStyle::Tight)
+            .unwrap();
+        assert_eq!(boxes.len(), 5, "{boxes:?}");
+        for (actual, expected) in boxes.into_iter().zip([
+            [0., text_y, 10., 14.],
+            [10., 0., 24., 14.],
+            [24., 0., 38., 14.],
+            [38., text_y, 48., 14.],
+            [48., 0., 62., 14.],
+        ]) {
+            assert_eq!(actual.direction, TextDirection::Ltr);
+            for (got, want) in edges(actual.rect).into_iter().zip(expected) {
+                close(got, want);
+            }
+        }
+    }
+}
