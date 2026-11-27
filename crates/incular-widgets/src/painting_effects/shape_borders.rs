@@ -2181,6 +2181,50 @@ pub struct LinearBorderEdge {
     pub alignment: f32,
 }
 
+impl std::fmt::Display for LinearBorderEdge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("LinearBorderEdge(")?;
+        if self.size != 1. {
+            write!(f, "size: {}", linear_border_number(self.size))?;
+        }
+        if self.alignment != 0. {
+            if self.size != 1. {
+                f.write_str(", ")?;
+            }
+            write!(f, "alignment: {}", linear_border_number(self.alignment))?;
+        }
+        f.write_str(")")
+    }
+}
+
+fn linear_border_number(value: f32) -> String {
+    if value.is_nan() {
+        return "NaN".to_owned();
+    }
+    if value.is_infinite() {
+        return if value.is_sign_negative() {
+            "-Infinity"
+        } else {
+            "Infinity"
+        }
+        .to_owned();
+    }
+    if value != 0. && !(1e-6..1e21).contains(&value.abs()) {
+        let value = format!("{value:e}");
+        let (mantissa, exponent) = value.split_once('e').expect("scientific notation");
+        return if exponent.starts_with('-') {
+            value
+        } else {
+            format!("{mantissa}e+{exponent}")
+        };
+    }
+    let mut decimal = value.to_string();
+    if !decimal.contains('.') {
+        decimal.push_str(".0");
+    }
+    decimal
+}
+
 impl Default for LinearBorderEdge {
     fn default() -> Self {
         Self::new(1.0, 0.0)
@@ -2241,6 +2285,26 @@ pub struct LinearBorder {
     pub end: Option<LinearBorderEdge>,
     pub top: Option<LinearBorderEdge>,
     pub bottom: Option<LinearBorderEdge>,
+}
+
+impl std::fmt::Display for LinearBorder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if *self == Self::NONE {
+            return f.write_str("LinearBorder.none");
+        }
+        write!(f, "LinearBorder(side: {}", self.side)?;
+        for (name, edge) in [
+            ("start", self.start),
+            ("end", self.end),
+            ("top", self.top),
+            ("bottom", self.bottom),
+        ] {
+            if let Some(edge) = edge {
+                write!(f, ", {name}: {edge}")?;
+            }
+        }
+        f.write_str(")")
+    }
 }
 
 impl LinearBorder {

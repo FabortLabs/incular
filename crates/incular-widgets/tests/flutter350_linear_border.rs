@@ -207,3 +207,39 @@ fn selected_solid_zero_width_edge_stays_a_hairline() {
 fn an_invalid_edge_size_is_not_silently_painted() {
     let _ = LinearBorderEdge::new(-0.1, 0.);
 }
+
+#[test]
+fn linear_border_diagnostics_list_only_current_sides_and_keep_zero_lengths() {
+    let side = BorderSide::new(Color::rgba(0x12, 0x34, 0x56, 0xff), 10., incular_widgets::BorderStyle::Solid);
+    let side_label = "BorderSide(color: Color(alpha: 1.0000, red: 0.0706, green: 0.2039, blue: 0.3373, colorSpace: ColorSpace.sRGB), width: 10.0)";
+    assert_eq!(
+        LinearBorderEdge::new(0.5, -0.5).to_string(),
+        "LinearBorderEdge(size: 0.5, alignment: -0.5)"
+    );
+    assert_eq!(
+        LinearBorderEdge::default().to_string(),
+        "LinearBorderEdge()"
+    );
+    assert_eq!(LinearBorder::NONE.to_string(), "LinearBorder.none");
+    assert_eq!(
+        LinearBorder {
+            side,
+            ..LinearBorder::NONE
+        }
+        .to_string(),
+        format!("LinearBorder(side: {side_label})")
+    );
+    let border = LinearBorder {
+        side,
+        start: Some(LinearBorderEdge::new(0., -0.75)),
+        end: Some(LinearBorderEdge::new(0.25, -0.5)),
+        top: Some(LinearBorderEdge::new(0.5, 0.5)),
+        bottom: Some(LinearBorderEdge::new(0.75, 0.75)),
+    };
+    assert_eq!(
+        border.to_string(),
+        format!(
+            "LinearBorder(side: {side_label}, start: LinearBorderEdge(size: 0.0, alignment: -0.75), end: LinearBorderEdge(size: 0.25, alignment: -0.5), top: LinearBorderEdge(size: 0.5, alignment: 0.5), bottom: LinearBorderEdge(size: 0.75, alignment: 0.75))"
+        ),
+    );
+}

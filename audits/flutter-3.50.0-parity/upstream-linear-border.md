@@ -20,3 +20,13 @@ a selected solid zero-width side is a hairline, and invalid relative
 edge sizes assert in debug. Eight paired/extra Rust controls and 30
 neighbor paint and outline checks passed. These path-containment tests
 are geometry/command comparisons, not raster-image comparisons.
+
+## Diagnostic string
+
+The pinned original `LinearBorderEdge, LinearBorder toString()` passed on
+Linux. The formatter distinguishes omitted edges from explicitly configured
+zero-length edges, omits default edge fields, and lists start, end, top and
+bottom in Flutter's order. It uses the same BorderSide diagnostic string as
+other outlines. All nine focused LinearBorder tests passed, including
+existing RTL geometry, zero-width hairline and no-ink checks. Four nearby
+Stadium morph tests remained green. The original skips browser builds.
