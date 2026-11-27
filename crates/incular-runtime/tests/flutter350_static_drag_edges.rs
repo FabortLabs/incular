@@ -151,3 +151,57 @@ fn captured_drag_interprets_outside_points_in_the_rotated_paragraph_coordinates(
     }
     assert_eq!(controller.selected_text(), "ABCD\nEFGH");
 }
+
+#[test]
+fn captured_drag_uses_rtl_logical_edges_instead_of_ltr_corners() {
+    let Some(path) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    const SOURCE: &str = "אבגד\nהוזח";
+    const FONT: &str = "Pinned FlutterTest for right-to-left drag";
+    incular_text::register_application_font_as(FONT, std::fs::read(path).unwrap());
+    let label = Key::from("RTL text");
+    for forward in [true, false] {
+        let controller = SelectionAreaController::new();
+        let text = Widget::from(
+            Text::new(SOURCE).style(TextStyle::new().font_size(10.).font_family(FONT)),
+        )
+        .with_key(label.clone());
+        let mut runtime = Runtime::new(
+            Directionality::new(
+                TextDirection::Rtl,
+                Widget::selection_area(controller.clone(), Center::new(text).into()),
+            )
+            .into(),
+        )
+        .unwrap();
+        runtime
+            .run_frame(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        let label = runtime.tree().element_with_key(&label).unwrap();
+        let rect = runtime.tree().element_bounds(label).unwrap();
+        let right = rect.origin.x + rect.size.width;
+        let start = if forward {
+            Offset::new(right - 1., rect.origin.y + 5.)
+        } else {
+            Offset::new(rect.origin.x + 1., rect.origin.y + rect.size.height - 5.)
+        };
+        let goal = Offset::new(
+            if forward {
+                right + 30.
+            } else {
+                rect.origin.x - 30.
+            },
+            start.y,
+        );
+        assert!(runtime.tree().selectable_text_at(goal).is_none());
+        for (phase, position) in [
+            (PointerPhase::Down, start),
+            (PointerPhase::Move, goal),
+            (PointerPhase::Up, goal),
+        ] {
+            let _ = runtime.handle_input(InputEvent::Pointer { phase, position });
+        }
+        assert_eq!(controller.selected_text(), SOURCE, "forward={forward}");
+    }
+}

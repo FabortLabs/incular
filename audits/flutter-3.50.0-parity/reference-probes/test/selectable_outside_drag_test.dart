@@ -118,4 +118,55 @@ void main() {
     await tester.pump();
     expect(selected, 'ABCD\nEFGH');
   });
+
+  for (final forward in [true, false]) {
+    testWidgets(
+      'RTL off-label drag selects the logical text edge (forward: $forward)',
+      (tester) async {
+        const hebrew = 'אבגד\nהוזח';
+        final focus = FocusNode();
+        addTearDown(focus.dispose);
+        String? selected;
+        await tester.pumpWidget(
+          WidgetsApp(
+            color: const Color(0xff303030),
+            pageRouteBuilder:
+                <T>(RouteSettings settings, WidgetBuilder builder) =>
+                    PageRouteBuilder<T>(
+                      settings: settings,
+                      pageBuilder: (context, _, _) => builder(context),
+                    ),
+            home: Directionality(
+              textDirection: TextDirection.rtl,
+              child: SelectableRegion(
+                focusNode: focus,
+                selectionControls: emptyTextSelectionControls,
+                onSelectionChanged: (content) => selected = content?.plainText,
+                child: const Center(
+                  child: Text(hebrew, key: first, style: style),
+                ),
+              ),
+            ),
+          ),
+        );
+        final text = tester.getRect(find.byKey(first));
+        final start = forward
+            ? text.topRight + const Offset(-1, 5)
+            : text.bottomLeft + const Offset(1, -5);
+        final goal = Offset(
+          forward ? text.right + 30 : text.left - 30,
+          start.dy,
+        );
+        final mouse = await tester.startGesture(
+          start,
+          kind: PointerDeviceKind.mouse,
+        );
+        await mouse.moveTo(goal);
+        await tester.pump();
+        await mouse.up();
+        await tester.pump();
+        expect(selected, hebrew);
+      },
+    );
+  }
 }

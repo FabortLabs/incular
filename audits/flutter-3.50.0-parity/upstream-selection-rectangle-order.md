@@ -40,3 +40,11 @@ Both engines map the same local start and outside offset into the
 window and select through the final row. The native test confirms
 the outside point has no ordinary selectable hit, so the captured
 drag, not hit testing the label again, delivers the edge.
+
+Two more pinned authored cases exercise a Hebrew paragraph. Dragging
+off the first row after starting at its visually right-hand edge
+extends to the logical end; the reverse drag from the visually
+left-hand edge of the last row extends to the logical beginning.
+Both native directions select the original UTF-8 text with its line
+break and match the reference. The corresponding unit geometry also
+checks all eight outside regions in RTL.
