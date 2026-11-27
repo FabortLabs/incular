@@ -5,7 +5,8 @@ usage() {
   printf '%s\n' 'Usage: bash run-reference-linux.sh probe FILE_test.dart' \
     '       bash run-reference-linux.sh upstream LIBRARY/FILE_test.dart "Exact full test name" [...]' \
     '       bash run-reference-linux.sh tooling WIDGET_PREVIEW_FILE_test.dart "Exact full test name" [...]' \
-    '       bash run-reference-linux.sh scaffold WIDGET_PREVIEW_FILE_test.dart "Exact full test name" [...]' >&2
+    '       bash run-reference-linux.sh scaffold WIDGET_PREVIEW_FILE_test.dart "Exact full test name" [...]' \
+    '       bash run-reference-linux.sh scaffold-probe FILE_test.dart "Exact full test name" [...]' >&2
   exit 2
 }
 
@@ -28,7 +29,7 @@ case "$mode" in
     [[ "$test_file" =~ ^[a-z0-9_]+_test\.dart$ ]] || usage
     fixture="$audit/reference-probes/test/$test_file"
     ;;
-  upstream|tooling|scaffold)
+  upstream|tooling|scaffold|scaffold-probe)
     (( $# >= 1 && $# <= 5 )) || usage
     if [[ "$mode" == tooling ]]; then
       [[ "$test_file" =~ ^([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
@@ -44,10 +45,14 @@ case "$mode" in
           fixture="$tool_root/test/commands.shard/hermetic/widget_preview/$test_file"
           ;;
       esac
-    elif [[ "$mode" == scaffold ]]; then
+    elif [[ "$mode" == scaffold || "$mode" == scaffold-probe ]]; then
       [[ "$test_file" =~ ^[a-z0-9_]+_test\.dart$ ]] || usage
       scaffold_root="$flutter_root/dev/integration_tests/widget_preview_scaffold"
-      fixture="$scaffold_root/test/$test_file"
+      if [[ "$mode" == scaffold ]]; then
+        fixture="$scaffold_root/test/$test_file"
+      else
+        fixture="$audit/reference-probes/scaffold/$test_file"
+      fi
     else
       [[ "$test_file" =~ ^(animation|foundation|gestures|painting|physics|rendering|scheduler|semantics|services|widget_previews|widgets)/([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
       fixture="$flutter_root/packages/flutter/test/$test_file"
@@ -77,8 +82,11 @@ if [[ "$mode" == probe ]]; then
   cp -- "$audit/reference-probes/pubspec.yaml" "$scratch/pubspec.yaml"
   cp -- "$fixture" "$scratch/test/$test_file"
   fixture="test/$test_file"
-elif [[ "$mode" == scaffold ]]; then
+elif [[ "$mode" == scaffold || "$mode" == scaffold-probe ]]; then
   cp -R -- "$scaffold_root/lib" "$scaffold_root/test" "$scratch/"
+  if [[ "$mode" == scaffold-probe ]]; then
+    cp -- "$fixture" "$scratch/test/$test_file"
+  fi
   # Widget tests do not need the CLI's separate Dart process or its pinned
   # host-native dependencies. Fixtures importing CLI internals are not
   # runnable through this isolated widget-test package.
@@ -160,7 +168,7 @@ else
   fi
 
   test_args=(--no-pub --concurrency=1 --reporter expanded)
-  if [[ "$mode" == upstream || "$mode" == scaffold ]]; then
+  if [[ "$mode" == upstream || "$mode" == scaffold || "$mode" == scaffold-probe ]]; then
     test_args+=(--name "$pattern")
   fi
   "$flutter" test "${test_args[@]}" "$fixture" 2>&1 | tee result.log

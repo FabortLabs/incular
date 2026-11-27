@@ -5,10 +5,14 @@
 
 use std::rc::Rc;
 
-use incular_config::{Brightness, Locale, LocaleResolver, LocalizationCatalog};
-use incular_core::Size;
+use incular_config::{Alignment, Axis, Brightness, Locale, LocaleResolver, LocalizationCatalog};
+use incular_core::{Offset, Size};
 
-use crate::{BuildContext, Builder, Localizations, MediaQuery, SizedBox, Widget};
+use crate::custom_layout::{ChildSizedLayout, CustomLayoutDelegate};
+use crate::{
+    BuildContext, Builder, Localizations, MediaQuery, ScrollController, SingleChildScrollView,
+    SizedBox, Transform, TransformationController, Widget, WidgetKind,
+};
 
 /// Wraps an existing preview widget in additional scaffolding.
 pub type WidgetWrapper = Rc<dyn Fn(Widget) -> Widget>;
@@ -338,6 +342,83 @@ impl Preview {
                 return child.clone();
             };
             Localizations::with_shared_catalog(locale, catalog.clone(), child.clone()).into()
+        })
+        .into()
+    }
+}
+
+/// Displays a preview in two independent scroll axes. Zoom changes the
+/// child's painted size and the scroll extents, but does not reflow its
+/// layout. A construction error bypasses both scrolling and scaling.
+#[derive(Clone)]
+pub struct ZoomablePreviewArea {
+    child: Widget,
+    controller: TransformationController,
+    construction_error: bool,
+    horizontal: Option<ScrollController>,
+    vertical: Option<ScrollController>,
+}
+
+impl ZoomablePreviewArea {
+    #[must_use]
+    pub fn new(child: impl Into<Widget>, controller: TransformationController) -> Self {
+        Self {
+            child: child.into(),
+            controller,
+            construction_error: false,
+            horizontal: None,
+            vertical: None,
+        }
+    }
+
+    #[must_use]
+    pub fn error_thrown_during_tree_construction(mut self, value: bool) -> Self {
+        self.construction_error = value;
+        self
+    }
+
+    #[must_use]
+    pub fn horizontal_controller(mut self, controller: ScrollController) -> Self {
+        self.horizontal = Some(controller);
+        self
+    }
+
+    #[must_use]
+    pub fn vertical_controller(mut self, controller: ScrollController) -> Self {
+        self.vertical = Some(controller);
+        self
+    }
+}
+
+impl From<ZoomablePreviewArea> for Widget {
+    fn from(area: ZoomablePreviewArea) -> Self {
+        if area.construction_error {
+            return area.child;
+        }
+        let horizontal = area.horizontal.unwrap_or_default();
+        let vertical = area.vertical.unwrap_or_default();
+        Builder::new(move |_| {
+            let scale = area.controller.value().coefficients()[0] as f32;
+            let scale = if scale.is_finite() && scale > 0. { scale } else { 1. };
+            let layout = ChildSizedLayout::new(move |_, size| (
+                Size::new(size.width * scale, size.height * scale),
+                Offset::ZERO,
+            ));
+            let sized = Widget::from_kind(WidgetKind::CustomLayout {
+                delegate: CustomLayoutDelegate::ChildSized(layout),
+                children: vec![
+                    Transform::scale(scale, area.child.clone())
+                        .alignment(Alignment::TOP_LEFT)
+                        .into(),
+                ],
+            });
+            let horizontal_scroll = SingleChildScrollView::new(sized)
+                .scroll_direction(Axis::Horizontal)
+                .controller(horizontal.clone());
+            SingleChildScrollView::new(horizontal_scroll)
+                .scroll_direction(Axis::Vertical)
+                .controller(vertical.clone())
+                .into()
         })
         .into()
     }

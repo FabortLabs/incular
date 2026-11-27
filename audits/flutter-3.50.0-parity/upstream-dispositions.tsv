@@ -3526,3 +3526,5 @@ dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	22	displays in
 dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	50	Zoom in and Zoom out linearly	paired-match	upstream-preview-zoom.md
 dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	84	Reset zoom works correctly	paired-match	upstream-preview-zoom.md
 dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	106	Slider updates scale correctly	paired-match	upstream-preview-zoom.md
+dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	139	renders scaled layout wrapper when no tree construction error	paired-match	upstream-preview-zoom.md#two-axis-preview-viewport-and-construction-errors
+dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	161	renders unscaled child directly when tree construction error occurred	paired-match	upstream-preview-zoom.md#two-axis-preview-viewport-and-construction-errors
