@@ -9,6 +9,7 @@ mod effects;
 mod geometry;
 mod glyphs;
 mod gradients;
+mod image_filter_config;
 mod paint;
 mod paths;
 mod rsuperellipse;
@@ -41,6 +42,7 @@ pub use gradients::{
     RadialGradient, Shader, SweepGradient, TileMode, linear_gradient_t, radial_gradient_t,
     sample_gradient_stops, sweep_gradient_t, two_point_conical_gradient_t,
 };
+pub use image_filter_config::{ImageFilterConfig, ImageFilterContext, SampledBlur};
 pub use paint::{
     Border, Decoration, FillRule, LineCap, LineJoin, Paint, PaintStyle, Shadow, Stroke,
 };

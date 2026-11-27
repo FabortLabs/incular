@@ -3505,6 +3505,12 @@ fn image_filter_generation(filter: &ImageFilter) -> u64 {
                 ImageFilter::Blur(blur) => {
                     u64::from(blur.sigma_x.to_bits()) ^ u64::from(blur.sigma_y.to_bits()) << 32
                 }
+                ImageFilter::SampledBlur(_) => {
+                    use std::hash::{DefaultHasher, Hash, Hasher};
+                    let mut hasher = DefaultHasher::new();
+                    stage.hash(&mut hasher);
+                    hasher.finish()
+                }
                 ImageFilter::Matrix(matrix) => transform_generation(*matrix),
                 ImageFilter::Dilate { radius_x, radius_y } => {
                     1 ^ u64::from(radius_x.to_bits()) ^ u64::from(radius_y.to_bits()) << 32

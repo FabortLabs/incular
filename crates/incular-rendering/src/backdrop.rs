@@ -47,7 +47,7 @@ pub fn backdrop_image_filter_executable(
     match filter.stages().into_iter().find(|stage| {
         matches!(
             stage,
-            ImageFilter::Dilate { .. } | ImageFilter::Erode { .. }
+            ImageFilter::Dilate { .. } | ImageFilter::Erode { .. } | ImageFilter::SampledBlur(_)
         )
     }) {
         Some(stage) => Err(UnsupportedImageFilter {

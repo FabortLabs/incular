@@ -386,7 +386,9 @@ impl ImageFiltered {
         if let Some(stage) = filter.stages().into_iter().find(|stage| {
             matches!(
                 stage,
-                ImageFilter::Dilate { .. } | ImageFilter::Erode { .. }
+                ImageFilter::Dilate { .. }
+                    | ImageFilter::Erode { .. }
+                    | ImageFilter::SampledBlur(_)
             )
         }) {
             return Err(UnsupportedImageFilter {
@@ -465,6 +467,7 @@ impl From<ImageFiltered> for Widget {
                     // `new` refuses these and flattens compositions.
                     ImageFilter::Dilate { .. }
                     | ImageFilter::Erode { .. }
+                    | ImageFilter::SampledBlur(_)
                     | ImageFilter::Compose { .. } => child,
                 });
         }

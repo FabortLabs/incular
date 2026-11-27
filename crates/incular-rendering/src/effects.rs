@@ -904,6 +904,8 @@ fn nonseparable_blend_rgb(mode: BlendMode, source: [f32; 3], destination: [f32; 
 pub enum ImageFilter {
     /// `ImageFilter.blur`: a separable Gaussian blur.
     Blur(GaussianBlur),
+    /// A blur resolved with explicit edge sampling or local bounds.
+    SampledBlur(crate::SampledBlur),
     /// `ImageFilter.matrix`: the input transformed by an affine matrix in
     /// the filtered layer's coordinates.
     Matrix(incular_core::Transform),
@@ -1008,6 +1010,7 @@ impl std::fmt::Display for UnsupportedImageFilter {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let form = match self.filter {
             ImageFilter::Blur(_) => "blur",
+            ImageFilter::SampledBlur(_) => "configured sampling blur",
             ImageFilter::Matrix(_) => "matrix",
             ImageFilter::Dilate { .. } => "dilate",
             ImageFilter::Erode { .. } => "erode",

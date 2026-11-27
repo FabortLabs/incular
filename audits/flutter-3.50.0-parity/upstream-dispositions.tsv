@@ -3715,3 +3715,12 @@ packages/flutter/test/widgets/editable_text_test.dart	10894	Repeatedly receiving
 packages/flutter/test/widgets/editable_text_test.dart	10104	getLocalRectForCaret does not throw when it sees an infinite point	partial-match	upstream-editable-boundary-conditions.md
 packages/flutter/test/widgets/editable_text_test.dart	10130	obscured multiline fields throw an exception	paired-match	upstream-editable-boundary-conditions.md
 packages/flutter/test/widgets/editable_text_test.dart	18915	EditableText does not crash at zero area	paired-match	upstream-editable-boundary-conditions.md
+packages/flutter/test/rendering/image_filter_config_test.dart	13	ImageFilterContext control	paired-match	upstream-image-filter-config.md
+packages/flutter/test/rendering/image_filter_config_test.dart	18	ImageFilterConfig.new == and hashCode	paired-match	upstream-image-filter-config.md
+packages/flutter/test/rendering/image_filter_config_test.dart	36	ImageFilterConfig.new toString and debugShortDescription	paired-match	upstream-image-filter-config.md
+packages/flutter/test/rendering/image_filter_config_test.dart	44	ImageFilterConfig.new get filter	paired-match	upstream-image-filter-config.md
+packages/flutter/test/rendering/image_filter_config_test.dart	51	ImageFilterConfig.blur == and hashCode	paired-match	upstream-image-filter-config.md
+packages/flutter/test/rendering/image_filter_config_test.dart	65	ImageFilterConfig.blur toString and debugShortDescription	paired-match	upstream-image-filter-config.md
+packages/flutter/test/rendering/image_filter_config_test.dart	75	ImageFilterConfig.compose == and hashCode	paired-match	upstream-image-filter-config.md
+packages/flutter/test/rendering/image_filter_config_test.dart	89	ImageFilterConfig.compose toString and debugShortDescription	paired-match	upstream-image-filter-config.md
+packages/flutter/test/rendering/image_filter_config_test.dart	103	ImageFilter resolves correctly	paired-match	upstream-image-filter-config.md
