@@ -3183,9 +3183,33 @@ impl Runtime {
         self.focus_next(true)
     }
 
+    /// Moves forward from the most recently focused child of the given node's
+    /// nearest mounted scope. A fresh scope starts at its first target.
+    pub fn next_focus_from(&mut self, node: &incular_widgets::FocusNode) -> bool {
+        self.focus_from(node, false)
+    }
+
+    /// Moves backward within the given node's mounted scope. A fresh scope
+    /// starts at its last target.
+    pub fn previous_focus_from(&mut self, node: &incular_widgets::FocusNode) -> bool {
+        self.focus_from(node, true)
+    }
+
+    fn focus_from(&mut self, node: &incular_widgets::FocusNode, reverse: bool) -> bool {
+        self.adopt_external_focus_change();
+        self.directional_focus_history = None;
+        let step = self.tree.resolve_node_sequential_focus(node, self.focused, reverse);
+        self.apply_sequential_focus(step, reverse)
+    }
+
     fn focus_next(&mut self, reverse: bool) -> bool {
         self.directional_focus_history = None;
-        match self.tree.resolve_sequential_focus(self.focused, reverse) {
+        let step = self.tree.resolve_sequential_focus(self.focused, reverse);
+        self.apply_sequential_focus(step, reverse)
+    }
+
+    fn apply_sequential_focus(&mut self, step: SequentialFocusResolution, reverse: bool) -> bool {
+        match step {
             SequentialFocusResolution::Move(next) => {
                 let previous = self.focused;
                 self.set_traversal_focus(next, reverse, false);

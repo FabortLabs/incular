@@ -761,6 +761,53 @@ impl WidgetTree {
         focused: Option<ElementId>,
         reverse: bool,
     ) -> SequentialFocusResolution {
+        let scope = focused.and_then(|id| self.scope_of_focus_boundary(id));
+        self.resolve_sequential_focus_in_scope(focused, scope, reverse)
+    }
+
+    fn mounted_focus_element(&self, node: &incular_gestures::FocusNode) -> Option<ElementId> {
+        self.hosted_focus_nodes.as_ref()?.iter().find_map(|(&id, binding)| {
+            (binding.node() == node).then_some(id)
+        })
+    }
+
+    /// Resolves a traversal invoked from a mounted node's scope, using its
+    /// remembered child rather than treating the invoking node as a stop.
+    #[doc(hidden)]
+    pub fn resolve_node_sequential_focus(
+        &self,
+        origin: &incular_gestures::FocusNode,
+        active: Option<ElementId>,
+        reverse: bool,
+    ) -> SequentialFocusResolution {
+        let Some(origin) = self.mounted_focus_element(origin) else {
+            return SequentialFocusResolution::Unchanged;
+        };
+        let scope = self.scope_of_focus_boundary(origin);
+        let anchor = if let Some(scope) = &scope {
+            scope.focused_child().and_then(|node| self.mounted_focus_element(&node))
+        } else {
+            // The implicit root has no stored ScopeNode. Its current child is
+            // the outermost explicit scope (or the focused unscoped leaf).
+            active.and_then(|id| {
+                let Some(mut outer) = self.scope_of_focus_boundary(id) else {
+                    return Some(id);
+                };
+                while let Some(parent) = outer.scope_focus_node().host_enclosing_scope() {
+                    outer = parent;
+                }
+                self.mounted_focus_element(&outer.scope_focus_node())
+            })
+        };
+        self.resolve_sequential_focus_in_scope(anchor, scope, reverse)
+    }
+
+    fn resolve_sequential_focus_in_scope(
+        &self,
+        focused: Option<ElementId>,
+        mut scope: Option<incular_gestures::FocusScopeNode>,
+        reverse: bool,
+    ) -> SequentialFocusResolution {
         use SequentialFocusResolution::{LeaveView, Move, Unchanged};
         use incular_gestures::TraversalEdgeBehavior;
 
@@ -780,11 +827,10 @@ impl WidgetTree {
             }
             let Some(scope) = child else { return id };
             let anchor = scope.scope_focus_node();
-            let Some(owner) = self.hosted_focus_nodes.as_ref().and_then(|hosted| {
-                hosted.iter().find_map(|(&id, binding)| {
-                    (binding.node() == &anchor && self.can_request_focus(id)).then_some(id)
-                })
-            }) else {
+            let Some(owner) = self
+                .mounted_focus_element(&anchor)
+                .filter(|&id| self.can_request_focus(id))
+            else {
                 return id;
             };
             let retained = self.restore_scope_history(owner, scope, None);
@@ -799,7 +845,6 @@ impl WidgetTree {
             }
         };
 
-        let mut scope = focused.and_then(|id| self.scope_of_focus_boundary(id));
         let mut departing_scope = None;
         loop {
             let local: Vec<_> = ordered
@@ -814,17 +859,22 @@ impl WidgetTree {
             let Some(&first) = local.first() else {
                 return Unchanged;
             };
+            let anchor_scope = focused
+                .and_then(|id| self.focus_boundary_at(id))
+                .and_then(incular_gestures::FocusNode::scope_owner);
             let anchor = if let Some(departing) = &departing_scope {
-                local
-                    .iter()
-                    .rposition(|id| self.is_in_focus_scope(*id, departing))
-            } else if focused.is_some_and(|id| {
-                self.focus_boundary_at(id)
-                    .is_some_and(|node| node.scope_owner().is_some())
-            }) {
-                // A focused scope with no active child enters from its first
-                // eligible target rather than treating the scope as a stop.
-                None
+                local.iter().rposition(|id| self.is_in_focus_scope(*id, departing))
+            } else if let Some(anchor_scope) = &anchor_scope {
+                // Enter an explicitly focused scope at its first stop. When
+                // that scope is the remembered child of the requested scope,
+                // step past its entire branch instead of re-entering it.
+                if scope.as_ref() == Some(anchor_scope) {
+                    None
+                } else {
+                    local
+                        .iter()
+                        .rposition(|id| self.is_in_focus_scope(*id, anchor_scope))
+                }
             } else {
                 focused.and_then(|id| local.iter().position(|candidate| *candidate == id))
             };

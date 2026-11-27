@@ -3049,3 +3049,7 @@ packages/flutter/test/widgets/editable_text_cursor_test.dart	1269	Caret with a c
 packages/flutter/test/widgets/editable_text_cursor_test.dart	1312	Caret with a cursorHeight bigger than font size is vertically centered on non-Apple platforms	paired-match	upstream-editable-cursor-visibility.md#vertical-placement-of-explicit-caret-heights
 packages/flutter/test/widgets/editable_text_cursor_test.dart	1175	getLocalRectForCaret with empty text	paired-match	upstream-editable-cursor-visibility.md#local-caret-geometry-and-trailing-whitespace
 packages/flutter/test/widgets/editable_text_cursor_test.dart	1224	Caret center space test	paired-match	upstream-editable-cursor-visibility.md#local-caret-geometry-and-trailing-whitespace
+packages/flutter/test/widgets/focus_traversal_test.dart	20	Find the initial focus if there is none yet.	paired-match	upstream-node-sequential-focus.md
+packages/flutter/test/widgets/focus_traversal_test.dart	61	Find the initial focus if there is none yet and traversing backwards.	paired-match	upstream-node-sequential-focus.md
+packages/flutter/test/widgets/focus_traversal_test.dart	108	focus traversal should work case 1	paired-match	upstream-node-sequential-focus.md
+packages/flutter/test/widgets/focus_traversal_test.dart	158	focus traversal should work case 2	paired-match	upstream-node-sequential-focus.md
