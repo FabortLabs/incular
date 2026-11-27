@@ -1270,6 +1270,40 @@ impl WidgetTree {
             .approximate_box_paint_clip(render.object.kind(), render.size)
     }
 
+    /// Reads the stack-local placement of an actual mounted box. Transparent
+    /// wrappers like Positioned and an ordinary Builder do not hide its
+    /// parent data. An unrelated descendant or an unlaid-out box returns None.
+    #[must_use]
+    pub fn stack_parent_data(&self, child: ElementId) -> Option<super::StackParentData> {
+        let mut slot = self.render_id(child)?;
+        loop {
+            let row = self.renders.get(slot.0)?;
+            let parent_id = row.parent?;
+            let parent = self.renders.get(parent_id.0)?;
+            match parent.object.kind() {
+                RenderKind::Stack { .. } | RenderKind::IndexedStack { .. } => break,
+                RenderKind::Positioned { .. } if parent.children.as_slice() == [slot] => {}
+                _ if self.forwards_container_parent_data(parent_id)
+                    && parent.children.as_slice() == [slot] => {}
+                _ => return None,
+            }
+            slot = parent_id;
+        }
+        let row = self.renders.get(slot.0)?;
+        row.constraints?;
+        let mut source = slot;
+        while self.forwards_container_parent_data(source) {
+            let [next] = self.renders.get(source.0)?.children.as_slice() else {
+                break;
+            };
+            source = *next;
+        }
+        Some(super::StackParentData {
+            positioning: self.stack_positioning_on(source).unwrap_or_default(),
+            offset: row.offset,
+        })
+    }
+
     /// Describes all retained IndexedStack children in their logical
     /// order. Only the selected child is shown as an ordinary sparse node;
     /// a null selection marks every child as offstage without unmounting.

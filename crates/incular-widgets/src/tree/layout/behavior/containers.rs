@@ -822,31 +822,14 @@ impl WidgetTree {
     ) -> Result<RenderObjectId, TreeError> {
         let mut current = child;
         loop {
-            match *self
-                .render_live(current, "retained render must remain live")
-                .object
-                .kind()
-            {
-                RenderKind::AnimationTicker { .. } => {}
-                RenderKind::LayoutBuilder => {
-                    let constraint_dependent =
-                        self.element_for_render(current).is_none_or(|element| {
-                            matches!(
-                                self.element_live(element, "builder element must remain live")
-                                    .widget
-                                    .kind(),
-                                WidgetKind::LayoutBuilder {
-                                    constraint_dependent: true,
-                                    ..
-                                }
-                            )
-                        });
-                    if constraint_dependent {
-                        return Ok(current);
-                    }
-                    self.materialize_layout_builder(current, constraints)?;
-                }
-                _ => return Ok(current),
+            if !self.forwards_container_parent_data(current) {
+                return Ok(current);
+            }
+            if matches!(
+                self.render_live(current, "retained render must remain live").object.kind(),
+                RenderKind::LayoutBuilder
+            ) {
+                self.materialize_layout_builder(current, constraints)?;
             }
             let [next] = self
                 .render_live(current, "retained render must remain live")
@@ -855,6 +838,34 @@ impl WidgetTree {
                 return Ok(current);
             };
             current = next;
+        }
+    }
+
+    pub(in crate::tree) fn forwards_container_parent_data(&self, render: RenderObjectId) -> bool {
+        let Some(node) = self.renders.get(render.0) else {
+            return false;
+        };
+        match node.object.kind() {
+            RenderKind::AnimationTicker { .. } => true,
+            RenderKind::LayoutBuilder => self.element_for_render(render).is_some_and(|element| {
+                matches!(
+                    self.element_live(element, "builder element remains live").widget.kind(),
+                    WidgetKind::LayoutBuilder { constraint_dependent: false, .. }
+                )
+            }),
+            _ => false,
+        }
+    }
+
+    pub(in crate::tree) fn stack_positioning_on(
+        &self,
+        id: RenderObjectId,
+    ) -> Option<incular_layout::Positioned> {
+        match *self.renders.get(id.0)?.object.kind() {
+            RenderKind::Positioned { left, top, right, bottom, width, height } => {
+                Some(incular_layout::Positioned { left, top, right, bottom, width, height })
+            }
+            _ => None,
         }
     }
 
@@ -872,33 +883,7 @@ impl WidgetTree {
         constraints: Constraints,
     ) -> Result<Option<incular_layout::Positioned>, TreeError> {
         let render = self.parent_data_render(child, constraints)?;
-        Ok(
-            match *self
-                .render_live(render, "retained render must remain live")
-                .object
-                .kind()
-            {
-                RenderKind::Positioned {
-                    left,
-                    top,
-                    right,
-                    bottom,
-                    width,
-                    height,
-                } => {
-                    let position = incular_layout::Positioned {
-                        left,
-                        top,
-                        right,
-                        bottom,
-                        width,
-                        height,
-                    };
-                    position.is_positioned().then_some(position)
-                }
-                _ => None,
-            },
-        )
+        Ok(self.stack_positioning_on(render).filter(|position| position.is_positioned()))
     }
 
     /// `RenderCustomSingleChildLayoutBox`, `RenderCustomMultiChildLayoutBox`

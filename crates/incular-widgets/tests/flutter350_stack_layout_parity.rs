@@ -61,6 +61,13 @@ fn position_data(t: &WidgetTree) -> [Option<f32>; 6] {
     [*left, *top, *right, *bottom, *width, *height]
 }
 
+fn box_parent_data(tree: &WidgetTree) -> ([Option<f32>; 6], Offset) {
+    let child = tree.element_with_key(&Key::Value(CHILD)).unwrap();
+    let data = tree.stack_parent_data(child).unwrap();
+    let incular_layout::Positioned { left, top, right, bottom, width, height } = data.positioning;
+    ([left, top, right, bottom, width, height], data.offset)
+}
+
 #[test]
 fn empty_stack_accepts_normal_and_loose_ancestors() {
     let empty = || Stack::new(Vec::<Widget>::new());
@@ -78,9 +85,11 @@ fn retained_position_switch_clears_old_insets_and_moves_child() {
     };
     let mut t = mount(build(true));
     assert_eq!(position_data(&t), [Some(10.), None, None, None, None, None]);
+    assert_eq!(box_parent_data(&t), (position_data(&t), Offset::new(10., 0.)));
     assert_eq!(bounds(&t, CHILD).origin, Offset::new(10., 0.));
     update(&mut t, build(false));
     assert_eq!(position_data(&t), [None, None, Some(10.), None, None, None]);
+    assert_eq!(box_parent_data(&t), (position_data(&t), Offset::new(780., 0.)));
     assert_eq!(bounds(&t, CHILD).origin, Offset::new(780., 0.));
 }
 #[test]
@@ -90,9 +99,11 @@ fn removing_positioned_parent_returns_child_to_stack_alignment() {
         POSITIONER,
     )])));
     assert_eq!(position_data(&t), [Some(10.), None, None, None, None, None]);
+    assert_eq!(box_parent_data(&t), (position_data(&t), Offset::new(10., 0.)));
     assert_eq!(bounds(&t, CHILD).origin, Offset::new(10., 0.));
     update(&mut t, scene(Stack::new([fixed(CHILD, 10., 10.)])));
     assert!(t.element_with_key(&Key::Value(POSITIONER)).is_none());
+    assert_eq!(box_parent_data(&t), ([None; 6], Offset::ZERO));
     assert_eq!(bounds(&t, CHILD).origin, Offset::ZERO);
 }
 #[test]
@@ -111,6 +122,7 @@ fn sized_positioned_child_honors_both_explicit_dimensions_and_edges() {
         position_data(&t),
         [Some(10.), None, None, None, Some(11.), Some(12.)]
     );
+    assert_eq!(box_parent_data(&t), (position_data(&t), Offset::new(10., 0.)));
     assert_eq!(
         bounds(&t, CHILD),
         Rect::from_origin_size(Offset::new(10., 0.), Size::new(11., 12.))
@@ -120,6 +132,7 @@ fn sized_positioned_child_honors_both_explicit_dimensions_and_edges() {
         position_data(&t),
         [None, None, Some(10.), None, Some(11.), Some(12.)]
     );
+    assert_eq!(box_parent_data(&t), (position_data(&t), Offset::new(779., 0.)));
     assert_eq!(
         bounds(&t, CHILD),
         Rect::from_origin_size(Offset::new(779., 0.), Size::new(11., 12.))
@@ -351,4 +364,29 @@ fn approximate_clip_respects_none_without_replacing_the_overflowing_stack() {
         assert_eq!(t.children(id).unwrap().len(), 1);
         assert_eq!(t.describe_approximate_paint_clip(render), (clip != Clip::None).then_some(expected));
     }
+}
+
+#[test]
+fn transparent_builder_forwards_stack_data_but_layout_box_does_not() {
+    use incular_widgets::Builder;
+
+    let child = || fixed(CHILD, 10., 10.);
+    let scene = || Stack::new([
+        Builder::new(move |_| Positioned::new(child()).left(15.).top(25.).into()),
+    ]).text_direction(TextDirection::Ltr);
+    let mut tree = WidgetTree::new();
+    tree.mount(scene().into()).unwrap();
+    tree.layout(Constraints::tight(DIM)).unwrap();
+    assert_eq!(
+        box_parent_data(&tree),
+        ([Some(15.), Some(25.), None, None, None, None], Offset::new(15., 25.))
+    );
+    let child = tree.element_with_key(&Key::Value(CHILD)).unwrap();
+    assert_eq!(tree.element_bounds(child).unwrap().origin, Offset::new(15., 25.));
+
+    let nested = Stack::new([
+        SizedBox::new().width(20.).height(20.).child(fixed(CHILD, 10., 10.)),
+    ]).text_direction(TextDirection::Ltr);
+    let tree = mount(nested);
+    assert!(tree.stack_parent_data(tree.element_with_key(&Key::Value(CHILD)).unwrap()).is_none());
 }

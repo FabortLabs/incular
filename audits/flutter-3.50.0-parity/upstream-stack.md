@@ -111,3 +111,15 @@ Clip.none, and an in-bounds child retaining its full width. This
 does not change the wgpu paint or hit-test paths. The exact upstream
 case and fifteen focused Rust checks passed; the preexisting
 missing-Directionality assertion remains a separate documented gap.
+
+### Parent data on the child's retained box
+
+Pinned `:33`, `:76`, and `:203` now pair. The same render metadata
+used by layout is readable from a mounted stack child. The six optional
+fields change from left to right without stale values, removing the
+Positioned wrapper returns six unset fields, and an explicit 11 by 12
+child reports the expected stack-local offsets (10,0) and (779,0).
+An authored control checks that an ordinary Builder forwards the data
+but a separate layout box does not. The query allocates no render state,
+does not rebuild the child, and shares the wrapper rule used by layout.
+All three exact references and 21 focused Rust checks passed.

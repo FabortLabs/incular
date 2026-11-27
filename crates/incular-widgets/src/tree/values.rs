@@ -141,6 +141,14 @@ pub enum ButtonState {
     Focused,
     Pressed,
 }
+/// The resolved parent data of a laid-out Stack or IndexedStack child.
+/// The offset is local to the stack, not to the window or a paint transform.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StackParentData {
+    pub positioning: incular_layout::Positioned,
+    pub offset: incular_core::Offset,
+}
+
 /// A widget identity. `Value` and `String` keys are local: they match only
 /// among the children of one parent. A `Global` key is unique in the whole
 /// tree, so its element (state, controllers and render object) moves with

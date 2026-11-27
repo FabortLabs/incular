@@ -532,11 +532,11 @@ packages/flutter/test/widgets/indexed_stack_test.dart	389	IndexedStack asserts w
 packages/flutter/test/widgets/indexed_stack_test.dart	400	IndexedStack asserts when index is not in children range	paired-match	upstream-indexed-stack.md#current-focus-positioning-and-selection-validation
 packages/flutter/test/widgets/stack_test.dart	20	Can construct an empty Stack	paired-match	upstream-stack.md
 packages/flutter/test/widgets/stack_test.dart	24	Can construct an empty Centered Stack	paired-match	upstream-stack.md
-packages/flutter/test/widgets/stack_test.dart	33	Can change position data	partial-match	upstream-stack.md
-packages/flutter/test/widgets/stack_test.dart	76	Can remove parent data	partial-match	upstream-stack.md
+packages/flutter/test/widgets/stack_test.dart	33	Can change position data	paired-match	upstream-stack.md#parent-data-on-the-childs-retained-box
+packages/flutter/test/widgets/stack_test.dart	76	Can remove parent data	paired-match	upstream-stack.md#parent-data-on-the-childs-retained-box
 packages/flutter/test/widgets/stack_test.dart	111	Can align non-positioned children (LTR)	paired-match	upstream-stack.md#directional-positioning-and-empty-parent-data
 packages/flutter/test/widgets/stack_test.dart	157	Can align non-positioned children (RTL)	paired-match	upstream-stack.md#directional-positioning-and-empty-parent-data
-packages/flutter/test/widgets/stack_test.dart	203	Can set width and height	partial-match	upstream-stack.md
+packages/flutter/test/widgets/stack_test.dart	203	Can set width and height	paired-match	upstream-stack.md#parent-data-on-the-childs-retained-box
 packages/flutter/test/widgets/stack_test.dart	269	Can set and update clipBehavior	paired-match	upstream-stack.md#painted-clip-coverage
 packages/flutter/test/widgets/stack_test.dart	278	Clip.none is respected by describeApproximateClip	paired-match	upstream-stack.md#approximate-clip-and-accessibility
 packages/flutter/test/widgets/stack_test.dart	308	Stack clip test	paired-match	upstream-stack.md

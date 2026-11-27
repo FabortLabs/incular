@@ -455,7 +455,7 @@ pub use transient::{
     TransientPlacement, TransientPlacementInput, TransientPlacementMode, TransientPlacementResult,
     TransientSide, TransientSurfaceId, TransientSurfaceSnapshot, place_transient,
 };
-pub use tree::{FloatingCaretGeometry, TextEditingCallback, TextEditingCallbackError};
+pub use tree::{FloatingCaretGeometry, StackParentData, TextEditingCallback, TextEditingCallbackError};
 pub use tree::{
     AffineController, AffineParts, BoxFit, BuildContext, ColorFiltered, ConstraintOverflowDiagnostic,
     DecoratedBox, EditableText, FadeTransition, FlexOverflowDiagnostic, GlobalKey, Icon, Image,
