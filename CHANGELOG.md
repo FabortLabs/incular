@@ -28,6 +28,9 @@ a version and date when publishing.
 
 ### Added
 
+- Flutter-compatible embedders can acknowledge services initialization and
+  request host-managed deferred assets by component name.
+
 - Flutter-compatible embedders can install `FlutterTextInputBinding` at
   startup to acknowledge text-input messages before an editor attaches.
 

@@ -3,6 +3,10 @@
 
 use std::{collections::BTreeMap, fmt, str::FromStr};
 
+use crate::flutter_platform_channel::{
+    FlutterPlatformChannelError, FlutterPlatformMessenger, invoke_optional_json,
+};
+
 /// Application lifecycle in Flutter's state-machine order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
@@ -109,6 +113,21 @@ pub struct AppLifecycleBinding {
 }
 
 impl AppLifecycleBinding {
+    /// Announces that the application's Flutter-compatible host binding is
+    /// ready. Call during embedder initialization, not on window focus.
+    pub async fn initialization_complete<M: FlutterPlatformMessenger>(
+        &self,
+        messenger: &mut M,
+    ) -> Result<(), FlutterPlatformChannelError<M::Error>> {
+        invoke_optional_json(
+            messenger,
+            "flutter/platform",
+            "System.initializationComplete",
+            serde_json::Value::Null,
+        )
+        .await
+    }
+
     pub const CHANNEL: &str = "flutter/lifecycle";
 
     #[must_use]

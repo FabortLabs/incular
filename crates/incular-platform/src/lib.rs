@@ -24,6 +24,7 @@ mod display;
 mod file_dialog;
 mod haptic_feedback;
 mod flutter_app_exit;
+mod deferred_component;
 mod flutter_keyboard_state;
 mod flutter_lifecycle;
 mod flutter_scribble;
@@ -127,6 +128,7 @@ pub use flutter_inbound_messenger::{
 };
 pub use flutter_floating_cursor::{FloatingCursorDragState, FlutterFloatingCursorPoint, FlutterFloatingCursorPointError};
 pub use flutter_scribble::{FlutterScribbleClient, FlutterScribbleError, FlutterScribbleRegistry};
+pub use deferred_component::{DeferredComponent, DeferredComponentError};
 pub use flutter_event_channel::{
     FlutterEventOperation, FlutterEventSubscription, FlutterEventTask, FlutterJsonBroadcast,
     FlutterJsonEventChannel, FlutterJsonStreamEvent,
