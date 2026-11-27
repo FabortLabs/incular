@@ -388,3 +388,229 @@ fn clip_defaults_to_hard_edge_and_all_four_modes_update_the_same_retained_layout
         assert_eq!(find_layout(&tree), (render, clip));
     }
 }
+
+#[test]
+fn unstable_child_is_followed_each_frame_then_size_animates_again() {
+    use incular_widgets::{AnimatedContainer, Center, internal::Key};
+    let key = Key::from("animated size following an animated child");
+    let build = |side, duration| {
+        Center::new(
+            Widget::from(AnimatedSize::new(
+                Duration::from_millis(200),
+                AnimatedContainer::new(Duration::from_millis(duration))
+                    .width(side)
+                    .height(side),
+            ))
+            .with_key(key.clone()),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(100., 100)).unwrap();
+    let epoch = Instant::now();
+    let frame = |tree: &mut WidgetTree, millis| {
+        tree.update_compositor(epoch + Duration::from_millis(millis))
+            .unwrap();
+        tree.layout(Constraints::tight(LARGE)).unwrap();
+        tree.element_bounds(tree.element_with_key(&key).unwrap())
+            .unwrap()
+            .size
+    };
+    assert_eq!(frame(&mut tree, 0), Size::new(100., 100.));
+    tree.update(root, build(200., 100)).unwrap();
+    assert_eq!(frame(&mut tree, 1_000), Size::new(100., 100.));
+    frame(&mut tree, 1_000);
+    frame(&mut tree, 1_001);
+    assert_eq!(frame(&mut tree, 1_050), Size::new(150., 150.));
+    assert_eq!(frame(&mut tree, 1_100), Size::new(200., 200.));
+    assert_eq!(frame(&mut tree, 1_150), Size::new(200., 200.));
+
+    tree.update(root, build(100., 1)).unwrap();
+    assert_eq!(frame(&mut tree, 1_200), Size::new(200., 200.));
+    frame(&mut tree, 1_200);
+    frame(&mut tree, 1_201);
+    frame(&mut tree, 1_201);
+    assert_eq!(frame(&mut tree, 1_301), Size::new(150., 150.));
+    assert_eq!(frame(&mut tree, 1_401), Size::new(100., 100.));
+}
+
+#[test]
+fn reparenting_while_growing_preserves_retained_element_and_in_flight_size() {
+    use incular_widgets::{Center, Directionality, GlobalKey, Row, internal::Key};
+
+    let subtree = GlobalKey::new();
+    let size_key = Key::from("reparented animated size");
+    let a = Key::from("first row child");
+    let b = Key::from("second row child");
+
+    let build = |side: f32, first: bool| -> Widget {
+        let animated = Widget::from(AnimatedSize::new(
+            Duration::from_secs(1),
+            SizedBox::new().width(side).height(side),
+        ))
+        .with_key(size_key.clone());
+        let wrapper = Widget::from(Center::new(
+            SizedBox::square(200.).child(Center::new(animated)),
+        ))
+        .with_key(subtree);
+        let left = SizedBox::new().height(200.);
+        let right = SizedBox::new().height(200.);
+        let (left, right) = if first {
+            (left.child(wrapper), right)
+        } else {
+            (left, right.child(wrapper))
+        };
+        Directionality::new(
+            TextDirection::Ltr,
+            Row::new([
+                Widget::from(left).with_key(a.clone()),
+                Widget::from(right).with_key(b.clone()),
+            ]),
+        )
+        .into()
+    };
+
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(100., true)).unwrap();
+    let epoch = Instant::now();
+    let frame = |tree: &mut WidgetTree, millis| {
+        tree.update_compositor(epoch + Duration::from_millis(millis))
+            .unwrap();
+        tree.layout(Constraints::tight(LARGE)).unwrap();
+        tree.element_bounds(tree.element_with_key(&size_key).unwrap())
+            .unwrap()
+            .size
+    };
+    assert_eq!(frame(&mut tree, 0), Size::new(100., 100.));
+    let retained = tree.element_with_key(&Key::Global(subtree)).unwrap();
+    let size_element = tree.element_with_key(&size_key).unwrap();
+    let original_parent = tree.parent(retained);
+
+    tree.update(root, build(150., true)).unwrap();
+    assert_eq!(frame(&mut tree, 1_000), Size::new(100., 100.));
+    tree.update(root, build(150., false)).unwrap();
+    assert_eq!(frame(&mut tree, 1_000), Size::new(100., 100.));
+    assert_eq!(tree.element_with_key(&Key::Global(subtree)), Some(retained));
+    assert_eq!(tree.element_with_key(&size_key), Some(size_element));
+    assert_ne!(tree.parent(retained), original_parent);
+    assert_eq!(frame(&mut tree, 1_500), Size::new(125., 125.));
+    assert_eq!(frame(&mut tree, 2_001), Size::new(150., 150.));
+}
+
+fn animated_size_controller(
+    tree: &WidgetTree,
+    root: ElementId,
+) -> incular_animation::AnimationController {
+    use incular_widgets::internal::RenderKind;
+
+    let mut pending = vec![root];
+    while let Some(element) = pending.pop() {
+        if let Some(RenderKind::AnimationTicker { controller, .. }) = tree
+            .render_id(element)
+            .and_then(|render| tree.render_object_kind(render))
+        {
+            return controller.clone();
+        }
+        pending.extend(tree.children(element).unwrap_or_default());
+    }
+    panic!("the AnimatedSize ticker was not found");
+}
+
+#[test]
+fn unmount_disposes_the_controller_even_if_debug_and_descriptor_handles_survive() {
+    use incular_widgets::Center;
+
+    let description = Widget::from(AnimatedSize::new(
+        Duration::from_millis(200),
+        SizedBox::square(100.),
+    ));
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(Center::new(description.clone()).into()).unwrap();
+    let constraints = Constraints::tight(LARGE);
+    tree.layout(constraints).unwrap();
+    let controller = animated_size_controller(&tree, root);
+    assert!(!controller.is_disposed());
+
+    tree.update(root, Center::new(SizedBox::shrink()).into())
+        .unwrap();
+    tree.layout(constraints).unwrap();
+    assert!(controller.is_disposed());
+    let error = controller.try_dispose().unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("dispose() called more than once")
+    );
+
+    tree.update(root, Center::new(description).into()).unwrap();
+    tree.layout(constraints).unwrap();
+    assert!(!animated_size_controller(&tree, root).is_disposed());
+}
+
+#[test]
+fn a_descriptor_cloned_for_multiple_mounts_does_not_share_size_controllers() {
+    use incular_widgets::Center;
+
+    let description = Widget::from(AnimatedSize::new(
+        Duration::from_millis(200),
+        SizedBox::square(100.),
+    ));
+    let mut first = WidgetTree::new();
+    let mut second = WidgetTree::new();
+    let root1 = first
+        .mount(Center::new(description.clone()).into())
+        .unwrap();
+    let root2 = second.mount(Center::new(description).into()).unwrap();
+    let constraints = Constraints::tight(LARGE);
+    first.layout(constraints).unwrap();
+    second.layout(constraints).unwrap();
+    let first_controller = animated_size_controller(&first, root1);
+    let second_controller = animated_size_controller(&second, root2);
+    first
+        .update(root1, Center::new(SizedBox::shrink()).into())
+        .unwrap();
+    first.layout(constraints).unwrap();
+    assert!(first_controller.is_disposed());
+    assert!(!second_controller.is_disposed());
+    assert_eq!(second.element_bounds(root2).unwrap().size, LARGE);
+}
+
+#[test]
+fn width_only_size_change_ticks_on_the_existing_controller() {
+    let build = |width| {
+        AnimatedSize::new(
+            Duration::from_millis(200),
+            SizedBox::new().width(width).height(100.),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(100.)).unwrap();
+    let epoch = Instant::now();
+    let frame = |tree: &mut WidgetTree, millis| {
+        tree.update_compositor(epoch + Duration::from_millis(millis))
+            .unwrap();
+        tree.layout(Constraints::loose(LARGE)).unwrap();
+        tree.element_bounds(root).unwrap().size
+    };
+    assert_eq!(frame(&mut tree, 0), Size::new(100., 100.));
+    tree.update(root, build(200.)).unwrap();
+    frame(&mut tree, 1_000);
+    frame(&mut tree, 1_000);
+    assert_eq!(frame(&mut tree, 1_100), Size::new(150., 100.));
+}
+
+#[test]
+fn dropping_the_tree_also_disposes_the_mounted_controller() {
+    let description = Widget::from(AnimatedSize::new(
+        Duration::from_millis(200),
+        SizedBox::square(100.),
+    ));
+    let controller = {
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(description.clone()).unwrap();
+        tree.layout(Constraints::loose(LARGE)).unwrap();
+        animated_size_controller(&tree, root)
+    };
+    assert!(controller.is_disposed());
+}

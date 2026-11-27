@@ -44,7 +44,7 @@ impl AnimatedSize {
     }
 
     /// Flutter's `reverseDuration`: the duration of a reverse run of the
-    /// size controller, `duration` when unset. Flutter 3.41.7 only runs the
+    /// size controller, `duration` when unset. Flutter 3.50 only runs the
     /// size animation forward, so this is stored on the controller for
     /// source compatibility and has no effect on today's size changes.
     #[must_use]
@@ -116,8 +116,24 @@ struct SizeState {
 }
 
 impl RetainedState for SizeState {
+    const DISPOSE_ON_UNMOUNT: bool = true;
+
+    fn dispose(&self) {
+        // An inspector can keep a controller handle alive after unmount.
+        // Dispose the shared controller rather than only dropping our handle.
+        let _ = self.controller.try_dispose();
+    }
+
     fn rebind_revision(&self, revision: Rc<Cell<u64>>) {
         *self.revision.borrow_mut() = revision;
+    }
+}
+
+impl Drop for SizeState {
+    fn drop(&mut self) {
+        // Also release the controller when the entire tree is dropped
+        // without reconciling its elements out one at a time.
+        self.dispose();
     }
 }
 
@@ -265,7 +281,7 @@ impl SizeState {
 impl From<AnimatedSize> for Widget {
     fn from(value: AnimatedSize) -> Self {
         let config = Rc::new(value);
-        Widget::retained_builder(
+        Widget::mount_scoped_layout_builder(
             {
                 let config = config.clone();
                 move |revision| {
