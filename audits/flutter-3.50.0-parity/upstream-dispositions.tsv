@@ -1007,7 +1007,7 @@ packages/flutter/test/rendering/baseline_test.dart	56	RenderBaseline different b
 packages/flutter/test/widgets/overflow_box_test.dart	37	'contentSuperLong=$contentSuperLong'	paired-match	upstream-overflow-box-fit.md
 packages/flutter/test/widgets/overflow_box_test.dart	68	no child	paired-match	upstream-overflow-box-fit.md
 packages/flutter/test/widgets/overflow_box_test.dart	93	OverflowBox implements debugFillProperties	partial-match	upstream-overflow-box-fit.md
-packages/flutter/test/rendering/positioned_box_test.dart	50	RenderPositionedBox width and height factors	partial-match	upstream-shifted-box-baselines.md
+packages/flutter/test/rendering/positioned_box_test.dart	50	RenderPositionedBox width and height factors	paired-match	upstream-shifted-box-baselines.md#align-intrinsic-factors
 packages/flutter/test/rendering/shifted_box_test.dart	57	computeDryBaseline works with center alignment	partial-match	upstream-shifted-box-baselines.md
 packages/flutter/test/rendering/shifted_box_test.dart	71	computeDryBaseline works with top-left alignment	partial-match	upstream-shifted-box-baselines.md
 packages/flutter/test/rendering/shifted_box_test.dart	84	computeDryBaseline works with bottom-right alignment	partial-match	upstream-shifted-box-baselines.md

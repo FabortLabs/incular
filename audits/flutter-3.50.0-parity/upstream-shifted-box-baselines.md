@@ -21,5 +21,22 @@ assert only the actual box sizes. Their Flutter originals and retained
 Rust checks agree on 200×200 when factors are absent and on
 100×200 → 200×100 → 100×100 when changing the specified axes. These
 are full behavioral comparisons, even though the Rust tests use its
-public Widget façade. :50 verifies actual layout at
-100×0 → 50×50 → 200×200; the direct intrinsic methods remain open.
+public Widget façade. :50 also verifies actual layout at
+100×0 → 50×50 → 200×200. Its direct intrinsic methods were paired
+in the follow-up below.
+
+
+## Align intrinsic factors
+
+The pinned positioned box at :50 now pairs. All four dry intrinsic
+queries update across the same mounted render box and match
+100×0 → 50×50 → 100×100. Without a factor the real bounded box
+still expands to 200×200, not its intrinsic size.
+
+Two additional reference probes compare a child whose own intrinsic
+extent differs from its laid-out size. Align forwards the original
+cross-axis input, then applies its factor only to the child's answer.
+Mounted IntrinsicWidth formerly chose 27.5 px from the actual child
+instead of 50 px from its reported size; it now pairs with Flutter,
+as does the 100 px height case. These probes add no original count.
+All 26 selected native tests passed.

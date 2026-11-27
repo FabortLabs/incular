@@ -45,6 +45,27 @@ impl WidgetTree {
                     self.probe_intrinsic_extent(grandchild, dimension, probe)
                 });
             }
+            RenderKind::Align {
+                width_factor,
+                height_factor,
+                ..
+            } => {
+                let factor = if dimension.is_horizontal() {
+                    width_factor
+                } else {
+                    height_factor
+                }
+                .unwrap_or(1.);
+                let Some(&grandchild) = node.children.first() else {
+                    return Ok(0.);
+                };
+                // Lay out the Align only after sizing its slot: the actual
+                // size of the child isn't necessarily its intrinsic size.
+                return with_recursive_tree_stack(|| {
+                    self.probe_intrinsic_extent(grandchild, dimension, probe)
+                })
+                .map(|extent| extent * factor);
+            }
             RenderKind::Padding { padding } => {
                 let horizontal = padding.horizontal();
                 let vertical = padding.vertical();

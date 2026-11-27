@@ -67,6 +67,20 @@ impl WidgetTree {
             RenderKind::Box { desired, .. } | RenderKind::Shape { desired, .. } => {
                 Some(axis.main_extent(*desired))
             }
+            RenderKind::Align {
+                width_factor,
+                height_factor,
+                ..
+            } => {
+                let factor = if axis.is_horizontal() {
+                    width_factor
+                } else {
+                    height_factor
+                };
+                // The other axis is unchanged; only the child's reported
+                // intrinsic result is scaled.
+                Some(child_extent(cross)? * factor.unwrap_or(1.))
+            }
             RenderKind::Padding { padding } => {
                 let (main_insets, cross_insets) = if axis.is_horizontal() {
                     (padding.horizontal(), padding.vertical())

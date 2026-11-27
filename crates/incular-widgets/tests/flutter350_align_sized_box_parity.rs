@@ -187,3 +187,94 @@ fn sized_box_constructor_fields_have_their_expected_public_layout_effects() {
         assert_eq!(bounds(&mount(Center::new(keyed(w)), VIEW)).size, expected);
     }
 }
+
+#[test]
+fn positioned_box_reports_factor_scaled_intrinsics_across_retained_updates() {
+    let scene = |factors| {
+        let mut align = Align::new(Alignment::CENTER, SizedBox::square(100.));
+        if let Some((width, height)) = factors {
+            align = align.width_factor(width).height_factor(height);
+        }
+        keyed(align)
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(Some((1., 0.)))).unwrap();
+    let constraints = Constraints::at_most(200., 200.);
+    let element = tree.element_with_key(&PROBE).unwrap();
+    let render = tree.render_id(element).unwrap();
+    for (factors, intrinsic, laid_out) in [
+        (Some((1., 0.)), Size::new(100., 0.), Size::new(100., 0.)),
+        (Some((0.5, 0.5)), Size::new(50., 50.), Size::new(50., 50.)),
+        (None, Size::new(100., 100.), Size::new(200., 200.)),
+    ] {
+        tree.update(root, scene(factors)).unwrap();
+        tree.layout(constraints).unwrap();
+        assert_eq!(tree.element_with_key(&PROBE), Some(element));
+        assert_eq!(tree.render_id(element), Some(render));
+        assert_eq!(bounds(&tree).size, laid_out);
+        assert_eq!(
+            tree.min_intrinsic_width(render, 200.),
+            Some(intrinsic.width)
+        );
+        assert_eq!(
+            tree.max_intrinsic_width(render, 200.),
+            Some(intrinsic.width)
+        );
+        assert_eq!(
+            tree.min_intrinsic_height(render, 200.),
+            Some(intrinsic.height)
+        );
+        assert_eq!(
+            tree.max_intrinsic_height(render, 200.),
+            Some(intrinsic.height)
+        );
+    }
+}
+
+#[test]
+fn align_passes_the_original_cross_extent_to_its_child_before_scaling() {
+    use incular_widgets::AspectRatio;
+    let tree = mount(
+        Center::new(keyed(
+            Align::new(Alignment::CENTER, AspectRatio::new(2., SizedBox::shrink()))
+                .width_factor(0.5)
+                .height_factor(3.),
+        )),
+        VIEW,
+    );
+    let render = tree
+        .render_id(tree.element_with_key(&PROBE).unwrap())
+        .unwrap();
+    let before = bounds(&tree);
+    // Width uses the child's 2x aspect ratio followed by the parent's 0.5x
+    // width factor. Height uses the reciprocal and the parent's 3x factor.
+    for cross in [10., 20.] {
+        assert_eq!(tree.min_intrinsic_width(render, cross), Some(cross));
+        assert_eq!(tree.max_intrinsic_width(render, cross), Some(cross));
+        assert_eq!(tree.min_intrinsic_height(render, cross), Some(cross * 1.5));
+        assert_eq!(tree.max_intrinsic_height(render, cross), Some(cross * 1.5));
+    }
+    assert_eq!(bounds(&tree), before);
+}
+
+#[test]
+fn intrinsic_parents_look_through_align_to_the_childs_reported_extent() {
+    use incular_widgets::{IntrinsicHeight, IntrinsicWidth, MaxIntrinsicSize};
+    let alignment = || {
+        keyed(
+            Align::new(
+                Alignment::CENTER,
+                MaxIntrinsicSize::new(
+                    Size::new(100., 200.),
+                    SizedBox::from_size(Size::new(55., 110.)),
+                ),
+            )
+            .width_factor(0.5)
+            .height_factor(0.5),
+        )
+    };
+    let intrinsic_width = mount(Center::new(IntrinsicWidth::new(alignment())), VIEW);
+    assert_eq!(bounds(&intrinsic_width).size, Size::new(50., 55.));
+    let intrinsic_height = mount(Center::new(IntrinsicHeight::new(alignment())), VIEW);
+    assert_eq!(bounds(&intrinsic_height).size, Size::new(27.5, 100.));
+}
