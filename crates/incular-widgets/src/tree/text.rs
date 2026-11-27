@@ -50,6 +50,20 @@ pub(super) fn editable_caret_margin(field: &TextFieldRender) -> f32 {
     field.cursor_width + 1.
 }
 
+/// Multiline editing scrolls vertically, so its horizontally wrapped
+/// paragraph keeps the caret inside the content width even when the text
+/// shaper reports advances for unbroken trailing spaces past that edge.
+/// Single-line caret positions remain scrollable on the horizontal axis.
+pub(super) fn editable_caret_x(field: &TextFieldRender, width: f32, x: f32) -> f32 {
+    if field.multiline {
+        let limit = (width - field.content_padding.horizontal() - editable_caret_margin(field))
+            .max(0.);
+        x.clamp(0., limit)
+    } else {
+        x
+    }
+}
+
 /// Includes the invisible one-pixel gap and caret width in the scrollable
 /// content, even if the glyphs alone fit.
 pub(super) fn editable_horizontal_max_scroll(
@@ -1964,8 +1978,9 @@ impl WidgetTree {
         ))
     }
 
-    /// The caret rectangle of the byte `offset` in global coordinates, from
-    /// the field's last layout (Flutter `RenderEditable.getLocalRectForCaret`).
+    /// The one-pixel caret position marker in global coordinates, used for
+    /// selection handles and position-to-point interaction. To obtain the
+    /// full painted caret, use [Self::editable_local_caret_rect].
     pub fn text_field_offset_rect(
         &self,
         id: ElementId,
@@ -1975,6 +1990,21 @@ impl WidgetTree {
         self.text_field_offset_rect_with(id, offset, affinity, EditableCaret::Visual)
     }
 
+    /// The painted caret rectangle in local coordinates, including its
+    /// configured width, height, and the editor's current scroll. The byte
+    /// offset and affinity identify a position in the last laid-out text.
+    /// Unlike a selection marker, this reports the caret's real thickness.
+    #[must_use]
+    pub fn editable_local_caret_rect(
+        &self,
+        id: ElementId,
+        offset: usize,
+        affinity: incular_text::TextAffinity,
+    ) -> Option<Rect> {
+        self.text_field_local_offset_rect_with(id, offset, affinity, EditableCaret::ImeAnchor)
+            .map(|(_, rect)| rect)
+    }
+
     fn text_field_offset_rect_with(
         &self,
         id: ElementId,
@@ -1982,6 +2012,17 @@ impl WidgetTree {
         affinity: incular_text::TextAffinity,
         mode: EditableCaret,
     ) -> Option<Rect> {
+        let (render, rect) = self.text_field_local_offset_rect_with(id, offset, affinity, mode)?;
+        Some(self.render_world_transform(render).transform_rect_bbox(rect))
+    }
+
+    fn text_field_local_offset_rect_with(
+        &self,
+        id: ElementId,
+        offset: usize,
+        affinity: incular_text::TextAffinity,
+        mode: EditableCaret,
+    ) -> Option<(RenderObjectId, Rect)> {
         let element = self.elements.get(id.0)?;
         let WidgetKind::TextField(spec) = element.widget.kind() else {
             return None;
@@ -1999,18 +2040,19 @@ impl WidgetTree {
         let top = text_field_content_top(
             spec.multiline,
             node.size.height,
-            height,
+            layout.metrics().line_height,
             field.content_padding,
         );
         let local = Offset::new(
-            x - state.scroll_x + field.content_padding.left,
+            editable_caret_x(field, node.size.width, x) - state.scroll_x
+                + field.content_padding.left,
             y - state.scroll_y + top,
         );
         let rect = match mode {
             EditableCaret::Visual => Rect::from_origin_size(local, Size::new(1., height.max(1.))),
             EditableCaret::ImeAnchor => editable_cursor_rect(field, local, height),
         };
-        Some(self.render_world_transform(render).transform_rect_bbox(rect))
+        Some((render, rect))
     }
 
     /// Returns the local bounds of the shaped text in a composing range.

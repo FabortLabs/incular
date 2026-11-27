@@ -61,3 +61,21 @@ calculation is used by the IME caret rectangle. All 19 focused
 native tests passed (including the Ahem-backed IME geometry tests).
 Apple's taller caret convention and native GPU pixels are not
 part of this result.
+
+## Local caret geometry and trailing whitespace
+
+Two exact pinned originals passed. Deleting `12` to the empty string
+keeps the caret's top and height and shifts its left position inward
+with center alignment. The native query reports the actual two-pixel
+painted caret, not the existing one-pixel global selection marker.
+The native fixture verifies both the local paint and the marker's
+projection through an enclosing 8 px translation.
+
+A centered multiline editor with 1,000 trailing spaces now keeps its
+13×17 cursor at x=786 on the first line of an 800 px box, with one
+pixel left after the caret. Previously the native shaper's trailing
+advances put the caret paint at x≈4,828. Painting and the local query
+now apply the same wrapped horizontal bound. The single-line path
+still allows horizontal scrolling. All 30 focused native cases
+passed, including the Ahem-backed IME geometry beforehand and after
+the retained cursor change.

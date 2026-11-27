@@ -1,7 +1,7 @@
 use super::super::*;
 use crate::tree::text::{
-    editable_content_clip, editable_cursor_alpha, editable_cursor_rect, editable_horizontal_max_scroll,
-    editable_vertical_max_scroll, reveal_horizontal_caret,
+    editable_caret_x, editable_content_clip, editable_cursor_alpha, editable_cursor_rect,
+    editable_horizontal_max_scroll, editable_vertical_max_scroll, reveal_horizontal_caret,
 };
 use incular_rendering::{ClipCoverage, ClipIsolation};
 use incular_text::TextGeometry;
@@ -352,7 +352,8 @@ impl WidgetTree {
                         let rect = editable_cursor_rect(
                             field,
                             Offset::new(
-                                caret - active_scroll_x + content_padding.left,
+                                editable_caret_x(field, size.width, caret) - active_scroll_x
+                                    + content_padding.left,
                                 top + caret_y - active_scroll_y,
                             ),
                             caret_height,
