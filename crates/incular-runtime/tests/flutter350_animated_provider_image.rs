@@ -349,3 +349,37 @@ fn standard_memory_provider_keeps_multiframe_canvas_despite_cache_width() {
         assert_eq!(&handles[0].pixels()[0..4], &expected);
     }
 }
+
+#[test]
+fn separate_mounts_of_equal_animated_memory_bytes_share_live_decoded_images() {
+    let first: Widget = Image::memory(Arc::<[u8]>::from(TWO_FRAMES)).into();
+    let second = Image::memory(Arc::<[u8]>::from(TWO_FRAMES)).into();
+    let resized = Image::memory(Arc::<[u8]>::from(TWO_FRAMES))
+        .cache_width(2)
+        .into();
+    let mut runtime = Runtime::new(Stack::new([first, second, resized]).into()).unwrap();
+    let t0 = Instant::now();
+    assert!(pixels(&mut runtime, t0).is_empty());
+    // Two different keys, not three: the first two mounts already follow
+    // one shared codec initialization, even with distinct byte allocations.
+    assert_eq!(runtime.runtime_diagnostics().active_tracked_tasks, 2);
+    drain_image_workers(&mut runtime);
+    for millis in [0, 200] {
+        let at = t0 + Duration::from_millis(millis);
+        let (list, _) = runtime
+            .run_frame_at(Constraints::loose(Size::new(100., 100.)), at)
+            .unwrap();
+        let ids: Vec<_> = list
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::Image { image, .. } => Some(image.id()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids.len(), 3);
+        assert_eq!(ids[0], ids[1]);
+        assert_ne!(ids[1], ids[2]);
+        drain_image_workers(&mut runtime);
+    }
+}

@@ -169,4 +169,45 @@ void main() {
       PaintingBinding.instance.imageCache.clearLiveImages();
     },
   );
+  testWidgets('live animated memory widgets share only matching cache keys', (
+    tester,
+  ) async {
+    final bytes = base64Decode(finite);
+    final copy = base64Decode(finite);
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Row(
+          children: [
+            Image.memory(bytes),
+            Image.memory(bytes),
+            Image.memory(bytes, cacheWidth: 2),
+            Image.memory(copy),
+          ],
+        ),
+      ),
+    );
+    List<RawImage> mounted() =>
+        tester.widgetList<RawImage>(find.byType(RawImage)).toList();
+
+    for (
+      var attempt = 0;
+      mounted().any((raw) => raw.image == null) && attempt < 40;
+      attempt++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+      await tester.pump();
+    }
+    final images = mounted().map((raw) => raw.image!).toList();
+    expect(images.length, 4);
+    expect(images[0].isCloneOf(images[1]), isTrue);
+    expect(images[0].isCloneOf(images[2]), isFalse);
+    expect(images[0].isCloneOf(images[3]), isFalse);
+
+    await tester.pumpWidget(const SizedBox());
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+  });
 }

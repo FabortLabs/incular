@@ -5,7 +5,9 @@
 
 use std::{
     cell::{Cell, RefCell},
-    rc::Rc,
+    collections::{HashMap, hash_map::RandomState},
+    hash::BuildHasher,
+    rc::{Rc, Weak},
     sync::Arc,
 };
 
@@ -591,19 +593,87 @@ impl PlaybackImageState {
 
 type LoadEncodedImage = dyn Fn(Arc<[u8]>, ImageResizeOptions) -> ImagePlayback;
 
-/// A host's window-scoped decoding capability for built-in image widgets.
+struct ResolvedMemoryPlayback {
+    bytes: Arc<[u8]>,
+    options: ImageResizeOptions,
+    source: ImagePlayback,
+}
+
+impl ResolvedMemoryPlayback {
+    fn matches(&self, bytes: &Arc<[u8]>, options: ImageResizeOptions) -> bool {
+        self.options == options && (Arc::ptr_eq(&self.bytes, bytes) || &self.bytes == bytes)
+    }
+}
+
+#[derive(Default)]
+struct ActiveImages {
+    entries: HashMap<(u64, ImageResizeOptions), Vec<Weak<ResolvedMemoryPlayback>>>,
+    reads: u8,
+}
+
+/// A window-scoped worker capability and index of currently active image
+/// resolutions. The index does not own encoded bytes, any pixel buffer,
+/// or the decoder; those belong to mounted resolutions.
 #[doc(hidden)]
-pub struct ImagePlaybackLoader(Rc<LoadEncodedImage>);
+pub struct ImagePlaybackLoader {
+    load: Box<LoadEncodedImage>,
+    hasher: RandomState,
+    active: RefCell<ActiveImages>,
+}
 
 impl ImagePlaybackLoader {
     #[must_use]
     pub fn new(load: impl Fn(Arc<[u8]>, ImageResizeOptions) -> ImagePlayback + 'static) -> Self {
-        Self(Rc::new(load))
+        Self {
+            load: Box::new(load),
+            hasher: RandomState::new(),
+            active: RefCell::new(ActiveImages::default()),
+        }
+    }
+
+    fn resolve(
+        &self,
+        bytes: &Arc<[u8]>,
+        options: ImageResizeOptions,
+    ) -> Rc<ResolvedMemoryPlayback> {
+        let key = (self.hasher.hash_one(bytes.as_ref()), options);
+        {
+            let mut active = self.active.borrow_mut();
+            active.reads = active.reads.wrapping_add(1);
+            if active.reads % 32 == 0 {
+                active.entries.retain(|_, bucket| {
+                    bucket.retain(|entry| entry.strong_count() != 0);
+                    !bucket.is_empty()
+                });
+            }
+            if let Some(bucket) = active.entries.get_mut(&key) {
+                bucket.retain(|entry| entry.strong_count() != 0);
+                if let Some(found) = bucket
+                    .iter()
+                    .filter_map(Weak::upgrade)
+                    .find(|candidate| candidate.matches(bytes, options))
+                {
+                    return found;
+                }
+            }
+        }
+        let resolution = Rc::new(ResolvedMemoryPlayback {
+            bytes: bytes.clone(),
+            options,
+            source: (self.load)(bytes.clone(), options),
+        });
+        self.active
+            .borrow_mut()
+            .entries
+            .entry(key)
+            .or_default()
+            .push(Rc::downgrade(&resolution));
+        resolution
     }
 }
 
 struct AnimatedMemoryState {
-    key: RefCell<Option<(Arc<[u8]>, ImageResizeOptions, ImagePlayback)>>,
+    resolution: RefCell<Option<Rc<ResolvedMemoryPlayback>>>,
     playback: Rc<PlaybackImageState>,
     fallback: ProviderImageState,
 }
@@ -617,7 +687,7 @@ impl RetainedState for AnimatedMemoryState {
 impl AnimatedMemoryState {
     fn new(revision: Rc<Cell<u64>>) -> Self {
         Self {
-            key: RefCell::new(None),
+            resolution: RefCell::new(None),
             playback: Rc::new(PlaybackImageState::new(revision)),
             fallback: ProviderImageState::default(),
         }
@@ -639,20 +709,17 @@ impl AnimatedMemoryState {
             config.cache_resize
         };
         let previous = self
-            .key
+            .resolution
             .borrow()
             .as_ref()
-            .and_then(|(old_bytes, old_options, source)| {
-                (*old_options == options && (Arc::ptr_eq(old_bytes, bytes) || old_bytes == bytes))
-                    .then(|| source.clone())
-            });
-        let source = previous.unwrap_or_else(|| {
-            let source = (loader.0)(bytes.clone(), options);
-            self.key
-                .replace(Some((bytes.clone(), options, source.clone())));
-            source
+            .filter(|resolution| resolution.matches(bytes, options))
+            .cloned();
+        let resolution = previous.unwrap_or_else(|| {
+            let resolution = loader.resolve(bytes, options);
+            self.resolution.replace(Some(resolution.clone()));
+            resolution
         });
-        self.playback.build(config, &source, context)
+        self.playback.build(config, &resolution.source, context)
     }
 }
 

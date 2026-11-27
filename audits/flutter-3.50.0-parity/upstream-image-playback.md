@@ -116,3 +116,15 @@ without waking the host. Native deferred initialization, transport,
 and frame errors reach listeners or can be replayed, but the three
 originals testing Flutter's app-global uncaught-error reporter
 remain partial.
+
+Matching live animated memory keys now share one decoder and the same
+image handles across mounts in a window. The active index stores only
+weak resolution records, not strong encoded bytes or prior frames;
+closing the last mount releases the source. A different cache width
+keeps a separate resolution even where the animated engine ignores
+that width for decoding. The original Flutter probe shares the same
+`Uint8List` object; a separate equal byte array remains a distinct
+Flutter key. Incular intentionally keeps its existing content-based
+memory-provider identity for separate equal byte allocations. The
+authored Flutter and native checks assert handle identity on real
+painted frames; all eleven native animated widget tests passed.
