@@ -3673,3 +3673,5 @@ packages/flutter/test/semantics/semantics_test.dart	229	sendSemanticsUpdate veri
 packages/flutter/test/semantics/semantics_test.dart	1357	SemanticsData.toJson and SemanticsNode.toJson generate expected maps	paired-match	upstream-semantics-visibility.md#semantic-data-and-node-json
 packages/flutter/test/gestures/recognizer_test.dart	30	GestureRecognizer smoketest	paired-match	upstream-primary-pointer-recognizer.md#custom-recognizer-diagnostics-and-lifetime
 packages/flutter/test/gestures/recognizer_test.dart	35	GestureRecognizer dispatches memory events	paired-match	upstream-primary-pointer-recognizer.md#custom-recognizer-diagnostics-and-lifetime
+packages/flutter/test/services/platform_channel_test.dart	191	can handle method call with no registered plugin (setting before)	paired-match	upstream-json-method-channel.md#direct-missing-plugin-inbound-dispatch
+packages/flutter/test/services/platform_channel_test.dart	206	can handle method call with no registered plugin (setting after)	paired-match	upstream-json-method-channel.md#direct-missing-plugin-inbound-dispatch

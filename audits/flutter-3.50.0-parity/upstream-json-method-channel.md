@@ -67,3 +67,14 @@ and one terminal event for a subscriber after close. All four focused
 event-channel tests and seven existing JSON method-channel tests passed.
 The JSON-specific adapter matches the codec used by these originals;
 the standard-codec event adapter and unrelated mock APIs are not claimed.
+
+## Direct missing-plugin inbound dispatch
+
+Both pinned registrations at :191 and :206 passed. Direct host dispatch
+consults the handler registered at dispatch time. It replies with no bytes
+exactly once if none is present, whether the handler is cleared before
+the request or after the reply. This is distinct from engine delivery,
+which retains early packets in the channel buffer. A separate native
+control installs a handler before the missing reply is delivered, verifies
+the old request does not replay and confirms a fresh request reaches the
+new handler. All 23 focused native channel tests passed.

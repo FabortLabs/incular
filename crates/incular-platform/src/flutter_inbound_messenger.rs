@@ -67,7 +67,7 @@ struct Inner {
     #[cfg(debug_assertions)]
     overflow_observer: RefCell<Option<OverflowObserver>>,
     channels: RefCell<HashMap<Rc<str>, Channel>>,
-    schedule: Box<dyn Fn(FlutterChannelMicrotask)>,
+    schedule: Rc<dyn Fn(FlutterChannelMicrotask)>,
 }
 
 /// Local receiver for Flutter-compatible platform messages. Outbound calls
@@ -123,7 +123,7 @@ impl FlutterInboundMessenger {
             #[cfg(debug_assertions)]
             overflow_observer: RefCell::new(None),
             channels: RefCell::default(),
-            schedule: Box::new(schedule),
+            schedule: Rc::new(schedule),
         }))
     }
 
@@ -177,6 +177,34 @@ impl FlutterInboundMessenger {
         }
     }
 
+    /// Sends a direct host request to the handler registered at call time.
+    /// Unlike engine packet delivery with [Self::push], this never queues
+    /// a request for a later handler. A missing handler replies null, and
+    /// both synchronous and asynchronous replies are forwarded on the
+    /// host's microtask queue.
+    pub fn dispatch_unbuffered(
+        &self,
+        name: &str,
+        payload: FlutterBinaryPayload,
+        reply: impl FnOnce(FlutterBinaryPayload) + 'static,
+    ) {
+        let handler = self
+            .0
+            .channels
+            .borrow()
+            .get(name)
+            .and_then(|channel| channel.handler.clone());
+        let schedule = self.0.schedule.clone();
+        let respond: FlutterBinaryReply = Box::new(move |value| {
+            schedule(Box::new(move || reply(value)));
+        });
+        if let Some(handler) = handler {
+            handler(payload, respond);
+        } else {
+            respond(None);
+        }
+    }
+
     /// Receives a platform message. An already listening channel dispatches
     /// immediately unless older buffered messages are draining. At zero
     /// capacity, a message that cannot be delivered is discarded without a reply.
@@ -190,10 +218,11 @@ impl FlutterInboundMessenger {
             // Match the embedder's finally block: a panic from a discarded
             // message's responder must not lose the control acknowledgement.
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                payload.as_deref().map_or(
-                    Err(FlutterChannelControlError::Malformed),
-                    |bytes| self.handle_control_message(bytes),
-                )
+                payload
+                    .as_deref()
+                    .map_or(Err(FlutterChannelControlError::Malformed), |bytes| {
+                        self.handle_control_message(bytes)
+                    })
             }));
             reply(None);
             match result {

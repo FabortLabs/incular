@@ -243,3 +243,85 @@ fn inbound_specific_and_other_errors_encode_the_expected_platform_exception() {
             && error.message.as_deref() == Some("Invalid argument(s): bad") && error.details.is_null()
     ));
 }
+
+#[test]
+fn missing_plugin_replies_null_once_when_cleared_before_or_after_dispatch() {
+    for clear_before in [true, false] {
+        check_missing_plugin(clear_before);
+    }
+}
+
+fn check_missing_plugin(clear_before: bool) {
+    let tasks: Rc<RefCell<VecDeque<FlutterChannelMicrotask>>> = Rc::default();
+    let inbound = FlutterInboundMessenger::new({
+        let tasks = tasks.clone();
+        move |task| tasks.borrow_mut().push_back(task)
+    });
+    if clear_before {
+        REQUIRED.set_method_call_handler(&inbound, |_, _| panic!("removed plugin"));
+        REQUIRED.clear_method_call_handler(&inbound);
+    }
+
+    let envelope = Rc::new(RefCell::new(Vec::new()));
+    inbound.dispatch_unbuffered(
+        REQUIRED.name(),
+        Some(
+            JsonMethodCodec::encode_method_call(&MethodCall {
+                method: "sayHello".into(),
+                arguments: json!("hello"),
+            })
+            .unwrap(),
+        ),
+        {
+            let envelope = envelope.clone();
+            move |reply| envelope.borrow_mut().push(reply)
+        },
+    );
+    assert!(envelope.borrow().is_empty());
+    pump(&tasks);
+    assert_eq!(*envelope.borrow(), [None]);
+    if !clear_before {
+        REQUIRED.clear_method_call_handler(&inbound);
+        pump(&tasks);
+        assert_eq!(*envelope.borrow(), [None]);
+    }
+}
+
+#[test]
+fn dispatch_without_a_plugin_does_not_replay_a_request_after_registration() {
+    let tasks: Rc<RefCell<VecDeque<FlutterChannelMicrotask>>> = Rc::default();
+    let inbound = FlutterInboundMessenger::new({
+        let tasks = tasks.clone();
+        move |task| tasks.borrow_mut().push_back(task)
+    });
+    let responses = Rc::new(RefCell::new(Vec::new()));
+    let call = JsonMethodCodec::encode_method_call(&MethodCall {
+        method: "sayHello".into(),
+        arguments: json!("hello"),
+    })
+    .unwrap();
+    let send = || {
+        let responses = responses.clone();
+        inbound.dispatch_unbuffered(REQUIRED.name(), Some(call.clone()), move |reply| {
+            responses.borrow_mut().push(reply)
+        });
+    };
+    send();
+    REQUIRED.set_method_call_handler(&inbound, |call, reply| {
+        assert_eq!(call.method, "sayHello");
+        assert_eq!(call.arguments, json!("hello"));
+        reply(Reply::Success(json!("arrived later"))).unwrap();
+    });
+    pump(&tasks);
+    assert_eq!(*responses.borrow(), [None]);
+    send();
+    assert_eq!(responses.borrow().len(), 1);
+    pump(&tasks);
+    let responses = responses.borrow();
+    assert_eq!(responses.len(), 2);
+    assert_eq!(
+        JsonMethodCodec::decode_envelope(responses[1].as_deref().unwrap()).unwrap(),
+        json!("arrived later"),
+    );
+    REQUIRED.clear_method_call_handler(&inbound);
+}
