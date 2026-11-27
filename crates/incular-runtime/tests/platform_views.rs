@@ -88,3 +88,124 @@ fn mounted_views_are_created_placed_moved_hidden_and_disposed() {
     view.clear_focus();
     assert!(runtime.take_platform_view_commands().is_empty());
 }
+
+fn native_view() -> PlatformViewController {
+    PlatformViewController::new("fixture view", Vec::new(), TextDirection::Ltr)
+}
+
+fn mount_view(view: &PlatformViewController) -> Runtime {
+    Runtime::new(PlatformViewSurface::new(view.clone()).into()).unwrap()
+}
+
+#[test]
+fn platform_view_fills_largest_allowed_size_after_constraints_change() {
+    let view = native_view();
+    let mut runtime = mount_view(&view);
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let _ = runtime.take_platform_view_commands();
+    runtime
+        .run_frame(Constraints::new(50., 100., 50., 100.))
+        .unwrap();
+    let expected = rect(0., 0., 100., 100.);
+    assert_eq!(
+        runtime.tree().platform_view_placements()[0].bounds,
+        expected
+    );
+    assert_eq!(
+        runtime.take_platform_view_commands(),
+        [place(&view, expected, true)]
+    );
+}
+
+#[test]
+fn platform_view_hover_dispatches_through_the_mounted_controller() {
+    use incular_core::{InputEvent, PointerSampleMetadata};
+    use incular_platform::{HoverDeviceChange, HoverDeviceEvent, PlatformEvent};
+    let view = native_view();
+    let mut runtime = mount_view(&view);
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let _ = runtime.take_platform_view_commands();
+    let hover = Offset::new(10., 10.);
+    for (position, change) in [
+        (Offset::ZERO, HoverDeviceChange::Added),
+        (hover, HoverDeviceChange::Removed),
+    ] {
+        if change == HoverDeviceChange::Removed {
+            let _ = runtime.handle_input(InputEvent::PointerWithMetadata {
+                pointer: 0,
+                device: 0,
+                kind: PointerDeviceKind::Mouse,
+                buttons: 0,
+                button: None,
+                sample: PointerSampleMetadata::default(),
+                phase: PointerPhase::Move,
+                position: hover,
+            });
+        }
+        let _ = runtime.handle_platform_event(PlatformEvent::HoverDevice(HoverDeviceEvent {
+            pointer: 0,
+            device: 0,
+            kind: PointerDeviceKind::Mouse,
+            position,
+            change,
+        }));
+    }
+    assert_eq!(
+        runtime.take_platform_view_commands(),
+        [PlatformViewCommand::Pointer {
+            id: view.id(),
+            event: PlatformViewPointerEvent {
+                pointer: 0,
+                kind: PointerDeviceKind::Mouse,
+                phase: PointerPhase::Move,
+                local_position: hover,
+                buttons: 0,
+            }
+        }]
+    );
+}
+
+#[test]
+fn attached_but_unlaid_view_does_not_report_a_screen_offset() {
+    let view = native_view();
+    let mut runtime = mount_view(&view);
+    assert!(runtime.take_platform_view_commands().is_empty());
+
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let commands = runtime.take_platform_view_commands();
+    assert!(matches!(
+        commands.as_slice(),
+        [
+            PlatformViewCommand::Create { .. },
+            PlatformViewCommand::Place { .. }
+        ]
+    ));
+    assert_eq!(commands[1], place(&view, rect(0., 0., 800., 600.), true));
+}
+
+#[test]
+fn swapping_controller_before_first_layout_reports_no_premature_size() {
+    let old = native_view();
+    let view = native_view();
+    let mut runtime = mount_view(&old);
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, PlatformViewSurface::new(view.clone()).into())
+        .unwrap();
+    assert!(runtime.take_platform_view_commands().is_empty());
+
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let commands = runtime.take_platform_view_commands();
+    assert!(
+        matches!(commands.as_slice(), [PlatformViewCommand::Create { id, .. }, PlatformViewCommand::Place { .. }] if *id == view.id())
+    );
+    assert_eq!(commands[1], place(&view, rect(0., 0., 800., 600.), true));
+}

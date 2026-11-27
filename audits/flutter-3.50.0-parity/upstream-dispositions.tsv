@@ -3781,3 +3781,8 @@ packages/flutter/test/widgets/editable_text_shortcuts_test.dart	926	at cluster b
 packages/flutter/test/widgets/text_selection_toolbar_layout_delegate_test.dart	9	positions itself at anchorAbove if it fits	paired-match	upstream-text-selection-toolbar-placement.md
 packages/flutter/test/rendering/dynamic_intrinsics_test.dart	81	Whether using intrinsics means you get hooked into layout	paired-match	upstream-shifted-box-baselines.md#dynamic-intrinsic-dependents
 packages/flutter/test/rendering/dynamic_intrinsics_test.dart	95	Parent returns correct intrinsics	paired-match	upstream-shifted-box-baselines.md#dynamic-intrinsic-dependents
+packages/flutter/test/rendering/platform_view_test.dart	44	layout should size to max constraint	paired-match	upstream-platform-view-layout-and-hover.md
+packages/flutter/test/rendering/platform_view_test.dart	85	mouse hover events are dispatched via PlatformViewController.dispatchPointerEvent	paired-match	upstream-platform-view-layout-and-hover.md
+packages/flutter/test/rendering/platform_view_test.dart	102	touch hover events are dispatched via PlatformViewController.dispatchPointerEvent	paired-match	upstream-platform-view-layout-and-hover.md
+packages/flutter/test/rendering/platform_view_test.dart	349	RenderAndroidView does not set the platform view offset when not laid out	paired-match	upstream-platform-view-layout-and-hover.md
+packages/flutter/test/rendering/platform_view_test.dart	377	RenderAndroidView does not size the platform view when not laid out	paired-match	upstream-platform-view-layout-and-hover.md
