@@ -450,3 +450,83 @@ fn explicit_reading_direction_overrides_ambient_and_reaches_both_projections() {
         Some(TextDirection::Ltr)
     );
 }
+
+#[test]
+fn requesting_the_same_semantics_recomputes_without_republishing() {
+    use incular_core::{Offset, Rect};
+    use incular_rendering::DisplayList;
+    use incular_widgets::{CustomPaint, CustomPainter, CustomPainterSemantics, SemanticsBuilder};
+
+    struct LabelPainter {
+        label: &'static str,
+        describes: Rc<Cell<usize>>,
+    }
+
+    impl CustomPainter for LabelPainter {
+        fn paint(&self, _: Size) -> DisplayList {
+            DisplayList::default()
+        }
+
+        fn should_repaint(&self, _: &Self) -> bool {
+            false
+        }
+
+        fn should_rebuild_semantics(&self, _: &Self) -> bool {
+            true
+        }
+
+        fn semantics_builder(&self) -> Option<SemanticsBuilder> {
+            let label = self.label;
+            let describes = self.describes.clone();
+            Some(Rc::new(move |size| {
+                describes.set(describes.get() + 1);
+                vec![
+                    CustomPainterSemantics::new(
+                        Rect::from_origin_size(Offset::ZERO, size),
+                        Semantics::builder().label(label).build(),
+                    )
+                    .key(1_u64),
+                ]
+            }))
+        }
+    }
+
+    let describes = Rc::new(Cell::new(0));
+    let build = |label| {
+        scene(SizedBox::square(20.).child(CustomPaint::from_painter(
+            Size::new(20., 20.),
+            LabelPainter {
+                label,
+                describes: describes.clone(),
+            },
+        )))
+    };
+    let mut runtime = Runtime::new(build("hello")).unwrap();
+    let mut desktop = AccessKitProjection::new();
+    let mut mobile = MobileAccessibilityProjection::new();
+    frame(&mut runtime);
+    assert!(describes.replace(0) > 0);
+    let id = semantic_id(&runtime, "hello");
+    let semantics = runtime.tree().semantics();
+    let revision = semantics.revision();
+    assert!(desktop.sync(semantics, 1.).is_some());
+    assert!(mobile.sync(semantics).is_some());
+
+    patch(&mut runtime, build("hello"));
+    assert!(describes.replace(0) > 0);
+    let semantics = runtime.tree().semantics();
+    assert_eq!(semantics.revision(), revision);
+    assert!(desktop.sync(semantics, 1.).is_none());
+    assert!(mobile.sync(semantics).is_none());
+
+    patch(&mut runtime, build("bye"));
+    assert!(describes.get() > 0);
+    assert_eq!(semantic_id(&runtime, "bye"), id);
+    let semantics = runtime.tree().semantics();
+    let desktop_patch = desktop.sync(semantics, 1.).unwrap().into_accesskit();
+    assert_eq!(desktop_patch.nodes.len(), 1);
+    assert_eq!(desktop_patch.nodes[0].1.label(), Some("bye"));
+    let mobile_patch = mobile.sync(semantics).unwrap();
+    assert_eq!(mobile_patch.nodes.len(), 1);
+    assert_eq!(mobile_patch.nodes[0].semantic.label.as_deref(), Some("bye"));
+}

@@ -3795,3 +3795,4 @@ packages/flutter/test/rendering/view_constraints_test.dart	11	Properly constrain
 packages/flutter/test/painting/strut_style_test.dart	9	StrutStyle diagnostics test	paired-match	upstream-strut-diagnostics.md
 packages/flutter/test/rendering/semantics_and_children_test.dart	22	RenderOpacity and children and semantics	paired-match	upstream-render-box-edges.md#opacity-child-semantics
 packages/flutter/test/rendering/semantics_and_children_test.dart	41	RenderOpacity and children and semantics	partial-match	upstream-render-box-edges.md#opacity-child-semantics
+packages/flutter/test/rendering/simple_semantics_test.dart	13	only send semantics update if semantics have changed	paired-match	upstream-semantic-native-updates.md#unchanged-semantics-are-not-re-published

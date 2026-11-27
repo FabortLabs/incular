@@ -41,3 +41,14 @@ changes only the explicit semantic direction and verifies the native property
 overrides surrounding direction. The focused binding, custom action, forest,
 and incremental adapter controls pass. This authored probe does not change
 the upstream count and does not assert native speech or mixed-direction hints.
+
+## Unchanged semantics are not re-published
+
+Pinned `rendering/simple_semantics_test.dart:13` passed. The native
+`flutter350_semantic_native_updates` fixture instruments a mounted
+painter's semantics callback, then explicitly asks a replacement
+delegate to rebuild the same labelled, keyed region. That callback
+runs, but the retained revision does not change and neither AccessKit
+nor the mobile projection emits an update. Changing the label to
+`bye` then emits exactly one node without replacing the semantic
+identity. All seven focused native semantic-update tests passed.
