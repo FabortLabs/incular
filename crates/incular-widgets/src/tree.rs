@@ -990,6 +990,7 @@ pub enum RenderKind {
     ShaderMask {
         shader: ShaderCallback,
         blend_mode: BlendMode,
+        has_child: bool,
     },
     BackdropFilter {
         blur: GaussianBlur,

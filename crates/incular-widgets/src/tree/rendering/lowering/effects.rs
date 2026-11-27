@@ -103,10 +103,11 @@ pub(super) fn lower_effects(widget: &Widget, context: &DependencyContext) -> Ren
         },
         WidgetKind::Blend { mode, .. } => RenderKind::Blend { mode: *mode },
         WidgetKind::ShaderMask {
-            shader, blend_mode, ..
+            shader, blend_mode, child,
         } => RenderKind::ShaderMask {
             shader: shader.clone(),
             blend_mode: *blend_mode,
+            has_child: child.is_some(),
         },
         WidgetKind::BackdropFilter {
             blur,

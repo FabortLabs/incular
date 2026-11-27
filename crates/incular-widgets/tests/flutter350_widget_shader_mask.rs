@@ -255,3 +255,77 @@ fn rotated_overflow_remains_in_the_mask_group_but_outside_its_quad() {
             .any(|command| matches!(command, PaintCommand::PushClip { .. }))
     );
 }
+
+#[test]
+fn adding_and_removing_child_controls_the_shader_and_layer_lifetime() {
+    use incular_rendering::{LayerId, LayerKind, LayerTree};
+    use incular_widgets::Widget;
+
+    fn find_mask(tree: &LayerTree, id: LayerId) -> Option<LayerId> {
+        let (kind, children) = tree.layer(id)?;
+        if matches!(kind, LayerKind::ShaderMask { .. }) {
+            Some(id)
+        } else {
+            children.iter().find_map(|id| find_mask(tree, *id))
+        }
+    }
+    let live_mask = |tree: &WidgetTree| {
+        let layers = tree.compositor_layers();
+        layers.root().and_then(|root| find_mask(layers, root))
+    };
+
+    let size = Size::new(20., 20.);
+    for (constraints, absent_size) in [
+        (Constraints::at_most(200., 200.), Size::ZERO),
+        (Constraints::tight(size), size),
+    ] {
+        let calls = Rc::new(RefCell::new(Vec::new()));
+        let shader = ShaderCallback::new({
+            let calls = calls.clone();
+            move |bounds| {
+                calls.borrow_mut().push(bounds);
+                gradient(bounds)
+            }
+        });
+        let make = |present| -> Widget {
+            let mask = ShaderMask::without_child(shader.clone());
+            if present {
+                mask.with_child(Widget::box_(size, Color::WHITE)).into()
+            } else {
+                mask.into()
+            }
+        };
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(make(false)).unwrap();
+        let render = tree.render_id(root).unwrap();
+        tree.layout(constraints).unwrap();
+        let _ = tree.paint();
+        assert_eq!(tree.render_size(render), Some(absent_size));
+        assert!(live_mask(&tree).is_none());
+        assert!(calls.borrow().is_empty());
+
+        tree.update(root, make(true)).unwrap();
+        tree.layout(constraints).unwrap();
+        let _ = tree.paint();
+        let first_mask_layer = live_mask(&tree).unwrap();
+        assert_eq!(tree.render_id(root), Some(render));
+        assert_eq!(tree.render_size(render), Some(size));
+        let local = Rect::from_origin_size(Offset::ZERO, size);
+        assert_eq!(*calls.borrow(), [local]);
+
+        tree.update(root, make(false)).unwrap();
+        tree.layout(constraints).unwrap();
+        let _ = tree.paint();
+        assert_eq!(tree.render_size(render), Some(absent_size));
+        assert!(live_mask(&tree).is_none());
+        assert!(!tree.compositor_layers().contains(first_mask_layer));
+        assert_eq!(*calls.borrow(), [local]);
+
+        tree.update(root, make(true)).unwrap();
+        tree.layout(constraints).unwrap();
+        let _ = tree.paint();
+        assert_eq!(tree.render_id(root), Some(render));
+        assert_ne!(live_mask(&tree).unwrap(), first_mask_layer);
+        assert_eq!(*calls.borrow(), [local, local]);
+    }
+}

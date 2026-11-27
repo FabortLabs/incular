@@ -11,13 +11,14 @@ impl WidgetTree {
             RenderKind::ShaderMask {
                 ref shader,
                 blend_mode,
+                ..
             } => {
-                let mask = shader.call(Rect::from_origin_size(Offset::ZERO, size));
                 if let Some(layer) = self
                     .renders
                     .get(id.0)
                     .and_then(|node| node.object.layers.shader_mask())
                 {
+                    let mask = shader.call(Rect::from_origin_size(Offset::ZERO, size));
                     self.compositor.update_shader_mask(
                         layer,
                         mask,

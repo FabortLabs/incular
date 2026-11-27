@@ -54,3 +54,15 @@ use independent hard stencil coverage. The mask fill itself uses
 non-antialiased geometry, matching the pinned engine. The shader-blend,
 clip geometry and four mounted shader-mask controls passed. This is an
 authored probe and does not credit the separate positioning golden.
+
+## No child and reattachment
+
+The authored pinned Flutter probe mounts a mask without a child, adds
+one, removes it, and adds it again. The same render object sizes to
+zero with no child under loose constraints. It has no mask layer and
+does not invoke the shader until the child exists. Removal drops the
+layer; reattachment creates a fresh one. The Incular test compares
+these transitions and adds a tight-constraint control where size does
+not change, so layer creation and callback resolution cannot depend
+only on a size change. These are authored checks, not extra original
+tests in the coverage count.

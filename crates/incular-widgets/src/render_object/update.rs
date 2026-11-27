@@ -52,10 +52,13 @@ fn invalidation_for_change(old: &RenderKind, new: &RenderKind) -> Invalidation {
         return I::COMPOSITE;
     }
     if let (
-        RenderKind::ShaderMask { shader: old_shader, .. },
-        RenderKind::ShaderMask { shader: new_shader, .. },
+        RenderKind::ShaderMask { shader: old_shader, has_child: had_child, .. },
+        RenderKind::ShaderMask { shader: new_shader, has_child, .. },
     ) = (old, new)
     {
+        if had_child != has_child {
+            return I::LAYOUT | I::PAINT | I::SEMANTICS | I::HIT_TEST;
+        }
         // Resolve a different application callback only when the mask
         // actually paints. Merely changing the blend keeps the old shader.
         return if old_shader == new_shader { I::COMPOSITE } else { I::PAINT };

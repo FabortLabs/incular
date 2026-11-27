@@ -141,7 +141,7 @@ impl LayerSpec {
                 source_effects,
                 ..
             } => raster_attachment_spec(source_effects.raster_paint_sources(*blend_mode)),
-            WidgetKind::ShaderMask { .. } => AttachmentSpec::ShaderMask,
+            WidgetKind::ShaderMask { child: Some(_), .. } => AttachmentSpec::ShaderMask,
             WidgetKind::BackdropFilter { .. } => AttachmentSpec::BackdropFilter,
             WidgetKind::AnnotatedRegion { .. } => AttachmentSpec::Annotation,
             WidgetKind::CompositedTransformTarget { .. } => AttachmentSpec::Leader,
@@ -518,7 +518,7 @@ impl RenderLayers {
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::Blend { layer }
             }
-            WidgetKind::ShaderMask { blend_mode, .. } => {
+            WidgetKind::ShaderMask { blend_mode, child: Some(_), .. } => {
                 let layer = compositor.create_shader_mask(
                     Brush::Solid(Color::WHITE),
                     *blend_mode,

@@ -1166,7 +1166,7 @@ pub(crate) enum WidgetKind {
     ShaderMask {
         shader: ShaderCallback,
         blend_mode: BlendMode,
-        child: Widget,
+        child: Option<Widget>,
     },
     BackdropFilter {
         blur: GaussianBlur,

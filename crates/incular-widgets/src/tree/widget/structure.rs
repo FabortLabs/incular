@@ -2789,8 +2789,8 @@ impl WidgetKind {
             WidgetKind::ShaderMask { child, .. } => (
                 WidgetType::ShaderMask,
                 Effects,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::BackdropFilter { child, .. } => (
                 WidgetType::BackdropFilter,

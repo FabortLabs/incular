@@ -75,17 +75,30 @@ impl PartialEq for ShaderCallback {
 pub struct ShaderMask {
     shader: ShaderCallback,
     blend_mode: BlendMode,
-    child: Widget,
+    child: Option<Widget>,
 }
 
 impl ShaderMask {
     #[must_use]
     pub fn new(shader: impl Into<ShaderCallback>, child: impl Into<Widget>) -> Self {
+        Self::without_child(shader).with_child(child)
+    }
+
+    /// Creates a mask without content. It creates no mask layer and does
+    /// not invoke the callback until a child is attached.
+    #[must_use]
+    pub fn without_child(shader: impl Into<ShaderCallback>) -> Self {
         Self {
             shader: shader.into(),
             blend_mode: BlendMode::Modulate,
-            child: child.into(),
+            child: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
     }
 
     /// Returns the retained shader callback without resolving it.
