@@ -2950,3 +2950,7 @@ packages/flutter/test/rendering/slivers_helpers_test.dart	112	SliverGeometry wit
 packages/flutter/test/rendering/slivers_helpers_test.dart	116	SliverGeometry throws error when layoutExtent exceeds paintExtent	paired-match	upstream-sliver-protocol-values.md
 packages/flutter/test/rendering/slivers_helpers_test.dart	122	SliverGeometry throws error when maxPaintExtent is less than paintExtent	paired-match	upstream-sliver-protocol-values.md
 packages/flutter/test/widgets/semantics_keep_alive_offstage_test.dart	12	Un-layouted RenderObject in keep alive offstage area do not crash semantics compiler	paired-match	upstream-offstage-keepalive-label.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1668	Move focus in all directions.	paired-match	upstream-directional-focus-history.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1808	Directional focus avoids hysteresis.	paired-match	upstream-directional-focus-history.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1927	Directional focus history is cleared on explicit focus request	paired-match	upstream-directional-focus-history.md
+packages/flutter/test/widgets/focus_traversal_test.dart	2336	Can find first focus in all directions.	paired-match	upstream-directional-focus-history.md

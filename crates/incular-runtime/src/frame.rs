@@ -126,6 +126,22 @@ enum InitialFocus {
     Settled,
 }
 
+/// Stops actually visited along the active directional run.
+struct DirectionalFocusHistory {
+    direction: Code,
+    stops: Vec<(ElementId, Option<FocusNode>)>,
+}
+
+fn reverses_focus_direction(first: Code, next: Code) -> bool {
+    matches!(
+        (first, next),
+        (Code::ArrowUp, Code::ArrowDown)
+            | (Code::ArrowDown, Code::ArrowUp)
+            | (Code::ArrowLeft, Code::ArrowRight)
+            | (Code::ArrowRight, Code::ArrowLeft)
+    )
+}
+
 /// Focus parked at the app root on desktop/web while inactive.
 struct ParkedFocus {
     target: ElementId,
@@ -255,6 +271,7 @@ pub struct Runtime {
     hover_hit_revision: u64,
     pub(crate) focused: Option<ElementId>,
     primary_focus_node: Option<FocusNode>,
+    directional_focus_history: Option<DirectionalFocusHistory>,
     primary_focus_changes: incular_core::reactivity::DependencySource,
     parked_focus: Option<ParkedFocus>,
     focused_selection_lease: Option<incular_text::FocusedSelectionLease>,
@@ -504,6 +521,7 @@ impl Runtime {
             hover_hit_revision: 0,
             focused: None,
             primary_focus_node: None,
+            directional_focus_history: None,
             primary_focus_changes: incular_core::reactivity::DependencySource::default(),
             parked_focus: None,
             focused_selection_lease: None,
@@ -2683,11 +2701,23 @@ impl Runtime {
     }
 
     fn set_focus_with_external_selection(&mut self, next: Option<ElementId>, external: bool) {
+        self.set_focus_inner(next, external, false);
+    }
+
+    fn set_focus_inner(
+        &mut self,
+        next: Option<ElementId>,
+        external: bool,
+        from_directional_traversal: bool,
+    ) {
         // Admit the new target before touching the old one. A hit on a
         // disabled or excluded editor is not permission to retire the
         // current native client or cancel its composing text.
         if next.is_some_and(|target| !self.tree.can_request_focus(target)) {
             return;
+        }
+        if !from_directional_traversal {
+            self.directional_focus_history = None;
         }
         // Explicit input (including clearing focus) wins over a pending initial
         // autofocus request, even when it leaves the focused element unchanged.
@@ -3184,15 +3214,64 @@ impl Runtime {
                     .scroll_nearest_viewport(self.focused, event.code, false)
             }
             Code::ArrowUp | Code::ArrowDown | Code::ArrowLeft | Code::ArrowRight if unmodified => {
-                let Some(next) = self.tree.directional_focus_target(self.focused, event.code)
-                else {
-                    return false;
-                };
-                self.set_focus(Some(next));
-                true
+                self.move_directional_focus(event.code)
             }
             _ => false,
         }
+    }
+
+    fn move_directional_focus(&mut self, direction: Code) -> bool {
+        let previous = self.focused;
+        // Opposite input walks the actual visited stops; a new axis or
+        // invalidated predecessor starts a fresh geometry search.
+        let mut history = self.directional_focus_history.take();
+        if let Some(run) = &mut history
+            && run.direction != direction
+        {
+            if reverses_focus_direction(run.direction, direction)
+                && let Some(current) = previous
+                && let Some((stop, node)) = run.stops.pop()
+                && self.tree.focus_node_at(stop) == node
+                && self.tree.can_retrace_directional_focus(current, stop)
+            {
+                self.directional_focus_history = history.filter(|run| !run.stops.is_empty());
+                self.set_focus_inner(Some(stop), true, true);
+                return self.focused == Some(stop);
+            }
+            history = None;
+        }
+        let Some(next) = self.tree.directional_focus_target(previous, direction) else {
+            self.directional_focus_history = history;
+            return false;
+        };
+        if let Some(stop) = previous
+            && let Some(from) = self.tree.element_bounds(stop)
+            && let Some(to) = self.tree.element_bounds(next)
+            && self.tree.can_retrace_directional_focus(next, stop)
+        {
+            // A wrap at the edge is not a forward stop in this run.
+            let x = to.origin.x + to.size.width * 0.5;
+            let y = to.origin.y + to.size.height * 0.5;
+            let forward = match direction {
+                Code::ArrowUp => y <= from.origin.y,
+                Code::ArrowDown => y >= from.origin.y + from.size.height,
+                Code::ArrowLeft => x <= from.origin.x,
+                Code::ArrowRight => x >= from.origin.x + from.size.width,
+                _ => false,
+            };
+            if forward {
+                history
+                    .get_or_insert_with(|| DirectionalFocusHistory {
+                        direction,
+                        stops: Vec::new(),
+                    })
+                    .stops
+                    .push((stop, self.tree.focus_node_at(stop)));
+                self.directional_focus_history = history;
+            }
+        }
+        self.set_focus_inner(Some(next), true, true);
+        self.focused == Some(next)
     }
 
     /// The portable pressed-key and lock state observed by this runtime.

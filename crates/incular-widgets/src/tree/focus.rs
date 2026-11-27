@@ -1104,6 +1104,15 @@ impl WidgetTree {
             .map(|index| ids[index])
     }
 
+    /// Whether directional traversal may return to a previous focus stop.
+    #[doc(hidden)]
+    pub fn can_retrace_directional_focus(&self, current: ElementId, previous: ElementId) -> bool {
+        self.can_request_focus(previous)
+            && self.scope_of_focus_boundary(current) == self.scope_of_focus_boundary(previous)
+            && self.scrollable_viewport_chain(current).first().map(|entry| entry.0)
+                == self.scrollable_viewport_chain(previous).first().map(|entry| entry.0)
+    }
+
     /// Flutter `ScrollAction` for `ScrollIntent`: scrolls the nearest scroll
     /// viewport of `focused` by one line (50 px) or one page (80% of the
     /// viewport) in `direction`, animating like Flutter's 100 ms `easeInOut`.
