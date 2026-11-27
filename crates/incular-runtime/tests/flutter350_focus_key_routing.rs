@@ -417,3 +417,104 @@ fn typed_and_raw_combine_before_bubbling_and_only_native_keys_have_a_raw_view() 
     assert!(!runtime.tree().dispatch_semantic_increment(focused, true));
     assert_eq!(&*calls.borrow(), &["typed"]);
 }
+
+#[test]
+fn native_raw_keys_bubble_only_along_the_focused_scope_then_stop_at_the_handler() {
+    use incular_runtime::KeyMessage;
+    use incular_widgets::{FocusScope, FocusScopeNode, RawKeyEvent};
+    use std::cell::Cell;
+
+    let scopes = [FocusScopeNode::new(), FocusScopeNode::new()];
+    let nodes: [FocusNode; 8] = [
+        scopes[0].scope_focus_node(),
+        scopes[1].scope_focus_node(),
+        FocusNode::new(),
+        FocusNode::new(),
+        FocusNode::new(),
+        FocusNode::new(),
+        FocusNode::new(),
+        FocusNode::new(),
+    ];
+    let visits = Rc::new(RefCell::new(Vec::new()));
+    let handled = Rc::new(Cell::new(0_u8));
+    for (index, node) in nodes.iter().enumerate() {
+        node.set_on_key(Some(Rc::new({
+            let visits = Rc::clone(&visits);
+            let handled = Rc::clone(&handled);
+            move |_, event| {
+                if !event.is_key_down() {
+                    return KeyEventResult::Ignored;
+                }
+                visits.borrow_mut().push(index);
+                if handled.get() & (1 << index) != 0 {
+                    KeyEventResult::Handled
+                } else {
+                    KeyEventResult::Ignored
+                }
+            }
+        })));
+    }
+
+    // The retained focus parent graph is not the widget ancestry: all of the
+    // descriptors are siblings, and only their authored focus parents link
+    // the two scopes, parents, and leaves.
+    let mut widgets: Vec<Widget> = scopes
+        .into_iter()
+        .map(|scope| FocusScope::with_external_focus_node(SizedBox::shrink(), scope).into())
+        .collect();
+    for (child, parent) in [(2, 0), (3, 1), (4, 2), (5, 2), (6, 3), (7, 3)] {
+        widgets.push(
+            Focus::with_external_focus_node(SizedBox::shrink(), nodes[child].clone())
+                .parent_node(nodes[parent].clone())
+                .into(),
+        );
+    }
+    let mut runtime = Runtime::new(Column::new(widgets).into()).unwrap();
+    frame(&mut runtime);
+    nodes[7].request_focus();
+    frame(&mut runtime);
+    assert!(nodes[7].has_primary_focus());
+
+    let candidates = (1 << 1) | (1 << 3) | (1 << 5) | (1 << 7);
+    let message = |raw_only, key_down| {
+        let key = KeyboardKey::Named(NamedKey::Meta);
+        let typed = if key_down {
+            KeyboardEvent::key_down(key, Code::MetaLeft)
+        } else {
+            KeyboardEvent::key_up(key, Code::MetaLeft)
+        };
+        let raw = RawKeyEvent::from(typed.clone());
+        if raw_only {
+            KeyMessage::Raw(raw)
+        } else {
+            KeyMessage::TypedAndRaw { typed, raw }
+        }
+    };
+    let check =
+        |runtime: &mut Runtime, selected: u8, expected_path: &[usize], expected_consumed| {
+            handled.set(selected);
+            for raw_only in [true, false] {
+                assert_eq!(
+                    runtime.dispatch_key_message(message(raw_only, true)),
+                    expected_consumed
+                );
+                assert_eq!(visits.take(), expected_path);
+                assert!(!runtime.dispatch_key_message(message(raw_only, false)));
+                assert!(visits.borrow().is_empty());
+            }
+        };
+    check(&mut runtime, candidates, &[7], true);
+    check(&mut runtime, candidates & !(1 << 7), &[7, 3], true);
+    check(
+        &mut runtime,
+        candidates & !((1 << 7) | (1 << 3)),
+        &[7, 3, 1],
+        true,
+    );
+    check(&mut runtime, 0, &[7, 3, 1], false);
+
+    nodes[4].request_focus();
+    frame(&mut runtime);
+    assert!(nodes[4].has_primary_focus());
+    check(&mut runtime, candidates, &[4, 2, 0], false);
+}

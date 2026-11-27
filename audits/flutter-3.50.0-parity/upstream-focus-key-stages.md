@@ -52,3 +52,17 @@ supplied key views even when their logical labels differ.
 Twelve targeted Rust tests passed. This does not emulate native
 scan tables or the Flutter engine/test channel itself; the paired
 behavior here is framework focus routing, not OS keyboard delivery.
+
+### Focused ancestry consumes raw keys once
+
+The original `widgets/focus_manager_test.dart:1406` passed in both
+`RawKeyEvent` and `ui.KeyData then RawKeyEvent` modes. The native retained
+fixture dispatches raw-only and paired messages through the runtime, using
+two mounted scopes, two parents and four leaves. Their authored focus
+parent links are separate from widget ancestry. The focused leaf sees
+MetaLeft first. If it ignores the key, the parent sees it, then the
+scope; if any handles it, delivery stops there and the native event is
+consumed. Ignoring the key at every eligible node leaves it unconsumed.
+After focus moves to the opposite scope, neither the former scope nor
+unfocused siblings receive the event. The exact path checks also reject
+duplicate deliveries on the paired route.
