@@ -80,6 +80,28 @@ impl From<WidgetSpan> for InlineSpan {
     }
 }
 
+/// The smallest update scope needed after replacing a span tree.
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+pub enum InlineSpanComparison {
+    #[default]
+    Identical,
+    Metadata,
+    Paint,
+    Layout,
+}
+
+impl InlineSpan {
+    #[must_use]
+    pub fn compare_to(&self, other: &Self) -> InlineSpanComparison {
+        use InlineSpanComparison::{Identical, Layout};
+        match (self, other) {
+            (Self::Text(a), Self::Text(b)) => a.compare_to(b),
+            (Self::Widget(a), Self::Widget(b)) if a == b => Identical,
+            _ => Layout,
+        }
+    }
+}
+
 /// A positioned inline span, borrowed from the original paragraph tree.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum InlineSpanRef<'a> {
@@ -182,6 +204,46 @@ impl TextSpan {
         S: Into<InlineSpan>,
     {
         Self::new(text).children(children)
+    }
+
+    /// Compares span contents and inline reservations without shaping text.
+    #[must_use]
+    pub fn compare_to(&self, other: &Self) -> InlineSpanComparison {
+        use InlineSpanComparison::{Identical, Layout, Metadata, Paint};
+        use incular_core::ChangeImpact;
+
+        if std::ptr::eq(self, other) {
+            return Identical;
+        }
+        if self.text != other.text
+            || self.children.len() != other.children.len()
+            || self.style.is_some() != other.style.is_some()
+        {
+            return Layout;
+        }
+        let mut result = if self.semantics_label != other.semantics_label
+            || self.semantics_identifier != other.semantics_identifier
+        {
+            Metadata
+        } else {
+            Identical
+        };
+
+        if let (Some(a), Some(b)) = (&self.style, &other.style) {
+            match a.change_impact(b) {
+                ChangeImpact::None => {}
+                ChangeImpact::Composite | ChangeImpact::Paint => result = Paint,
+                ChangeImpact::Layout | ChangeImpact::Build => return Layout,
+            }
+        }
+
+        for (a, b) in self.children.iter().zip(&other.children) {
+            result = result.max(a.compare_to(b));
+            if result == Layout {
+                break;
+            }
+        }
+        result
     }
 
     /// The literal laid-out text, preserving widget positions and ignoring

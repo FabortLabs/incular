@@ -27,7 +27,8 @@ pub use editing::{
 pub use flutter_editing_delta::{FlutterTextDeltaError, FlutterTextEdit, FlutterTextEditingDelta};
 pub use font_loader::{FontLoader, FontLoaderError};
 pub use spans::{
-    InlineSpan, InlineSpanRef, InlineSpanSemanticsInformation, PlainTextOptions, RichText,
+    InlineSpan, InlineSpanComparison, InlineSpanRef, InlineSpanSemanticsInformation, PlainTextOptions,
+    RichText,
     StyledTextRun, Text, TextSpan, TextSpanVisitor, WidgetSpan,
     WidgetSpanAlignment,
 };

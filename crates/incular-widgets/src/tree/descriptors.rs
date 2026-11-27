@@ -858,6 +858,19 @@ impl RichParagraph {
         self
     }
 
+    /// Compares a paragraph's spans and actual inline child descriptions.
+    /// Editing an inline child's subtree requires layout even when it keeps
+    /// its placeholder identity and its last measured width.
+    #[must_use]
+    pub fn compare_spans(&self, other: &Self) -> incular_text::InlineSpanComparison {
+        use incular_text::InlineSpanComparison;
+        if self.children != other.children {
+            InlineSpanComparison::Layout
+        } else {
+            self.text.text.compare_to(&other.text.text)
+        }
+    }
+
     /// Flutter `RichText.strutStyle`; see [`Text::strut_style`].
     #[must_use]
     pub fn strut_style(mut self, strut: StrutStyle) -> Self {

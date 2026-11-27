@@ -21,5 +21,19 @@ label and identifier. Direct-child visitation preserves order, supports
 short-circuiting and allows the test's original preorder index walk.
 Five focused native span tests and 28 paragraph geometry controls passed.
 Native screen-reader delivery, string attributes, empty-vs-null Dart
-object representations, mouse callbacks, and change comparison are
+object representations, and mouse callbacks are
 separate cases not credited here.
+
+## Comparing replacements
+
+Pinned originals :137 and :205 passed. The compared native
+`RichParagraph` includes actual inline widget descriptors, not just its
+placeholder size and ID. A change from width 10 to 11, a changed literal
+widget or its text, a change to top alignment, or a height change deep
+inside an inline child's own rich paragraph requires layout. A self or
+structurally identical description returns identical. Native controls
+also distinguish color-only paint from font-size relayout and keep
+semantic-ID-only changes in a separate metadata category. The latter is
+an Incular extension to this comparison, not an assertion of Dart's
+semantics-ID invalidation rules. Three dedicated native tests and
+three mounted rich-paragraph controls passed.

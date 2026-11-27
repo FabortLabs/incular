@@ -2718,3 +2718,5 @@ packages/flutter/test/painting/text_span_test.dart	247	GetSpanForPosition	paired
 packages/flutter/test/painting/text_span_test.dart	266	GetSpanForPosition with WidgetSpan	paired-match	upstream-inline-text-spans.md
 packages/flutter/test/painting/text_span_test.dart	291	TextSpan computeSemanticsInformation	paired-match	upstream-inline-text-spans.md
 packages/flutter/test/painting/text_span_test.dart	303	TextSpan visitDirectChildren	paired-match	upstream-inline-text-spans.md
+packages/flutter/test/painting/text_span_test.dart	137	TextSpan widget change test	paired-match	upstream-inline-text-spans.md#comparing-replacements
+packages/flutter/test/painting/text_span_test.dart	205	TextSpan nested widget change test	paired-match	upstream-inline-text-spans.md#comparing-replacements
