@@ -126,3 +126,54 @@ fn replacing_the_editing_controller_cannot_keep_the_old_prompt() {
     assert!(prompt_rect(&frame(&mut runtime)).is_none());
     assert_eq!(replacement.text(), "replaced");
 }
+
+#[test]
+fn removing_the_prompt_color_removes_only_its_paint_from_the_live_editor() {
+    const COLOR: Color = Color::rgba(0x34, 0x56, 0x78, 0x12);
+    let controller = TextEditingController::with_text("ABCDEFG");
+    controller.set_selection(TextSelection::collapsed(0));
+    let focus = FocusNode::new();
+    let build = |enabled| {
+        let editor = EditableText::new(controller.clone())
+            .focus_node(focus.clone())
+            .autofocus(true)
+            .text_direction(TextDirection::Ltr)
+            .style(
+                incular_text::TextStyle::new()
+                    .font_size(10.)
+                    .height(Some(1.)),
+            )
+            .fixed_scroll_offset(10.)
+            .show_cursor(false);
+        if enabled {
+            editor.autocorrection_text_rect_color(COLOR)
+        } else {
+            editor
+        }
+    };
+    let constraints = Constraints::loose(Size::new(1000., 1000.));
+    let mut runtime = Runtime::new(build(true).into()).unwrap();
+    let frame = |runtime: &mut Runtime| runtime.run_frame(constraints).unwrap().0;
+    frame(&mut runtime);
+    let field = runtime.focused_element().unwrap();
+    let before = controller.value();
+    assert!(runtime.tree_mut().set_autocorrection_prompt(field, 0, 1));
+    let painted = |list: &DisplayList| {
+        list.commands().iter().find_map(|command| match command {
+            PaintCommand::Rect { rect, color } if *color == COLOR => Some(*rect),
+            _ => None,
+        })
+    };
+    let original = painted(&frame(&mut runtime)).expect("configured prompt is painted");
+
+    runtime.schedule_update(field, build(false).into()).unwrap();
+    assert_eq!(painted(&frame(&mut runtime)), None);
+    assert_eq!(runtime.focused_element(), Some(field));
+    assert_eq!(controller.value(), before);
+
+    // Do not send the range again. Restoring the color must reveal the
+    // same range to show that removing color only hid the decoration.
+    runtime.schedule_update(field, build(true).into()).unwrap();
+    assert_eq!(painted(&frame(&mut runtime)), Some(original));
+    assert!(focus.has_primary_focus());
+}

@@ -3644,3 +3644,4 @@ packages/flutter/test/widgets/editable_text_test.dart	13306	EditableText does no
 packages/flutter/test/rendering/editable_test.dart	261	Can change cursor color, radius, visibility	paired-match	upstream-floating-caret.md#live-caret-configuration
 packages/flutter/test/rendering/editable_test.dart	2035	Floating cursor position is independent of viewport offset	paired-match	upstream-floating-caret.md#fixed-viewport-offset
 packages/flutter/test/rendering/editable_test.dart	2007	does not skip TextPainter.layout because of invalid cache	partial-match	upstream-editable-width-basis.md
+packages/flutter/test/rendering/editable_test.dart	779	promptRect disappears when promptRectColor is set to null	paired-match	upstream-autocorrection-prompt.md#color-removal-on-the-same-retained-renderer
