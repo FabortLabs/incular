@@ -103,6 +103,10 @@ impl ArenaLink {
             .then_some(GestureDisposition::Accepted)
     }
 
+    pub(crate) fn forget_position(&mut self, pointer: u64) {
+        self.positions.remove(&pointer);
+    }
+
     /// Fills in the event's `delta` and `localDelta` from the pointer's
     /// previous event.
     pub(crate) fn with_deltas(&mut self, mut event: RawPointerEvent) -> RawPointerEvent {

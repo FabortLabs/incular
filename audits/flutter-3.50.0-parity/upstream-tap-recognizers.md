@@ -252,3 +252,22 @@ dropping a waiting recognizer or unwinding a failed cancellation still
 releases the passive contender. All 60 focused native tests passed.
 The older unfinished-double comparison remains partial until its
 standalone companion tap path also verifies stale release ownership.
+
+## Serial tap arbitration
+
+Seven exact `gestures/serial_tap_test.dart` originals now pair with
+the real Incular managed arena. Normal tap waits even after its press
+timeout, so serial wins in both registration orders and the normal
+tap sends cancel, not tap. Immediate release competitors win only
+when routed first, and a press-time winner cancels serial before
+release. Against double tap in both registration orders, all three
+serial counts complete in order and no double tap is dispatched.
+
+Incular previously reported serial up when an external arena had not
+yet decided, and could report both cancel and up on a synchronous
+rejection. Serial now holds the release until acceptance. A wrong
+pointer's later resolution cannot alter the next press, and cancellation
+drops the old position instead of waiting for another event. Authored
+checks exercise deferred and synchronous rejection and the actual
+raw-gesture adapter, which reports arena decisions after routing.
+Eighty-three focused arena and recognizer tests passed.

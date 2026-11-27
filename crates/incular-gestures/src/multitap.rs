@@ -331,6 +331,13 @@ impl TapTracker {
     }
 }
 
+#[derive(Clone, Copy)]
+struct PendingSerialTap {
+    tracker: TapTracker,
+    accepted: bool,
+    release: Option<RawPointerEvent>,
+}
+
 /// Flutter's `SerialTapGestureRecognizer`: reports every tap of a series
 /// with its number in the series, each tap winning its own arena on
 /// release.
@@ -342,8 +349,7 @@ pub struct SerialTapGestureRecognizer {
     /// The serial-tap timer's deadline.
     serial_tap_timer: Option<Instant>,
     completed_taps: Vec<TapTracker>,
-    gesture_resolutions: BTreeMap<u64, GestureDisposition>,
-    pending_tap: Option<TapTracker>,
+    pending_tap: Option<PendingSerialTap>,
     link: ArenaLink,
 }
 
@@ -363,7 +369,6 @@ impl SerialTapGestureRecognizer {
             on_serial_tap_up: None,
             serial_tap_timer: None,
             completed_taps: Vec::new(),
-            gesture_resolutions: BTreeMap::new(),
             pending_tap: None,
             link: ArenaLink::default(),
         }
@@ -397,7 +402,7 @@ impl SerialTapGestureRecognizer {
         self
     }
 
-    /// Whether a tap is in progress.
+    /// Whether a pressed or released tap is still waiting for its result.
     #[must_use]
     pub const fn is_tracking_pointer(&self) -> bool {
         self.pending_tap.is_some()
@@ -442,12 +447,16 @@ impl SerialTapGestureRecognizer {
             });
         }
         self.link.add(event.pointer);
-        self.pending_tap = Some(TapTracker {
-            pointer: event.pointer,
-            initial: event.position,
-            buttons: event.buttons,
-            down_time: event.time,
-            kind: event.kind,
+        self.pending_tap = Some(PendingSerialTap {
+            tracker: TapTracker {
+                pointer: event.pointer,
+                initial: event.position,
+                buttons: event.buttons,
+                down_time: event.time,
+                kind: event.kind,
+            },
+            accepted: false,
+            release: None,
         });
     }
 
@@ -459,35 +468,56 @@ impl SerialTapGestureRecognizer {
     /// `_handleEvent` for a routed event.
     pub fn handle_event(&mut self, event: RawPointerEvent) {
         let event = self.link.with_deltas(event);
-        let Some(tracker) = self.pending_tap else {
+        let Some(pending) = self.pending_tap.as_mut() else {
             return;
         };
-        if tracker.pointer != event.pointer {
+        if pending.tracker.pointer != event.pointer {
+            return;
+        }
+        if event.phase == PointerPhase::Cancel {
+            self.reset();
+            return;
+        }
+        if pending.release.is_some() {
             return;
         }
         match event.phase {
-            PointerPhase::Up => self.register_tap(event, tracker),
+            PointerPhase::Up if pending.accepted => self.finish_tap(event),
+            PointerPhase::Up => {
+                // The detector or embedding arena may report acceptance
+                // after returning from this route. Until then, do not
+                // publish a tap-up or advance the serial count.
+                pending.release = Some(event);
+                self.settle(event.pointer, GestureDisposition::Accepted);
+            }
             PointerPhase::Move => {
-                if distance(event.position - tracker.initial) > DOUBLE_TAP_TOUCH_SLOP {
+                if distance(event.position - pending.tracker.initial) > DOUBLE_TAP_TOUCH_SLOP {
                     self.reset();
                 }
             }
-            PointerPhase::Cancel => self.reset(),
-            PointerPhase::Down | PointerPhase::Enter | PointerPhase::Exit => {}
+            PointerPhase::Cancel | PointerPhase::Down | PointerPhase::Enter | PointerPhase::Exit => {}
         }
     }
 
     /// Flutter `acceptGesture`.
     pub fn accept_gesture(&mut self, pointer: u64) {
-        self.gesture_resolutions
-            .insert(pointer, GestureDisposition::Accepted);
+        if let Some(pending) = self.pending_tap.as_mut()
+            && pending.tracker.pointer == pointer
+        {
+            pending.accepted = true;
+            if let Some(event) = pending.release {
+                self.finish_tap(event);
+            }
+        }
     }
 
     /// Flutter `rejectGesture`.
     pub fn reject_gesture(&mut self, pointer: u64) {
-        self.gesture_resolutions
-            .insert(pointer, GestureDisposition::Rejected);
-        self.reset();
+        if self.pending_tap.is_some_and(|pending| pending.tracker.pointer == pointer) {
+            // The arena has already decided. Don't resolve a second time.
+            self.cancel_pending_tap(false);
+            self.reset();
+        }
     }
 
     /// Fires the serial-tap timer when it is due by `now`: the series ends.
@@ -506,39 +536,35 @@ impl SerialTapGestureRecognizer {
         self.serial_tap_timer
     }
 
-    fn reject_pending_tap(&mut self) {
-        let Some(tracker) = self.pending_tap.take() else {
+    fn cancel_pending_tap(&mut self, notify_arena: bool) {
+        let Some(pending) = self.pending_tap.take() else {
             return;
         };
+        // After a routed rejection, no further pointer events are required.
+        self.link.forget_position(pending.tracker.pointer);
         // The resolution can re-enter `reset`, so the cancel count is taken
         // first.
         let count = self.count();
         if let Some(callback) = &self.on_serial_tap_cancel {
             callback(SerialTapCancelDetails { count });
         }
-        if !self.gesture_resolutions.contains_key(&tracker.pointer) {
-            self.settle(tracker.pointer, GestureDisposition::Rejected);
+        if notify_arena && !pending.accepted {
+            self.settle(pending.tracker.pointer, GestureDisposition::Rejected);
         }
     }
 
     fn reset(&mut self) {
-        if self.pending_tap.is_some() {
-            self.reject_pending_tap();
-        }
-        self.pending_tap = None;
+        self.cancel_pending_tap(true);
         self.completed_taps.clear();
-        self.gesture_resolutions.clear();
         self.serial_tap_timer = None;
     }
 
-    fn register_tap(&mut self, event: RawPointerEvent, tracker: TapTracker) {
-        if self.serial_tap_timer.is_none() {
-            self.serial_tap_timer = Some(event.time + DOUBLE_TAP_TIMEOUT);
-        }
-        if !self.gesture_resolutions.contains_key(&event.pointer) {
-            self.settle(event.pointer, GestureDisposition::Accepted);
-        }
-        self.pending_tap = None;
+    fn finish_tap(&mut self, event: RawPointerEvent) {
+        let Some(pending) = self.pending_tap.take() else {
+            return;
+        };
+        let tracker = pending.tracker;
+        self.serial_tap_timer = Some(event.time + DOUBLE_TAP_TIMEOUT);
         if let Some(callback) = &self.on_serial_tap_up {
             callback(SerialTapUpDetails {
                 global_position: event.position,

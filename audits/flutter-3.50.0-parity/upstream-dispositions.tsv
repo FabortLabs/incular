@@ -3317,3 +3317,10 @@ packages/flutter/test/widgets/value_listenable_builder_test.dart	65	Can change l
 packages/flutter/test/widgets/value_listenable_builder_test.dart	81	Stops listening to old listenable after changing listenable	paired-match	upstream-value-listenable-builder.md
 packages/flutter/test/widgets/value_listenable_builder_test.dart	106	Self-cleans when removed	paired-match	upstream-value-listenable-builder.md
 packages/flutter/test/widgets/value_listenable_builder_test.dart	119	ValueListenableBuilder does not crash at zero area	paired-match	upstream-value-listenable-builder.md
+packages/flutter/test/gestures/serial_tap_test.dart	101	Wins over tap gesture below it in the tree	paired-match	upstream-tap-recognizers.md#serial-tap-arbitration
+packages/flutter/test/gestures/serial_tap_test.dart	125	Wins over tap gesture above it in the tree	paired-match	upstream-tap-recognizers.md#serial-tap-arbitration
+packages/flutter/test/gestures/serial_tap_test.dart	149	Loses to release gesture below it in the tree	paired-match	upstream-tap-recognizers.md#serial-tap-arbitration
+packages/flutter/test/gestures/serial_tap_test.dart	167	Wins over release gesture above it in the tree	paired-match	upstream-tap-recognizers.md#serial-tap-arbitration
+packages/flutter/test/gestures/serial_tap_test.dart	185	Fires cancel if competing recognizer declares victory	paired-match	upstream-tap-recognizers.md#serial-tap-arbitration
+packages/flutter/test/gestures/serial_tap_test.dart	197	Wins over double-tap recognizer below it in the tree	paired-match	upstream-tap-recognizers.md#serial-tap-arbitration
+packages/flutter/test/gestures/serial_tap_test.dart	235	Wins over double-tap recognizer above it in the tree	paired-match	upstream-tap-recognizers.md#serial-tap-arbitration
