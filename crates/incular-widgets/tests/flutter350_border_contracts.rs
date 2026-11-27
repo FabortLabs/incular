@@ -1,7 +1,8 @@
 //! Public border value contracts from Flutter 3.50.0 painting tests.
 
-use incular_core::{Color, Lerp};
-use incular_widgets::{Border, BorderSide, BorderStyle};
+use incular_core::{Color, Lerp, Offset, Rect, Size};
+use incular_rendering::{Canvas, PaintCommand};
+use incular_widgets::{Border, BorderSide, BorderStyle, BoxShape};
 
 #[test]
 fn flutter_350_border_side_merge_only_combines_compatible_sides() {
@@ -136,6 +137,43 @@ fn flutter_350_border_symmetric_assigns_vertical_to_left_and_right() {
 fn flutter_350_a_single_border_side_populates_every_physical_edge() {
     let side = BorderSide::default();
     let border = Border::from_border_side(side);
-    assert_eq!([border.left, border.top, border.right, border.bottom], [side; 4]);
+    assert_eq!(
+        [border.left, border.top, border.right, border.bottom],
+        [side; 4]
+    );
     assert_eq!(border, Border::all(side));
+}
+
+#[test]
+fn omitted_horizontal_sides_emit_no_strokes_or_fills_at_the_top_and_bottom() {
+    let size = Size::new(40., 30.);
+    let bounds = Rect::from_origin_size(Offset::ZERO, size);
+    let mut canvas = Canvas::default();
+    assert!(!Border::default().paint(&mut canvas, bounds, BoxShape::Rectangle, None));
+    assert!(canvas.finish().commands().is_empty());
+
+    let vertical = BorderSide::solid(Color::rgba(255, 0, 0, 255), 3.);
+    let mut canvas = Canvas::default();
+    let border = Border::symmetric(vertical, BorderSide::NONE);
+    assert!(border.paint(&mut canvas, bounds, BoxShape::Rectangle, None));
+    let display = canvas.finish();
+    let commands = display.commands();
+    assert_eq!(commands.len(), 2);
+    let covers = |point| {
+        commands.iter().any(|paint| {
+            let PaintCommand::FillPath {
+                path, fill_rule, ..
+            } = paint
+            else {
+                panic!("expected only the two vertical fill bands");
+            };
+            path.contains(point, *fill_rule)
+        })
+    };
+    assert!(covers(Offset::new(0.5, 15.5)));
+    assert!(covers(Offset::new(39.5, 15.5)));
+    assert!(!covers(Offset::new(20.5, 0.5)));
+    assert!(!covers(Offset::new(20.5, 29.5)));
+    assert!(!covers(Offset::new(3.5, 15.5)));
+    assert!(!covers(Offset::new(36.5, 15.5)));
 }

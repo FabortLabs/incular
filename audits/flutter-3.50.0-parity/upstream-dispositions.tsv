@@ -69,7 +69,7 @@ packages/flutter/test/widgets/scroll_physics_test.dart	407	on trailing edge over
 packages/flutter/test/painting/border_side_test.dart	79	BorderSide - scale	paired-match	upstream-border-constraints-formatters.md
 packages/flutter/test/painting/border_side_test.dart	109	BorderSide - won't lerp into negative widths	paired-match	upstream-border-constraints-formatters.md#reverified-negative-extrapolation
 packages/flutter/test/painting/border_side_test.dart	126	BorderSide - lerp with strokeAlign	paired-match	upstream-border-constraints-formatters.md
-packages/flutter/test/painting/border_test.dart	27	Border.symmetric constructor	partial-match	upstream-border-constraints-formatters.md
+packages/flutter/test/painting/border_test.dart	27	Border.symmetric constructor	partial-match	upstream-border-side-placement.md
 packages/flutter/test/rendering/box_constraints_test.dart	17	BoxConstraints copyWith	paired-match	upstream-border-constraints-formatters.md#layout-bound-arithmetic-and-view-conversion
 packages/flutter/test/rendering/box_constraints_test.dart	60	BoxConstraints lerp	paired-match	upstream-border-constraints-formatters.md#constraint-interpolation-repair
 packages/flutter/test/rendering/box_constraints_test.dart	134	BoxConstraints lerp with overshooting t is normalized	paired-match	upstream-border-constraints-formatters.md#constraint-interpolation-repair
@@ -966,7 +966,7 @@ packages/flutter/test/widgets/list_wheel_scroll_view_test.dart	1277	onSelectedIt
 packages/flutter/test/services/text_input_test.dart	1250	TextEditingValue.isComposingRangeValid	paired-match	upstream-text-replacement-boundaries.md#composition-range-validity
 packages/flutter/test/services/text_input_test.dart	205	text input client handler responds to reattach with setClient	paired-match	upstream-text-input-reattach.md
 packages/flutter/test/services/text_input_test.dart	226	text input client handler responds to reattach with setClient (null TextEditingValue)	partial-match	upstream-text-input-reattach.md
-packages/flutter/test/painting/border_test.dart	18	Border.fromBorderSide constructor	partial-match	upstream-border-constraints-formatters.md#boxborder-factories-and-width-construction
+packages/flutter/test/painting/border_test.dart	18	Border.fromBorderSide constructor	partial-match	upstream-border-side-placement.md
 packages/flutter/test/painting/border_test.dart	474	BoxBorder factories	paired-match	upstream-border-constraints-formatters.md#boxborder-factories-and-width-construction
 packages/flutter/test/painting/border_side_test.dart	9	BorderSide - asserts when constructed incorrectly	paired-match	upstream-border-constraints-formatters.md#boxborder-factories-and-width-construction
 packages/flutter/test/painting/border_test.dart	465	Compound borders with differing preferPaintInteriors	paired-match	upstream-border-constraints-formatters.md#compound-shape-border-interior-and-edge-order
