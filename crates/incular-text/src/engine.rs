@@ -674,6 +674,7 @@ struct ApplicationFont {
 thread_local! {
     static APPLICATION_FONTS: std::cell::RefCell<Vec<ApplicationFont>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    static SYSTEM_FONT_REVISION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 /// Registers a TrueType/OpenType font with every [`TextEngine`] on the
@@ -765,6 +766,11 @@ pub struct TextEngine {
     /// and a full-file memcpy plus full-file hash per glyph run).
     font_handles: HashMap<(usize, usize, u32), FontHandle>,
     font_context: FontContext,
+    system_fonts: bool,
+    system_font_revision: u64,
+    /// Successful local and application registrations in discovery order.
+    /// Their blobs share storage with the font collection.
+    registered_fonts: Vec<ApplicationFont>,
     layout_context: LayoutContext<()>,
     generation: u64,
     /// Count of thread application fonts already registered here.
@@ -863,6 +869,9 @@ impl TextEngine {
                 }),
                 source_cache: Default::default(),
             },
+            system_fonts,
+            system_font_revision: SYSTEM_FONT_REVISION.get(),
+            registered_fonts: Vec::new(),
             layout_context: LayoutContext::new(),
             generation: 1,
             application_fonts: 0,
@@ -891,7 +900,10 @@ impl TextEngine {
                 std::cell::RefCell::new(TextEngine::new());
         }
         SHARED.with(|shared| match shared.try_borrow_mut() {
-            Ok(mut engine) => f(&mut engine),
+            Ok(mut engine) => {
+                engine.sync_system_fonts();
+                f(&mut engine)
+            }
             Err(_) => f(&mut Self::new()),
         })
     }
@@ -933,6 +945,51 @@ impl TextEngine {
     #[must_use]
     pub const fn cache_bytes(&self) -> usize {
         self.cache.bytes() + self.unwrapped.bytes() + self.shaped.bytes()
+    }
+
+    /// Queues a host font database change for the current UI thread. Existing
+    /// laid-out text remains valid until its next frame's font update.
+    pub fn notify_system_fonts_changed() {
+        SYSTEM_FONT_REVISION.set(
+            SYSTEM_FONT_REVISION
+                .get()
+                .checked_add(1)
+                .expect("system font revision exhausted"),
+        );
+    }
+
+    #[must_use]
+    pub fn has_pending_system_fonts(&self) -> bool {
+        self.system_fonts && self.system_font_revision != SYSTEM_FONT_REVISION.get()
+    }
+
+    /// Refreshes platform font discovery once per notification batch. Restore
+    /// application/local faces before resolving any new text.
+    pub fn sync_system_fonts(&mut self) -> bool {
+        use parley::fontique::{Collection, CollectionOptions};
+
+        if !self.has_pending_system_fonts() {
+            return false;
+        }
+        self.system_font_revision = SYSTEM_FONT_REVISION.get();
+        self.font_context = FontContext {
+            collection: Collection::new(CollectionOptions {
+                system_fonts: true,
+                ..Default::default()
+            }),
+            source_cache: Default::default(),
+        };
+        self.layout_context = LayoutContext::new();
+        self.font_handles.clear();
+        for font in &self.registered_fonts {
+            Self::insert_font(
+                &mut self.font_context,
+                font.blob.clone(),
+                font.alias.as_deref(),
+            );
+        }
+        self.clear_layouts_for_font_change();
+        true
     }
 
     /// Whether fonts were registered with [`register_application_font`]
@@ -991,9 +1048,25 @@ impl TextEngine {
     }
 
     fn register_font_blob(&mut self, blob: parley::fontique::Blob<u8>, alias: Option<&str>) -> bool {
+        let inserted = Self::insert_font(&mut self.font_context, blob.clone(), alias);
+        if inserted {
+            self.registered_fonts.push(ApplicationFont {
+                blob,
+                alias: alias.map(Arc::from),
+            });
+        }
+        self.clear_layouts_for_font_change();
+        inserted
+    }
+
+    fn insert_font(
+        context: &mut FontContext,
+        blob: parley::fontique::Blob<u8>,
+        alias: Option<&str>,
+    ) -> bool {
         use parley::fontique::{FontInfoOverride, GenericFamily};
 
-        let collection = &mut self.font_context.collection;
+        let collection = &mut context.collection;
         let families: Vec<_> = collection
             .register_fonts(
                 blob,
@@ -1032,6 +1105,10 @@ impl TextEngine {
                 collection.append_generic_families(generic, families.iter().copied());
             }
         }
+        !families.is_empty()
+    }
+
+    fn clear_layouts_for_font_change(&mut self) {
         self.generation = self
             .generation
             .checked_add(1)
@@ -1042,7 +1119,6 @@ impl TextEngine {
         self.strut_font_metrics.clear();
         self.documents.clear();
         self.retained_documents.clear();
-        !families.is_empty()
     }
 
     /// Measures both intrinsic widths from the same shaped paragraph,

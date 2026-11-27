@@ -1,4 +1,4 @@
-//! Application service delivery to the shared root asset bundle.
+//! Flutter-compatible application system notifications.
 
 use crate::Application;
 use incular_assets::root_asset_bundle;
@@ -20,17 +20,21 @@ impl Application {
         clear_shared_memory_image_cache();
     }
 
-    /// Handles the Flutter-compatible JSON system notification for memory
-    /// pressure. Other channels, unknown kinds and malformed data do not
-    /// affect caches and can be handled by the caller.
+    /// Handles the Flutter-compatible JSON system notifications for memory
+    /// pressure and platform font changes. Unknown channels, kinds and
+    /// malformed data can be handled by the caller.
     pub fn handle_system_message(&self, channel: &str, payload: &[u8]) -> bool {
-        if channel != "flutter/system"
-            || !serde_json::from_slice::<SystemNotice>(payload)
-                .is_ok_and(|message| message.kind == "memoryPressure")
-        {
+        if channel != "flutter/system" {
             return false;
         }
-        self.handle_memory_pressure();
+        let Ok(notice) = serde_json::from_slice::<SystemNotice>(payload) else {
+            return false;
+        };
+        match notice.kind.as_str() {
+            "memoryPressure" => self.handle_memory_pressure(),
+            "fontsChange" => incular_text::TextEngine::notify_system_fonts_changed(),
+            _ => return false,
+        }
         true
     }
 }

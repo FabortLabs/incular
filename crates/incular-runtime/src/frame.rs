@@ -1809,6 +1809,7 @@ impl Runtime {
             || self.reactive.borrow().has_work()
             || self.tree.has_dirty_dependencies()
             || self.tree.has_pending_application_fonts()
+            || self.tree.has_pending_system_fonts()
             || self.tree.has_pending_scroll_animations()
             || self.next_frame_deadline().is_some_and(|deadline| deadline <= Instant::now())
             || incular_animation::scheduler::has_scheduled_frame()
@@ -4483,6 +4484,9 @@ impl Runtime {
                 // Ordinary prioritized tasks yield between frames.
                 let _ = incular_animation::scheduler::run_one_scheduled_task();
             }
+            // System font notices wait until the next frame. Mark affected
+            // render objects before transient callbacks, not at receipt.
+            self.tree.apply_system_font_change();
             incular_animation::scheduler::begin_frame(now);
         }
         incular_animation::scheduler::flush_frame_microtasks();

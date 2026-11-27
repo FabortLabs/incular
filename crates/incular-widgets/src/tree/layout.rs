@@ -121,6 +121,43 @@ impl WidgetTree {
         Ok(())
     }
 
+    /// Whether a host font change is waiting for the transient frame phase.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn has_pending_system_fonts(&self) -> bool {
+        self.text_engine.has_pending_system_fonts()
+    }
+
+    /// Refresh text consumers without rebuilding widgets or dirtying
+    /// unrelated non-text render objects.
+    #[doc(hidden)]
+    pub fn apply_system_font_change(&mut self) {
+        if !self.text_engine.sync_system_fonts() {
+            return;
+        }
+        let affected = self
+            .renders
+            .iter()
+            .filter_map(|(id, node)| {
+                let layout = match node.object.kind() {
+                    RenderKind::Text { .. }
+                    | RenderKind::SelectableText { .. }
+                    | RenderKind::TextField(_) => true,
+                    RenderKind::Banner { .. } | RenderKind::SemanticsDebugger { .. } => false,
+                    _ => return None,
+                };
+                Some((RenderObjectId(id), layout))
+            })
+            .collect::<Vec<_>>();
+        for (id, layout) in affected {
+            if layout {
+                self.mark_render_dirty(id, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true);
+            } else {
+                self.mark_render_paint(id);
+            }
+        }
+    }
+
     /// Whether fonts registered since the last layout still have to reach
     /// this tree's text. The runtime schedules a frame for them.
     #[must_use]
@@ -1423,4 +1460,39 @@ fn advanced_viewport_size(constraints: Constraints) -> Size {
         constraints.min_height()
     };
     constraints.constrain(Size::new(width, height))
+}
+
+#[cfg(test)]
+mod system_font_tests {
+    use super::*;
+    use incular_text::TextEditingController;
+
+    #[test]
+    fn system_font_notice_keeps_text_layout_clean_until_frame_boundary() {
+        for widget in [
+            crate::Text::new("paragraph")
+                .text_direction(TextDirection::Ltr)
+                .into(),
+            crate::EditableText::new(TextEditingController::with_text("editor"))
+                .text_direction(TextDirection::Ltr)
+                .into(),
+        ] {
+            let mut tree = WidgetTree::new();
+            let id = tree.mount(widget).unwrap();
+            let render = tree.render_id(id).unwrap();
+            tree.layout(Constraints::tight(Size::new(300.0, 80.0)))
+                .unwrap();
+            let _ = tree.paint();
+            let needs_layout = |tree: &WidgetTree| {
+                tree.renders.get(render.0).unwrap().dirty.contains(DirtyFlags::LAYOUT)
+            };
+            assert!(!needs_layout(&tree));
+            TextEngine::notify_system_fonts_changed();
+            assert!(tree.has_pending_system_fonts());
+            assert!(!needs_layout(&tree));
+            tree.apply_system_font_change();
+            assert!(needs_layout(&tree));
+            assert!(!tree.has_pending_system_fonts());
+        }
+    }
 }

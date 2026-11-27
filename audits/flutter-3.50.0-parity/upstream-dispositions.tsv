@@ -3443,3 +3443,8 @@ packages/flutter/test/painting/colors_test.dart	235	HSVColor lerps value correct
 packages/flutter/test/painting/colors_test.dart	419	HSLColor lerps hue correctly.	paired-match	color-clamp-comparisons.md#exact-bytes-during-hsl-and-hsv-interpolation
 packages/flutter/test/painting/colors_test.dart	493	HSLColor lerps saturation correctly.	paired-match	color-clamp-comparisons.md#exact-bytes-during-hsl-and-hsv-interpolation
 packages/flutter/test/painting/colors_test.dart	519	HSLColor lerps lightness correctly.	paired-match	color-clamp-comparisons.md#exact-bytes-during-hsl-and-hsv-interpolation
+packages/flutter/test/painting/system_fonts_test.dart	40	RenderParagraph relayout upon system fonts changes	paired-match	upstream-system-font-notifications.md
+packages/flutter/test/painting/system_fonts_test.dart	46	Safe to query a RelayoutWhenSystemFontsChangeMixin for text layout after system fonts changes	partial-match	upstream-system-font-notifications.md
+packages/flutter/test/painting/system_fonts_test.dart	66	RenderEditable relayout upon system fonts changes	paired-match	upstream-system-font-notifications.md
+packages/flutter/test/painting/system_fonts_test.dart	73	Banner repaint upon system fonts changes	partial-match	upstream-system-font-notifications.md
+packages/flutter/test/painting/system_fonts_test.dart	215	System fonts update during non-idle scheduler phase does not assert	paired-match	upstream-system-font-notifications.md
