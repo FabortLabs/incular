@@ -19,3 +19,14 @@ late arena decisions that must not affect a new sequence. The
 adjacent arena and pointer router cases brought the focused total
 to 29. These are direct recognizer comparisons; they do not replace
 the retained widgets' existing live gesture arbitration.
+
+## Custom recognizer diagnostics and lifetime
+
+Pinned `gestures/recognizer_test.dart:30` and `:35` passed. The
+native custom handler supplies the debug description and class name;
+the recognizer's debug output also includes the supplied owner and
+the current primary-pointer state. One allocation event and one
+disposal event share a stable identity. Explicit disposal emits
+immediately, and a second disposal followed by dropping the Rust
+value emits nothing extra. Debug telemetry is omitted from release
+builds. Twenty-one direct primary and managed-arena cases passed.

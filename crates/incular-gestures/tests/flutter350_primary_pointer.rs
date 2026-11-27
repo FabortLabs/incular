@@ -33,6 +33,14 @@ struct Probe {
 }
 
 impl PrimaryPointerGestureHandler for Probe {
+    fn debug_description(&self) -> &'static str {
+        "test primary"
+    }
+
+    fn debug_class_name(&self) -> &'static str {
+        "TestPrimaryPointer"
+    }
+
     fn handle_primary_pointer(&self, event: RawPointerEvent) -> Option<GestureDisposition> {
         self.calls
             .phases
@@ -308,4 +316,37 @@ fn only_the_primary_is_dispatched_but_all_contact_routes_keep_the_sequence_open(
     assert_eq!(f.recognition.state(), Ready);
     assert_eq!(f.recognition.initial_position(), None);
     assert_eq!(f.calls.phases.take(), [(5, Down), (5, Cancel)]);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn custom_recognizer_debug_identity_and_memory_events_survive_explicit_disposal() {
+    use incular_core::memory::allocations::{MemoryAllocations, ObjectEventKind};
+
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let _subscription = MemoryAllocations::current().add_listener({
+        let events = events.clone();
+        move |event| {
+            if event.library == "gestures" && event.class_name == "TestPrimaryPointer" {
+                events.borrow_mut().push(event);
+            }
+        }
+    });
+    let recognizer = Fixture::new((Up, Accepted), PrimaryPointerGestureOptions::default())
+        .recognition
+        .with_debug_owner(0);
+    let debug = format!("{recognizer:#?}");
+    assert!(debug.starts_with("TestPrimaryPointer {"));
+    assert!(debug.contains("description: \"test primary\""));
+    assert!(debug.contains("state: Ready"));
+    assert!(debug.contains("debug_owner: \"0\""));
+    assert_eq!(events.borrow().len(), 1);
+    recognizer.dispose();
+    recognizer.dispose();
+    drop(recognizer);
+    let recorded = events.borrow();
+    assert_eq!(recorded.len(), 2);
+    assert_eq!(recorded[0].kind, ObjectEventKind::Created);
+    assert_eq!(recorded[1].kind, ObjectEventKind::Disposed);
+    assert_eq!(recorded[0].id, recorded[1].id);
 }

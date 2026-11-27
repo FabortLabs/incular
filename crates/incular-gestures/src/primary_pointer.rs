@@ -3,6 +3,7 @@
 
 use std::{
     cell::{Cell, RefCell},
+    fmt,
     rc::{Rc, Weak},
     time::Duration,
 };
@@ -55,6 +56,16 @@ pub struct PrimaryPointerGestureOptions {
 /// Custom recognition logic. Returning a disposition resolves all of the
 /// current sequence's arena memberships; `None` leaves them undecided.
 pub trait PrimaryPointerGestureHandler {
+    /// A short name for diagnostic output.
+    fn debug_description(&self) -> &'static str {
+        "primary pointer"
+    }
+
+    /// The developer-facing class name used in allocation events.
+    fn debug_class_name(&self) -> &'static str {
+        "PrimaryPointerGestureRecognizer"
+    }
+
     fn accepts_pointer(&self, _down: RawPointerEvent) -> bool {
         true
     }
@@ -71,6 +82,10 @@ pub trait PrimaryPointerGestureHandler {
 /// borrowed state so they can register or remove routes of their own.
 pub struct PrimaryPointerGestureRecognizer {
     inner: Rc<Inner>,
+    #[cfg(debug_assertions)]
+    allocation: Cell<Option<incular_core::memory::allocations::ObjectLifetime>>,
+    #[cfg(debug_assertions)]
+    debug_owner: Option<String>,
 }
 
 struct Inner {
@@ -122,6 +137,22 @@ impl GestureArenaClient for Client {
     }
 }
 
+impl fmt::Debug for PrimaryPointerGestureRecognizer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut details = f.debug_struct(self.inner.handler.debug_class_name());
+        details
+            .field("description", &self.inner.handler.debug_description())
+            .field("state", &self.state())
+            .field("primary_pointer", &self.primary_pointer())
+            .field("initial_position", &self.initial_position());
+        #[cfg(debug_assertions)]
+        if let Some(owner) = &self.debug_owner {
+            details.field("debug_owner", owner);
+        }
+        details.finish()
+    }
+}
+
 impl PrimaryPointerGestureRecognizer {
     /// Builds a recognizer attached to one view's explicit arena and router.
     ///
@@ -138,6 +169,13 @@ impl PrimaryPointerGestureRecognizer {
         for slop in [options.pre_accept, options.post_accept] {
             assert!(!matches!(slop, GestureSlopTolerance::Pixels(value) if !(value >= 0.)));
         }
+        #[cfg(debug_assertions)]
+        let allocation = Cell::new(Some(
+            incular_core::memory::allocations::ObjectLifetime::new(
+                "gestures",
+                handler.debug_class_name(),
+            ),
+        ));
         Self {
             inner: Rc::new(Inner {
                 router,
@@ -148,6 +186,27 @@ impl PrimaryPointerGestureRecognizer {
                 handler: Box::new(handler),
                 state: RefCell::new(State::default()),
             }),
+            #[cfg(debug_assertions)]
+            allocation,
+            #[cfg(debug_assertions)]
+            debug_owner: None,
+        }
+    }
+
+    /// Labels this recognizer for diagnostic output. Drops the label in
+    /// release builds rather than allocating it on the input path.
+    #[must_use]
+    pub fn with_debug_owner(self, owner: impl fmt::Display) -> Self {
+        #[cfg(debug_assertions)]
+        {
+            let mut this = self;
+            this.debug_owner = Some(owner.to_string());
+            this
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            drop(owner);
+            self
         }
     }
 
@@ -286,6 +345,8 @@ impl PrimaryPointerGestureRecognizer {
 
     pub fn dispose(&self) {
         self.inner.dispose();
+        #[cfg(debug_assertions)]
+        drop(self.allocation.take());
     }
 }
 
