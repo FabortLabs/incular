@@ -3088,3 +3088,8 @@ packages/flutter/test/widgets/actions_test.dart	1065	FocusableActionDetector can
 packages/flutter/test/widgets/actions_test.dart	1115	CallbackAction passes correct intent when invoked.	paired-match	upstream-action-dispatchers.md#direct-callback-adapters
 packages/flutter/test/widgets/actions_test.dart	1128	VoidCallbackAction	paired-match	upstream-action-dispatchers.md#direct-callback-adapters
 packages/flutter/test/widgets/actions_test.dart	1139	Base Action class default toKeyEventResult delegates to consumesKey	paired-match	upstream-action-dispatchers.md#keyboard-dispatch-and-key-consumption
+packages/flutter/test/widgets/actions_test.dart	541	Disabled actions stop propagation to an ancestor	paired-match	upstream-action-dispatchers.md#detector-descendant-permissions-and-disabled-action-shadowing
+packages/flutter/test/widgets/actions_test.dart	856	FocusableActionDetector can be used without callbacks	paired-match	upstream-action-dispatchers.md#detector-descendant-permissions-and-disabled-action-shadowing
+packages/flutter/test/widgets/actions_test.dart	892	FocusableActionDetector can prevent its descendants from being focusable	paired-match	upstream-action-dispatchers.md#detector-descendant-permissions-and-disabled-action-shadowing
+packages/flutter/test/widgets/actions_test.dart	929	FocusableActionDetector can prevent its descendants from being traversable	paired-match	upstream-action-dispatchers.md#detector-descendant-permissions-and-disabled-action-shadowing
+packages/flutter/test/widgets/actions_test.dart	990	FocusableActionDetector forwards skipTraversal to Focus	paired-match	upstream-action-dispatchers.md#detector-descendant-permissions-and-disabled-action-shadowing

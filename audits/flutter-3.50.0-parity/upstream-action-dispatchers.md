@@ -84,3 +84,21 @@ fallback handler. The passive shortcut scope supplies bindings only
 and does not take focus. Only the one original conversion registration
 adds paired credit. All 32 focused native tests and the renderer-neutral
 facade check passed.
+
+## Detector descendant permissions and disabled action shadowing
+
+Five more pinned originals passed. A disabled inner mapping stops
+action lookup without invoking either action or dispatcher. Rust
+reports the found but ignored mapping separately from an absent
+mapping. A detector without highlight callbacks still routes its
+enabled shortcut, and disabling it stops the invocation.
+
+The detector forwards its traversal skip and independent descendant
+focus/traversal permissions to the retained focus hierarchy. Revoking
+focus clears a focused child and rejects a later request. Revoking
+traversal still permits direct focus. A pinned authored comparison
+distinguished two edge cases: with no eligible next node, an empty
+root keeps its current focus; the TestWidgetsApp route uses ParentScope
+edge behavior and moves focus from the child to the route scope.
+The native runtime now preserves that distinction. All 23 focused
+native tests and both authored pinned cases passed.

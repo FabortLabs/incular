@@ -913,7 +913,14 @@ impl WidgetTree {
                 TraversalEdgeBehavior::ClosedLoop => {}
             }
             return if Some(first) == focused {
-                Unchanged
+                // Parent-scope traversal already cleared the departing
+                // scope's child history. With no other stop to enter,
+                // leave the former child by focusing that scope itself.
+                departing_scope
+                    .as_ref()
+                    .and_then(|scope| self.mounted_focus_element(&scope.scope_focus_node()))
+                    .filter(|&id| self.can_request_focus(id))
+                    .map_or(Unchanged, Move)
             } else {
                 Move(remembered_or(first, scope.as_ref()))
             };

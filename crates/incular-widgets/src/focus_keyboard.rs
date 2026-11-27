@@ -970,6 +970,8 @@ pub struct FocusableActionDetector {
     enabled: bool,
     autofocus: bool,
     skip_traversal: Option<bool>,
+    descendants_are_focusable: Option<bool>,
+    descendants_are_traversable: Option<bool>,
     include_focus_semantics: bool,
     mouse_cursor: crate::MouseCursor,
     shortcuts: Option<Rc<incular_gestures::ErasedShortcutScope>>,
@@ -988,6 +990,8 @@ impl FocusableActionDetector {
             enabled: true,
             autofocus: false,
             skip_traversal: None,
+            descendants_are_focusable: None,
+            descendants_are_traversable: None,
             include_focus_semantics: true,
             mouse_cursor: crate::MouseCursor::default(),
             shortcuts: None,
@@ -1021,6 +1025,26 @@ impl FocusableActionDetector {
     #[must_use]
     pub fn skip_traversal(mut self, skip: bool) -> Self {
         self.skip_traversal = Some(skip);
+        self
+    }
+
+    /// Whether this detector is skipped in traversal.
+    #[must_use]
+    pub fn skips_traversal(&self) -> bool {
+        self.skip_traversal.unwrap_or_else(|| self.focus_node.skip_traversal())
+    }
+
+    /// Controls whether descendants can receive either explicit or traversal focus.
+    #[must_use]
+    pub fn descendants_are_focusable(mut self, focusable: bool) -> Self {
+        self.descendants_are_focusable = Some(focusable);
+        self
+    }
+
+    /// Controls descendant traversal without blocking explicit focus requests.
+    #[must_use]
+    pub fn descendants_are_traversable(mut self, traversable: bool) -> Self {
+        self.descendants_are_traversable = Some(traversable);
         self
     }
 
@@ -1093,6 +1117,8 @@ impl From<FocusableActionDetector> for Widget {
             annotates_focus: true,
             focus_node_widget_properties: Some(incular_gestures::FocusNodeWidgetProperties {
                 skip_traversal: value.skip_traversal,
+                descendants_are_focusable: value.descendants_are_focusable,
+                descendants_are_traversable: value.descendants_are_traversable,
                 ..Default::default()
             }),
             ..incular_gestures::GestureCallbacks::default()
