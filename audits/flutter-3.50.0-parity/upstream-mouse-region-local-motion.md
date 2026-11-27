@@ -131,3 +131,20 @@ Five exact pinned cases and their native counterparts pass:
 Five new mounted runtime tests and 26 adjacent checks passed. These
 compare visible feedback and scheduling, not the internal phase in
 which a callback can affect an unrelated custom painter.
+
+## Callback changes and paint ordering
+
+Pinned `widgets/mouse_region_test.dart:1050,1074,1513,1609` all pass.
+The actual retained painter runs exactly once with or without a
+connected mouse. Replacing only callbacks does not repaint, and the
+next physical motion uses only the replacement hover callback.
+
+Changing opacity from blocking to nonblocking must repaint before
+the stationary pointer enters the newly uncovered region. The native
+fixture used to log `hover-enter` before `paint`. The runtime now uses
+the final hit route once, applies native button styling before paint,
+then delivers raw enter/exit and cursor changes after paint. A single
+device's saved hit stays inline. Physical pointer motion continues to
+deliver its enter, exit and hover callbacks immediately.
+
+Three direct native fixtures and 60 adjacent pointer, cursor and input checks passed.

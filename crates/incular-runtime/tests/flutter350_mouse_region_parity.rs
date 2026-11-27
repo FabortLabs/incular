@@ -1,15 +1,18 @@
 //! Pinned Flutter 3.50.0 widgets/mouse_region_test.dart comparisons.
 //! Pointer samples and effective cursor observations are headless.
 
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 use incular_config::{Alignment, Constraints};
 use incular_core::{InputEvent, Offset, PointerDeviceKind, PointerPhase, Size};
-use incular_platform::PlatformEvent;
+use incular_platform::{HoverDeviceChange, HoverDeviceEvent, PlatformEvent};
 use incular_rendering::DisplayList;
 use incular_runtime::Runtime;
 use incular_widgets::{
-    Align, CustomPaint, CustomPainter, MouseCursor, MouseRegion, SizedBox, Widget,
+    Align, CustomPaint, CustomPainter, MouseCursor, MouseRegion, SizedBox, Stack, Widget,
 };
 
 fn frame(runtime: &mut Runtime) {
@@ -39,6 +42,113 @@ fn update(runtime: &mut Runtime, widget: Widget) {
     let root = runtime.tree().root().unwrap();
     runtime.schedule_update(root, widget).unwrap();
     frame(runtime);
+}
+
+type PaintLog = Rc<RefCell<Vec<&'static str>>>;
+
+struct TracedPainter(PaintLog);
+
+impl CustomPainter for TracedPainter {
+    fn paint(&self, _size: Size) -> DisplayList {
+        self.0.borrow_mut().push("paint");
+        DisplayList::default()
+    }
+
+    fn should_repaint(&self, _old: &Self) -> bool {
+        false
+    }
+}
+
+fn painted_child(log: &PaintLog) -> CustomPaint {
+    CustomPaint::from_painter(Size::new(10., 10.), TracedPainter(log.clone()))
+}
+
+fn connect_mouse(runtime: &mut Runtime, position: Offset) {
+    let _ = runtime.handle_platform_event(PlatformEvent::HoverDevice(HoverDeviceEvent {
+        pointer: 0,
+        device: 1,
+        kind: PointerDeviceKind::Mouse,
+        position,
+        change: HoverDeviceChange::Added,
+    }));
+}
+
+#[test]
+fn a_mouse_region_paints_its_child_once_with_or_without_a_connected_pointer() {
+    for connected in [false, true] {
+        let log = PaintLog::default();
+        let mut runtime = Runtime::new(
+            MouseRegion::new(painted_child(&log))
+                .on_enter(|_| {})
+                .into(),
+        )
+        .unwrap();
+        if connected {
+            connect_mouse(&mut runtime, Offset::ZERO);
+        }
+        frame(&mut runtime);
+        assert_eq!(log.take(), ["paint"]);
+    }
+}
+
+#[test]
+fn replacing_only_hover_callbacks_uses_the_new_handler_without_repainting() {
+    let log = PaintLog::default();
+    let make = |version| {
+        let paint = MouseRegion::new(painted_child(&log));
+        let callbacks = |action| {
+            let log = log.clone();
+            move |_| log.borrow_mut().push(action)
+        };
+        let region = match version {
+            1 => paint
+                .on_enter(callbacks("enter1"))
+                .on_hover(callbacks("hover1"))
+                .on_exit(callbacks("exit1")),
+            2 => paint
+                .on_enter(callbacks("enter2"))
+                .on_hover(callbacks("hover2"))
+                .on_exit(callbacks("exit2")),
+            _ => paint.opaque(false),
+        };
+        top_left(SizedBox::square(10.).child(region))
+    };
+    let mut runtime = Runtime::new(make(1)).unwrap();
+    connect_mouse(&mut runtime, Offset::new(20., 20.));
+    frame(&mut runtime);
+    assert_eq!(log.take(), ["paint"]);
+    move_mouse(&mut runtime, 5., 5.);
+    assert_eq!(log.take(), ["enter1", "hover1"]);
+    update(&mut runtime, make(2));
+    assert!(log.take().is_empty());
+    move_mouse(&mut runtime, 6., 6.);
+    assert_eq!(log.take(), ["hover2"]);
+    update(&mut runtime, make(0));
+    assert_eq!(log.take(), ["paint"]);
+}
+
+#[test]
+fn opacity_change_repaints_before_the_stationary_pointer_enters_the_uncovered_region() {
+    let log = PaintLog::default();
+    let make = |opaque| {
+        let beneath = MouseRegion::new(SizedBox::expand()).on_enter({
+            let log = log.clone();
+            move |_| log.borrow_mut().push("hover-enter")
+        });
+        let top = MouseRegion::new(painted_child(&log))
+            .opaque(opaque)
+            .on_hover(|_| {});
+        Widget::from(Stack::new([
+            beneath.into(),
+            top_left(SizedBox::square(10.).child(top)),
+        ]))
+    };
+    let mut runtime = Runtime::new(make(true)).unwrap();
+    connect_mouse(&mut runtime, Offset::new(5., 5.));
+    frame(&mut runtime);
+    assert_eq!(log.take(), ["paint"]);
+    update(&mut runtime, make(false));
+    assert_eq!(log.take(), ["paint", "hover-enter"]);
 }
 
 // Upstream :667. A positioned sample establishes the simulated mouse in

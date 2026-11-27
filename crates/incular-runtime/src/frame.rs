@@ -2738,23 +2738,46 @@ impl Runtime {
             .and_then(|render| self.tree.element_for_render(render))
             .and_then(|element| self.tree.button_ancestor(element))
     }
-    /// Flutter's `MouseTracker.updateAllDevices` after layout: a still
-    /// pointer over content that moved (a programmatic or wheel scroll, a
-    /// relayout) hovers whatever is under it now. Mouse regions get their
-    /// enter and exit callbacks, and button hover follows unless a press
-    /// owns the single-contact controls.
-    fn refresh_hover_after_layout(&mut self) {
-        let Some(primary) = self.hover_devices.latest() else {
-            return;
-        };
-        self.tree.refresh_follower_links_for_geometry();
+    /// Hit tests still pointers against final frame geometry once. Native
+    /// button styling can use the result for this paint, but MouseTracker
+    /// delivers region and span transitions after painting.
+    fn collect_stationary_hover_hits(
+        &mut self,
+    ) -> impl Iterator<Item = (RawPointerEvent, PointerHitTest)> + use<> {
+        let mut first = None;
+        let mut others = Vec::new();
+        if let Some(primary) = self.hover_devices.latest() {
+            self.tree.refresh_follower_links_for_geometry();
+            let primary_key = primary.hover_device_identity();
+            let mut target = None;
+            let mut index = 0;
+            while let Some(sample) = self.hover_devices.sample_at(index) {
+                index += 1;
+                let hit = self.tree.pointer_hit_test(sample.position);
+                if self.legacy_pointer.is_none() && sample.hover_device_identity() == primary_key {
+                    target = self.button_target(&hit).map(|(id, _)| id);
+                }
+                if first.is_none() {
+                    first = Some((sample, hit));
+                } else {
+                    others.push((sample, hit));
+                }
+            }
+            if self.legacy_pointer.is_none() {
+                self.set_hover(target);
+            }
+        }
+        // Keep the common single-device case inline.
+        first.into_iter().chain(others)
+    }
+
+    fn deliver_stationary_hover_hits(
+        &mut self,
+        hits: impl Iterator<Item = (RawPointerEvent, PointerHitTest)>,
+    ) {
         let window = self.gesture_window();
         let now = self.input_now();
-        let primary_key = primary.hover_device_identity();
-        let mut target = None;
-        let mut index = 0;
-        while let Some(sample) = self.hover_devices.sample_at(index) {
-            index += 1;
+        for (sample, hit) in hits {
             let event = RawPointerEvent {
                 local_position: sample.position,
                 delta: Offset::ZERO,
@@ -2762,15 +2785,8 @@ impl Runtime {
                 time: now,
                 ..sample
             };
-            let hit = self.tree.pointer_hit_test(sample.position);
             self.tree.refresh_mouse_hover_in_window(window, event, &hit);
             self.update_mouse_cursor(sample, &hit);
-            if self.legacy_pointer.is_none() && sample.hover_device_identity() == primary_key {
-                target = self.button_target(&hit).map(|(id, _)| id);
-            }
-        }
-        if self.legacy_pointer.is_none() {
-            self.set_hover(target);
         }
     }
 
@@ -4646,18 +4662,19 @@ impl Runtime {
         let (composited, animations_active) = self.tree.update_compositor(now)?;
         let composite = composite_span.elapsed_us();
         drop(_composite_guard);
-        // Layout and the compositor's scroll translations are final here,
-        // so hover catches up with content that moved under the pointer
-        // and its paint lands in this frame.
+        // Layout and the compositor's translations are final. Reuse this
+        // hit route for the post-paint mouse tracker update.
         let geometry = self.tree.diagnostics();
         let hit_revision = self.tree.hover_hit_revision();
-        if geometry.layouts != before.layouts
+        let stationary_hover_hits = if geometry.layouts != before.layouts
             || geometry.scroll_offset_updates != before.scroll_offset_updates
             || self.hover_hit_revision != hit_revision
         {
             self.hover_hit_revision = hit_revision;
-            self.refresh_hover_after_layout();
-        }
+            Some(self.collect_stationary_hover_hits())
+        } else {
+            None
+        };
         let floating_caret_live = self.sample_floating_caret(now);
         self.sync_text_selection_handles();
         self.cursor_blink_deadline = self.focused.and_then(|editor| {
@@ -4678,6 +4695,9 @@ impl Runtime {
         // Flutter `RenderView._updateSystemChrome`: the paint flattened the
         // compositor, so its annotations describe this frame.
         self.update_system_ui_overlay_style_from_annotations();
+        if let Some(hits) = stationary_hover_hits {
+            self.deliver_stationary_hover_hits(hits);
+        }
         self.sync_text_input_client();
         self.sync_mounted_text_histories();
         self.sync_undo_manager_state();
