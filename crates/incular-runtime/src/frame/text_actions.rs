@@ -812,8 +812,11 @@ impl Runtime {
 
     /// Deletes between the collapsed caret and `target`.
     fn delete_to(&self, controller: &TextEditingController, target: usize) {
-        controller.move_cursor(target, true);
-        controller.replace_selection("");
+        let caret = controller.selection().extent;
+        let range = TextRange::new(caret.min(target), caret.max(target));
+        // Flutter applies one ReplaceTextIntent, without publishing a temporary
+        // selection. An empty range leaves affinity and composing unchanged.
+        let _ = controller.replace_range_as_user_edit(range, "");
     }
 
     /// `collapseAtReversal`: extends the selection to `target`, unless that

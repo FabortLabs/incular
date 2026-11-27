@@ -13,3 +13,14 @@ The native Fuchsia shortcut policy reuses Android's tested map. The
 cluster boundary uses Flutter's equivalent UTF-16 offset and
 Incular's UTF-8 byte offset. The separate upstream case placing a
 selection inside a surrogate pair is not credited.
+
+Five forward Delete registrations ran through all 26 platform
+expansions. They cover deleting at the start of a line or document,
+preserving selection in a read-only editor, keeping upstream affinity
+when Delete has nothing to remove at the end of the document, and
+removing the entire following family emoji at a cluster boundary.
+
+The document-end regression reproduced on Android: a zero-length
+deletion reset upstream affinity even though the text had not changed.
+The runtime now deletes the range in one controller transaction,
+without first changing the selection, so an empty range is a no-op.

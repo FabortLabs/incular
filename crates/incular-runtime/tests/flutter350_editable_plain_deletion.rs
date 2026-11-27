@@ -27,7 +27,8 @@ struct Expected<'a> {
     affinity: TextAffinity,
 }
 
-fn backspace(
+fn character_deletion(
+    (named_key, code): (NamedKey, Code),
     platforms: &[TextShortcutPlatform],
     initial_text: &str,
     selection: TextSelection,
@@ -50,12 +51,9 @@ fn backspace(
         runtime.run_frame(bounds).unwrap();
         let was_focused = runtime.focused_element();
         assert!(was_focused.is_some(), "{platform:?}");
-        let key = KeyboardKey::Named(NamedKey::Backspace);
-        let _ = runtime.handle_input(InputEvent::Key(KeyboardEvent::key_down(
-            key.clone(),
-            Code::Backspace,
-        )));
-        let _ = runtime.handle_input(InputEvent::Key(KeyboardEvent::key_up(key, Code::Backspace)));
+        let key = KeyboardKey::Named(named_key);
+        let _ = runtime.handle_input(InputEvent::Key(KeyboardEvent::key_down(key.clone(), code)));
+        let _ = runtime.handle_input(InputEvent::Key(KeyboardEvent::key_up(key, code)));
         runtime.run_frame(bounds).unwrap();
         assert_eq!(runtime.focused_element(), was_focused);
         assert_eq!(controller.text(), expected.text, "{platform:?}");
@@ -74,7 +72,8 @@ fn backspace(
 
 #[test]
 fn backspace_joins_with_the_previous_line() {
-    backspace(
+    character_deletion(
+        (NamedKey::Backspace, Code::Backspace),
         NON_IOS,
         TEXT,
         TextSelection::collapsed(20),
@@ -90,7 +89,8 @@ fn backspace_joins_with_the_previous_line() {
 
 #[test]
 fn read_only_backspace_does_not_change_text_or_selection_affinity() {
-    backspace(
+    character_deletion(
+        (NamedKey::Backspace, Code::Backspace),
         ALL,
         TEXT,
         TextSelection::collapsed(20),
@@ -106,7 +106,8 @@ fn read_only_backspace_does_not_change_text_or_selection_affinity() {
 
 #[test]
 fn backspace_at_document_start_is_a_no_op() {
-    backspace(
+    character_deletion(
+        (NamedKey::Backspace, Code::Backspace),
         ALL,
         TEXT,
         TextSelection::collapsed(0),
@@ -122,7 +123,8 @@ fn backspace_at_document_start_is_a_no_op() {
 
 #[test]
 fn backspace_at_document_end_deletes_just_the_last_character() {
-    backspace(
+    character_deletion(
+        (NamedKey::Backspace, Code::Backspace),
         NON_IOS,
         TEXT,
         TextSelection::collapsed(72),
@@ -144,7 +146,8 @@ fn backspace_at_a_cluster_boundary_removes_the_entire_preceding_emoji() {
     // Flutter records a UTF-16 selection at code-unit offset 8.
     // Incular's equivalent is the UTF-8 byte boundary after the first emoji.
     assert_eq!(FAMILY.encode_utf16().count(), 8);
-    backspace(
+    character_deletion(
+        (NamedKey::Backspace, Code::Backspace),
         NON_IOS,
         INPUT,
         TextSelection::collapsed(FAMILY.len()),
@@ -153,6 +156,95 @@ fn backspace_at_a_cluster_boundary_removes_the_entire_preceding_emoji() {
         Expected {
             text: RESULT,
             caret: 0,
+            affinity: TextAffinity::Downstream,
+        },
+    );
+}
+
+#[test]
+fn forward_delete_removes_the_first_character_of_the_current_line() {
+    character_deletion(
+        (NamedKey::Delete, Code::Delete),
+        NON_IOS,
+        TEXT,
+        TextSelection::collapsed(20),
+        TextAffinity::Upstream,
+        false,
+        Expected {
+            text: "Now is the time for\nll good people\nto come to the aid\nof their country.",
+            caret: 20,
+            affinity: TextAffinity::Downstream,
+        },
+    );
+}
+
+#[test]
+fn read_only_forward_delete_does_not_change_text_or_selection_affinity() {
+    character_deletion(
+        (NamedKey::Delete, Code::Delete),
+        NON_IOS,
+        TEXT,
+        TextSelection::collapsed(20),
+        TextAffinity::Upstream,
+        true,
+        Expected {
+            text: TEXT,
+            caret: 20,
+            affinity: TextAffinity::Upstream,
+        },
+    );
+}
+
+#[test]
+fn forward_delete_at_document_start_removes_the_first_character() {
+    character_deletion(
+        (NamedKey::Delete, Code::Delete),
+        NON_IOS,
+        TEXT,
+        TextSelection::collapsed(0),
+        TextAffinity::Downstream,
+        false,
+        Expected {
+            text: "ow is the time for\nall good people\nto come to the aid\nof their country.",
+            caret: 0,
+            affinity: TextAffinity::Downstream,
+        },
+    );
+}
+
+#[test]
+fn forward_delete_at_document_end_preserves_affinity() {
+    character_deletion(
+        (NamedKey::Delete, Code::Delete),
+        ALL,
+        TEXT,
+        TextSelection::collapsed(72),
+        TextAffinity::Upstream,
+        false,
+        Expected {
+            text: TEXT,
+            caret: 72,
+            affinity: TextAffinity::Upstream,
+        },
+    );
+}
+
+#[test]
+fn forward_delete_at_a_cluster_boundary_removes_the_entire_following_emoji() {
+    const FAMILY: &str = "👨‍👩‍👦";
+    const INPUT: &str = "👨‍👩‍👦👨‍👩‍👦👨‍👩‍👦";
+    const RESULT: &str = "👨‍👩‍👦👨‍👩‍👦";
+    assert_eq!(FAMILY.encode_utf16().count(), 8);
+    character_deletion(
+        (NamedKey::Delete, Code::Delete),
+        NON_IOS,
+        INPUT,
+        TextSelection::collapsed(FAMILY.len()),
+        TextAffinity::Upstream,
+        false,
+        Expected {
+            text: RESULT,
+            caret: FAMILY.len(),
             affinity: TextAffinity::Downstream,
         },
     );

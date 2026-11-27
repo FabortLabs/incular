@@ -3748,3 +3748,8 @@ packages/flutter/test/widgets/editable_text_shortcuts_test.dart	146	backspace re
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	164	backspace at start	paired-match	upstream-editable-plain-deletion.md
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	182	backspace at end	paired-match	upstream-editable-plain-deletion.md
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	218	backspace at cluster boundary	paired-match	upstream-editable-plain-deletion.md
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	237	delete	paired-match	upstream-editable-plain-deletion.md
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	260	delete readonly	paired-match	upstream-editable-plain-deletion.md
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	278	delete at start	paired-match	upstream-editable-plain-deletion.md
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	296	delete at end	paired-match	upstream-editable-plain-deletion.md
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	335	delete at cluster boundary	paired-match	upstream-editable-plain-deletion.md
