@@ -3212,6 +3212,17 @@ impl WidgetTree {
                 let node = self.render_live(*child, "mounted flow child render must remain live");
                 (!node.parked).then_some(node.object.layers.root)
             }).collect()
+        } else if let Some(visible) = self
+            .render_live(render, "mounted paragraph must remain live")
+            .inline_visible_children()
+        {
+            render_children.iter().filter_map(|child| {
+                if !visible.contains(child) {
+                    return None;
+                }
+                let node = self.render_live(*child, "mounted inline child must remain live");
+                (!node.parked).then_some(node.object.layers.root)
+            }).collect()
         } else if let Some(slots) = paint_slots {
             slots
                 .into_iter()

@@ -959,8 +959,9 @@ fn rich_text_widget(
     strut: Option<StrutStyle>,
 ) -> Widget {
     let placeholders = value.text.placeholders();
+    let has_placeholders = !placeholders.is_empty();
     let inline =
-        (!placeholders.is_empty()).then(|| {
+        has_placeholders.then(|| {
             let capacity = children.len().min(placeholders.len());
             let mut slots = Vec::with_capacity(capacity);
             let mut widgets = Vec::with_capacity(capacity);
@@ -1009,6 +1010,13 @@ fn rich_text_widget(
     }
     if let Some(label) = paragraph_pronunciation(&value.text) {
         crate::Semantics::new(widget).attributed_label(label).into()
+    } else if has_placeholders {
+        // Replacement characters are layout protocol bytes, not speech.
+        // An actual inline child contributes its own semantics if placed.
+        widget.accessibility_label(value.text.to_plain_text(incular_text::PlainTextOptions {
+            include_semantics_labels: true,
+            include_placeholders: false,
+        }))
     } else {
         match value.text.semantics_text() {
             Some(label) => widget.accessibility_label(label),

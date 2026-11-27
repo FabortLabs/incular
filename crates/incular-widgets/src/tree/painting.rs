@@ -11,10 +11,10 @@ use super::text::{
     with_text_field_display,
 };
 
-/// The paintable subset; unselected IndexedStack children remain laid out
-/// and retain any pending paint until their layer is attached again.
+/// The paintable subset. Hidden IndexedStack and paragraph children keep
+/// retained state and pending paint until their layer is attached again.
 fn visible_paint_children(node: &RenderNode) -> &[RenderObjectId] {
-    if let Some(order) = node.flow_paint_order() {
+    if let Some(order) = node.flow_paint_order().or_else(|| node.inline_visible_children()) {
         order
     } else if let RenderKind::IndexedStack { index, .. } = node.object.kind() {
         index

@@ -107,6 +107,33 @@ impl WidgetTree {
         .strut(strut)
     }
 
+    fn sync_inline_children(
+        &mut self,
+        id: RenderObjectId,
+        children: &[RenderObjectId],
+        visible: Option<Box<[RenderObjectId]>>,
+    ) {
+        let node = self.render_live(id, "inline paragraph remains live");
+        if node.inline_visible_children() == visible.as_deref() {
+            return;
+        }
+        let layers = visible
+            .as_deref()
+            .unwrap_or(children)
+            .iter()
+            .filter_map(|&child| {
+                let child = self.render_live(child, "inline child remains live");
+                (!child.parked).then_some(child.object.layers.root)
+            })
+            .collect();
+        let surface = node.object.layers.clone();
+        let kind = node.object.shared_kind();
+        self.render_live_mut(id, "inline paragraph remains live")
+            .set_inline_visible_children(visible);
+        surface.set_render_children(&mut self.compositor, &kind, layers);
+        self.mark_render_semantics(id, SemanticsDirty::Subtree);
+    }
+
     pub(super) fn layout_text_kind(
         &mut self,
         id: RenderObjectId,
@@ -198,24 +225,33 @@ impl WidgetTree {
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(layout.clone());
                 node.baseline = Some(layout.metrics.baseline);
-                // Each child sits in its placed box; a box the paragraph dropped
-                // (clipped or ellipsized lines) leaves its child at the origin.
+                // A placeholder with no laid-out box has no paint offset
+                // in Flutter. Retain the widget and its geometry but exclude
+                // it from paint, hit testing, and accessibility.
+                let mut visible: Option<Vec<_>> = None;
                 let offsets = match inline {
                     Some(inline) => inline
                         .slots
                         .iter()
                         .take(children.len())
-                        .map(|&slot| {
+                        .enumerate()
+                        .map(|(child_index, &slot)| {
                             let index = placeholders.get(slot).map(|placeholder| placeholder.index);
-                            layout
-                                .placeholders
-                                .iter()
-                                .find(|placed| Some(placed.index) == index)
-                                .map_or(Offset::ZERO, |placed| placed.rect.origin)
+                            let placement = layout.placeholders.iter()
+                                .find(|placed| Some(placed.index) == index);
+                            if let Some(placed) = placement {
+                                if let Some(visible) = &mut visible {
+                                    visible.push(children[child_index]);
+                                }
+                                return placed.rect.origin;
+                            }
+                            visible.get_or_insert_with(|| children[..child_index].to_vec());
+                            Offset::ZERO
                         })
                         .collect(),
                     None => ChildOffsets::default(),
                 };
+                self.sync_inline_children(id, children, visible.map(Vec::into_boxed_slice));
                 (size, offsets)
             }
             RenderKind::SelectableText {

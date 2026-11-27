@@ -665,6 +665,27 @@ impl WidgetTree {
         if let Some(grouped) = self.sliver_semantics_children(element, entry) {
             return Cow::Owned(grouped);
         }
+        if let Some(visible) = self
+            .render_live(entry.render, "semantic render remains live")
+            .inline_visible_children()
+        {
+            let mut filtered: Vec<_> = entry
+                .children
+                .iter()
+                .copied()
+                .filter(|child| {
+                    self.elements
+                        .get(child.0)
+                        .is_some_and(|entry| visible.contains(&entry.render))
+                })
+                .collect();
+            let start = filtered
+                .iter()
+                .rposition(|child| self.semantics_block_reach.contains(child))
+                .unwrap_or(0);
+            filtered.drain(..start);
+            return Cow::Owned(filtered);
+        }
         if self.semantics_block_reach.is_empty() {
             return Cow::Borrowed(&entry.children);
         }

@@ -59,6 +59,8 @@ impl Default for RenderButtonState {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RenderTextState {
     pub(crate) layout: Option<Arc<TextLayout>>,
+    /// Set only when a rich paragraph omitted one or more inline children.
+    inline_visible_children: Option<Box<[RenderObjectId]>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -574,6 +576,19 @@ impl RenderNode {
         match &self.object.feature {
             RenderFeatureState::Flow(order) => Some(order),
             _ => None,
+        }
+    }
+
+    pub(crate) fn inline_visible_children(&self) -> Option<&[RenderObjectId]> {
+        match &self.object.feature {
+            RenderFeatureState::Text(state) => state.inline_visible_children.as_deref(),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn set_inline_visible_children(&mut self, visible: Option<Box<[RenderObjectId]>>) {
+        if let RenderFeatureState::Text(state) = &mut self.object.feature {
+            state.inline_visible_children = visible;
         }
     }
 

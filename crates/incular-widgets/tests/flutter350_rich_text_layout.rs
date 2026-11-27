@@ -106,3 +106,96 @@ fn widget_span_defaults_to_bottom_alignment() {
         WidgetSpanAlignment::TextBottom
     );
 }
+
+#[test]
+fn an_ellipsized_inline_widget_does_not_paint_hit_or_expose_semantics_at_the_origin() {
+    use incular_core::Offset;
+    use incular_rendering::PaintCommand;
+    use incular_text::TextOverflow;
+    use incular_widgets::Semantics;
+
+    let Some(_) = std::env::var_os("INCULAR_FLUTTER_AHEM_PATH") else {
+        return;
+    };
+    let key = GlobalKey::new();
+    let tint = Color::rgba(23, 187, 64, 255);
+    let text = TextSpan::new("a long line to be truncated.")
+        .style(ahem())
+        .child(WidgetSpan::new(1));
+    let rich = RichParagraph::new(
+        RichText::new(text)
+            .max_lines(Some(1))
+            .overflow(TextOverflow::Ellipsis),
+    )
+    .child(
+        1,
+        Semantics::new(
+            Widget::from(ColoredBox::new(
+                tint,
+                SizedBox::new().width(64.).height(16.),
+            ))
+            .with_key(key),
+        )
+        .label("truncated")
+        .container(true),
+    );
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, rich).into())
+        .unwrap();
+    let frame = |tree: &mut WidgetTree, width| {
+        tree.layout(Constraints::loose(Size::new(width, 100.)))
+            .unwrap();
+        tree.update_semantics();
+        tree.paint()
+    };
+    let painted_child = |list: &incular_rendering::DisplayList| {
+        list.commands().iter().any(|command| {
+            matches!(command, PaintCommand::Rect { color, .. }
+                | PaintCommand::HardEdgeRect { color, .. } if *color == tint)
+        })
+    };
+    let semantics_has_child = |tree: &WidgetTree| {
+        tree.semantics()
+            .iter()
+            .any(|(_, node)| node.label.as_deref() == Some("truncated"))
+    };
+
+    assert!(painted_child(&frame(&mut tree, 800.)));
+    let child = tree.element_with_key(&key.into()).unwrap();
+    let render = tree.render_id(child).unwrap();
+    let location = tree.element_bounds(child).unwrap().origin + Offset::new(1., 1.);
+    assert_eq!(tree.hit_test(location), Some(render));
+    assert!(semantics_has_child(&tree));
+
+    let display_list = frame(&mut tree, 100.);
+    let paragraph = tree.children(tree.root().unwrap()).unwrap()[0];
+    let rich_render = tree.render_id(paragraph).unwrap();
+    assert!(
+        tree.text_layout(rich_render)
+            .unwrap()
+            .placeholders
+            .is_empty()
+    );
+    assert_eq!(
+        tree.element_with_key(&key.into()),
+        Some(child),
+        "keep retained state"
+    );
+    assert!(
+        !painted_child(&display_list),
+        "an elided inline widget must not leave a stale picture"
+    );
+    assert_ne!(tree.hit_test(Offset::new(1., 1.)), Some(render));
+    assert!(!semantics_has_child(&tree));
+    assert_eq!(
+        tree.semantics()
+            .iter()
+            .filter_map(|(_, node)| node.label.as_deref())
+            .collect::<Vec<_>>(),
+        ["a long line to be truncated."]
+    );
+
+    assert!(painted_child(&frame(&mut tree, 800.)));
+    assert_eq!(tree.hit_test(location), Some(render));
+    assert!(semantics_has_child(&tree));
+}

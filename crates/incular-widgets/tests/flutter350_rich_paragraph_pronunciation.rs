@@ -103,3 +103,28 @@ fn switching_locale_or_clearing_ranges_keeps_the_mounted_text_semantics_id() {
         }
     }
 }
+
+#[test]
+fn an_empty_spell_out_span_never_publishes_a_zero_length_pronunciation_range() {
+    let mut tree = WidgetTree::new();
+    let text = RichText::new(TextSpan::empty().spell_out(true));
+    tree.mount(Directionality::new(TextDirection::Rtl, text).into())
+        .unwrap();
+    tree.layout(Constraints::loose(Size::new(200., 100.)))
+        .unwrap();
+    tree.update_semantics();
+    let graph = tree.semantics();
+    let [root] = graph.roots() else {
+        panic!("expected the empty paragraph")
+    };
+    let paragraph = graph.node(*root).unwrap();
+    assert_eq!(paragraph.label.as_deref().unwrap_or_default(), "");
+    assert!(
+        paragraph
+            .state
+            .text_attributes
+            .as_ref()
+            .is_none_or(|attrs| attrs.label.is_empty())
+    );
+    assert!(paragraph.children.is_empty());
+}

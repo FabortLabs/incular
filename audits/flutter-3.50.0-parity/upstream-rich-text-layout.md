@@ -25,3 +25,24 @@ mixed-script inline coverage.
 INCULAR_FLUTTER_AHEM_PATH="$PWD/.tmp/flutter/packages/flutter_tools/static/Ahem.ttf" \
   cargo test -p incular-widgets --test flutter350_rich_text_layout
 ```
+
+## Ellipsized inline children
+
+The authored pinned `ellipsized_inline_widget_presentation_test.dart`
+mounts a rich paragraph without named spans and keeps the same green
+inline child mounted across a width change. At 100 pixels, the one-line
+ellipsis removes the placeholder's placement. Flutter does not paint the
+green widget, send it a tap, or publish its annotation in the active
+semantics tree. Widening to 800 restores all three. In Incular, the
+missing placement previously became an origin offset but the child's
+cached compositor layer remained attached. The retained paint, hit, and
+semantic walks now use only placed inline children. The text annotation
+does not speak the object-replacement marker.
+
+The original `rendering/paragraph_test.dart:755` passed in Flutter.
+It stays partial because its raw RenderParagraph configuration relies on
+an unlimited-line ellipsis; the paired mounted presentation probe uses
+an explicit one-line cap. The original empty spell-out registration at
+`rendering/paragraph_test.dart:815` also passed, and the native
+`flutter350_rich_paragraph_pronunciation` target verifies the mounted
+empty paragraph has no pronunciation attributes or synthetic fragments.
