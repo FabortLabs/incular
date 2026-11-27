@@ -48,3 +48,16 @@ left-hand edge of the last row extends to the logical beginning.
 Both native directions select the original UTF-8 text with its line
 break and match the reference. The corresponding unit geometry also
 checks all eight outside regions in RTL.
+
+## Touch long-press drag
+
+Two pinned authored touch cases start a long press in the first or
+last word, verify that whole word is initially selected, then drag
+horizontally outside the paragraph without lifting the finger.
+Flutter extends through the opposite logical end in both directions
+and preserves the selection on release. Incular formerly kept
+only the initial word. Its long-press path now shares the captured
+region's rectangle routing; an outside point uses the snapped edge
+instead of recomputing a word at that boundary. All 25 selected
+native controls passed. This does not compare toolbar artwork or
+the behavior of individual inline fragments.

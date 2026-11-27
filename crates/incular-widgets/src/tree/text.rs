@@ -1292,6 +1292,7 @@ impl WidgetTree {
         point: Offset,
     ) -> Option<(usize, incular_text::TextAffinity)> {
         self.selectable_text_affinity_at(id, point, false)
+            .map(|(byte, affinity, _)| (byte, affinity))
     }
 
     fn selectable_text_affinity_at(
@@ -1299,7 +1300,7 @@ impl WidgetTree {
         id: ElementId,
         point: Offset,
         snap_drag: bool,
-    ) -> Option<(usize, incular_text::TextAffinity)> {
+    ) -> Option<(usize, incular_text::TextAffinity, bool)> {
         let render = self.render_id(id)?;
         let node = self.renders.get(render.0)?;
         let layout = node.text_layout()?;
@@ -1307,6 +1308,7 @@ impl WidgetTree {
             .render_world_transform(render)
             .inverse_transform_point(point)
             .unwrap_or(point);
+        let mut inside = true;
         if snap_drag {
             let direction = match node.object.kind() {
                 RenderKind::Text { text_direction, .. } => *text_direction,
@@ -1324,10 +1326,13 @@ impl WidgetTree {
                 _ => TextDirection::Ltr,
             };
             let rect = Rect::from_origin_size(Offset::ZERO, node.size);
-            local = SelectionUtils::adjust_drag_offset(rect, local, direction);
+            inside = SelectionUtils::get_result_based_on_rect(rect, local) == SelectionResult::End;
+            if !inside {
+                local = SelectionUtils::adjust_drag_offset(rect, local, direction);
+            }
         }
         let position = layout.closest_text_position(local);
-        Some((position.offset, position.affinity))
+        Some((position.offset, position.affinity, inside))
     }
 
     /// The context menu state of a field built with a context menu builder.
@@ -1448,12 +1453,41 @@ impl WidgetTree {
         point: Offset,
     ) -> Option<ElementId> {
         let area = self.selection_area_ancestor(current)?;
-        let target = hit
-            .filter(|&hit| hit == current || self.selection_area_ancestor(hit) == Some(area))
-            .or_else(|| self.selectable_outside_drag_target(area, current, point))
-            .unwrap_or(current);
+        let target = self.selectable_pointer_drag_target(area, current, hit, point);
         self.selectable_text_set_selection(target, point, true)
             .then_some(target)
+    }
+
+    /// Extends a long-press drag from the original selected word while
+    /// retaining the active edge's position among this region's labels.
+    #[doc(hidden)]
+    pub fn selectable_text_extend_word_drag(
+        &mut self,
+        anchor: ElementId,
+        anchor_word: TextSelection,
+        hit: Option<ElementId>,
+        point: Offset,
+    ) -> Option<ElementId> {
+        let area = self.selection_area_ancestor(anchor)?;
+        let current = self
+            .static_selections
+            .get(&area)
+            .map_or(anchor, |selection| selection.extent.element);
+        let target = self.selectable_pointer_drag_target(area, current, hit, point);
+        self.selectable_text_select_words_to(anchor, anchor_word, target, point)
+            .then_some(target)
+    }
+
+    fn selectable_pointer_drag_target(
+        &self,
+        area: ElementId,
+        current: ElementId,
+        hit: Option<ElementId>,
+        point: Offset,
+    ) -> ElementId {
+        hit.filter(|&hit| hit == current || self.selection_area_ancestor(hit) == Some(area))
+            .or_else(|| self.selectable_outside_drag_target(area, current, point))
+            .unwrap_or(current)
     }
 
     fn selectable_outside_drag_target(
@@ -1501,7 +1535,7 @@ impl WidgetTree {
         };
         // Use shaped line positions and caret stops. A single nominal
         // line height cannot locate a hit between differently sized runs.
-        let Some((byte, affinity)) = self.selectable_text_affinity_at(id, point, extend) else {
+        let Some((byte, affinity, _)) = self.selectable_text_affinity_at(id, point, extend) else {
             return false;
         };
         let point = StaticSelectionPoint {
@@ -1558,7 +1592,7 @@ impl WidgetTree {
         let Some(text) = self.selectable_text_value(id) else {
             return false;
         };
-        let Some((byte, _)) = self.selectable_text_affinity_position_at(id, point) else {
+        let Some((byte, _, inside)) = self.selectable_text_affinity_at(id, point, true) else {
             return false;
         };
         let entries = self.selectable_texts_in_area(area);
@@ -1568,7 +1602,13 @@ impl WidgetTree {
         ) else {
             return false;
         };
-        let (word_start, word_end) = incular_text::word_boundary_at(text, byte);
+        // Flutter does not expand a point snapped from outside to the
+        // neighboring word: the fragment boundary itself owns that edge.
+        let (word_start, word_end) = if inside {
+            incular_text::word_boundary_at(text, byte)
+        } else {
+            (byte, byte)
+        };
         let (anchor_point, extent) = if (target_index, byte) >= (anchor_index, anchor_word.end()) {
             (anchor_word.start(), word_end)
         } else if (target_index, byte) < (anchor_index, anchor_word.start()) {

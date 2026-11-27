@@ -205,3 +205,84 @@ fn captured_drag_uses_rtl_logical_edges_instead_of_ltr_corners() {
         assert_eq!(controller.selected_text(), SOURCE, "forward={forward}");
     }
 }
+
+#[test]
+fn long_press_drag_extends_whole_words_off_the_label_in_both_directions() {
+    use incular_core::{PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerSampleMetadata};
+    use incular_runtime::TextShortcutPlatform;
+    use std::time::{Duration, Instant};
+
+    let Some(path) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    const TEXT: &str = "alpha beta\nomega zeta";
+    const FONT: &str = "Pinned FlutterTest for off-label long press";
+    incular_text::register_application_font_as(FONT, std::fs::read(path).unwrap());
+    let frame = Constraints::tight(Size::new(800., 600.));
+    let key = Key::from("touch text");
+    for forward in [true, false] {
+        let controller = SelectionAreaController::new();
+        let child =
+            Widget::from(Text::new(TEXT).style(TextStyle::new().font_family(FONT).font_size(10.)))
+                .with_key(key.clone());
+        let mut runtime = Runtime::new(
+            Directionality::new(
+                TextDirection::Ltr,
+                Widget::selection_area(controller.clone(), Center::new(child).into()),
+            )
+            .into(),
+        )
+        .unwrap();
+        runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+        let down = Instant::now();
+        runtime.run_frame_at(frame, down).unwrap();
+        let node = runtime.tree().element_with_key(&key).unwrap();
+        let bounds = runtime.tree().element_bounds(node).unwrap();
+        let right = bounds.origin.x + bounds.size.width;
+        let start = if forward {
+            bounds.origin + Offset::new(15., 5.)
+        } else {
+            Offset::new(right - 15., bounds.origin.y + bounds.size.height - 5.)
+        };
+        let goal = Offset::new(
+            if forward {
+                right + 30.
+            } else {
+                bounds.origin.x - 30.
+            },
+            start.y,
+        );
+        let send = |runtime: &mut Runtime, phase, position, at| {
+            let active = phase != PointerPhase::Up;
+            let _ = runtime.handle_input_at(
+                InputEvent::PointerWithMetadata {
+                    pointer: 1,
+                    device: 3,
+                    kind: PointerDeviceKind::Touch,
+                    buttons: if active { PRIMARY_POINTER_BUTTON } else { 0 },
+                    button: (phase != PointerPhase::Move).then_some(PRIMARY_POINTER_BUTTON),
+                    sample: PointerSampleMetadata::default(),
+                    phase,
+                    position,
+                },
+                at,
+            );
+        };
+        send(&mut runtime, PointerPhase::Down, start, down);
+        let held = down + Duration::from_millis(510);
+        runtime.run_frame_at(frame, held).unwrap();
+        assert_eq!(
+            controller.selected_text(),
+            if forward { "alpha" } else { "zeta" }
+        );
+        send(&mut runtime, PointerPhase::Move, goal, held);
+        assert_eq!(controller.selected_text(), TEXT, "forward={forward}");
+        send(
+            &mut runtime,
+            PointerPhase::Up,
+            goal,
+            held + Duration::from_millis(1),
+        );
+        assert_eq!(controller.selected_text(), TEXT);
+    }
+}

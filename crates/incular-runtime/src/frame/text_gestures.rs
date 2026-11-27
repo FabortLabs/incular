@@ -1553,10 +1553,13 @@ impl Runtime {
                 self.report_editor_selection_delta(field, previous, SelectionChangedCause::LongPress);
             }
             LongPressTarget::Label(label) => {
-                if let (Some(anchor), Some(target)) = (press.anchor_word, selectable_target)
-                    && self
-                        .tree
-                        .selectable_text_select_words_to(label, anchor, target, position)
+                if let Some(anchor) = press.anchor_word
+                    && let Some(target) = self.tree.selectable_text_extend_word_drag(
+                        label,
+                        anchor,
+                        selectable_target,
+                        position,
+                    )
                 {
                     self.set_focus(Some(target));
                 }
