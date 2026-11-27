@@ -16,6 +16,12 @@ Flutter-compatible embedders can pass a `flutter/textinput`
 positions before touching the active editor and ignores updates for a
 retired client.
 
+`FlutterTextInputConfiguration` compares and hashes implicit smart punctuation
+using its effective values. Use `configuration.copy_with(|copy| { ... })` to
+change settings while retaining the source configuration's effective smart dashes
+and quotes. Set either setting to `None` inside the update to resolve it again
+from the copy's `obscure_text` value.
+
 ```rust
 use incular::prelude::*;
 

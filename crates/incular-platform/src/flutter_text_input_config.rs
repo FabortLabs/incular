@@ -1,11 +1,13 @@
 //! Flutter text-input configuration on its JSON channel, not a native IME state.
 
+use std::hash::{Hash, Hasher};
+
 use incular_config::{Brightness, Locale};
 use serde_json::{Map, Value, json};
 
 use crate::{SmartDashesType, SmartQuotesType, TextCapitalization, TextInputAction, TextInputType};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct FlutterTextInputConfiguration {
     pub view_id: Option<i64>,
     pub input_type: TextInputType,
@@ -54,19 +56,83 @@ impl Default for FlutterTextInputConfiguration {
     }
 }
 
+impl PartialEq for FlutterTextInputConfiguration {
+    fn eq(&self, other: &Self) -> bool {
+        self.identity() == other.identity()
+    }
+}
+
+impl Eq for FlutterTextInputConfiguration {}
+
+impl Hash for FlutterTextInputConfiguration {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.identity().hash(state);
+    }
+}
+
 impl FlutterTextInputConfiguration {
-    #[must_use]
-    pub fn to_json(&self) -> Map<String, Value> {
-        let dashes = self.smart_dashes_type.unwrap_or(if self.obscure_text {
+    fn effective_smart_dashes(&self) -> SmartDashesType {
+        self.smart_dashes_type.unwrap_or(if self.obscure_text {
             SmartDashesType::Disabled
         } else {
             SmartDashesType::Enabled
-        });
-        let quotes = self.smart_quotes_type.unwrap_or(if self.obscure_text {
+        })
+    }
+
+    fn effective_smart_quotes(&self) -> SmartQuotesType {
+        self.smart_quotes_type.unwrap_or(if self.obscure_text {
             SmartQuotesType::Disabled
         } else {
             SmartQuotesType::Enabled
-        });
+        })
+    }
+
+    // Borrow the original fields and normalize just the implicit defaults.
+    // Comparing or hashing a configuration must not serialize it.
+    fn identity(&self) -> impl Eq + Hash + '_ {
+        (
+            (
+                self.view_id,
+                self.input_type,
+                self.read_only,
+                self.obscure_text,
+                self.autocorrect,
+                self.effective_smart_dashes(),
+                self.effective_smart_quotes(),
+                self.enable_suggestions,
+                self.enable_interactive_selection,
+                self.action_label.as_deref(),
+            ),
+            (
+                self.input_action,
+                self.text_capitalization,
+                self.keyboard_appearance,
+                self.enable_ime_personalized_learning,
+                self.allowed_mime_types.as_slice(),
+                self.autofill.as_ref(),
+                self.enable_delta_model,
+                self.hint_locales.as_deref(),
+                self.enable_inline_prediction,
+            ),
+        )
+    }
+
+    /// Copies this configuration and applies updates to the copy.
+    ///
+    /// Like Flutter's `copyWith`, changing `obscure_text` alone retains the
+    /// source's effective smart punctuation settings. Set one of those settings
+    /// to `None` in the update to resolve it from the new obscuring mode instead.
+    #[must_use]
+    pub fn copy_with(&self, update: impl FnOnce(&mut Self)) -> Self {
+        let mut copy = self.clone();
+        copy.smart_dashes_type = Some(self.effective_smart_dashes());
+        copy.smart_quotes_type = Some(self.effective_smart_quotes());
+        update(&mut copy);
+        copy
+    }
+
+    #[must_use]
+    pub fn to_json(&self) -> Map<String, Value> {
         let action = match self.input_action {
             TextInputAction::Unspecified => "unspecified",
             TextInputAction::Done => "done",
@@ -102,8 +168,8 @@ impl FlutterTextInputConfiguration {
             "readOnly": self.read_only,
             "obscureText": self.obscure_text,
             "autocorrect": self.autocorrect,
-            "smartDashesType": dashes.flutter_index(),
-            "smartQuotesType": quotes.flutter_index(),
+            "smartDashesType": self.effective_smart_dashes().flutter_index(),
+            "smartQuotesType": self.effective_smart_quotes().flutter_index(),
             "enableSuggestions": self.enable_suggestions,
             "enableInteractiveSelection": self.enable_interactive_selection,
             "actionLabel": self.action_label,

@@ -744,7 +744,7 @@ pub enum TextCapitalization {
 }
 
 /// Flutter's keyboard substitution policy for straight dashes.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum SmartDashesType {
     Disabled,
     #[default]
@@ -752,7 +752,7 @@ pub enum SmartDashesType {
 }
 
 /// Flutter's keyboard substitution policy for straight quotes.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum SmartQuotesType {
     Disabled,
     #[default]
