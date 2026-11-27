@@ -2865,8 +2865,8 @@ packages/flutter/test/painting/image_stream_test.dart	1156	ImageInfo.isCloneOf r
 packages/flutter/test/painting/image_stream_test.dart	1169	ImageInfo.isCloneOf returns true when all properties match	paired-match	upstream-image-info-and-handoff.md
 packages/flutter/test/painting/image_stream_test.dart	179	Chunk events of base ImageStreamCompleter are delivered	paired-match	upstream-image-live-chunks.md
 packages/flutter/test/painting/image_stream_test.dart	207	Chunk events of base ImageStreamCompleter are not buffered before listener registration	paired-match	upstream-image-live-chunks.md
-packages/flutter/test/painting/image_stream_test.dart	235	Chunk events of MultiFrameImageStreamCompleter are delivered	partial-match	upstream-image-live-chunks.md
-packages/flutter/test/painting/image_stream_test.dart	266	Chunk events of MultiFrameImageStreamCompleter are not buffered before listener registration	partial-match	upstream-image-live-chunks.md
+packages/flutter/test/painting/image_stream_test.dart	235	Chunk events of MultiFrameImageStreamCompleter are delivered	paired-match	upstream-image-live-chunks.md#animated-grouped-chunk-delivery
+packages/flutter/test/painting/image_stream_test.dart	266	Chunk events of MultiFrameImageStreamCompleter are not buffered before listener registration	paired-match	upstream-image-live-chunks.md#animated-grouped-chunk-delivery
 packages/flutter/test/painting/image_stream_test.dart	845	ImageStreamListener hashCode and equals	paired-match	upstream-image-live-chunks.md#grouped-listener-identity
 packages/flutter/test/painting/image_stream_test.dart	99	Decoding starts when a listener is added after codec is ready	paired-match	upstream-image-playback.md
 packages/flutter/test/painting/image_stream_test.dart	124	Decoding starts when a codec is ready after a listener is added	paired-match	upstream-image-playback.md

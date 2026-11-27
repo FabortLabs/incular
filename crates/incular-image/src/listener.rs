@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     ImageChunkEvent, ImageChunkSubscription, ImageError, ImageFrameSubscription, ImageInfo,
-    ImageStream,
+    ImagePlayback, ImagePlaybackSubscription, ImageStream,
 };
 
 pub type ImageListener = Rc<dyn Fn(ImageInfo, bool)>;
@@ -113,5 +113,28 @@ impl ImageStream {
             _frame: frame,
             _chunks: chunks,
         }
+    }
+}
+
+impl ImagePlayback {
+    /// Registers one group for both animated frame delivery and live
+    /// progress reports. Keep the returned token while observing.
+    pub fn listen_group(&self, listener: ImageStreamListener) -> Option<ImagePlaybackSubscription> {
+        let ImageStreamListener {
+            on_image,
+            on_chunk,
+            on_error,
+        } = listener;
+        self.listen_with_chunks(
+            move |result, synchronous| match result {
+                Ok(image) => on_image(image, synchronous),
+                Err(error) => {
+                    if let Some(handle) = &on_error {
+                        handle(error);
+                    }
+                }
+            },
+            on_chunk,
+        )
     }
 }

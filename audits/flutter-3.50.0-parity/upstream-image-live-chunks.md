@@ -44,3 +44,15 @@ Pending outcome listeners register with the unresolved source and
 are snapshotted before any callback; widget build dependencies still
 use the ordinary reactive cancellation rules. This probe adds no
 original registration to the coverage ledger.
+
+## Animated grouped chunk delivery
+
+The previously partial registrations at `painting/image_stream_test.dart:235,266`
+now pair against a pending animated playback rather than a one-image
+substitute. The native groups see exact byte reports 1/3 then 2/3,
+or only 2/3 when subscription begins after the first event. Progress
+does not schedule a frame. An authored native control also receives
+a transport error followed by a live progress report from the same
+listener group. Global unhandled-error reporting remains distinct
+from this explicit callback contract. All 25 focused native tests
+passed.

@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{ImageError, ImageInfo};
+use crate::{ImageChunkEvent, ImageChunkListener, ImageError, ImageInfo};
 
 mod scheduled;
 
@@ -45,6 +45,11 @@ type FrameResult = Result<ImageInfo, ImageError>;
 type FrameObserver = Rc<dyn Fn(FrameResult, bool)>;
 type SharedState = Rc<RefCell<State>>;
 
+struct PlaybackObserver {
+    frame: FrameObserver,
+    chunks: Option<ImageChunkListener>,
+}
+
 struct Source {
     codec: Rc<dyn ImageFrameCodec>,
     frames: NonZeroUsize,
@@ -56,7 +61,7 @@ struct State {
     source: Option<Source>,
     attached: bool,
     disposed: bool,
-    listeners: BTreeMap<u64, FrameObserver>,
+    listeners: BTreeMap<u64, PlaybackObserver>,
     next_listener: u64,
     keep_alive: usize,
     generation: u64,
@@ -82,7 +87,10 @@ impl State {
     }
 
     fn snapshot(&self) -> Vec<FrameObserver> {
-        self.listeners.values().cloned().collect()
+        self.listeners
+            .values()
+            .map(|listener| listener.frame.clone())
+            .collect()
     }
 
     fn needs_more(&mut self) -> bool {
@@ -212,6 +220,14 @@ impl ImagePlayback {
         &self,
         observer: impl Fn(Result<ImageInfo, ImageError>, bool) + 'static,
     ) -> Option<ImagePlaybackSubscription> {
+        self.listen_with_chunks(observer, None)
+    }
+
+    pub(crate) fn listen_with_chunks(
+        &self,
+        observer: impl Fn(FrameResult, bool) + 'static,
+        chunks: Option<ImageChunkListener>,
+    ) -> Option<ImagePlaybackSubscription> {
         let observer: FrameObserver = Rc::new(observer);
         let (id, current, error) = {
             let mut state = self.state.borrow_mut();
@@ -220,7 +236,13 @@ impl ImagePlayback {
             }
             let id = state.next_listener;
             state.next_listener = id.checked_add(1).expect("image listener id exhausted");
-            state.listeners.insert(id, Rc::clone(&observer));
+            state.listeners.insert(
+                id,
+                PlaybackObserver {
+                    frame: Rc::clone(&observer),
+                    chunks,
+                },
+            );
             (id, state.current.clone(), state.error.clone())
         };
         let subscription = ImagePlaybackSubscription {
@@ -235,6 +257,43 @@ impl ImagePlayback {
         }
         self.decode();
         Some(subscription)
+    }
+
+    /// Delivers this live progress event to the active listener groups.
+    /// Reports never replay for late listeners or wake the frame clock.
+    pub fn report_chunk(&self, event: ImageChunkEvent) -> bool {
+        let listeners = {
+            let state = self.state.borrow();
+            if state.disposed {
+                return false;
+            }
+            state
+                .listeners
+                .values()
+                .filter_map(|listener| listener.chunks.clone())
+                .collect::<Vec<_>>()
+        };
+        for listener in listeners {
+            listener(event);
+        }
+        true
+    }
+
+    /// Reports a transport error independently of frame decoding. The most
+    /// recent error remains available to newly added listener groups.
+    pub fn report_transport_error(&self, error: ImageError) -> bool {
+        let listeners = {
+            let mut state = self.state.borrow_mut();
+            if state.disposed {
+                return false;
+            }
+            state.error = Some(error.clone());
+            state.snapshot()
+        };
+        for listener in listeners {
+            listener(Err(error.clone()), false);
+        }
+        true
     }
 
     /// Preserve the codec and previously shown frame while no listeners
@@ -355,7 +414,7 @@ impl ImagePlayback {
         drop(finished);
     }
 
-    fn retire_if_idle(&self, remove: impl FnOnce(&mut State) -> Option<FrameObserver>) {
+    fn retire_if_idle(&self, remove: impl FnOnce(&mut State) -> Option<PlaybackObserver>) {
         let (removed, source, cancel_wake) = {
             let mut state = self.state.borrow_mut();
             let had_listeners = !state.listeners.is_empty();

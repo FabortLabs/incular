@@ -548,3 +548,72 @@ fn assert_error(delivered: &Delivered, i: usize, expected: &ImageError, synchron
     assert!(matches!(&delivered[i].0, Err(error) if error == expected));
     assert_eq!(delivered[i].1, synchronous);
 }
+
+#[test]
+fn pending_animated_codec_delivers_both_original_progress_events() {
+    use incular_animation::scheduler::has_scheduled_frame;
+    use incular_image::{ImageChunkEvent, ImageStreamListener};
+
+    let source = ImagePlayback::scheduled();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let chunks = seen.clone();
+    let _listener = source
+        .listen_group(
+            ImageStreamListener::new(Rc::new(|_, _| panic!("codec is still pending")))
+                .on_chunk(Rc::new(move |event| chunks.borrow_mut().push(event))),
+        )
+        .unwrap();
+    let first = ImageChunkEvent::new(1, Some(3));
+    let second = ImageChunkEvent::new(2, Some(3));
+    assert!(source.report_chunk(first));
+    assert!(source.report_chunk(second));
+    assert_eq!(*seen.borrow(), [first, second]);
+    assert!(!has_scheduled_frame());
+}
+
+#[test]
+fn animated_download_chunks_are_not_replayed_for_a_new_listener() {
+    use incular_image::{ImageChunkEvent, ImageStreamListener};
+
+    let source = ImagePlayback::scheduled();
+    let first = ImageChunkEvent::new(1, Some(3));
+    let second = ImageChunkEvent::new(2, Some(3));
+    assert!(source.report_chunk(first));
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let chunks = seen.clone();
+    let listener = source
+        .listen_group(
+            ImageStreamListener::new(Rc::new(|_, _| panic!("codec is still pending")))
+                .on_chunk(Rc::new(move |event| chunks.borrow_mut().push(event))),
+        )
+        .unwrap();
+    assert!(seen.borrow().is_empty());
+    assert!(source.report_chunk(second));
+    assert_eq!(*seen.borrow(), [second]);
+    drop(listener);
+    assert!(!source.report_chunk(first));
+}
+
+#[test]
+fn a_chunk_transport_error_does_not_block_later_download_progress() {
+    use incular_animation::scheduler::has_scheduled_frame;
+    use incular_image::{ImageChunkEvent, ImageStreamListener};
+
+    let source = ImagePlayback::scheduled();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let chunks = seen.clone();
+    let errors = seen.clone();
+    let _listener = source
+        .listen_group(
+            ImageStreamListener::new(Rc::new(|_, _| panic!("codec is still pending")))
+                .on_chunk(Rc::new(move |event| chunks.borrow_mut().push(Ok(event))))
+                .on_error(Rc::new(move |error| errors.borrow_mut().push(Err(error)))),
+        )
+        .unwrap();
+    let error = ImageError::Io("download disconnected".into());
+    let chunk = ImageChunkEvent::new(2, Some(3));
+    assert!(source.report_transport_error(error.clone()));
+    assert!(source.report_chunk(chunk));
+    assert_eq!(*seen.borrow(), [Err(error), Ok(chunk)]);
+    assert!(!has_scheduled_frame());
+}
