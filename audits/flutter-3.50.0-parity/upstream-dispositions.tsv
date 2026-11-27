@@ -3399,3 +3399,7 @@ packages/flutter/test/gestures/tap_and_drag_test.dart	487	TapAndHorizontalDragGe
 packages/flutter/test/gestures/tap_and_drag_test.dart	865	Beats TapGestureRecognizer when the pointer has exceeded the slop tolerance	paired-match	upstream-tap-drag-arena-competition.md#default-wins-after-the-sample-is-routed
 packages/flutter/test/gestures/tap_and_drag_test.dart	682	Drag state is properly reset after losing GestureArena	paired-match	upstream-tap-drag-arena-competition.md#losing-a-drag-then-tapping-or-holding-again
 packages/flutter/test/gestures/tap_and_drag_test.dart	744	Beats LongPressGestureRecognizer on a consecutive tap greater than one	paired-match	upstream-tap-drag-arena-competition.md#losing-a-drag-then-tapping-or-holding-again
+packages/flutter/test/widgets/shortcuts_test.dart	19	LogicalKeySet passes parameters correctly.	paired-match	upstream-logical-key-set.md
+packages/flutter/test/widgets/shortcuts_test.dart	72	LogicalKeySet works as a map key.	paired-match	upstream-logical-key-set.md
+packages/flutter/test/widgets/shortcuts_test.dart	178	LogicalKeySet.hashCode is stable	paired-match	upstream-logical-key-set.md
+packages/flutter/test/widgets/shortcuts_test.dart	201	LogicalKeySet.hashCode is order-independent	paired-match	upstream-logical-key-set.md

@@ -1593,15 +1593,13 @@ impl LogicalKeySet {
     /// dropped; the order of the remaining keys does not matter.
     #[must_use]
     pub fn new(keys: impl IntoIterator<Item = KeyboardKey>) -> Self {
-        let mut unique = Vec::new();
-        for key in keys {
-            if !unique.contains(&key) {
-                unique.push(key);
-            }
-        }
-        Self { keys: unique }
+        let mut keys: Vec<_> = keys.into_iter().collect();
+        keys.sort_unstable();
+        keys.dedup();
+        Self { keys }
     }
 
+    /// The canonical members, independent of construction order.
     #[must_use]
     pub fn keys(&self) -> &[KeyboardKey] {
         &self.keys
