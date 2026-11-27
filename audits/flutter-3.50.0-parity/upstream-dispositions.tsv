@@ -2954,3 +2954,4 @@ packages/flutter/test/widgets/focus_traversal_test.dart	1668	Move focus in all d
 packages/flutter/test/widgets/focus_traversal_test.dart	1808	Directional focus avoids hysteresis.	paired-match	upstream-directional-focus-history.md
 packages/flutter/test/widgets/focus_traversal_test.dart	1927	Directional focus history is cleared on explicit focus request	paired-match	upstream-directional-focus-history.md
 packages/flutter/test/widgets/focus_traversal_test.dart	2336	Can find first focus in all directions.	paired-match	upstream-directional-focus-history.md
+packages/flutter/test/widgets/focus_traversal_test.dart	3977	Edge cases for inDirection	paired-match	upstream-directional-focus-edge-policies.md

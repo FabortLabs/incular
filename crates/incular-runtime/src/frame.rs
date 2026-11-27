@@ -42,7 +42,7 @@ use incular_semantics::{SemanticAction, SemanticNodeId};
 #[cfg(feature = "devtools")]
 use incular_widgets::internal::InvalidationCause;
 use incular_widgets::internal::{
-    ActionId, ButtonInk, Diagnostics, ElementId, MouseCursor, PlatformMenuBinding,
+    ActionId, ButtonInk, Diagnostics, DirectionalFocusResolution, ElementId, MouseCursor, PlatformMenuBinding,
     PointerDeviceKind, PointerHitTest, RawPointerEvent, TextEditingController, TextRange,
     TextSelection, TreeError, WidgetTree, WindowInteraction,
 };
@@ -3240,35 +3240,29 @@ impl Runtime {
             }
             history = None;
         }
-        let Some(next) = self.tree.directional_focus_target(previous, direction) else {
-            self.directional_focus_history = history;
-            return false;
+        let (next, forward) = match self.tree.resolve_directional_focus(previous, direction) {
+            DirectionalFocusResolution::Move { target, forward } => (target, forward),
+            DirectionalFocusResolution::LeaveView => {
+                self.set_focus(None);
+                return false;
+            }
+            DirectionalFocusResolution::Unchanged => {
+                self.directional_focus_history = history;
+                return false;
+            }
         };
-        if let Some(stop) = previous
-            && let Some(from) = self.tree.element_bounds(stop)
-            && let Some(to) = self.tree.element_bounds(next)
+        if forward
+            && let Some(stop) = previous
             && self.tree.can_retrace_directional_focus(next, stop)
         {
-            // A wrap at the edge is not a forward stop in this run.
-            let x = to.origin.x + to.size.width * 0.5;
-            let y = to.origin.y + to.size.height * 0.5;
-            let forward = match direction {
-                Code::ArrowUp => y <= from.origin.y,
-                Code::ArrowDown => y >= from.origin.y + from.size.height,
-                Code::ArrowLeft => x <= from.origin.x,
-                Code::ArrowRight => x >= from.origin.x + from.size.width,
-                _ => false,
-            };
-            if forward {
-                history
-                    .get_or_insert_with(|| DirectionalFocusHistory {
-                        direction,
-                        stops: Vec::new(),
-                    })
-                    .stops
-                    .push((stop, self.tree.focus_node_at(stop)));
-                self.directional_focus_history = history;
-            }
+            history
+                .get_or_insert_with(|| DirectionalFocusHistory {
+                    direction,
+                    stops: Vec::new(),
+                })
+                .stops
+                .push((stop, self.tree.focus_node_at(stop)));
+            self.directional_focus_history = history;
         }
         self.set_focus_inner(Some(next), true, true);
         self.focused == Some(next)

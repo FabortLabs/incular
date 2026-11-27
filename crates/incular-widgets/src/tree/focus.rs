@@ -6,6 +6,14 @@ use incular_gestures::KeyEventResult;
 
 use super::*;
 
+/// A directional traversal result for a runtime-owned tree.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DirectionalFocusResolution {
+    Move { target: ElementId, forward: bool },
+    LeaveView,
+    Unchanged,
+}
+
 #[derive(Clone, Copy, Default)]
 struct TraversalScan {
     anchor: Option<ElementId>,
@@ -1102,6 +1110,112 @@ impl WidgetTree {
         }
         incular_gestures::directional_focus_index(current, &candidates, direction)
             .map(|index| ids[index])
+    }
+
+    /// Resolves directional traversal within the current scope and applies
+    /// the scope's edge policy only if it has no forward candidate.
+    #[doc(hidden)]
+    pub fn resolve_directional_focus(
+        &self,
+        focused: Option<ElementId>,
+        code: incular_core::Code,
+    ) -> DirectionalFocusResolution {
+        use DirectionalFocusResolution::{LeaveView, Move, Unchanged};
+        use incular_gestures::{TraversalDirection, TraversalEdgeBehavior};
+        let Some(direction) = traversal_direction_for(code, false) else {
+            return Unchanged;
+        };
+        let axis = match direction {
+            TraversalDirection::Up | TraversalDirection::Down => Axis::Vertical,
+            TraversalDirection::Left | TraversalDirection::Right => Axis::Horizontal,
+        };
+        let current_scope = focused.and_then(|id| self.scope_of_focus_boundary(id));
+        let current = focused
+            .filter(|id| {
+                self.focus_boundary_at(*id)
+                    .is_none_or(|node| node.scope_owner().is_none())
+            })
+            .and_then(|id| self.element_bounds(id));
+        let owner = focused.and_then(|id| self.scroll_owner_on_axis(id, axis));
+
+        // Resolve candidates once. ParentScope may widen the search without
+        // rescanning the mounted widget tree.
+        let candidates: Vec<_> = self
+            .focusable_elements()
+            .into_iter()
+            .filter(|id| Some(*id) != focused)
+            .filter_map(|id| {
+                let rect = self.element_bounds(id)?;
+                let shares_scroll_owner =
+                    owner.is_none_or(|owner| self.scroll_owner_on_axis(id, axis) == Some(owner));
+                Some((
+                    id,
+                    incular_gestures::DirectionalFocusCandidate {
+                        rect,
+                        shares_scroll_owner,
+                    },
+                ))
+            })
+            .collect();
+
+        let mut scope = current_scope.clone();
+        loop {
+            let (ids, geometry): (Vec<_>, Vec<_>) = candidates
+                .iter()
+                .filter(|(id, _)| {
+                    scope
+                        .as_ref()
+                        .is_none_or(|scope| self.is_in_focus_scope(*id, scope))
+                })
+                .copied()
+                .unzip();
+            let find = |forward| {
+                incular_gestures::directional_focus_index_in_phase(
+                    current, &geometry, direction, forward,
+                )
+                .map(|index| ids[index])
+            };
+            if let Some(target) = find(true) {
+                return Move {
+                    target,
+                    forward: current.is_some() && scope == current_scope,
+                };
+            }
+            match scope.as_ref().map_or(TraversalEdgeBehavior::Stop, |scope| {
+                scope.directional_traversal_edge_behavior()
+            }) {
+                TraversalEdgeBehavior::LeaveFlutterView => return LeaveView,
+                TraversalEdgeBehavior::Stop => return Unchanged,
+                TraversalEdgeBehavior::ParentScope => {
+                    if let Some(parent) =
+                        scope.and_then(|scope| scope.scope_focus_node().host_enclosing_scope())
+                    {
+                        scope = Some(parent);
+                        continue;
+                    }
+                }
+                TraversalEdgeBehavior::ClosedLoop => {}
+            }
+            return find(false).map_or(Unchanged, |target| Move {
+                target,
+                forward: false,
+            });
+        }
+    }
+
+    fn is_in_focus_scope(
+        &self,
+        element: ElementId,
+        requested: &incular_gestures::FocusScopeNode,
+    ) -> bool {
+        let mut current = self.scope_of_focus_boundary(element);
+        while let Some(scope) = current {
+            if &scope == requested {
+                return true;
+            }
+            current = scope.scope_focus_node().host_enclosing_scope();
+        }
+        false
     }
 
     /// Whether directional traversal may return to a previous focus stop.

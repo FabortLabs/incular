@@ -1393,6 +1393,21 @@ pub fn directional_focus_index(
         .or_else(|| directional_search(current, candidates, direction, false))
 }
 
+/// Selects only the forward or wrap phase of directional traversal.
+#[doc(hidden)]
+#[must_use]
+pub fn directional_focus_index_in_phase(
+    current: Option<Rect>,
+    candidates: &[DirectionalFocusCandidate],
+    direction: TraversalDirection,
+    forward: bool,
+) -> Option<usize> {
+    match current {
+        Some(current) => directional_search(current, candidates, direction, forward),
+        None => first_in_direction(candidates, direction),
+    }
+}
+
 fn first_in_direction(
     candidates: &[DirectionalFocusCandidate],
     direction: TraversalDirection,
@@ -1933,6 +1948,19 @@ impl FocusManager {
     }
 }
 
+/// What focus traversal does upon reaching the edge of a focus scope.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum TraversalEdgeBehavior {
+    /// Traverse from the opposite edge of the same scope.
+    ClosedLoop,
+    /// Unfocus the current target and let the host handle traversal.
+    LeaveFlutterView,
+    /// Continue traversal in the enclosing scope when one exists.
+    ParentScope,
+    /// Leave focus unchanged.
+    Stop,
+}
+
 /// A retained focus-scope handle.
 ///
 /// `FocusScopeNode` is the Rust-native equivalent of a scoped focus owner. It
@@ -1968,6 +1996,7 @@ struct ScopeFocusAnchor {
 }
 
 struct FocusScopeState {
+    directional_traversal_edge_behavior: Cell<TraversalEdgeBehavior>,
     anchor: OnceCell<ScopeFocusAnchor>,
     hosted_history: RefCell<Vec<Weak<FocusState>>>,
     manager: RefCell<FocusManager>,
@@ -2012,6 +2041,7 @@ impl FocusScopeNode {
     pub fn new() -> Self {
         Self {
             state: Rc::new(FocusScopeState {
+                directional_traversal_edge_behavior: Cell::new(TraversalEdgeBehavior::Stop),
                 anchor: OnceCell::new(),
                 hosted_history: RefCell::new(Vec::new()),
                 manager: RefCell::new(FocusManager::new()),
@@ -2020,6 +2050,19 @@ impl FocusScopeNode {
                 changes: incular_core::reactivity::DependencySource::default(),
                 revision: Cell::new(0),
             }),
+        }
+    }
+
+    /// The behavior at the edge of arrow-key traversal. Defaults to Stop.
+    #[must_use]
+    pub fn directional_traversal_edge_behavior(&self) -> TraversalEdgeBehavior {
+        self.state.directional_traversal_edge_behavior.get()
+    }
+
+    /// Changes directional edge behavior without replacing the scope.
+    pub fn set_directional_traversal_edge_behavior(&self, behavior: TraversalEdgeBehavior) {
+        if self.state.directional_traversal_edge_behavior.replace(behavior) != behavior {
+            self.state.bump_revision();
         }
     }
 
