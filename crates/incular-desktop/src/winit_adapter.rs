@@ -5,8 +5,8 @@
 //! them. All window/IME operations run on the host event-loop thread.
 use incular_core::{
     Code, ImeEvent, InputEvent, KeyState, KeyboardEvent, KeyboardKey, Location, Modifiers,
-    NamedKey, NormalizedPressure, Offset, PointerPhase, PointerSampleMetadata, TrackpadGesture,
-    TrackpadGesturePhase,
+    NamedKey, NormalizedPressure, Offset, PointerContactMetadata, PointerPhase,
+    PointerSampleMetadata, TrackpadGesture, TrackpadGesturePhase,
 };
 use incular_platform::{
     NativePointerSample, NativeWindowSystem, PlatformEvent, PointerMetadata, TextInputCommand,
@@ -230,6 +230,7 @@ pub fn touch_event_with_native_sample(
     {
         buttons |= incular_core::SECONDARY_POINTER_BUTTON;
     }
+    let fallback_contact = touch.force.as_ref().and_then(touch_force_contact);
     let fallback_pressure = normalize_touch_force(touch.force);
     let (device, kind, sample) = native.map_or_else(
         || {
@@ -239,13 +240,23 @@ pub fn touch_event_with_native_sample(
                 PointerSampleMetadata {
                     pressure: fallback_pressure,
                     stylus: None,
-                    ..PointerSampleMetadata::EMPTY
+                    contact: fallback_contact.unwrap_or_default(),
                 },
             )
         },
         |native| {
             let mut sample = native.sample;
             sample.pressure = sample.pressure.or(fallback_pressure);
+            if sample.contact.raw_pressure.is_none()
+                && sample.contact.pressure_min == PointerContactMetadata::DEFAULT.pressure_min
+                && sample.contact.pressure_max == PointerContactMetadata::DEFAULT.pressure_max
+                && let Some(contact) = fallback_contact
+            {
+                // Raw units and their range must describe the same source.
+                sample.contact.raw_pressure = contact.raw_pressure;
+                sample.contact.pressure_min = contact.pressure_min;
+                sample.contact.pressure_max = contact.pressure_max;
+            }
             (
                 native.device.unwrap_or(fallback_device),
                 native.kind,
@@ -266,6 +277,24 @@ pub fn touch_event_with_native_sample(
         touch.location,
         metrics,
     )
+}
+
+fn touch_force_contact(force: &winit::event::Force) -> Option<PointerContactMetadata> {
+    let (raw, max) = match *force {
+        winit::event::Force::Normalized(raw) => (raw, 1.),
+        winit::event::Force::Calibrated {
+            force,
+            max_possible_force,
+            ..
+        } => (force, max_possible_force),
+    };
+    let (raw, max) = (raw as f32, max as f32);
+    (raw.is_finite() && max.is_finite() && max > 0.).then_some(PointerContactMetadata {
+        raw_pressure: Some(raw),
+        pressure_min: 0.,
+        pressure_max: max,
+        ..PointerContactMetadata::DEFAULT
+    })
 }
 
 fn normalize_touch_force(force: Option<winit::event::Force>) -> Option<NormalizedPressure> {

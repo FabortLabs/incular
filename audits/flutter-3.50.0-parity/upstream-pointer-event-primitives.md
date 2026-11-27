@@ -78,3 +78,11 @@ from both endpoints. All 35 targeted native tests passed.
 The original remains partial: the raw enter/exit value path does not
 expose Flutter's identity backlink, normalized force is not Flutter's raw
 pressure reading, and retained widget hit testing is still affine.
+
+The desktop adapter now preserves Winit's raw calibrated pressure and
+range separately from the force used by recognizers. The native
+integration test sends a down and move through Winit conversion and the
+retained runtime to a mounted Listener: it receives raw 4 of 10 and
+angle-corrected force 0.8. A source with its own calibration never
+mixes its range with Winit's values. The four focused desktop controls
+passed. Native operating-system sensor acquisition is not certified.
