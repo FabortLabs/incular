@@ -18,6 +18,7 @@ use incular_core::{Offset, Rect, Size};
 use std::{
     cell::{Cell, RefCell},
     fmt,
+    hash::{Hash, Hasher},
     rc::{Rc, Weak},
 };
 
@@ -208,7 +209,106 @@ pub enum ContextMenuButtonType {
     Custom,
 }
 
+/// Extensible menu action vocabulary. A new action can fall back to
+/// `ContextMenuButtonType::Custom` for legacy callers without losing its kind.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ContextMenuButtonKind {
+    Cut,
+    Copy,
+    Paste,
+    SelectAll,
+    Delete,
+    LookUp,
+    SearchWeb,
+    Share,
+    LiveTextInput,
+    Translate,
+    #[default]
+    Custom,
+}
+
+impl ContextMenuButtonKind {
+    pub const VALUES: [Self; 11] = [
+        Self::Cut, Self::Copy, Self::Paste, Self::SelectAll, Self::Delete, Self::LookUp,
+        Self::SearchWeb, Self::Share, Self::LiveTextInput, Self::Translate, Self::Custom,
+    ];
+
+    #[must_use]
+    pub const fn from_legacy(button_type: ContextMenuButtonType) -> Self {
+        match button_type {
+            ContextMenuButtonType::Cut => Self::Cut,
+            ContextMenuButtonType::Copy => Self::Copy,
+            ContextMenuButtonType::Paste => Self::Paste,
+            ContextMenuButtonType::SelectAll => Self::SelectAll,
+            ContextMenuButtonType::Delete => Self::Delete,
+            ContextMenuButtonType::LookUp => Self::LookUp,
+            ContextMenuButtonType::SearchWeb => Self::SearchWeb,
+            ContextMenuButtonType::Share => Self::Share,
+            ContextMenuButtonType::LiveTextInput => Self::LiveTextInput,
+            ContextMenuButtonType::Custom => Self::Custom,
+        }
+    }
+
+    #[must_use]
+    pub const fn legacy_type(self) -> ContextMenuButtonType {
+        match self {
+            Self::Cut => ContextMenuButtonType::Cut,
+            Self::Copy => ContextMenuButtonType::Copy,
+            Self::Paste => ContextMenuButtonType::Paste,
+            Self::SelectAll => ContextMenuButtonType::SelectAll,
+            Self::Delete => ContextMenuButtonType::Delete,
+            Self::LookUp => ContextMenuButtonType::LookUp,
+            Self::SearchWeb => ContextMenuButtonType::SearchWeb,
+            Self::Share => ContextMenuButtonType::Share,
+            Self::LiveTextInput => ContextMenuButtonType::LiveTextInput,
+            Self::Translate | Self::Custom => ContextMenuButtonType::Custom,
+        }
+    }
+
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Cut => "cut",
+            Self::Copy => "copy",
+            Self::Paste => "paste",
+            Self::SelectAll => "selectAll",
+            Self::Delete => "delete",
+            Self::LookUp => "lookUp",
+            Self::SearchWeb => "searchWeb",
+            Self::Share => "share",
+            Self::LiveTextInput => "liveTextInput",
+            Self::Translate => "translate",
+            Self::Custom => "custom",
+        }
+    }
+
+    #[must_use]
+    pub const fn default_label(self) -> Option<&'static str> {
+        match self {
+            Self::Translate => Some("Translate"),
+            _ => self.legacy_type().default_label(),
+        }
+    }
+}
+
+impl From<ContextMenuButtonType> for ContextMenuButtonKind {
+    fn from(button_type: ContextMenuButtonType) -> Self {
+        Self::from_legacy(button_type)
+    }
+}
+
 impl ContextMenuButtonType {
+    pub const VALUES: [Self; 10] = [
+        Self::Cut, Self::Copy, Self::Paste, Self::SelectAll, Self::Delete, Self::LookUp,
+        Self::SearchWeb, Self::Share, Self::LiveTextInput, Self::Custom,
+    ];
+
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        ContextMenuButtonKind::from_legacy(self).name()
+    }
+
     /// The English label Flutter's `DefaultMaterialLocalizations` and
     /// `DefaultCupertinoLocalizations` give this button. `Custom` has none.
     #[must_use]
@@ -229,30 +329,45 @@ impl ContextMenuButtonType {
 }
 
 /// One button of a context menu (Flutter's `ContextMenuButtonItem`).
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ContextMenuButtonItem {
-    pub button_type: ContextMenuButtonType,
-    /// Overrides the type's default label. Required for `Custom`.
+    kind: ContextMenuButtonKind,
+    /// Overrides the kind's default label. Required for `Custom`.
     pub label: Option<String>,
     /// `None` shows a disabled button.
     pub on_pressed: Option<Rc<dyn Fn()>>,
 }
 
+/// Overrides for a copy of a context menu button. Pass a legacy type to
+/// `kind` with `.into()`; one canonical kind avoids conflicting aliases.
+#[derive(Default)]
+pub struct ContextMenuButtonItemUpdate {
+    pub kind: Option<ContextMenuButtonKind>,
+    pub label: Option<String>,
+    pub on_pressed: Option<Rc<dyn Fn()>>,
+}
+
 impl ContextMenuButtonItem {
     #[must_use]
-    pub fn new(button_type: ContextMenuButtonType, on_pressed: impl Fn() + 'static) -> Self {
+    pub fn new(kind: impl Into<ContextMenuButtonKind>, on_pressed: impl Fn() + 'static) -> Self {
         Self {
-            button_type,
+            kind: kind.into(),
             label: None,
             on_pressed: Some(Rc::new(on_pressed)),
         }
+    }
+
+    /// A disabled button with the supplied kind or legacy type.
+    #[must_use]
+    pub fn disabled(kind: impl Into<ContextMenuButtonKind>) -> Self {
+        Self { kind: kind.into(), ..Self::default() }
     }
 
     /// A `Custom` button with its own label.
     #[must_use]
     pub fn custom(label: impl Into<String>, on_pressed: impl Fn() + 'static) -> Self {
         Self {
-            button_type: ContextMenuButtonType::Custom,
+            kind: ContextMenuButtonKind::Custom,
             label: Some(label.into()),
             on_pressed: Some(Rc::new(on_pressed)),
         }
@@ -264,12 +379,32 @@ impl ContextMenuButtonItem {
         self
     }
 
+    #[must_use]
+    pub const fn kind(&self) -> ContextMenuButtonKind {
+        self.kind
+    }
+
+    /// Legacy button type. New kinds without an equivalent report `Custom`.
+    #[must_use]
+    pub const fn button_type(&self) -> ContextMenuButtonType {
+        self.kind.legacy_type()
+    }
+
+    #[must_use]
+    pub fn copy_with(&self, update: ContextMenuButtonItemUpdate) -> Self {
+        Self {
+            kind: update.kind.unwrap_or(self.kind),
+            label: update.label.or_else(|| self.label.clone()),
+            on_pressed: update.on_pressed.or_else(|| self.on_pressed.clone()),
+        }
+    }
+
     /// The label to show: the explicit one, else the type's default.
     #[must_use]
     pub fn resolved_label(&self) -> String {
         self.label
             .clone()
-            .or_else(|| self.button_type.default_label().map(str::to_owned))
+            .or_else(|| self.kind.default_label().map(str::to_owned))
             .unwrap_or_default()
     }
 
@@ -284,7 +419,7 @@ impl ContextMenuButtonItem {
 impl fmt::Debug for ContextMenuButtonItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ContextMenuButtonItem")
-            .field("button_type", &self.button_type)
+            .field("kind", &self.kind)
             .field("label", &self.label)
             .field("enabled", &self.on_pressed.is_some())
             .finish()
@@ -293,9 +428,19 @@ impl fmt::Debug for ContextMenuButtonItem {
 
 impl PartialEq for ContextMenuButtonItem {
     fn eq(&self, other: &Self) -> bool {
-        self.button_type == other.button_type
+        self.kind == other.kind
             && self.label == other.label
             && crate::util::same_rc(&self.on_pressed, &other.on_pressed)
+    }
+}
+
+impl Eq for ContextMenuButtonItem {}
+
+impl Hash for ContextMenuButtonItem {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.kind.hash(state);
+        self.label.hash(state);
+        self.on_pressed.as_ref().map(|callback| Rc::as_ptr(callback).cast::<()>()).hash(state);
     }
 }
 

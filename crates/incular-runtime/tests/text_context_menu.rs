@@ -66,7 +66,7 @@ fn secondary_click(runtime: &mut Runtime, position: Offset) {
 fn types(menu: &TextContextMenu) -> Vec<ContextMenuButtonType> {
     menu.button_items
         .iter()
-        .map(|item| item.button_type)
+        .map(|item| item.button_type())
         .collect()
 }
 
@@ -126,7 +126,7 @@ fn copy_button_writes_the_selection_and_closes_the_menu() {
     let copy = menu
         .button_items
         .iter()
-        .find(|item| item.button_type == ContextMenuButtonType::Copy)
+        .find(|item| item.button_type() == ContextMenuButtonType::Copy)
         .unwrap()
         .clone();
     copy.press();

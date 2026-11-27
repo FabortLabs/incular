@@ -86,7 +86,7 @@ fn touch_double_tap_selects_the_word_and_shows_the_toolbar() {
     assert!(
         menu.button_items
             .iter()
-            .any(|item| item.button_type == ContextMenuButtonType::Copy),
+            .any(|item| item.button_type() == ContextMenuButtonType::Copy),
         "{menu:?}"
     );
 }

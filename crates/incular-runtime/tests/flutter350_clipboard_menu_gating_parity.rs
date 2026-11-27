@@ -82,7 +82,7 @@ fn mount_with_selection(
 fn actions(menu: &TextContextMenu) -> Vec<ContextMenuButtonType> {
     menu.button_items
         .iter()
-        .map(|item| item.button_type)
+        .map(|item| item.button_type())
         .collect()
 }
 

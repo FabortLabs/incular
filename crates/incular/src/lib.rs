@@ -270,7 +270,8 @@ pub mod prelude {
     pub use incular_widgets::{
         AlignmentDirectionalTween, AlignmentTween, BorderRadiusTween, BorderTween,
         BoxConstraintsTween, CapturedThemes, CharacterActivator, ContextMenuButtonItem,
-        ContextMenuButtonType, ContextMenuController, DecorationTween, EdgeInsetsDirectionalTween, EdgeInsetsTween,
+        ContextMenuButtonItemUpdate, ContextMenuButtonKind, ContextMenuButtonType, ContextMenuController,
+        DecorationTween, EdgeInsetsDirectionalTween, EdgeInsetsTween,
         EditableTextContextMenuBuilder, FocusOrder, InheritedNotifier, LerpTween, LogicalKeySet,
         RegistryActivator, ShortcutRegistrar, ShortcutRegistry, ShortcutRegistryEntry,
         TextContextMenu, TextSelectionToolbarAnchors, TextStyleTween,

@@ -190,7 +190,8 @@ pub use content_insertion::{
 };
 pub use context_menu::TextContextMenuState;
 pub use context_menu::{
-    ContextMenuButtonItem, ContextMenuButtonType, ContextMenuController, DesktopTextSelectionToolbarLayoutDelegate,
+    ContextMenuButtonItem, ContextMenuButtonItemUpdate, ContextMenuButtonKind, ContextMenuButtonType,
+    ContextMenuController, DesktopTextSelectionToolbarLayoutDelegate,
     EditableTextContextMenuBuilder, TextContextMenu, TextSelectionToolbarAnchors,
     TextSelectionToolbarLayoutDelegate,
 };

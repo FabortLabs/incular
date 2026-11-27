@@ -3617,3 +3617,10 @@ packages/flutter/test/widgets/context_menu_controller_test.dart	146	markNeedsBui
 packages/flutter/test/widgets/context_menu_controller_test.dart	181	Calling show when a built-in widget is already showing its context menu hides the built-in menu	paired-match	upstream-context-menu-controller.md
 packages/flutter/test/widgets/context_menu_controller_test.dart	268	ContextMenuController.show updates in-place	paired-match	upstream-context-menu-controller.md
 packages/flutter/test/widgets/context_menu_controller_test.dart	304	ContextMenuController.show after remove creates a new overlay entry	paired-match	upstream-context-menu-controller.md
+packages/flutter/test/widgets/context_menu_button_item_test.dart	9	defaults to custom	paired-match	upstream-context-menu-button-kind.md
+packages/flutter/test/widgets/context_menu_button_item_test.dart	15	every ContextMenuButtonType maps to a kind and back	paired-match	upstream-context-menu-button-kind.md
+packages/flutter/test/widgets/context_menu_button_item_test.dart	23	kinds with a matching type report that type	paired-match	upstream-context-menu-button-kind.md
+packages/flutter/test/widgets/context_menu_button_item_test.dart	34	kinds without a matching type report custom	paired-match	upstream-context-menu-button-kind.md
+packages/flutter/test/widgets/context_menu_button_item_test.dart	39	items created with type or kind are equal	paired-match	upstream-context-menu-button-kind.md
+packages/flutter/test/widgets/context_menu_button_item_test.dart	46	copyWith accepts type or kind	paired-match	upstream-context-menu-button-kind.md
+packages/flutter/test/widgets/context_menu_button_item_test.dart	53	switches on kind work with constant patterns	paired-match	upstream-context-menu-button-kind.md

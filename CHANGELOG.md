@@ -7,6 +7,12 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-widgets`):** replace reads of
+  `ContextMenuButtonItem.button_type` with `button_type()` or use
+  `kind()` to distinguish newer actions such as Translate. Replace item
+  struct literals with `ContextMenuButtonItem::new` or `disabled`, and set an
+  optional label with `label`. Both constructors accept legacy button types.
+
 - **Breaking (`incular-platform`):** exhaustive matches on
   `WindowEventKind` must handle `FocusChanged`, which carries the optional
   platform navigation direction. Existing `Focused` and `Unfocused`
