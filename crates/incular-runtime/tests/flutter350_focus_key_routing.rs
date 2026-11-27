@@ -518,3 +518,100 @@ fn native_raw_keys_bubble_only_along_the_focused_scope_then_stop_at_the_handler(
     assert!(nodes[4].has_primary_focus());
     check(&mut runtime, candidates, &[4, 2, 0], false);
 }
+
+#[test]
+fn typed_and_deprecated_focus_handlers_cooperate_in_both_raw_transit_modes() {
+    use incular_core::KeyState;
+    use incular_runtime::KeyMessage;
+    use incular_widgets::{FocusRawKeyEventHandler, WebRawKeyData};
+    use std::cell::Cell;
+
+    let nodes: [FocusNode; 3] = std::array::from_fn(|_| FocusNode::new());
+    let order = Rc::new(RefCell::new(Vec::new()));
+    let decisions = Rc::new(Cell::new([[KeyEventResult::Ignored; 2]; 3]));
+    let mut content = Widget::from(SizedBox::from_dimensions(
+        Some(200.),
+        Some(100.),
+        None::<Widget>,
+    ));
+    for index in (0..3).rev() {
+        let typed = {
+            let order = order.clone();
+            let decisions = decisions.clone();
+            move |_: &FocusNode, _: KeyboardEvent| {
+                order.borrow_mut().push(index * 10);
+                decisions.get()[index][0]
+            }
+        };
+        let raw: FocusRawKeyEventHandler = Rc::new({
+            let order = order.clone();
+            let decisions = decisions.clone();
+            move |_, event| {
+                assert!(
+                    matches!(event.data(), Some(incular_widgets::RawKeyPlatformData::Web(data))
+                    if data.code == "Digit1" && data.key == "1")
+                );
+                order.borrow_mut().push(index * 10 + 1);
+                decisions.get()[index][1]
+            }
+        });
+        content = Focus::new(content)
+            .node(nodes[index].clone())
+            .on_key_event(typed)
+            .with_raw_key_handler(Some(raw))
+            .into();
+    }
+    let mut runtime = Runtime::new(content).unwrap();
+    frame(&mut runtime);
+    nodes[2].request_focus();
+    frame(&mut runtime);
+    assert!(nodes[2].has_primary_focus());
+
+    for raw_only in [true, false] {
+        use KeyEventResult::{Handled, Ignored, SkipRemainingHandlers};
+        for (state, middle, handled, trace) in [
+            (
+                KeyState::Down,
+                [Ignored, Ignored],
+                false,
+                &[20, 21, 10, 11, 0, 1][..],
+            ),
+            (
+                KeyState::Up,
+                [Handled, Ignored],
+                true,
+                &[20, 21, 10, 11][..],
+            ),
+            (
+                KeyState::Down,
+                [Ignored, Handled],
+                true,
+                &[20, 21, 10, 11][..],
+            ),
+            (
+                KeyState::Up,
+                [SkipRemainingHandlers, Ignored],
+                false,
+                &[20, 21, 10, 11][..],
+            ),
+        ] {
+            decisions.set([[Ignored; 2], middle, [Ignored; 2]]);
+            let raw = WebRawKeyData {
+                code: "Digit1".into(),
+                key: "1".into(),
+                ..Default::default()
+            }
+            .into_event(state, false, false);
+            let message = if raw_only {
+                KeyMessage::Raw(raw)
+            } else {
+                KeyMessage::TypedAndRaw {
+                    typed: raw.portable().clone(),
+                    raw,
+                }
+            };
+            assert_eq!(runtime.dispatch_key_message(message), handled);
+            assert_eq!(order.take(), trace);
+        }
+    }
+}

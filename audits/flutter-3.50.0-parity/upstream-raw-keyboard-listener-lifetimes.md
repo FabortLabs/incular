@@ -25,3 +25,15 @@ an unmounted listener remain silent. Normal deprecated
 `Focus.onKey` still bubbles with its node's typed callback.
 The authored regression does not add an original registration.
 One focused and 29 adjacent runtime tests passed.
+
+## Deprecated and typed Focus handlers cooperate
+
+The pinned `focus_manager_test.dart`:264 registration passed in both
+exact transit variants, RawKeyEvent and ui.KeyData then RawKeyEvent.
+Mounted native tests use three focus nodes and a decoded Digit1
+record. Both handlers on a node run in typed-then-raw order. Ignored
+results bubble to the outer ancestor; either handled result stops
+after that node. SkipRemainingHandlers also stops there but returns
+the key to the host. Both transit modes exercise all four traces.
+Nine focused and 17 adjacent native tests passed. The two variants
+are one upstream registration.
