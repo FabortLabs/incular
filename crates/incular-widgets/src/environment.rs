@@ -521,6 +521,7 @@ pub struct DefaultTextParagraph {
     pub(crate) soft_wrap: Option<bool>,
     pub(crate) max_lines: Option<usize>,
     pub(crate) overflow: Option<TextOverflow>,
+    pub(crate) height_behavior: Option<TextHeightBehavior>,
 }
 
 impl DefaultTextStyle {
@@ -559,6 +560,14 @@ impl DefaultTextStyle {
     #[must_use]
     pub fn max_lines(mut self, max_lines: usize) -> Self {
         self.paragraph.max_lines = Some(max_lines);
+        self
+    }
+
+    /// Applies paragraph height behavior before considering any surrounding
+    /// `DefaultTextHeightBehavior`. An explicit value on `Text` still wins.
+    #[must_use]
+    pub fn text_height_behavior(mut self, behavior: TextHeightBehavior) -> Self {
+        self.paragraph.height_behavior = Some(behavior);
         self
     }
 

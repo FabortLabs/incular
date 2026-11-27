@@ -118,6 +118,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 max_lines: max_lines.unwrap_or(defaults.max_lines),
                 overflow: overflow.or(defaults.overflow).unwrap_or(TextOverflow::Clip),
                 height_behavior: text_height_behavior
+                    .or(defaults.height_behavior)
                     .or_else(|| context.depend::<TextHeightBehavior>())
                     .unwrap_or_default(),
                 spans: spans.as_ref().map(|runs| {

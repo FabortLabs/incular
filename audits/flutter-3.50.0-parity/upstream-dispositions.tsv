@@ -3602,3 +3602,7 @@ packages/flutter/test/widgets/animated_positioned_test.dart	528	AnimatedPosition
 packages/flutter/test/widgets/animated_positioned_test.dart	593	AnimatedPositionedDirectional - interrupted animation (RTL)	paired-match	upstream-animated-positioned.md
 packages/flutter/test/widgets/animated_positioned_test.dart	684	AnimatedPositionedDirectional - switching variables (RTL)	paired-match	upstream-animated-positioned.md
 packages/flutter/test/widgets/animated_positioned_test.dart	749	AnimatedPositionedDirectional does not crash at zero area	paired-match	upstream-animated-positioned.md
+packages/flutter/test/widgets/default_text_height_behavior_test.dart	9	Text widget parameter takes precedence over DefaultTextHeightBehavior	paired-match	upstream-text-height-defaults.md
+packages/flutter/test/widgets/default_text_height_behavior_test.dart	30	DefaultTextStyle.textHeightBehavior takes precedence over DefaultTextHeightBehavior 	paired-match	upstream-text-height-defaults.md
+packages/flutter/test/widgets/default_text_height_behavior_test.dart	71	DefaultTextHeightBehavior changes propagate to Text	paired-match	upstream-text-height-defaults.md
+packages/flutter/test/widgets/default_text_height_behavior_test.dart	99	DefaultTextHeightBehavior.of(context) returns null if no DefaultTextHeightBehavior widget in tree	partial-match	upstream-text-height-defaults.md

@@ -48,7 +48,11 @@ fn element_environment(
                         || previous.value.downcast_ref::<RuntimeEnvironment>()
                             .is_some_and(|data| next.value.downcast_ref::<RuntimeEnvironment>() == Some(data))
                         || previous.value.downcast_ref::<TextDirection>()
-                            .is_some_and(|direction| next.value.downcast_ref::<TextDirection>() == Some(direction)) =>
+                            .is_some_and(|direction| next.value.downcast_ref::<TextDirection>() == Some(direction))
+                        || previous.value.downcast_ref::<incular_text::TextHeightBehavior>()
+                            .is_some_and(|height| next.value.downcast_ref::<incular_text::TextHeightBehavior>() == Some(height))
+                        || previous.value.downcast_ref::<crate::environment::DefaultTextParagraph>()
+                            .is_some_and(|paragraph| next.value.downcast_ref::<crate::environment::DefaultTextParagraph>() == Some(paragraph)) =>
                 {
                     Some(previous.clone())
                 }

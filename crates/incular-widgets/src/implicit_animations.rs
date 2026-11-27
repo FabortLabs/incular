@@ -17,7 +17,7 @@ use incular_config::{
     Alignment, Clip, Constraints, EdgeInsets, TextDirection,
 };
 use incular_core::{Color, Lerp, Offset, Rect, Size, Transform as CoreTransform};
-use incular_text::{TextAlign, TextOverflow, TextStyle};
+use incular_text::{TextAlign, TextHeightBehavior, TextOverflow, TextStyle};
 
 use crate::dx::motion::config::{MotionConfig, reduce};
 use crate::environment::DefaultTextParagraph;
@@ -1460,8 +1460,8 @@ impl From<AnimatedOpacity> for Widget {
 }
 
 /// Flutter's `AnimatedDefaultTextStyle`. The style interpolates; the paragraph
-/// options (`textAlign`, `softWrap`, `overflow`, `maxLines`) are set directly, as
-/// in Flutter, and apply to descendants from the first frame.
+/// options (`textAlign`, `softWrap`, `overflow`, `maxLines`, height behavior)
+/// are set directly, as in Flutter, and apply from the first frame.
 #[derive(Clone)]
 pub struct AnimatedDefaultTextStyle {
     style: TextStyle,
@@ -1506,6 +1506,13 @@ impl AnimatedDefaultTextStyle {
     #[must_use]
     pub fn max_lines(mut self, max_lines: usize) -> Self {
         self.paragraph.max_lines = Some(max_lines);
+        self
+    }
+
+    /// Updates paragraph height behavior immediately, without interpolation.
+    #[must_use]
+    pub fn text_height_behavior(mut self, behavior: TextHeightBehavior) -> Self {
+        self.paragraph.height_behavior = Some(behavior);
         self
     }
 
