@@ -3308,3 +3308,5 @@ packages/flutter/test/widgets/text_semantics_test.dart	252	Text with semanticsId
 packages/flutter/test/widgets/shader_mask_test.dart	23	Can be constructed	paired-match	upstream-widget-shader-mask-offset.md
 packages/flutter/test/widgets/shader_mask_test.dart	28	Bounds rect includes offset	paired-match	upstream-widget-shader-mask-offset.md
 packages/flutter/test/widgets/text_test.dart	428	semanticsLabel can override text label	paired-match	upstream-text-semantics.md#spoken-label-replacement
+packages/flutter/test/widgets/size_changed_layout_notification_test.dart	9	SizeChangedLayoutNotification test	paired-match	upstream-size-change-notifications.md
+packages/flutter/test/widgets/size_changed_layout_notification_test.dart	39	SizeChangedLayoutNotifier does not crash at zero area	paired-match	upstream-size-change-notifications.md

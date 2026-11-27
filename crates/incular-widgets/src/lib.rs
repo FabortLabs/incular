@@ -338,7 +338,7 @@ pub use navigation::{
     current_page_storage_bucket, current_restoration_scope,
 };
 pub use navigation_scopes::OverlayPortal;
-pub use notification::NotificationDispatcher;
+pub use notification::{LayoutChangedNotification, NotificationDispatcher};
 pub use overscroll_indicator::{
     GlowingOverscrollIndicator, StretchEffect, StretchingOverscrollIndicator,
 };

@@ -4,10 +4,9 @@ use super::*;
 /// the widget tree.
 ///
 /// [`NotificationListener::on_notification`] receives scroll notifications
-/// from descendant viewports. [`NotificationListener::on`] receives any
-/// other notification type that a descendant sends with
-/// [`NotificationDispatcher::dispatch`](crate::NotificationDispatcher::dispatch),
-/// such as [`SizeChangedLayoutNotification`](crate::SizeChangedLayoutNotification).
+/// from descendant viewports. [`NotificationListener::on`] also accepts
+/// typed notifications and [`LayoutChangedNotification`](crate::LayoutChangedNotification),
+/// which receives both size changes and scrolling (but not metrics changes).
 #[derive(Clone, TypedBuilder)]
 pub struct NotificationListener {
     #[builder(default)]
@@ -52,7 +51,31 @@ impl NotificationListener {
 
 impl From<NotificationListener> for Widget {
     fn from(value: NotificationListener) -> Self {
-        let child = Widget::notification_listener(value.callback, value.child);
+        use crate::LayoutChangedNotification;
+
+        let scroll_handlers: Vec<_> = value
+            .handlers
+            .iter()
+            .filter(|handler| {
+                handler.handles::<ScrollNotification>()
+                    || handler.handles::<LayoutChangedNotification>()
+            })
+            .cloned()
+            .collect();
+        let mut callback = value.callback;
+        if !scroll_handlers.is_empty() {
+            let direct = callback.take();
+            callback = Some(Rc::new(move |scroll| {
+                if direct.as_ref().is_some_and(|direct| direct(scroll)) {
+                    return true;
+                }
+                let layout_change = LayoutChangedNotification::for_notification(&scroll);
+                scroll_handlers
+                    .iter()
+                    .any(|handler| handler.notify(&scroll, layout_change.as_ref()))
+            }));
+        }
+        let child = Widget::notification_listener(callback, value.child);
         if value.handlers.is_empty() {
             child
         } else {

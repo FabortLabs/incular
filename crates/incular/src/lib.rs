@@ -329,7 +329,7 @@ pub mod prelude {
         ImageErrorBuilder, ImageFiltered, ImageFrameBuilder, ImageIcon, ImageLoadingBuilder,
         ImageRepeat, IndexedStack, InheritedModel, InheritedModelData, Intent, InteractiveViewer,
         KeepAlive, KeepAliveHandle, KeepAliveNotification, KeepAliveRegistry, KeyboardListener,
-        KeyedSubtree, LayoutBuilder, LayoutChildId, LayoutId, LimitedBox, ListBody, ListView,
+        KeyedSubtree, LayoutBuilder, LayoutChangedNotification, LayoutChildId, LayoutId, LimitedBox, ListBody, ListView,
         ListWheelScrollView, ListWheelViewport, Listener, ListenerCallbacks, Localizations,
         LogicalShortcutKey, LongPressDraggable, LookupBoundary, MatrixTransition, MediaQuery,
         MediaQueryData, MemoryRouteInformationProvider, MetaData, MouseCursor, MouseRegion,

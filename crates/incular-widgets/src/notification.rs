@@ -9,7 +9,30 @@ use std::{
     rc::Rc,
 };
 
-use crate::{BuildContext, Widget};
+use crate::{
+    BuildContext, ScrollNotification, ScrollNotificationType, SizeChangedLayoutNotification, Widget,
+};
+
+/// A layout-change notification or one of the two framework notifications
+/// that extend it in Flutter. Viewport metrics changes are not scroll
+/// activity and do not reach this listener.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum LayoutChangedNotification {
+    #[default]
+    Unspecified,
+    SizeChanged(SizeChangedLayoutNotification),
+    Scroll(ScrollNotification),
+}
+
+impl LayoutChangedNotification {
+    pub(crate) fn for_notification(event: &dyn Any) -> Option<Self> {
+        if let Some(event) = event.downcast_ref::<SizeChangedLayoutNotification>() {
+            return Some(Self::SizeChanged(*event));
+        }
+        let event = event.downcast_ref::<ScrollNotification>()?;
+        (event.kind != ScrollNotificationType::Metrics).then_some(Self::Scroll(*event))
+    }
+}
 
 /// A callback over a notification of any type.
 type ErasedCallback = Rc<dyn Fn(&dyn Any) -> bool>;
@@ -29,6 +52,24 @@ impl NotificationHandler {
             callback: Rc::new(move |notification| {
                 notification.downcast_ref::<T>().is_some_and(&callback)
             }),
+        }
+    }
+
+    pub(crate) fn handles<T: Any>(&self) -> bool {
+        self.type_id == TypeId::of::<T>()
+    }
+
+    pub(crate) fn notify(
+        &self,
+        notification: &dyn Any,
+        layout_change: Option<&LayoutChangedNotification>,
+    ) -> bool {
+        if self.type_id == notification.type_id() {
+            (self.callback)(notification)
+        } else if self.handles::<LayoutChangedNotification>() {
+            layout_change.is_some_and(|change| (self.callback)(change))
+        } else {
+            false
         }
     }
 }
@@ -66,13 +107,15 @@ impl NotificationDispatcher {
 
     /// Bubbles `notification` to each enclosing listener with a handler for
     /// its type, innermost first, stopping at the first that returns `true`.
-    /// Returns whether one did.
+    /// Layout-change listeners can receive qualifying concrete notifications.
+    /// Returns whether a listener stopped propagation.
     pub fn dispatch<T: Any>(&self, notification: &T) -> bool {
+        let layout_change = LayoutChangedNotification::for_notification(notification);
         let mut node = self.nearest.clone();
         while let Some(current) = node {
             let handlers = current.handlers.borrow().clone();
             for handler in handlers.iter() {
-                if handler.type_id == TypeId::of::<T>() && (handler.callback)(notification) {
+                if handler.notify(notification, layout_change.as_ref()) {
                     return true;
                 }
             }
