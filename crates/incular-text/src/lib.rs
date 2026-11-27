@@ -31,7 +31,7 @@ pub use flutter_editing_delta::{FlutterTextDeltaError, FlutterTextEdit, FlutterT
 pub use font_loader::{FontLoader, FontLoaderError};
 pub use spans::{
     CombinedInlineSpanSemantics, InlineSpan, InlineSpanComparison, InlineSpanRef,
-    InlineSpanSemanticsInformation, InlineSpanStringAttribute, PlainTextOptions,
+    InlineSpanSemanticsInformation, InlineSpanStringAttribute, InvalidUtf16Span, PlainTextOptions,
     RichText,
     StyledTextRun, Text, TextSpan, TextSpanVisitor, WidgetSpan,
     WidgetSpanAlignment, combine_inline_span_semantics,

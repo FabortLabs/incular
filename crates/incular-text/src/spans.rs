@@ -237,6 +237,32 @@ pub fn combine_inline_span_semantics<'a>(
     result
 }
 
+/// The recoverable diagnostic emitted for an invalid UTF-16 span.
+#[derive(Debug)]
+pub struct InvalidUtf16Span {
+    pub error: std::string::FromUtf16Error,
+}
+
+impl InvalidUtf16Span {
+    /// The owner can observe the error without surfacing it as a fatal error.
+    #[must_use]
+    pub const fn is_silent(&self) -> bool {
+        true
+    }
+}
+
+impl std::fmt::Display for InvalidUtf16Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid UTF-16 while building a TextSpan: {}", self.error)
+    }
+}
+
+impl std::error::Error for InvalidUtf16Span {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
 /// A recursively nestable text node. Styles are inherited by descendants;
 /// inline widget spans occupy one object-replacement character in plain text.
 #[derive(Clone, Debug, PartialEq)]
@@ -263,6 +289,20 @@ impl TextSpan {
             semantics_identifier: None,
             locale: None,
             spell_out: None,
+        }
+    }
+
+    /// Imports a text run from a UTF-16 boundary such as a platform
+    /// interface. A malformed run produces one silent diagnostic and one
+    /// replacement character, not a partially decoded run.
+    #[must_use]
+    pub fn from_utf16(units: &[u16], report: impl FnOnce(InvalidUtf16Span)) -> Self {
+        match String::from_utf16(units) {
+            Ok(text) => Self::new(text),
+            Err(error) => {
+                report(InvalidUtf16Span { error });
+                Self::new("\u{fffd}")
+            }
         }
     }
 

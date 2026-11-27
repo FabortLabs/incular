@@ -23,6 +23,11 @@ parser.add_argument(
     action="store_true",
     help="give the caret test's emoji and Hebrew scalars the pinned missing-glyph advance",
 )
+parser.add_argument(
+    "--replacement-fixture",
+    action="store_true",
+    help="give U+FFFD the pinned missing-glyph advance without system fallback",
+)
 args = parser.parse_args()
 
 source = subprocess.check_output(
@@ -38,7 +43,7 @@ if match is None:
 font = bytes(int(value, 16) for value in re.findall(r"0x([\da-fA-F]{2})", match[1]))
 if len(font) != int(match[2]) or not font.startswith(b"\0\x01\0\0"):
     raise SystemExit("Unexpected embedded FlutterTest font size or header")
-if not (args.arabic_lam_fixture or args.emoji_caret_fixture):
+if not (args.arabic_lam_fixture or args.emoji_caret_fixture or args.replacement_fixture):
     args.output_ttf.write_bytes(font)
 else:
     try:
@@ -51,7 +56,7 @@ else:
     # removing platform-specific system fallback in exact caret tests.
     characters = ("ل" if args.arabic_lam_fixture else "") + (
         "👩👦👧👏🏽🚀מילים" if args.emoji_caret_fixture else ""
-    )
+    ) + ("\ufffd" if args.replacement_fixture else "")
     with TTFont(io.BytesIO(font)) as face:
         square = face.getBestCmap()[ord("a")]
         assert face["hmtx"][square][0] == face["hmtx"][".notdef"][0]

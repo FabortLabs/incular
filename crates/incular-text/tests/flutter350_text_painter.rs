@@ -1761,3 +1761,37 @@ fn painter_creation_and_disposal_dispatch_the_same_stable_identity() {
     }
     assert_ne!(events[0].id, events[2].id);
 }
+
+#[test]
+fn invalid_utf16_replaces_the_entire_run_and_reports_once_without_failing_layout() {
+    use std::error::Error as _;
+    let mut input: Vec<u16> = "Hello".encode_utf16().collect();
+    input.push(0xd83d);
+    input.extend("World".encode_utf16());
+    let mut diagnostic = None;
+    let span = TextSpan::from_utf16(&input, |error| diagnostic = Some(error));
+    let diagnostic = diagnostic.expect("one invalid-run diagnostic");
+    assert!(diagnostic.source().is_some());
+    assert!(diagnostic.is_silent());
+    assert_eq!(span.text, "\u{fffd}");
+    let valid: Vec<_> = "Hello😀World".encode_utf16().collect();
+    assert_eq!(
+        TextSpan::from_utf16(&valid, |_| panic!("valid pair")).text,
+        "Hello😀World"
+    );
+
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_REPLACEMENT_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    assert!(engine.register_font_bytes_as("Flutter UTF16", std::fs::read(path).unwrap()));
+    let style = TextStyle::default()
+        .font_family("Flutter UTF16")
+        .font_size(20.);
+    let mut painter = painter(span.style(style), TextDirection::Ltr);
+    painter
+        .layout_with_engine(&mut engine, 0., f32::INFINITY)
+        .unwrap();
+    assert_eq!(painter.width(), Ok(20.));
+    assert_eq!(painter.shaped_layout().unwrap().glyph_count(), 1);
+}

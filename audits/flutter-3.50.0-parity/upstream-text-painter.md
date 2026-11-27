@@ -296,3 +296,21 @@ stable identity. Repeated explicit disposal is rejected and dropping an
 already disposed painter emits nothing. Ordinary Rust scope exit also
 disposes an undropped token once. The original and all 51 focused
 painter tests passed.
+
+## Invalid UTF-16 span input
+
+The pinned malformed-surrogate original pairs at the Rust input
+boundary. One invalid UTF-16 unit in `Hello…World` replaces that
+entire span with one U+FFFD, reports one silent typed diagnostic,
+and lets layout continue. A valid surrogate pair decodes normally.
+Rust strings cannot hold unpaired UTF-16, so recovery occurs on
+`TextSpan::from_utf16` import rather than after creating a String.
+With the deterministic replacement-glyph fixture, one 20 px glyph
+is painted. The pinned original and 52 focused native tests passed.
+
+```sh
+python3 audits/flutter-3.50.0-parity/extract-flutter-test-font.py \
+  --replacement-fixture .tmp/flutter .tmp/FlutterTest-replacement.ttf
+INCULAR_FLUTTER_REPLACEMENT_FONT_PATH="$PWD/.tmp/FlutterTest-replacement.ttf" \
+  cargo test --locked --offline -j1 -p incular-text --test flutter350_text_painter invalid_utf16 -- --test-threads=1
+```
