@@ -450,6 +450,17 @@ impl MobileAccessibilityProjection {
 /// Flutter tags inform framework tree assembly but are not transmitted to
 /// accessibility adapters. Compare the projected form as well as exporting
 /// it, so a tag-only tree revision produces no native update.
+fn whole_label_language(node: &SemanticNode) -> Option<&str> {
+    let [StringAttribute::Locale { range, locale }] =
+        node.state.text_attributes.as_ref()?.label.as_slice()
+    else {
+        return None;
+    };
+    let label = node.label.as_deref()?;
+    (range.start == 0 && !label.is_empty() && range.end == label.encode_utf16().count())
+        .then_some(locale.as_str())
+}
+
 fn platform_semantic_node(node: &SemanticNode) -> Cow<'_, SemanticNode> {
     if node.tags().is_empty() {
         return Cow::Borrowed(node);
@@ -1054,8 +1065,17 @@ impl AccessKitProjection {
         if semantic.state.live_region {
             node.set_live(Live::Polite);
         }
-        if let Some(locale) = &semantic.state.locale {
-            node.set_language(locale.as_ref());
+        // AccessKit exposes one language per node, not attributed ranges.
+        // A text leaf with one locale covering its whole spoken label is
+        // representable without applying the locale to a different field.
+        let label_language = (semantic.role == Role::Text
+            && semantic.value.is_none()
+            && semantic.description.is_none()
+            && !semantic.state.obscured)
+            .then(|| whole_label_language(semantic))
+            .flatten();
+        if let Some(locale) = label_language.or(semantic.state.locale.as_deref()) {
+            node.set_language(locale);
         }
         if let Some(direction) = semantic.state.text_direction {
             node.set_text_direction(match direction {

@@ -696,6 +696,8 @@ pub struct Text {
     text_height_behavior: Option<TextHeightBehavior>,
     text_scaler: Option<TextScaler>,
     strut: Option<StrutStyle>,
+    locale: Option<incular_config::Locale>,
+    semantics_identifier: Option<String>,
 }
 impl Text {
     #[must_use]
@@ -713,6 +715,8 @@ impl Text {
             text_height_behavior: None,
             text_scaler: None,
             strut: None,
+            locale: None,
+            semantics_identifier: None,
         }
     }
     /// Flutter's `Text.textHeightBehavior`. Without it the nearest
@@ -752,6 +756,20 @@ impl Text {
         self.text_scaler = Some(text_scaler);
         self
     }
+    /// Overrides the locale used for shaping and for the spoken text label.
+    #[must_use]
+    pub fn locale(mut self, locale: incular_config::Locale) -> Self {
+        self.locale = Some(locale);
+        self
+    }
+
+    /// Publishes an accessibility identifier on the retained text node.
+    #[must_use]
+    pub fn semantics_identifier(mut self, identifier: impl Into<String>) -> Self {
+        self.semantics_identifier = Some(identifier.into());
+        self
+    }
+
     #[must_use]
     pub fn style(mut self, style: TextStyle) -> Self {
         self.style = Arc::new(style);
@@ -796,9 +814,37 @@ impl Text {
 }
 impl From<Text> for Widget {
     fn from(value: Text) -> Self {
-        Widget::text_configured(
+        use incular_semantics::{
+            SemanticRole, SemanticState, SemanticTextAttributes, StringAttribute,
+        };
+
+        let mut style = value.style;
+        let text_attributes = value.locale.and_then(|locale| {
+            let tag = locale.to_string();
+            Arc::make_mut(&mut style).locale = Some(tag.clone());
+            (!value.text.is_empty()).then(|| {
+                Arc::new(SemanticTextAttributes {
+                    label: vec![StringAttribute::locale(
+                        0..value.text.encode_utf16().count(),
+                        tag,
+                    )],
+                    ..Default::default()
+                })
+            })
+        });
+        let has_semantics = value.semantics_identifier.is_some() || text_attributes.is_some();
+        let annotation = has_semantics.then(|| {
+            crate::ExplicitSemantics::new(SemanticRole::GenericContainer)
+                .label(value.text.as_str())
+                .state(SemanticState {
+                    identifier: value.semantics_identifier,
+                    text_attributes,
+                    ..SemanticState::default()
+                })
+        });
+        let widget = Widget::text_configured(
             value.text,
-            value.style,
+            style,
             TextParagraphPolicy {
                 align: value.align,
                 soft_wrap: value.soft_wrap,
@@ -811,7 +857,11 @@ impl From<Text> for Widget {
             None,
             None,
             value.strut.map(Box::new),
-        )
+        );
+        match annotation {
+            Some(annotation) => widget.semantics(annotation),
+            None => widget,
+        }
     }
 }
 

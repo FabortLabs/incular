@@ -3301,3 +3301,7 @@ packages/flutter/test/painting/stadium_border_test.dart	330	StadiumBorder and Ro
 packages/flutter/test/painting/stadium_border_test.dart	464	StadiumBorder and RoundedRectBorder with BorderRadiusDirectional	paired-match	upstream-stadium-morphing.md
 packages/flutter/test/painting/linear_border_test.dart	85	LinearBorderEdge, LinearBorder toString()	paired-match	upstream-linear-border.md#diagnostic-string
 packages/flutter/test/painting/border_rtl_test.dart	75	BoxBorder.lerp	paired-match	upstream-box-border-mixed-interpolation.md
+packages/flutter/test/widgets/text_semantics_test.dart	177	GIVEN a Text widget with a locale WHEN semantics are built THEN the SemanticsNode contains the correct language tag	paired-match	upstream-text-semantics.md
+packages/flutter/test/widgets/text_semantics_test.dart	196	GIVEN a Text with a locale is within a SelectionContainer WHEN semantics are built THEN the SemanticsNode contains the correct language tag	paired-match	upstream-text-semantics.md
+packages/flutter/test/widgets/text_semantics_test.dart	231	Text with semanticsIdentifier creates its own semantic node	paired-match	upstream-text-semantics.md
+packages/flutter/test/widgets/text_semantics_test.dart	252	Text with semanticsIdentifier is not absorbed by route-scoping ancestor	paired-match	upstream-text-semantics.md
