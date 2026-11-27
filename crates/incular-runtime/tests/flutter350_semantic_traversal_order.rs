@@ -1,10 +1,12 @@
-use std::f32::consts::FRAC_PI_2;
+use std::{cmp::Reverse, f32::consts::FRAC_PI_2};
 
 use incular_accessibility::AccessKitProjection;
 use incular_config::{Alignment, Constraints, TextDirection};
 use incular_core::Size;
 use incular_runtime::Runtime;
-use incular_semantics::{OrdinalSortKey, Role, SemanticNodeId, SemanticsTree};
+use incular_semantics::{
+    CustomSemanticsSortKey, OrdinalSortKey, Role, SemanticNodeId, SemanticsTree,
+};
 use incular_widgets::{
     Column, Directionality, Placeholder, Positioned, Row, Semantics, SizedBox, Stack, Text,
     Transform, Widget,
@@ -40,6 +42,12 @@ fn order(label: &'static str, order: f64) -> Widget {
         .into()
 }
 
+fn custom(label: &'static str, number: i32) -> Widget {
+    Semantics::new(text(label))
+        .custom_sort_key(CustomSemanticsSortKey::new(number))
+        .into()
+}
+
 #[test]
 fn explicit_sort_numbers_order_nested_annotation_groups_independently() {
     let group = Semantics::new(Row::new([
@@ -47,14 +55,14 @@ fn explicit_sort_numbers_order_nested_annotation_groups_independently() {
         order("Label 4", 2.),
         order("Label 5", 1.),
     ]))
-    .sort_key(OrdinalSortKey::new(1.))
+    .custom_sort_key(CustomSemanticsSortKey::new(1i32))
     .explicit_child_nodes(true);
     let scene = Semantics::new(Column::new([
-        order("Label 1", 3.),
-        order("Label 2", 2.),
+        custom("Label 1", 3),
+        custom("Label 2", 2),
         group.into(),
     ]))
-    .sort_key(OrdinalSortKey::new(0.))
+    .custom_sort_key(CustomSemanticsSortKey::new(0i32))
     .explicit_child_nodes(true);
     let runtime = mount(Directionality::new(TextDirection::Ltr, scene));
     let tree = runtime.tree().semantics();
@@ -75,9 +83,9 @@ fn explicit_sort_numbers_order_nested_annotation_groups_independently() {
 #[test]
 fn explicit_sort_numbers_can_override_spatial_order_in_a_row() {
     let scene = Row::new([
-        order("Label 1", 3.),
-        order("Label 2", 1.),
-        order("Label 3", 2.),
+        custom("Label 1", 3),
+        custom("Label 2", 1),
+        custom("Label 3", 2),
     ]);
     let runtime = mount(Directionality::new(TextDirection::Ltr, scene));
     let tree = runtime.tree().semantics();
@@ -156,4 +164,52 @@ fn without_direction_unkeyed_overlap_uses_paint_order_not_position() {
         order,
         ["placeholder", "box-0", "box-1", "box-2", "box-3", "box-4"]
     );
+}
+
+#[test]
+fn custom_types_and_names_partition_runs_and_equal_keys_stay_stable() {
+    let descending = |name, order, label| {
+        Widget::from(
+            Semantics::new(text(label))
+                .custom_sort_key(CustomSemanticsSortKey::named(Reverse(order), name)),
+        )
+    };
+    let ordinal = |order, label| {
+        Widget::from(Semantics::new(text(label)).sort_key(OrdinalSortKey::named(order, "group")))
+    };
+    let ascending = |order, label| {
+        Widget::from(
+            Semantics::new(text(label))
+                .custom_sort_key(CustomSemanticsSortKey::named(order, "group")),
+        )
+    };
+
+    let runtime = mount(Directionality::new(
+        TextDirection::Ltr,
+        Row::new([
+            descending("group", 1i32, "a1"),
+            descending("group", 3, "a3"),
+            descending("group", 3, "a3 tie"),
+            ordinal(2., "b2"),
+            ordinal(0., "b0"),
+            ascending(9i32, "c9"),
+            ascending(1, "c1"),
+            descending("group", 2, "d2"),
+            descending("other", 4, "e4"),
+            descending("other", 6, "e6"),
+        ]),
+    ));
+    let tree = runtime.tree().semantics();
+    assert_eq!(
+        labels(tree, tree.roots()),
+        [
+            "a3", "a3 tie", "a1", "b0", "b2", "c1", "c9", "d2", "e6", "e4"
+        ]
+        .map(Some)
+    );
+    for &id in &tree.roots()[0..3] {
+        let node = tree.node(id).unwrap();
+        assert!(node.state.custom_sort_key.is_some());
+        assert!(node.state.sort_key.is_none());
+    }
 }

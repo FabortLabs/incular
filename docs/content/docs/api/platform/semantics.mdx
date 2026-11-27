@@ -19,6 +19,12 @@ one node per logical row.
 | [`SemanticState`](/docs/api/platform/semantics) | Node state snapshot |
 | [`SemanticsTree`](/docs/api/platform/semantics) | Whole-tree queries |
 
+Use `OrdinalSortKey` for numeric traversal order or
+`Semantics::custom_sort_key(CustomSemanticsSortKey::named(value, "group"))`
+for a Rust value with its own ordering. Keys sort only within a consecutive
+run of the same type and name. Equal keys keep their previous traversal
+order. Traversal order does not change painting or pointer hit testing.
+
 ```rust
 use incular::prelude::*;
 use incular::widgets::{ExcludeSemantics, MergeSemantics};

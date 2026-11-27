@@ -13,7 +13,18 @@ confirms paint order in both axes when no direction is inherited, as
 the pinned traversal implementation specifies. Incular matches the
 observable identifier order.
 
-The two explicit numeric tests have the same sorted sibling and nested
-orders on Incular. Their use of a distinct Dart `CustomSortKey` subclass
-is not yet represented by the Rust ordinal key exercised here, and
-remains partial until custom type compatibility is tested.
+## Typed custom sort keys
+
+The two explicit numeric tests (:1239, :1304) now use a distinct custom
+numeric ordering key for the Dart `CustomSortKey` groups, and the nested
+test uses ordinary ordinal keys in its inner group. Both matching trees
+are verified on Incular. The authored pinned
+`semantics_custom_sort_key_test.dart` and its native twin add two custom
+ordering types, an ordinary ordinal type, adjacent different names,
+descending order and a tie. A type or name boundary prevents comparisons
+across the boundary, and equal keys remain stable.
+
+Incular models extension with a Rust ordering type rather than a Dart
+subclass. The key is included in retained annotation metadata and kept
+on the outer node when a viewport splits its native semantics panes.
+All 35 selected runtime regressions passed.

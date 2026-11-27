@@ -133,8 +133,9 @@ impl WidgetTree {
                 }
                 if old_inner.is_some() {
                     node.state.tags = self.semantics.node(outer).unwrap().state.tags.clone();
-                    node.state.sort_key =
-                        self.semantics.node(outer).unwrap().state.sort_key.clone();
+                    let outer_state = &self.semantics.node(outer).unwrap().state;
+                    node.state.sort_key.clone_from(&outer_state.sort_key);
+                    node.state.custom_sort_key.clone_from(&outer_state.custom_sort_key);
                 }
                 node.children = children.to_vec();
                 node
@@ -157,6 +158,7 @@ impl WidgetTree {
             hidden: content.state.hidden,
             tags: std::mem::take(&mut content.state.tags),
             sort_key: content.state.sort_key.take(),
+            custom_sort_key: content.state.custom_sort_key.take(),
             ..SemanticState::default()
         };
         let inner = if let Some(inner) = old_inner {

@@ -16,12 +16,14 @@ use std::{
 mod attributed_string;
 mod custom_action;
 mod label_builder;
+mod sort_key;
 pub use attributed_string::{
     AttributedString, InvalidStringAttribute, SemanticTextAttributes, StringAttribute,
 };
 pub use custom_action::{CustomSemanticsAction, CustomSemanticsActionId};
 pub use incular_core::TextDirection;
 pub use label_builder::SemanticsLabelBuilder;
+pub use sort_key::CustomSemanticsSortKey;
 
 /// Framework-only metadata used to identify a node without changing what
 /// assistive technology says. The name is diagnostic; cloning a tag
@@ -610,6 +612,8 @@ pub struct SemanticState {
     /// siblings. Siblings with compatible keys are reordered (see
     /// `OrdinalSortKey`); unkeyed siblings keep their widget order.
     pub sort_key: Option<OrdinalSortKey>,
+    /// A typed custom sort key takes precedence over an ordinal key.
+    pub custom_sort_key: Option<CustomSemanticsSortKey>,
     /// Flutter's `container`: the node is always its own accessibility node,
     /// even without other metadata.
     pub container: bool,
@@ -778,6 +782,7 @@ impl Default for SemanticState {
             max_value_length: None,
             current_value_length: None,
             sort_key: None,
+            custom_sort_key: None,
             container: false,
             explicit_child_nodes: false,
             tags: Box::default(),

@@ -380,6 +380,15 @@ impl Semantics {
     #[must_use]
     pub fn sort_key(mut self, key: incular_semantics::OrdinalSortKey) -> Self {
         self.state.sort_key = Some(key);
+        self.state.custom_sort_key = None;
+        self
+    }
+
+    /// Orders this node with adjacent keys of the same Rust type and name.
+    #[must_use]
+    pub fn custom_sort_key(mut self, key: incular_semantics::CustomSemanticsSortKey) -> Self {
+        self.state.sort_key = None;
+        self.state.custom_sort_key = Some(key);
         self
     }
 

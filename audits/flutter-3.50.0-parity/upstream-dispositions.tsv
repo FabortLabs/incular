@@ -2825,8 +2825,8 @@ packages/flutter/test/widgets/semantics_test.dart	1552	Can change handlers	paire
 packages/flutter/test/widgets/semantics_test.dart	2105	applies heading semantics to semantics tree	paired-match	upstream-semantic-headings-clamping-and-dilation.md#published-heading-levels-and-validation-precedence
 packages/flutter/test/widgets/semantics_test.dart	2137	RenderSemanticsAnnotations provides validation result	paired-match	upstream-semantic-headings-clamping-and-dilation.md#published-heading-levels-and-validation-precedence
 packages/flutter/test/widgets/semantics_test.dart	2175	validation result precedence	paired-match	upstream-semantic-headings-clamping-and-dilation.md#published-heading-levels-and-validation-precedence
-packages/flutter/test/widgets/semantics_test.dart	1239	Semantics widgets built in a widget tree are sorted properly	partial-match	upstream-ordinary-semantics-traversal.md
-packages/flutter/test/widgets/semantics_test.dart	1304	Semantics widgets built with explicit sort orders are sorted properly	partial-match	upstream-ordinary-semantics-traversal.md
+packages/flutter/test/widgets/semantics_test.dart	1239	Semantics widgets built in a widget tree are sorted properly	paired-match	upstream-ordinary-semantics-traversal.md#typed-custom-sort-keys
+packages/flutter/test/widgets/semantics_test.dart	1304	Semantics widgets built with explicit sort orders are sorted properly	paired-match	upstream-ordinary-semantics-traversal.md#typed-custom-sort-keys
 packages/flutter/test/widgets/semantics_test.dart	1343	Semantics widgets without sort orders are sorted properly	paired-match	upstream-ordinary-semantics-traversal.md
 packages/flutter/test/widgets/semantics_test.dart	1385	Semantics widgets that are transformed are sorted properly	paired-match	upstream-ordinary-semantics-traversal.md
 packages/flutter/test/widgets/semantics_test.dart	1432	Semantics widgets without sort orders are sorted properly when no Directionality is present	paired-match	upstream-ordinary-semantics-traversal.md

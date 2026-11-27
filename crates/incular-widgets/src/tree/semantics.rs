@@ -2021,7 +2021,7 @@ impl WidgetTree {
     }
 
     /// The sort key the element's explicit semantics declares, if any.
-    fn element_sort_key(&self, element: ElementId) -> Option<&incular_semantics::OrdinalSortKey> {
+    fn element_sort_key(&self, element: ElementId) -> Option<TraversalSortKey<'_>> {
         self.elements
             .get(element.0)
             .and_then(|entry| widget_sort_key(&entry.widget))
@@ -2259,6 +2259,7 @@ impl WidgetTree {
                 && (annotation.role == SemanticRole::Heading
                     || (annotation.role == SemanticRole::GenericContainer
                         && (annotation.state.sort_key.is_some()
+                            || annotation.state.custom_sort_key.is_some()
                             || annotation.state.effective_validation_result()
                                 != SemanticValidationResult::None
                             || ((annotation.state.container || annotation.state.toggled.is_some())
@@ -2283,6 +2284,7 @@ impl WidgetTree {
         let annotation = entry.widget.semantic_properties().explicit.as_ref().unwrap();
         if annotation.role == SemanticRole::Heading
             || annotation.state.sort_key.is_some()
+            || annotation.state.custom_sort_key.is_some()
             || annotation.state.effective_validation_result() != SemanticValidationResult::None
         {
             return true;
@@ -3352,6 +3354,10 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
             $(if overlay.$field != default.$field { base.$field = overlay.$field.clone(); })*
         };
     }
+    if overlay.sort_key.is_some() || overlay.custom_sort_key.is_some() {
+        base.sort_key.clone_from(&overlay.sort_key);
+        base.custom_sort_key.clone_from(&overlay.custom_sort_key);
+    }
     take!(
         focused,
         focusable,
@@ -3410,24 +3416,43 @@ fn semantics_hidden(entry: &Element) -> bool {
         )
 }
 
-/// The sort key a widget's explicit semantics declares, if any.
-fn widget_sort_key(widget: &Widget) -> Option<&incular_semantics::OrdinalSortKey> {
-    widget
-        .semantic_properties()
-        .explicit
-        .as_ref()
-        .and_then(|explicit| explicit.state.sort_key.as_ref())
+#[derive(Clone, Copy)]
+enum TraversalSortKey<'a> {
+    Ordinal(&'a incular_semantics::OrdinalSortKey),
+    Custom(&'a incular_semantics::CustomSemanticsSortKey),
 }
 
-/// Flutter's `SemanticsNode` sort-group compatibility: unkeyed keys agree
-/// with each other, and keyed ones agree when they share a group name.
+impl TraversalSortKey<'_> {
+    fn compare_to(self, other: Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (Self::Ordinal(a), Self::Ordinal(b)) => a.compare_to(b),
+            (Self::Custom(a), Self::Custom(b)) => a.compare_to(b).expect("compatible custom run"),
+            _ => unreachable!("incompatible semantic keys cannot share a sort run"),
+        }
+    }
+}
+
+/// The sort key a widget's explicit semantics declares, if any.
+fn widget_sort_key(widget: &Widget) -> Option<TraversalSortKey<'_>> {
+    let state = &widget.semantic_properties().explicit.as_ref()?.state;
+    state
+        .custom_sort_key
+        .as_ref()
+        .map(TraversalSortKey::Custom)
+        .or_else(|| state.sort_key.as_ref().map(TraversalSortKey::Ordinal))
+}
+
+/// Adjacent keys share a sort run only when their concrete type and name
+/// agree. Unkeyed siblings retain their existing order.
 fn sort_keys_compatible(
-    left: Option<&incular_semantics::OrdinalSortKey>,
-    right: Option<&incular_semantics::OrdinalSortKey>,
+    left: Option<TraversalSortKey<'_>>,
+    right: Option<TraversalSortKey<'_>>,
 ) -> bool {
+    use TraversalSortKey::{Custom, Ordinal};
     match (left, right) {
         (None, None) => true,
-        (Some(left), Some(right)) => left.name == right.name,
+        (Some(Ordinal(a)), Some(Ordinal(b))) => a.name == b.name,
+        (Some(Custom(a)), Some(Custom(b))) => a.is_compatible_with(b),
         _ => false,
     }
 }
