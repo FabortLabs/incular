@@ -1312,6 +1312,7 @@ impl WidgetTree {
         lock_modes: incular_core::Modifiers,
         raw_delivery: incular_gestures::RawKeyDelivery<'_>,
     ) -> KeyEventResult {
+        self.notify_raw_keyboard_observers(focused, &event, raw_delivery);
         self.dispatch_keyboard_where(focused, event, lock_modes, raw_delivery, None, |_| true, None)
     }
 
@@ -1325,9 +1326,11 @@ impl WidgetTree {
         lock_modes: incular_core::Modifiers,
         raw_delivery: incular_gestures::RawKeyDelivery<'_>,
     ) -> (KeyEventResult, Option<crate::DirectionalFocusIntent>) {
+        self.notify_raw_keyboard_observers(focused, &event, raw_delivery);
         self.route_keyboard_with_focus_intent_and_state(focused, event, lock_modes, raw_delivery, None)
     }
 
+    /// Routes typed focus actions after the raw observation phase.
     #[doc(hidden)]
     pub fn route_keyboard_with_focus_intent_and_state(
         &self,
@@ -2590,6 +2593,38 @@ impl WidgetTree {
     fn notify_focus_within(&self, id: ElementId, focused: bool) {
         for observer in self.focus_within_observers(id) {
             observer(focused);
+        }
+    }
+
+    /// RawKeyboardListener is a passive subscription while its node or a
+    /// descendant has focus. It receives the raw record before typed handlers
+    /// can consume it. Deprecated Focus.onKey stays in normal focus bubbling.
+    #[doc(hidden)]
+    pub fn notify_raw_keyboard_observers(
+        &self,
+        focused: Option<ElementId>,
+        event: &KeyboardEvent,
+        delivery: incular_gestures::RawKeyDelivery<'_>,
+    ) {
+        use incular_gestures::RawKeyDelivery;
+        if matches!(delivery, RawKeyDelivery::Absent) {
+            return;
+        }
+        let mut raw: Option<crate::RawKeyEvent> = None;
+        let mut current = focused;
+        while let Some(id) = current {
+            if let Some(element) = self.elements.get(id.0)
+                && let WidgetKind::Gesture { callbacks, .. } = element.widget.kind()
+                && let Some(observer) = &callbacks.on_raw_key_observer
+            {
+                let raw = raw.get_or_insert_with(|| match delivery {
+                    RawKeyDelivery::Mirror => event.clone().into(),
+                    RawKeyDelivery::Supplied(raw) => raw.clone(),
+                    RawKeyDelivery::Absent => unreachable!("typed-only records are excluded"),
+                });
+                observer(raw.clone());
+            }
+            current = self.mounted_focus_parent(id);
         }
     }
 

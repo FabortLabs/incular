@@ -3977,6 +3977,7 @@ impl Runtime {
         // without going through runtime pointer/Tab handling. Adopt that
         // external selection before routing the event through retained parents.
         self.adopt_external_focus_change();
+        self.tree.notify_raw_keyboard_observers(self.focused, &event, message_source.raw_delivery());
 
         let hardware = self.hardware_key_handlers.dispatch(&event);
         for failure in hardware.failures {

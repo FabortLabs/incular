@@ -236,11 +236,6 @@ impl GestureCallbacks {
         {
             return KeyEventResult::Handled;
         }
-        if let Some(observer) = &self.on_raw_key_observer
-            && let Some(raw) = raw_delivery.payload(&event)
-        {
-            observer(raw);
-        }
         // Phase observers never consume the event: Flutter's KeyboardListener
         // reports KeyEventResult.ignored, so outer scopes still see the key.
         if event.state.is_down() {
