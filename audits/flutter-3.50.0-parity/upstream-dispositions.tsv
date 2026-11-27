@@ -3281,3 +3281,8 @@ packages/flutter/test/rendering/debug_overflow_indicator_test.dart	9	overflow in
 packages/flutter/test/rendering/debug_overflow_indicator_test.dart	17	overflow indicator is shown when overflowing	paired-match	upstream-debug-overflow-indicators.md
 packages/flutter/test/rendering/debug_overflow_indicator_test.dart	39	overflow indicator is not shown when constraint size is zero.	paired-match	upstream-debug-overflow-indicators.md
 packages/flutter/test/rendering/flex_overflow_test.dart	9	Flex overflow indicator	paired-match	upstream-debug-overflow-indicators.md
+packages/flutter/test/widgets/focus_traversal_test.dart	203	Move focus to next node.	paired-match	upstream-focus-navigation-matrix.md
+packages/flutter/test/widgets/focus_traversal_test.dart	320	Move focus to previous node.	paired-match	upstream-focus-navigation-matrix.md
+packages/flutter/test/widgets/focus_traversal_test.dart	2020	Directional prefers the closest node even on irregular grids	paired-match	upstream-focus-navigation-matrix.md
+packages/flutter/test/widgets/focus_traversal_test.dart	2154	Closest vertical is picked when only out of band items are considered	paired-match	upstream-focus-navigation-matrix.md
+packages/flutter/test/widgets/focus_traversal_test.dart	2245	Closest horizontal is picked when only out of band items are considered	paired-match	upstream-focus-navigation-matrix.md

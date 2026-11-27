@@ -409,6 +409,7 @@ pub struct FocusScope {
     use_external_properties: bool,
     autofocus: bool,
     policy: FocusTraversalPolicyKind,
+    on_focus_change: Option<Rc<dyn Fn(bool)>>,
     child: Option<Widget>,
 }
 
@@ -424,6 +425,7 @@ impl Default for FocusScope {
             use_external_properties: false,
             autofocus: false,
             policy: FocusTraversalPolicyKind::ReadingOrder,
+            on_focus_change: None,
             child: None,
         }
     }
@@ -583,6 +585,15 @@ impl FocusScope {
         self
     }
 
+    /// Reports when focus enters or leaves this scope, including its
+    /// descendants. Moving between children of an already focused scope
+    /// does not report a second focus transition.
+    #[must_use]
+    pub fn on_focus_change(mut self, callback: impl Fn(bool) + 'static) -> Self {
+        self.on_focus_change = Some(Rc::new(callback));
+        self
+    }
+
     /// Selects the traversal policy for this scope's descendants.
     #[must_use]
     pub fn policy(mut self, policy: FocusTraversalPolicyKind) -> Self {
@@ -613,10 +624,10 @@ impl From<FocusScope> for Widget {
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         let scope = if let Some(node) = &value.node {
-            let mut widget = Widget::from(
-                Focus::with_external_focus_node(child, node.scope_focus_node())
-                    .parent_node(value.parent_node),
-            );
+            let mut focus = Focus::with_external_focus_node(child, node.scope_focus_node())
+                .parent_node(value.parent_node);
+            focus.on_focus_change = value.on_focus_change;
+            let mut widget = Widget::from(focus);
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
                 callbacks.focus_scope = Some(node.clone());
                 callbacks.focus_node_widget_properties = properties;
@@ -626,9 +637,10 @@ impl From<FocusScope> for Widget {
             // Flutter always mounts a scope node, even without a supplied
             // node or explicit focus permission. Mount-owned descriptors
             // retain that identity and its focused-child history on rebuild.
-            let focus = Focus::new(child)
+            let mut focus = Focus::new(child)
                 .parent_node(value.parent_node)
                 .can_request_focus(value.can_request_focus.unwrap_or(true));
+            focus.on_focus_change = value.on_focus_change;
             let mut widget = Widget::from(focus);
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
                 callbacks.owns_focus_scope = true;
