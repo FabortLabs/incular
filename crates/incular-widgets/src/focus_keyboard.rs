@@ -360,8 +360,9 @@ impl FocusScope {
         }
     }
 
-    /// Finds the nearest mounted scope above this retained element.
-    /// Returns none when the root has no explicit scope node.
+    /// Resolves the nearest focus boundary above this retained element and
+    /// returns that boundary's mounted focus scope, if any. A scope boundary
+    /// belongs to itself; another focus boundary follows its focus parents.
     #[must_use]
     pub fn maybe_of(
         tree: &crate::tree::WidgetTree,
@@ -369,8 +370,8 @@ impl FocusScope {
     ) -> Option<FocusScopeNode> {
         let mut ancestor = tree.parent(element);
         while let Some(id) = ancestor {
-            if let Some(scope) = tree.focus_node_at(id).and_then(|node| node.scope_owner()) {
-                return Some(scope);
+            if tree.focus_boundary_at(id).is_some() {
+                return tree.scope_of_focus_boundary(id);
             }
             ancestor = tree.parent(id);
         }

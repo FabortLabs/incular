@@ -423,6 +423,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Scope lookup follows a focus boundary's explicitly assigned focus parent
+  rather than returning a scope from its widget ancestry.
+
 - Retained annotation lookups preserve a shared clip edge when a reflection
   makes it the included edge of both shapes.
 

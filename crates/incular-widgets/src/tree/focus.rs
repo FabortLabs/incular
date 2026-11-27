@@ -227,6 +227,20 @@ impl WidgetTree {
             .and_then(|element| focus_boundary_node(element.widget.kind()))
     }
 
+    pub(crate) fn scope_of_focus_boundary(
+        &self,
+        id: ElementId,
+    ) -> Option<incular_gestures::FocusScopeNode> {
+        let mut current = Some(id);
+        while let Some(id) = current {
+            if let Some(scope) = self.focus_boundary_at(id).and_then(|node| node.scope_owner()) {
+                return Some(scope);
+            }
+            current = self.mounted_focus_parent(id);
+        }
+        None
+    }
+
     /// Enables deferred FocusNode requests for a runtime-owned tree.
     #[doc(hidden)]
     pub fn enable_hosted_focus(&mut self) {

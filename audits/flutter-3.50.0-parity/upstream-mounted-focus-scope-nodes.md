@@ -204,3 +204,22 @@ provided scope nodes during retained updates. The external-node constructor
 keeps the node's settings authoritative. The focused native controls also
 verify owned scope identity remains unchanged and distinguish a denied
 request from simply omitting a descendant in traversal.
+
+### Context lookup with explicit focus parents
+
+The authored pinned `explicit_focus_scope_lookup_test.dart` mounts a left
+and right scope, with a focus boundary mounted under the left scope but
+attached to the right one. The boundary still owns `Focus.of`, but
+`FocusScope.of` inside the branch resolves to the right scope. A left
+sibling outside the branch still resolves to the left scope. A nested
+scope attached to the right is its own nearest scope. Updating the focus
+parent while retaining the widget and node moves the branch lookup back
+to the left scope.
+
+The native baseline returned the left scope for the entire widget
+subtree, even though the branch node itself already knew it was attached
+to the right. `FocusScope::maybe_of` now finds the context's nearest
+widget focus boundary and then follows its mounted focus parents. Its
+optional API still returns `None` without a scope, rather than returning
+a framework-wide root scope as Dart's non-optional API does. This
+authored comparison adds no original coverage credit.
