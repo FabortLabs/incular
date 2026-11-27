@@ -194,7 +194,11 @@ impl WidgetTree {
                 let (value_selection, value_empty) =
                     controller.with_value(|value| (value.selection, value.text.is_empty()));
                 let reveal_key = (controller.revisions().0, value_selection, focused, size);
-                let reveal = revealed != Some(reveal_key);
+                // In a read-only field, mounting or simply gaining focus
+                // does not reveal the pre-existing selection. A subsequent
+                // change within the focused field can still reveal it.
+                let reveal = revealed != Some(reveal_key)
+                    && (!field.read_only || (focused && revealed.is_some_and(|old| old.2)));
                 let has_layout = layout.is_some();
                 let mask = obscure_text.then_some(obscuring_character);
                 let shows_placeholder = value_empty

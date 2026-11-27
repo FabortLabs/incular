@@ -43,3 +43,19 @@ animation. The two upstream cases differ in whether the delegate
 supplies vsync; the Rust layout uses explicit request durations
 instead of an external ticker provider. All 14 focused native
 reveal and pinned-sliver checks passed.
+
+## Read-only focus and caret repaint
+
+Both read-only expansions of two pinned registrations passed. A
+field whose existing caret is off screen can receive focus even
+when read-only. Focus alone then leaves both the editor's horizontal
+scroll and its enclosing list unchanged. The corresponding editable
+field scrolls both to reveal its pre-existing caret. Native behavior
+previously revealed the read-only field too. The guard is limited
+to initial reveal, so later selection changes within a focused
+read-only field can still scroll.
+
+A separate native fixture also advances actual blink boundaries
+after explicitly scrolling the focused editor horizontally, verifying
+that paint activity never snaps the scroll back. All 24 focused native
+caret, focus, and reveal cases passed.

@@ -3000,7 +3000,15 @@ impl Runtime {
         if self.caret_reveal_key == Some(key) {
             return false;
         }
+        let entering = self
+            .caret_reveal_key
+            .is_none_or(|(previous, ..)| previous != field);
         self.caret_reveal_key = Some(key);
+        // Read-only editors can still take keyboard focus, but focus alone
+        // must not pull their selection into either enclosing viewport.
+        if entering && !self.tree.text_field_is_editable(field) {
+            return false;
+        }
         self.tree.text_field_show_caret_on_screen(field)
     }
 
