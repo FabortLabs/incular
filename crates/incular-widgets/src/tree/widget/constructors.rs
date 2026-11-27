@@ -1237,6 +1237,15 @@ impl Widget {
         build: impl for<'a> Fn(&Rc<S>, &BuildContext<'a>, Constraints) -> Self + 'static,
         constraint_dependent: bool,
     ) -> Self {
+        Self::retained_builder_with_direction_requirement(init, build, constraint_dependent, None)
+    }
+
+    pub(crate) fn retained_builder_with_direction_requirement<S: super::super::RetainedState>(
+        init: impl Fn(Rc<Cell<u64>>) -> S + 'static,
+        build: impl for<'a> Fn(&Rc<S>, &BuildContext<'a>, Constraints) -> Self + 'static,
+        constraint_dependent: bool,
+        direction_requirement: Option<&'static super::super::DirectionRequirement>,
+    ) -> Self {
         let revision = Rc::new(Cell::new(0_u64));
         let slot = Rc::new(super::super::retained_state::RetainedSlot::new::<S>(
             revision.clone(),
@@ -1255,7 +1264,7 @@ impl Widget {
                 constraint_dependent,
                 retained: Some(slot),
                 static_child: None,
-                direction_requirement: None,
+                direction_requirement,
             },
             semantics: None,
         })

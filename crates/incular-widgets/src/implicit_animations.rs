@@ -16,13 +16,13 @@ use incular_animation::{
 use incular_config::{
     Alignment, Clip, Constraints, EdgeInsets, TextDirection,
 };
-use incular_core::{Color, Lerp, Offset, Size, Transform as CoreTransform};
+use incular_core::{Color, Lerp, Offset, Rect, Size, Transform as CoreTransform};
 use incular_text::{TextAlign, TextOverflow, TextStyle};
 
 use crate::dx::motion::config::{MotionConfig, reduce};
 use crate::environment::DefaultTextParagraph;
 use crate::painting_effects::{BoxShape, PhysicalModel};
-use crate::tree::{FrameDelegate, FrameTick, RetainedState};
+use crate::tree::{DirectionRequirement, FrameDelegate, FrameTick, RetainedState};
 use crate::{
     Align, BorderRadius, BoxDecoration, BuildContext, Container, DefaultTextStyle,
     FractionalTranslation, FractionallySizedBox, Opacity, Padding, Positioned, SizedBox, Transform,
@@ -327,8 +327,15 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
 }
 
 pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
+    implicitly_animated_with_direction_requirement(widget, None)
+}
+
+fn implicitly_animated_with_direction_requirement<W: ImplicitlyAnimated>(
+    widget: W,
+    requirement: Option<&'static DirectionRequirement>,
+) -> Widget {
     let config = Rc::new(widget);
-    Widget::retained_builder(
+    Widget::retained_builder_with_direction_requirement(
         {
             let config = config.clone();
             move |revision| ImplicitState::<W> {
@@ -377,6 +384,7 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
             state.build(context)
         },
         false,
+        requirement,
     )
 }
 
@@ -961,6 +969,17 @@ pub(crate) struct EdgeTweens {
 }
 
 impl Edges {
+    fn debug_assert_valid(self) {
+        debug_assert!(
+            self.leading.is_none() || self.trailing.is_none() || self.width.is_none(),
+            "only two horizontal positioning values may be set"
+        );
+        debug_assert!(
+            self.top.is_none() || self.bottom.is_none() || self.height.is_none(),
+            "only two vertical positioning values may be set"
+        );
+    }
+
     fn visit(&self, tweens: &mut EdgeTweens, pass: &mut TweenPass) {
         visit(pass, &mut tweens.leading, self.leading.as_ref());
         visit(pass, &mut tweens.top, self.top.as_ref());
@@ -1019,6 +1038,46 @@ impl AnimatedPositioned {
         }
     }
 
+    /// Animates the child's physical position and size from a rectangle.
+    #[must_use]
+    pub fn from_rect(rect: Rect, duration: Duration, child: impl Into<Widget>) -> Self {
+        Self::new(duration, child)
+            .left(rect.origin.x)
+            .top(rect.origin.y)
+            .width(rect.size.width)
+            .height(rect.size.height)
+    }
+
+    #[must_use]
+    pub const fn get_left(&self) -> Option<f32> {
+        self.edges.leading
+    }
+
+    #[must_use]
+    pub const fn get_right(&self) -> Option<f32> {
+        self.edges.trailing
+    }
+
+    #[must_use]
+    pub const fn get_top(&self) -> Option<f32> {
+        self.edges.top
+    }
+
+    #[must_use]
+    pub const fn get_bottom(&self) -> Option<f32> {
+        self.edges.bottom
+    }
+
+    #[must_use]
+    pub const fn get_width(&self) -> Option<f32> {
+        self.edges.width
+    }
+
+    #[must_use]
+    pub const fn get_height(&self) -> Option<f32> {
+        self.edges.height
+    }
+
     #[must_use]
     pub fn left(mut self, left: f32) -> Self {
         self.edges.leading = Some(left);
@@ -1058,6 +1117,22 @@ impl AnimatedPositioned {
     implicit_timing_options!();
 }
 
+impl fmt::Debug for AnimatedPositioned {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AnimatedPositioned")
+            .field("left", &self.edges.leading)
+            .field("top", &self.edges.top)
+            .field("right", &self.edges.trailing)
+            .field("bottom", &self.edges.bottom)
+            .field("width", &self.edges.width)
+            .field("height", &self.edges.height)
+            .field("curve", &self.timing.curve)
+            .field("duration", &self.timing.duration)
+            .finish()
+    }
+}
+
 impl ImplicitlyAnimated for AnimatedPositioned {
     type Tweens = EdgeTweens;
 
@@ -1076,6 +1151,7 @@ impl ImplicitlyAnimated for AnimatedPositioned {
 
 impl From<AnimatedPositioned> for Widget {
     fn from(value: AnimatedPositioned) -> Self {
+        value.edges.debug_assert_valid();
         implicitly_animated(value)
     }
 }
@@ -1158,7 +1234,12 @@ impl ImplicitlyAnimated for AnimatedPositionedDirectional {
 
 impl From<AnimatedPositionedDirectional> for Widget {
     fn from(value: AnimatedPositionedDirectional) -> Self {
-        implicitly_animated(value)
+        static REQUIREMENT: DirectionRequirement = DirectionRequirement {
+            widget: "AnimatedPositionedDirectional",
+            reason: "logical animated edges use Directionality.of",
+        };
+        value.edges.debug_assert_valid();
+        implicitly_animated_with_direction_requirement(value, Some(&REQUIREMENT))
     }
 }
 

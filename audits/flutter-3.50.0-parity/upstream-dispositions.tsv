@@ -3594,3 +3594,11 @@ packages/flutter/test/widgets/animated_size_test.dart	166	tracks unstable child,
 packages/flutter/test/widgets/animated_size_test.dart	251	resyncs its animation controller	paired-match	upstream-animated-size-lifecycle.md
 packages/flutter/test/widgets/animated_size_test.dart	386	re-attach with interrupted animation	paired-match	upstream-animated-size-lifecycle.md
 packages/flutter/test/widgets/animated_size_test.dart	456	disposes animation and controller	partial-match	upstream-animated-size-lifecycle.md
+packages/flutter/test/widgets/animated_positioned_test.dart	9	AnimatedPositioned.fromRect control test	paired-match	upstream-animated-positioned.md
+packages/flutter/test/widgets/animated_positioned_test.dart	295	AnimatedPositioned - interrupted animation (VISUAL)	paired-match	upstream-animated-positioned.md
+packages/flutter/test/widgets/animated_positioned_test.dart	378	AnimatedPositioned - switching variables (VISUAL)	paired-match	upstream-animated-positioned.md
+packages/flutter/test/widgets/animated_positioned_test.dart	437	AnimatedPositionedDirectional - interrupted animation (LTR)	paired-match	upstream-animated-positioned.md
+packages/flutter/test/widgets/animated_positioned_test.dart	528	AnimatedPositionedDirectional - switching variables (LTR)	paired-match	upstream-animated-positioned.md
+packages/flutter/test/widgets/animated_positioned_test.dart	593	AnimatedPositionedDirectional - interrupted animation (RTL)	paired-match	upstream-animated-positioned.md
+packages/flutter/test/widgets/animated_positioned_test.dart	684	AnimatedPositionedDirectional - switching variables (RTL)	paired-match	upstream-animated-positioned.md
+packages/flutter/test/widgets/animated_positioned_test.dart	749	AnimatedPositionedDirectional does not crash at zero area	paired-match	upstream-animated-positioned.md
