@@ -247,8 +247,8 @@ impl Runtime {
         Some(selection)
     }
 
-    /// `SelectableRegion.getSelectableButtonItems` on desktop: copy while
-    /// something is selected, select all while there is content.
+    /// `SelectableRegion.getSelectableButtonItems`: copy a selection, share
+    /// it on native Android, and select all while there is content.
     fn selectable_text_context_menu_items(
         &mut self,
         label: ElementId,
@@ -262,7 +262,10 @@ impl Runtime {
             .selectable_text_editing_value(label)
             .is_some_and(|(text, _, _)| !text.is_empty());
         let dispatcher = self.dispatcher();
-        let mut items = Vec::with_capacity(2);
+        let android_share = can_copy
+            && !cfg!(target_arch = "wasm32")
+            && self.text_shortcut_platform == TextShortcutPlatform::Android;
+        let mut items = Vec::with_capacity(if android_share { 3 } else { 2 });
         if can_copy {
             let dispatcher = dispatcher.clone();
             items.push(ContextMenuButtonItem::new(
@@ -279,6 +282,18 @@ impl Runtime {
                 },
             ));
         }
+        if android_share {
+            let dispatcher = dispatcher.clone();
+            let kind = ContextMenuButtonType::Share;
+            items.push(
+                ContextMenuButtonItem::new(kind, move || {
+                    dispatcher.dispatch(move |runtime: &mut Runtime| {
+                        runtime.share_selectable_region(label);
+                    });
+                })
+                .label(self.adaptive_text_menu_label(label, kind)),
+            );
+        }
         if can_select_all {
             items.push(ContextMenuButtonItem::new(
                 ContextMenuButtonType::SelectAll,
@@ -291,6 +306,26 @@ impl Runtime {
             ));
         }
         items
+    }
+
+    fn share_selectable_region(&mut self, label: ElementId) {
+        let Some(menu) = self.tree.selectable_text_context_menu(label) else {
+            return;
+        };
+        if !menu.is_showing() {
+            return;
+        }
+        let Some(text) = self.tree.selectable_text_selected_text(label).filter(|text| !text.is_empty())
+        else {
+            return;
+        };
+        self.text_selection_actions.push(TextSelectionActionRequest {
+            action: TextSelectionAction::Share,
+            text,
+        });
+        self.tree.selectable_text_clear_selection(label);
+        menu.hide();
+        self.frame_requested = true;
     }
 
     /// `RenderEditable.selectWord` at a view point: Flutter's

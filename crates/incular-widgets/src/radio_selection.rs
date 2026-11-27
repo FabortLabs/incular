@@ -1,8 +1,10 @@
 //! Radio group and rich selection infrastructure widgets.
 
 use crate::selection::SelectionAreaController;
-use crate::{GestureDetector, Text, Widget};
-use std::rc::Rc;
+use crate::{
+    BuildContext, EditableTextContextMenuBuilder, GestureDetector, Text, TextContextMenu, Widget,
+};
+use std::{fmt, rc::Rc};
 
 /// Coordinates mutually exclusive selection for a group of radio buttons.
 #[derive(Clone)]
@@ -80,9 +82,33 @@ impl<T: Clone + PartialEq + 'static> From<RawRadio<T>> for Widget {
 }
 
 /// An area that supports pointer-based text selection.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone)]
 pub struct SelectableRegion {
     child: Widget,
+    context_menu_builder: Option<EditableTextContextMenuBuilder>,
+}
+
+impl fmt::Debug for SelectableRegion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SelectableRegion")
+            .field("child", &self.child)
+            .field(
+                "has_context_menu_builder",
+                &self.context_menu_builder.is_some(),
+            )
+            .finish()
+    }
+}
+
+impl PartialEq for SelectableRegion {
+    fn eq(&self, other: &Self) -> bool {
+        self.child == other.child
+            && match (&self.context_menu_builder, &other.context_menu_builder) {
+                (None, None) => true,
+                (Some(a), Some(b)) => Rc::ptr_eq(a, b),
+                _ => false,
+            }
+    }
 }
 
 impl SelectableRegion {
@@ -90,12 +116,30 @@ impl SelectableRegion {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             child: child.into(),
+            context_menu_builder: None,
         }
+    }
+
+    /// Builds the selection toolbar at the supplied anchors. The menu model
+    /// contains the platform's ordered actions without prescribing a style.
+    #[must_use]
+    pub fn context_menu_builder(
+        mut self,
+        builder: impl for<'a> Fn(&BuildContext<'a>, &TextContextMenu) -> Widget + 'static,
+    ) -> Self {
+        self.context_menu_builder = Some(Rc::new(builder));
+        self
     }
 }
 
 impl From<SelectableRegion> for Widget {
     fn from(value: SelectableRegion) -> Self {
-        Widget::selection_area(SelectionAreaController::new(), value.child)
+        let controller = SelectionAreaController::new();
+        match value.context_menu_builder {
+            Some(builder) => {
+                Widget::selection_area_with_context_menu(controller, value.child, builder)
+            }
+            None => Widget::selection_area(controller, value.child),
+        }
     }
 }

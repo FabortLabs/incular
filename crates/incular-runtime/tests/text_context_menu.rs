@@ -516,3 +516,104 @@ fn flutter_text_selection_actions_send_the_unmodified_string_on_platform() {
         );
     }
 }
+
+#[test]
+fn selectable_region_share_matches_android_long_press_and_clears_selection() {
+    use ContextMenuButtonType::{Copy, SelectAll, Share};
+    use incular_core::PRIMARY_POINTER_BUTTON;
+    use incular_platform::{TextSelectionAction, TextSelectionActionRequest};
+    use std::time::{Duration, Instant};
+
+    for platform in [
+        TextShortcutPlatform::Android,
+        TextShortcutPlatform::Ios,
+        TextShortcutPlatform::Linux,
+        TextShortcutPlatform::MacOs,
+        TextShortcutPlatform::Windows,
+    ] {
+        use incular_widgets::{Directionality, SelectableRegion, Text};
+        let shown: Shown = Rc::default();
+        let region = SelectableRegion::new(Text::new("How are you?")).context_menu_builder({
+            let shown = shown.clone();
+            move |_, menu| {
+                shown.borrow_mut().push(menu.clone());
+                IgnorePointer::new(SizedBox::shrink()).into()
+            }
+        });
+        let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, region).into()).unwrap();
+        runtime.set_text_shortcut_platform(platform);
+        runtime.run_frame(bounds()).unwrap();
+        let label = runtime
+            .tree()
+            .selectable_text_at(Offset::new(4., 8.))
+            .unwrap();
+        let point = (0..200)
+            .map(|x| Offset::new(x as f32, 8.))
+            .find(|point| runtime.tree().selectable_text_position_at(label, *point) == Some(6))
+            .expect("point inside ‘are’");
+        let start = Instant::now();
+        let released = start + Duration::from_millis(500);
+        for (phase, buttons, time) in [
+            (PointerPhase::Down, PRIMARY_POINTER_BUTTON, start),
+            (PointerPhase::Up, 0, released),
+        ] {
+            runtime.run_frame_at(bounds(), time).unwrap();
+            let _ = runtime.handle_input_at(
+                InputEvent::PointerWithMetadata {
+                    pointer: 1,
+                    device: 3,
+                    kind: PointerDeviceKind::Touch,
+                    buttons,
+                    button: Some(PRIMARY_POINTER_BUTTON),
+                    sample: PointerSampleMetadata::default(),
+                    phase,
+                    position: point,
+                },
+                time,
+            );
+        }
+        runtime.run_frame_at(bounds(), released).unwrap();
+        assert_eq!(
+            runtime
+                .tree()
+                .selectable_text_editing_value(label)
+                .unwrap()
+                .1,
+            TextSelection::new(4, 7),
+            "{platform:?}"
+        );
+        let menu = last(&shown);
+        if platform == TextShortcutPlatform::Android {
+            assert_eq!(types(&menu), vec![Copy, Share, SelectAll]);
+            menu.button_items[1].press();
+            let mut runtime = process(runtime);
+            assert_eq!(
+                runtime.take_text_selection_actions(),
+                vec![TextSelectionActionRequest {
+                    action: TextSelectionAction::Share,
+                    text: "are".into()
+                }]
+            );
+            assert_eq!(
+                runtime
+                    .tree()
+                    .selectable_text_selected_text(label)
+                    .as_deref(),
+                Some("")
+            );
+            assert!(
+                !runtime
+                    .tree()
+                    .selectable_text_context_menu(label)
+                    .unwrap()
+                    .is_showing()
+            );
+            assert_eq!(runtime.focused_element(), Some(label));
+            menu.button_items[1].press();
+            assert!(process(runtime).take_text_selection_actions().is_empty());
+        } else {
+            assert_eq!(types(&menu), vec![Copy, SelectAll], "{platform:?}");
+            assert!(runtime.take_text_selection_actions().is_empty());
+        }
+    }
+}

@@ -1673,6 +1673,20 @@ impl WidgetTree {
         self.sync_static_selection(area);
         true
     }
+    /// Removes the region's selection and all of its paragraph highlights.
+    /// A collapsed selection is different: it still preserves an anchor.
+    #[doc(hidden)]
+    pub fn selectable_text_clear_selection(&mut self, id: ElementId) -> bool {
+        let Some(area) = self.selection_area_ancestor(id) else {
+            return false;
+        };
+        if self.static_selections.remove(&area).is_none() {
+            return false;
+        }
+        self.sync_static_selection(area);
+        true
+    }
+
     #[must_use]
     pub fn selectable_text_selected_text(&self, id: ElementId) -> Option<String> {
         let area = self.selection_area_ancestor(id)?;
