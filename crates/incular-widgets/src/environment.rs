@@ -6,7 +6,7 @@ use incular_config::{
 };
 use incular_core::Color;
 use incular_scroll::{ScrollController, ScrollPhysics};
-use incular_text::{TextAlign, TextHeightBehavior, TextOverflow, TextStyle};
+use incular_text::{TextAlign, TextHeightBehavior, TextOverflow, TextScaler, TextStyle};
 use std::{any::Any, rc::Rc};
 use typed_builder::TypedBuilder;
 
@@ -99,6 +99,13 @@ impl MediaQuery {
                 platform.paragraph_spacing_override.or(data.paragraph_spacing_override);
         }
         data
+    }
+
+    /// Returns the platform text scaling policy captured from this view.
+    /// A previously captured policy is unaffected by later view updates.
+    #[must_use]
+    pub fn system_text_scaler_from_view(view: &crate::ViewController) -> TextScaler {
+        TextScaler::system(Self::data_from_view(view, None).text_scale)
     }
 
     /// Subscribes to all data in the nearest MediaQuery, if present.

@@ -1537,9 +1537,9 @@ packages/flutter/test/widgets/binding_test.dart	1225	handleCommitBackGesture	pai
 packages/flutter/test/widgets/binding_test.dart	1270	handleCancelBackGesture	paired-match	upstream-predictive-back-events.md#back-observer-failure-isolation
 packages/flutter/test/painting/text_scaler_test.dart	10	equality	paired-match	upstream-linear-text-scaler.md
 packages/flutter/test/painting/text_scaler_test.dart	25	clamping	paired-match	upstream-linear-text-scaler.md
-packages/flutter/test/painting/text_scaler_test.dart	48	equality	reference-ran-incular-open	upstream-linear-text-scaler.md
-packages/flutter/test/painting/text_scaler_test.dart	61	Reclamping	reference-ran-incular-open	upstream-linear-text-scaler.md
-packages/flutter/test/painting/text_scaler_test.dart	86	ClampedScaler asserts	partial-match	upstream-linear-text-scaler.md
+packages/flutter/test/painting/text_scaler_test.dart	48	equality	paired-match	upstream-linear-text-scaler.md#platform-scaling-snapshots-and-clamp-composition
+packages/flutter/test/painting/text_scaler_test.dart	61	Reclamping	paired-match	upstream-linear-text-scaler.md#platform-scaling-snapshots-and-clamp-composition
+packages/flutter/test/painting/text_scaler_test.dart	86	ClampedScaler asserts	paired-match	upstream-linear-text-scaler.md#platform-scaling-snapshots-and-clamp-composition
 packages/flutter/test/painting/text_style_test.dart	340	TextStyle using package font	partial-match	upstream-package-fonts.md
 packages/flutter/test/painting/text_style_test.dart	375	TextStyle package font merge	paired-match	upstream-package-fonts.md
 packages/flutter/test/painting/text_style_test.dart	400	TextStyle font family fallback	partial-match	upstream-package-fonts.md

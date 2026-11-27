@@ -231,12 +231,20 @@ pub enum TextOverflow {
 pub struct TextScaler {
     kind: TextScalerKind,
     factor: f32,
+    // Keep system ranges separate from the platform value. Projecting the
+    // factor early makes separately configured policies compare equal.
+    min: f32,
+    max: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TextScalerKind {
     Linear,
     NoScaling,
+    /// Platform accessibility preference captured from a view.
+    System,
+    /// Platform preference constrained by a range.
+    ClampedSystem,
 }
 
 /// Invalid lower or upper bound supplied to a scaler clamp.
@@ -264,8 +272,17 @@ impl std::error::Error for TextScaleBoundsError {}
 
 impl PartialEq for TextScaler {
     fn eq(&self, other: &Self) -> bool {
-        // Flutter's noScaling is the same scaling policy as linear(1).
-        self.factor == other.factor
+        use TextScalerKind::{ClampedSystem, System};
+        match (self.kind, other.kind) {
+            (ClampedSystem, ClampedSystem) => {
+                self.factor == other.factor && self.min == other.min && self.max == other.max
+            }
+            (ClampedSystem, _) | (_, ClampedSystem) => false,
+            (System, System) => self.factor == other.factor,
+            (System, _) | (_, System) => self.factor == 1.0 && other.factor == 1.0,
+            // Flutter's noScaling is the same policy as linear(1).
+            _ => self.factor == other.factor,
+        }
     }
 }
 
@@ -273,6 +290,8 @@ impl TextScaler {
     pub const NO_SCALING: Self = Self {
         kind: TextScalerKind::NoScaling,
         factor: 1.0,
+        min: 0.0,
+        max: f32::INFINITY,
     };
 
     #[must_use]
@@ -280,6 +299,19 @@ impl TextScaler {
         Self {
             kind: TextScalerKind::Linear,
             factor,
+            ..Self::NO_SCALING
+        }
+    }
+
+    /// Snapshots the platform's accessibility scale. Incular hosts currently
+    /// supply a proportional factor; clamps retain their system provenance
+    /// and bounds instead of reducing to an unrelated explicit linear policy.
+    #[must_use]
+    pub const fn system(factor: f32) -> Self {
+        Self {
+            kind: TextScalerKind::System,
+            factor,
+            ..Self::NO_SCALING
         }
     }
 
@@ -290,7 +322,15 @@ impl TextScaler {
 
     #[must_use]
     pub const fn factor(self) -> f32 {
-        self.factor
+        if !matches!(self.kind, TextScalerKind::ClampedSystem) {
+            self.factor
+        } else if self.factor < self.min {
+            self.min
+        } else if self.factor > self.max {
+            self.max
+        } else {
+            self.factor
+        }
     }
 
     #[must_use]
@@ -299,10 +339,14 @@ impl TextScaler {
     }
 
     fn effective_factor(self) -> f32 {
-        if self.factor.is_finite() && self.factor >= 0.0 {
+        let factor = if self.factor.is_finite() && self.factor >= 0.0 {
             self.factor
         } else {
             1.0
+        };
+        match self.kind {
+            TextScalerKind::ClampedSystem => factor.clamp(self.min, self.max),
+            _ => factor,
         }
     }
 
@@ -313,7 +357,8 @@ impl TextScaler {
 
     /// Restricts scaled size to between these two multiples of the input.
     /// A minimum of zero and maximum of infinity leave a valid policy
-    /// unchanged. Successive linear clamps act on the current factor.
+    /// unchanged. Successive linear clamps act on the current factor; a
+    /// system clamp intersects the policy ranges and collapses disjoint bounds.
     pub fn try_clamp(self, min: f32, max: f32) -> Result<Self, TextScaleBoundsError> {
         if min.is_nan() || max.is_nan() || max < min {
             return Err(TextScaleBoundsError::InvalidMaximum);
@@ -324,17 +369,38 @@ impl TextScaler {
         if min < 0.0 {
             return Err(TextScaleBoundsError::NegativeMinimum);
         }
-        let factor = self.effective_factor().clamp(min, max);
-        Ok(if factor == self.factor {
-            self
-        } else {
-            Self::linear(factor)
+        use TextScalerKind::{ClampedSystem, System};
+        Ok(match self.kind {
+            System | ClampedSystem if min == 0.0 && max == f32::INFINITY => self,
+            System | ClampedSystem => {
+                let lower = self.min.max(min);
+                let upper = self.max.min(max);
+                if upper <= lower {
+                    // With no overlap, use the nearest boundary of the new range.
+                    Self::linear(self.min.clamp(min, max))
+                } else {
+                    Self {
+                        kind: ClampedSystem,
+                        min: lower,
+                        max: upper,
+                        ..self
+                    }
+                }
+            }
+            _ => {
+                let factor = self.effective_factor().clamp(min, max);
+                if factor == self.factor {
+                    self
+                } else {
+                    Self::linear(factor)
+                }
+            }
         })
     }
 
     #[must_use]
     pub fn is_no_scaling(self) -> bool {
-        self.factor == 1.0
+        self == Self::NO_SCALING
     }
 }
 

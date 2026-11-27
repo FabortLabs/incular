@@ -69,20 +69,16 @@ pub(super) fn resolve_text_style<'a>(
     resolved
 }
 
-/// Flutter's `MediaQuery.textScalerOf(context)`: the system text scale as a
-/// linear scaler. Reading it records the environment dependency, so a change to
-/// the text scale relayouts the text that resolved it.
+/// Explicit media overrides are linear; a bare runtime reads the platform
+/// scale. Both record their aspect so a text-scale change relayouts only its
+/// consumers.
 pub(super) fn environment_text_scaler(context: &DependencyContext) -> TextScaler {
-    let factor = context
-        .depend::<super::context::MediaQueryTextScale>()
-        .map(|scale| scale.0)
-        .or_else(|| {
-            context
-                .depend::<super::context::RuntimeTextScale>()
-                .map(|scale| scale.0)
-        })
-        .unwrap_or(1.0);
-    TextScaler::linear(factor)
+    if let Some(scale) = context.depend::<super::context::MediaQueryTextScale>() {
+        return TextScaler::linear(scale.0);
+    }
+    context
+        .depend::<super::context::RuntimeTextScale>()
+        .map_or(TextScaler::NO_SCALING, |scale| TextScaler::system(scale.0))
 }
 
 /// Resolves the editor style before scaling its logical font size.
