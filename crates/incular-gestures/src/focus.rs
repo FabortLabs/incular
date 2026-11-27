@@ -1278,9 +1278,10 @@ pub enum FocusTraversalPolicyKind {
     WidgetOrder,
     /// Sort by the top edge and then the leading edge of each node.
     ReadingOrder,
-    /// Sort by [`FocusNode::traversal_order`], with registration order as the
-    /// stable tie breaker.
+    /// Sort explicit orders first; equal or absent orders use reading order.
     Ordered,
+    /// Sort explicit orders first; equal or absent orders use widget order.
+    OrderedWithWidgetOrder,
 }
 
 fn is_traversable(node: &FocusNode) -> bool {
@@ -1737,6 +1738,7 @@ fn policy_nodes(policy: FocusTraversalPolicyKind, nodes: Vec<FocusNode>) -> Vec<
         FocusTraversalPolicyKind::WidgetOrder => nodes,
         FocusTraversalPolicyKind::ReadingOrder => reading_order(nodes),
         FocusTraversalPolicyKind::Ordered => explicit_order(reading_order(nodes)),
+        FocusTraversalPolicyKind::OrderedWithWidgetOrder => explicit_order(nodes),
     }
 }
 

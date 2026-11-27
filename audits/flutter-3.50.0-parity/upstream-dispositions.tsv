@@ -305,8 +305,6 @@ packages/flutter/test/animation/animation_controller_test.dart	1267	calling repe
 packages/flutter/test/animation/animation_controller_test.dart	1278	calling repeat by setting count as negative shall throw Assertion	reference-ran-incular-open	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/animation/animation_controller_test.dart	1289	calling repeat by setting count as valid with reverse as false, shall run animation accordingly	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/animation/animation_controller_test.dart	1324	calling repeat by setting count as valid with reverse as true, shall run animation accordingly	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
-packages/flutter/test/widgets/focus_traversal_test.dart	1279	Move focus to next/previous node using numerical order.	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
-packages/flutter/test/widgets/focus_traversal_test.dart	1331	Move focus to next/previous node using lexical order.	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3691	Descendants aren't traversable	paired-match	upstream-repeat-focus-restoration-flex-and-image-filter.md#programmatic-focus-group-parity
 packages/flutter/test/services/restoration_bucket_test.dart	147	claim child with existing data	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md
 packages/flutter/test/services/restoration_bucket_test.dart	172	claim child with no existing data	partial-match	upstream-repeat-focus-restoration-flex-and-image-filter.md#empty-restoration-buckets-survive-a-save
@@ -3292,3 +3290,8 @@ packages/flutter/test/widgets/focus_traversal_test.dart	799	Requesting nextFocus
 packages/flutter/test/widgets/focus_traversal_test.dart	836	Move reading focus to previous node.	paired-match	upstream-reading-order-directions.md
 packages/flutter/test/widgets/focus_traversal_test.dart	910	Focus order is correct in the presence of different directionalities.	paired-match	upstream-reading-order-directions.md
 packages/flutter/test/widgets/focus_traversal_test.dart	1035	Focus order is reading order regardless of widget order, even when overlapping.	paired-match	upstream-reading-order-directions.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1190	Find the initial focus if there is none yet.	paired-match	upstream-ordered-focus-secondary.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1227	Fall back to the secondary sort if no FocusTraversalOrder exists.	paired-match	upstream-ordered-focus-secondary.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1279	Move focus to next/previous node using numerical order.	paired-match	upstream-ordered-focus-secondary.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1331	Move focus to next/previous node using lexical order.	paired-match	upstream-ordered-focus-secondary.md
+packages/flutter/test/widgets/focus_traversal_test.dart	1389	Focus order is correct in the presence of FocusTraversalPolicyGroups.	paired-match	upstream-ordered-focus-secondary.md

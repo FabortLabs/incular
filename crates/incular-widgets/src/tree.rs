@@ -1624,6 +1624,7 @@ enum FocusTraversalMember {
 struct FocusTraversalGroupMembers {
     owner: Option<ElementId>,
     policy: FocusTraversalPolicyKind,
+    order: Option<incular_gestures::FocusOrder>,
     members: Vec<FocusTraversalMember>,
 }
 
@@ -1648,8 +1649,10 @@ impl FocusTraversalMember {
     }
 
     fn representative_order(&self) -> Option<&incular_gestures::FocusOrder> {
-        self.first_candidate()
-            .and_then(|candidate| candidate.order.as_ref())
+        match self {
+            Self::Candidate(candidate) => candidate.order.as_ref(),
+            Self::Group(group) => group.order.as_ref(),
+        }
     }
 
     fn representative_sequence(&self) -> usize {
@@ -1671,11 +1674,13 @@ fn sort_focus_members(
             members.sort_by_key(|member| member.representative_sequence());
             focus_reading_order::sort_members(tree, members);
         }
-        FocusTraversalPolicyKind::Ordered => {
-            // Flutter's OrderedTraversalPolicy: reading order is the secondary
-            // policy, so nodes with equal or absent orders keep that order.
+        FocusTraversalPolicyKind::Ordered | FocusTraversalPolicyKind::OrderedWithWidgetOrder => {
+            // The secondary policy establishes the stable ordering of
+            // members with equal or absent explicit orders.
             members.sort_by_key(|member| member.representative_sequence());
-            focus_reading_order::sort_members(tree, members);
+            if policy == FocusTraversalPolicyKind::Ordered {
+                focus_reading_order::sort_members(tree, members);
+            }
             members.sort_by(|left, right| {
                 match (left.representative_order(), right.representative_order()) {
                     (Some(left), Some(right)) => left.compare(right),

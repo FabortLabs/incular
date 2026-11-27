@@ -965,6 +965,7 @@ impl WidgetTree {
             FocusTraversalGroupMembers {
                 owner: None,
                 policy: FocusTraversalPolicyKind::ReadingOrder,
+                order: None,
                 members,
             },
             &mut result,
@@ -2166,6 +2167,7 @@ impl WidgetTree {
         out.push(FocusTraversalMember::Group(FocusTraversalGroupMembers {
             owner: Some(id),
             policy,
+            order: element.widget.semantic_properties().focus_traversal_order.clone(),
             members,
         }));
     }

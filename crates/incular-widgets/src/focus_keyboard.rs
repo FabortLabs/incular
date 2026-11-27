@@ -615,6 +615,13 @@ impl FocusScope {
     pub fn ordered(self) -> Self {
         self.policy(FocusTraversalPolicyKind::Ordered)
     }
+
+    /// Uses widget order as the secondary policy for equal or absent
+    /// explicit focus orders. [Self::ordered] defaults to reading order.
+    #[must_use]
+    pub fn ordered_with_widget_order(self) -> Self {
+        self.policy(FocusTraversalPolicyKind::OrderedWithWidgetOrder)
+    }
 }
 
 impl From<FocusScope> for Widget {
@@ -1269,6 +1276,13 @@ impl FocusTraversalGroup {
     #[must_use]
     pub fn ordered(self) -> Self {
         self.policy(FocusTraversalPolicyKind::Ordered)
+    }
+
+    /// Uses widget order as the secondary policy for equal or absent
+    /// explicit focus orders. [Self::ordered] defaults to reading order.
+    #[must_use]
+    pub fn ordered_with_widget_order(self) -> Self {
+        self.policy(FocusTraversalPolicyKind::OrderedWithWidgetOrder)
     }
 }
 
