@@ -2711,3 +2711,10 @@ packages/flutter/test/gestures/hit_test_test.dart	35	HitTestResult should correc
 packages/flutter/test/gestures/hit_test_test.dart	76	HitTestResult should correctly push and pop offsets	paired-match	upstream-shared-hit-test-result.md
 packages/flutter/test/gestures/multitap_test.dart	13	Should recognize pan	paired-match	upstream-multitap-timers.md
 packages/flutter/test/gestures/multitap_test.dart	78	Can filter based on device kind	paired-match	upstream-multitap-timers.md
+packages/flutter/test/painting/text_span_test.dart	102	TextSpan toPlainText	paired-match	upstream-inline-text-spans.md
+packages/flutter/test/painting/text_span_test.dart	113	WidgetSpan toPlainText	paired-match	upstream-inline-text-spans.md
+packages/flutter/test/painting/text_span_test.dart	125	TextSpan toPlainText with semanticsLabel	paired-match	upstream-inline-text-spans.md
+packages/flutter/test/painting/text_span_test.dart	247	GetSpanForPosition	paired-match	upstream-inline-text-spans.md
+packages/flutter/test/painting/text_span_test.dart	266	GetSpanForPosition with WidgetSpan	paired-match	upstream-inline-text-spans.md
+packages/flutter/test/painting/text_span_test.dart	291	TextSpan computeSemanticsInformation	paired-match	upstream-inline-text-spans.md
+packages/flutter/test/painting/text_span_test.dart	303	TextSpan visitDirectChildren	paired-match	upstream-inline-text-spans.md

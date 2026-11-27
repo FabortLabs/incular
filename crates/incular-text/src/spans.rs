@@ -1,7 +1,7 @@
 //! Plain and rich text descriptions.
 
 use crate::{
-    TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow, TextPlaceholder,
+    TextAffinity, TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow, TextPlaceholder,
     TextScaler, TextStyle,
 };
 use incular_core::Size;
@@ -80,6 +80,35 @@ impl From<WidgetSpan> for InlineSpan {
     }
 }
 
+/// A positioned inline span, borrowed from the original paragraph tree.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum InlineSpanRef<'a> {
+    Text(&'a TextSpan),
+    Widget(&'a WidgetSpan),
+}
+
+/// Controls the flattening of inline text for presentation or diagnostics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PlainTextOptions {
+    pub include_semantics_labels: bool,
+    pub include_placeholders: bool,
+}
+
+impl Default for PlainTextOptions {
+    fn default() -> Self {
+        Self { include_semantics_labels: true, include_placeholders: true }
+    }
+}
+
+/// Speech metadata for one literal text span or one inline widget marker.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InlineSpanSemanticsInformation<'a> {
+    pub text: &'a str,
+    pub semantics_label: Option<&'a str>,
+    pub semantics_identifier: Option<&'a str>,
+    pub is_placeholder: bool,
+}
+
 /// A recursively nestable text node. Styles are inherited by descendants;
 /// inline widget spans occupy one object-replacement character in plain text.
 #[derive(Clone, Debug, PartialEq)]
@@ -90,6 +119,7 @@ pub struct TextSpan {
     /// Flutter `TextSpan.semanticsLabel`: spoken in place of this span's text
     /// when the paragraph is announced.
     pub semantics_label: Option<String>,
+    pub semantics_identifier: Option<String>,
 }
 
 impl TextSpan {
@@ -100,6 +130,7 @@ impl TextSpan {
             style: None,
             children: Vec::new(),
             semantics_label: None,
+            semantics_identifier: None,
         }
     }
 
@@ -112,6 +143,13 @@ impl TextSpan {
     #[must_use]
     pub fn semantics_label(mut self, label: impl Into<String>) -> Self {
         self.semantics_label = Some(label.into());
+        self
+    }
+
+    /// A platform-independent identifier for this span's semantics.
+    #[must_use]
+    pub fn semantics_identifier(mut self, identifier: impl Into<String>) -> Self {
+        self.semantics_identifier = Some(identifier.into());
         self
     }
 
@@ -146,11 +184,101 @@ impl TextSpan {
         Self::new(text).children(children)
     }
 
+    /// The literal laid-out text, preserving widget positions and ignoring
+    /// speech labels. Layout and editor byte offsets use this representation.
     #[must_use]
     pub fn plain_text(&self) -> String {
+        self.to_plain_text(PlainTextOptions {
+            include_semantics_labels: false,
+            include_placeholders: true,
+        })
+    }
+
+    /// Flutter-style presentation text, optionally using speech labels and
+    /// object replacement characters. Use default options to include both.
+    #[must_use]
+    pub fn to_plain_text(&self, options: PlainTextOptions) -> String {
         let mut output = String::new();
-        self.write_plain_text(&mut output);
+        self.write_plain_text(&mut output, options);
         output
+    }
+
+    /// Visits just the immediate children in order, stopping on false.
+    pub fn visit_direct_children<'a>(&'a self, visitor: impl FnMut(&'a InlineSpan) -> bool) -> bool {
+        self.children.iter().all(visitor)
+    }
+
+    /// Finds the span covering a Flutter UTF-16 text position. At an
+    /// ordinary boundary, upstream selects the preceding text and
+    /// downstream selects the following text. A widget occupies one unit.
+    #[must_use]
+    pub fn span_for_utf16_position(&self, offset: usize, affinity: TextAffinity) -> Option<InlineSpanRef<'_>> {
+        self.find_utf16_position(offset, affinity, &mut 0)
+    }
+
+    fn find_utf16_position(
+        &self,
+        offset: usize,
+        affinity: TextAffinity,
+        consumed: &mut usize,
+    ) -> Option<InlineSpanRef<'_>> {
+        if !self.text.is_empty() {
+            let start = *consumed;
+            let end = start + self.text.encode_utf16().count();
+            if (start < offset && offset < end)
+                || (start == offset && affinity == TextAffinity::Downstream)
+                || (end == offset && affinity == TextAffinity::Upstream)
+            {
+                return Some(InlineSpanRef::Text(self));
+            }
+            *consumed = end;
+        }
+        for child in &self.children {
+            match child {
+                InlineSpan::Text(span) => {
+                    if let Some(hit) = span.find_utf16_position(offset, affinity, consumed) {
+                        return Some(hit);
+                    }
+                }
+                InlineSpan::Widget(span) => {
+                    if offset == *consumed {
+                        return Some(InlineSpanRef::Widget(span));
+                    }
+                    *consumed += 1;
+                }
+            }
+        }
+        None
+    }
+
+    /// Returns literal text and speech metadata in paragraph traversal order.
+    #[must_use]
+    pub fn semantics_information(&self) -> Vec<InlineSpanSemanticsInformation<'_>> {
+        let mut result = Vec::new();
+        self.collect_semantics_information(&mut result);
+        result
+    }
+
+    fn collect_semantics_information<'a>(&'a self, output: &mut Vec<InlineSpanSemanticsInformation<'a>>) {
+        if !self.text.is_empty() || self.semantics_label.is_some() || self.semantics_identifier.is_some() {
+            output.push(InlineSpanSemanticsInformation {
+                text: &self.text,
+                semantics_label: self.semantics_label.as_deref(),
+                semantics_identifier: self.semantics_identifier.as_deref(),
+                is_placeholder: false,
+            });
+        }
+        for child in &self.children {
+            match child {
+                InlineSpan::Text(span) => span.collect_semantics_information(output),
+                InlineSpan::Widget(_) => output.push(InlineSpanSemanticsInformation {
+                    text: "\u{fffc}",
+                    semantics_label: None,
+                    semantics_identifier: None,
+                    is_placeholder: true,
+                }),
+            }
+        }
     }
 
     /// The spoken text when any span sets a semantics label (Flutter
@@ -165,21 +293,7 @@ impl TextSpan {
                     .iter()
                     .any(|child| matches!(child, InlineSpan::Text(inner) if has_label(inner)))
         }
-        fn write(span: &TextSpan, output: &mut String) {
-            output.push_str(span.semantics_label.as_deref().unwrap_or(&span.text));
-            for child in &span.children {
-                match child {
-                    InlineSpan::Text(inner) => write(inner, output),
-                    InlineSpan::Widget(_) => output.push('\u{fffc}'),
-                }
-            }
-        }
-        if !has_label(self) {
-            return None;
-        }
-        let mut output = String::new();
-        write(self, &mut output);
-        Some(output)
+        has_label(self).then(|| self.to_plain_text(PlainTextOptions::default()))
     }
 
     #[must_use]
@@ -228,12 +342,18 @@ impl TextSpan {
         self.visit_with(&TextStyle::default(), visitor);
     }
 
-    fn write_plain_text(&self, output: &mut String) {
-        output.push_str(&self.text);
+    fn write_plain_text(&self, output: &mut String, options: PlainTextOptions) {
+        let text = if options.include_semantics_labels {
+            self.semantics_label.as_deref().unwrap_or(&self.text)
+        } else {
+            &self.text
+        };
+        output.push_str(text);
         for child in &self.children {
             match child {
-                InlineSpan::Text(span) => span.write_plain_text(output),
-                InlineSpan::Widget(_) => output.push('\u{fffc}'),
+                InlineSpan::Text(span) => span.write_plain_text(output, options),
+                InlineSpan::Widget(_) if options.include_placeholders => output.push('\u{fffc}'),
+                InlineSpan::Widget(_) => {}
             }
         }
     }

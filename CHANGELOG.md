@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Inline text spans expose speech metadata and UTF-16 position lookup,
+  keeping presentation labels separate from literal layout text.
+
 - Gesture hit-test results can share a live target path and transform stack
   without adding reference counting to ordinary owned hit tests.
 
