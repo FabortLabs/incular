@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- Platform receivers can buffer early plugin messages and drain them in order
+  when a local handler is installed. Each message has a one-shot reply.
+
 - Runtime windows can override key-message routing and report callback failures
   with their original payload and key message, without losing pressed state.
 

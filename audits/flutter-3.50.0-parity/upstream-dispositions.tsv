@@ -2657,3 +2657,5 @@ packages/flutter/test/foundation/timeline_test.dart	109	Can collect more than on
 packages/flutter/test/foundation/timeline_test.dart	125	Collects blocks in a correct order	paired-match	upstream-foundation-timeline.md
 packages/flutter/test/services/font_loader_test.dart	22	Font loader test	paired-match	upstream-font-loader.md
 packages/flutter/test/services/font_loader_test.dart	39	FontLoader loads fonts in order	paired-match	upstream-font-loader.md
+packages/flutter/test/services/channel_buffers_test.dart	24	does drain channel buffers	paired-match	upstream-inbound-messenger.md
+packages/flutter/test/services/default_binary_messenger_test.dart	18	default binary messenger calls callback once	paired-match	upstream-inbound-messenger.md

@@ -23,6 +23,7 @@ mod display;
 mod file_dialog;
 mod haptic_feedback;
 mod flutter_lifecycle;
+mod flutter_inbound_messenger;
 mod flutter_platform_channel;
 mod flutter_text_input_config;
 pub use flutter_text_input_config::FlutterTextInputConfiguration;
@@ -93,6 +94,9 @@ pub use file_dialog::{
 pub use flutter_lifecycle::{
     AppLifecycleBinding, AppLifecycleCallback, AppLifecycleError, AppLifecycleState,
     AppLifecycleStateChange,
+};
+pub use flutter_inbound_messenger::{
+    FlutterBinaryPayload, FlutterBinaryReply, FlutterChannelMicrotask, FlutterInboundMessenger,
 };
 pub use flutter_platform_channel::{FlutterPlatformChannelError, FlutterPlatformMessenger};
 pub use haptic_feedback::{HapticFeedback, HapticFeedbackError, HapticFeedbackType};
