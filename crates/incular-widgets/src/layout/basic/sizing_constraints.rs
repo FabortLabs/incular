@@ -211,6 +211,19 @@ impl ConstrainedBox {
             child: child.into(),
         }
     }
+
+    /// The constraints this proxy additionally applies to its child.
+    #[must_use]
+    pub const fn additional_constraints(&self) -> Constraints {
+        self.constraints
+    }
+
+    /// Replaces the additional constraints while retaining the child.
+    #[must_use]
+    pub fn with_additional_constraints(mut self, constraints: Constraints) -> Self {
+        self.constraints = constraints;
+        self
+    }
 }
 
 widget_from_kind!(ConstrainedBox => Constrained { constraints, child });
@@ -260,6 +273,18 @@ impl LimitedBox {
     pub fn child(mut self, child: impl Into<Widget>) -> Self {
         self.child = Some(child.into());
         self
+    }
+
+    /// Maximum width applied to an unbounded width constraint.
+    #[must_use]
+    pub const fn width_limit(&self) -> f32 {
+        self.max_width
+    }
+
+    /// Maximum height applied to an unbounded height constraint.
+    #[must_use]
+    pub const fn height_limit(&self) -> f32 {
+        self.max_height
     }
 
     /// Sets the limit for unbounded width.
@@ -571,6 +596,18 @@ impl IntrinsicWidth {
             step_height: None,
             child: child.into(),
         }
+    }
+
+    /// Optional step used to round the child's resolved width up.
+    #[must_use]
+    pub const fn width_step(&self) -> Option<f32> {
+        self.step_width
+    }
+
+    /// Optional step used to round the child's resolved height up.
+    #[must_use]
+    pub const fn height_step(&self) -> Option<f32> {
+        self.step_height
     }
 
     #[must_use]

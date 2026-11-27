@@ -3013,3 +3013,8 @@ packages/flutter/test/rendering/layers_test.dart	930	Observe layer tree composit
 packages/flutter/test/rendering/layers_test.dart	953	Observe layer tree composition - observer count correctly maintained	paired-match	upstream-layer-composition-observers.md#detachment-and-observer-lifetime
 packages/flutter/test/rendering/layers_test.dart	978	Double removing a observe callback throws	partial-mismatch	upstream-layer-composition-observers.md#detachment-and-observer-lifetime
 packages/flutter/test/rendering/layers_test.dart	986	Removing an observe callback on a disposed layer does not throw	paired-match	upstream-layer-composition-observers.md#detachment-and-observer-lifetime
+packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	9	RenderConstrainedBox getters and setters	paired-match	upstream-render-proxy-properties.md
+packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	18	RenderLimitedBox getters and setters	paired-match	upstream-render-proxy-properties.md
+packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	28	RenderAspectRatio getters and setters	paired-match	upstream-render-proxy-properties.md
+packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	37	RenderIntrinsicWidth getters and setters	paired-match	upstream-render-proxy-properties.md
+packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	47	RenderOpacity getters and setters	paired-match	upstream-render-proxy-properties.md

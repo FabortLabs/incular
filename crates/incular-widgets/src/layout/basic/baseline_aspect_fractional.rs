@@ -119,6 +119,19 @@ impl AspectRatio {
             child: child.into(),
         }
     }
+
+    /// The configured ratio of width to height.
+    #[must_use]
+    pub const fn ratio(&self) -> f32 {
+        self.aspect_ratio
+    }
+
+    /// Changes the configured aspect ratio while retaining the child.
+    #[must_use]
+    pub fn with_ratio(mut self, ratio: f32) -> Self {
+        self.aspect_ratio = ratio.max(f32::EPSILON);
+        self
+    }
 }
 
 impl From<AspectRatio> for Widget {
