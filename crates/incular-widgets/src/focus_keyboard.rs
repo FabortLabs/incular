@@ -941,6 +941,9 @@ pub struct FocusableActionDetector {
     focus_node: FocusNode,
     enabled: bool,
     autofocus: bool,
+    skip_traversal: Option<bool>,
+    include_focus_semantics: bool,
+    mouse_cursor: crate::MouseCursor,
     shortcuts: Option<Rc<incular_gestures::ErasedShortcutScope>>,
     actions: Option<Rc<incular_gestures::ErasedActionScope>>,
     on_focus_change: Option<Rc<dyn Fn(bool)>>,
@@ -956,6 +959,9 @@ impl FocusableActionDetector {
             focus_node: FocusNode::new(),
             enabled: true,
             autofocus: false,
+            skip_traversal: None,
+            include_focus_semantics: true,
+            mouse_cursor: crate::MouseCursor::default(),
             shortcuts: None,
             actions: None,
             on_focus_change: None,
@@ -980,6 +986,32 @@ impl FocusableActionDetector {
     #[must_use]
     pub fn autofocus(mut self, autofocus: bool) -> Self {
         self.autofocus = autofocus;
+        self
+    }
+
+    /// Skips this detector in traversal while keeping explicit focus allowed.
+    #[must_use]
+    pub fn skip_traversal(mut self, skip: bool) -> Self {
+        self.skip_traversal = Some(skip);
+        self
+    }
+
+    /// Controls the focus contribution without removing child semantics.
+    #[must_use]
+    pub fn include_focus_semantics(mut self, include: bool) -> Self {
+        self.include_focus_semantics = include;
+        self
+    }
+
+    #[must_use]
+    pub const fn includes_focus_semantics(&self) -> bool {
+        self.include_focus_semantics
+    }
+
+    /// Cursor to use over the detector. By default it defers to ancestors.
+    #[must_use]
+    pub fn mouse_cursor(mut self, cursor: crate::MouseCursor) -> Self {
+        self.mouse_cursor = cursor;
         self
     }
 
@@ -1049,13 +1081,20 @@ impl From<FocusableActionDetector> for Widget {
             focus_node: Some(value.focus_node),
             focus_behavior: Some(behavior),
             autofocus: value.autofocus,
-            include_semantics: true,
+            include_semantics: value.include_focus_semantics,
+            annotates_focus: true,
+            focus_node_widget_properties: Some(incular_gestures::FocusNodeWidgetProperties {
+                skip_traversal: value.skip_traversal,
+                ..Default::default()
+            }),
             ..incular_gestures::GestureCallbacks::default()
         };
         Widget::from_kind(WidgetKind::Gesture {
             behavior: crate::gestures::HitTestBehavior::DeferToChild,
             callbacks: Box::new(callbacks),
-            child: value.child,
+            child: crate::MouseRegion::new(value.child)
+                .cursor(value.mouse_cursor)
+                .into(),
         })
     }
 }

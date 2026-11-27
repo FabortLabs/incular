@@ -1177,9 +1177,9 @@ impl WidgetTree {
         }
         self.sync_edit_callbacks(id);
         // Carry hover presence across a focus-behavior swap without
-        // replaying transitions: replacement callbacks learn only
-        // subsequent changes, matching focus-callback policy, while
-        // synchronous reads keep exposing current state.
+        // replaying an enter event. Changes in computed focus or hover
+        // highlight visibility still have to reach the replacement
+        // callbacks, for example when the detector becomes disabled.
         if let (
             WidgetKind::Gesture {
                 callbacks: old_callbacks,
@@ -1195,9 +1195,8 @@ impl WidgetTree {
                 new_callbacks.focus_behavior.as_ref(),
             )
             && !Rc::ptr_eq(previous, next)
-            && previous.is_hovering()
         {
-            next.restore_hovering(true);
+            next.reconcile_highlights_from(previous);
         }
         let visibility_changed = matches!(
             (&*old_kind, &new_kind),

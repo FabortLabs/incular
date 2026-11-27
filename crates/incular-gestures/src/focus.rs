@@ -1178,6 +1178,18 @@ impl FocusBehavior {
             .set(self.hover_highlight_visible());
     }
 
+    /// Carries pointer presence into a compatible replacement and emits
+    /// only changed highlight visibility, not a duplicate enter event.
+    #[doc(hidden)]
+    pub fn reconcile_highlights_from(&self, previous: &Self) {
+        self.hovering.set(previous.hovering.get());
+        self.hover_highlight_visible
+            .set(previous.hover_highlight_visible.get());
+        self.focus_highlight_visible
+            .set(previous.focus_highlight_visible.get());
+        self.trigger_highlight_callbacks();
+    }
+
     fn handle_focus_change(&self) {
         let focused = self.node.has_focus();
         if self.focused.replace(focused) != focused {

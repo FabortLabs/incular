@@ -41,3 +41,20 @@ registered action and returns no callback for a missing or disabled
 action. The native fixture also disables the same action after
 obtaining its callback, then verifies that the callback rechecks
 its enabled state. All 21 focused native runtime tests passed.
+
+## Focusable action detector
+
+Five exact registrations passed. The two highlight cases verify that
+a focused, hovered detector invokes its shortcut while enabled;
+disabling clears the visible hover and focus highlights and blocks
+the shortcut; re-enabling under the stationary pointer restores only
+hover; and leaving while disabled prevents stale hover on re-enable.
+The native retained reconciliation previously copied hover silently
+even when its derived visible highlight changed.
+
+A specified text cursor overrides the surrounding forbidden cursor;
+the default defers back to the surrounding region. The detector can
+be skipped in traversal while remaining explicitly focusable. Its
+focus semantics default on, can be removed independently, and leave
+the descendant labels intact. All 53 focused Rust runtime, focus,
+keyboard, and semantics tests passed.

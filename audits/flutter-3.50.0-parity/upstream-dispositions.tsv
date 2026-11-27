@@ -3080,3 +3080,8 @@ packages/flutter/test/widgets/actions_test.dart	270	Action can be found with fin
 packages/flutter/test/widgets/actions_test.dart	319	Actions.handler forwards the intent type and finds the bound action	paired-match	upstream-action-dispatchers.md#typed-lookup-and-optional-callbacks
 packages/flutter/test/widgets/actions_test.dart	348	Actions.handler returns null when the action is disabled	paired-match	upstream-action-dispatchers.md#typed-lookup-and-optional-callbacks
 packages/flutter/test/widgets/actions_test.dart	363	Actions.handler returns null when no matching action is found	paired-match	upstream-action-dispatchers.md#typed-lookup-and-optional-callbacks
+packages/flutter/test/widgets/actions_test.dart	377	FocusableActionDetector keeps track of focus and hover even when disabled.	paired-match	upstream-action-dispatchers.md#focusable-action-detector
+packages/flutter/test/widgets/actions_test.dart	449	FocusableActionDetector changes mouse cursor when hovered	paired-match	upstream-action-dispatchers.md#focusable-action-detector
+packages/flutter/test/widgets/actions_test.dart	786	FocusableActionDetector keeps track of focus and hover even when disabled.	paired-match	upstream-action-dispatchers.md#focusable-action-detector
+packages/flutter/test/widgets/actions_test.dart	1010	FocusableActionDetector can be skipped by focus traversal	paired-match	upstream-action-dispatchers.md#focusable-action-detector
+packages/flutter/test/widgets/actions_test.dart	1065	FocusableActionDetector can exclude Focus semantics	paired-match	upstream-action-dispatchers.md#focusable-action-detector
