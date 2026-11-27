@@ -252,3 +252,21 @@ fn a_delta_between_two_values_replaces_only_the_changed_middle() {
         (TextRange::new(1, 5), "🙃")
     );
 }
+
+#[test]
+fn clear_sets_a_valid_zero_caret_even_without_a_focused_editor() {
+    let controller = TextEditingController::with_text("abc");
+    controller.set_selection(TextSelection::new(1, 2));
+    controller.set_composing(Some(TextRange::new(0, 2)));
+    controller.clear();
+    assert_eq!(controller.text(), "");
+    assert_eq!(
+        controller.selection_if_set(),
+        Some(TextSelection::collapsed(0))
+    );
+    assert_eq!(controller.composing(), None);
+
+    controller.set_text("abc");
+    controller.set_text("");
+    assert_eq!(controller.selection_if_set(), None);
+}

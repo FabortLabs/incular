@@ -783,8 +783,10 @@ impl TextEditingController {
         }
     }
 
+    /// Clears text and composition and sets a valid collapsed caret at zero,
+    /// even without a focused field.
     pub fn clear(&self) {
-        self.set_text("");
+        self.set_value(TextEditingValue::new(""));
     }
 
     pub fn set_selection(&self, selection: TextSelection) {

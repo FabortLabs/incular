@@ -621,3 +621,112 @@ fn a_controllers_reentrant_numeric_listener_can_repair_a_host_edit_and_its_caret
     assert_eq!(controller.text(), "5.5555");
     assert_eq!(controller.selection(), TextSelection::collapsed(6));
 }
+
+#[test]
+fn clear_sends_one_empty_wire_value_after_a_host_edit_that_was_not_echoed() {
+    use incular_core::{InputEvent, Offset, PointerPhase};
+    use incular_platform::{FlutterTextInputConfiguration, FlutterTextInputControls};
+
+    let controller = TextEditingController::new();
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(field(&controller, &focus, false).into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    frame(&mut runtime);
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        let _ = runtime.handle_input(InputEvent::Pointer {
+            phase,
+            position: Offset::new(10., 12.),
+        });
+    }
+    frame(&mut runtime);
+    assert!(focus.has_primary_focus());
+    let client = attached(&mut runtime);
+    let mut controls = FlutterTextInputControls::new(false);
+    assert!(controls.attach_existing(client, FlutterTextInputConfiguration::default(), |_| {}));
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    let _ = controls.take_platform_calls();
+
+    let host = update(
+        json!(client.get()),
+        json!({
+            "text":"a", "selectionBase":0, "selectionExtent":0,
+            "selectionAffinity":"TextAffinity.downstream", "selectionIsDirectional":false,
+            "composingBase":-1, "composingExtent":-1,
+        }),
+    );
+    assert_eq!(controls.handle_platform_edit(&host).unwrap(), Some(true));
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_editing_call(&host)
+            .unwrap(),
+        Some(true)
+    );
+    frame(&mut runtime);
+    assert_eq!(controller.text(), "a");
+    assert!(
+        !runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    assert!(controls.take_platform_calls().is_empty());
+
+    controller.clear();
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    let calls = controls.take_platform_calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].method, "TextInput.setEditingState");
+    assert_eq!(
+        calls[0].arguments,
+        json!({
+            "text":"", "selectionBase":0, "selectionExtent":0,
+            "selectionAffinity":"TextAffinity.downstream", "selectionIsDirectional":false,
+            "composingBase":-1, "composingExtent":-1,
+        })
+    );
+    frame(&mut runtime);
+    assert!(
+        !runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    assert!(controls.take_platform_calls().is_empty());
+}
+
+#[test]
+fn setting_controller_text_to_empty_removes_the_retained_glyphs() {
+    use incular_rendering::{DisplayList, PaintCommand};
+
+    let controller = TextEditingController::new();
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(field(&controller, &focus, false).into()).unwrap();
+    let constraints = Constraints::tight(Size::new(180., 80.));
+    runtime.run_frame(constraints).unwrap();
+    controller.set_text("...");
+    let glyphs = |paint: &DisplayList| {
+        paint
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::GlyphRun { run, .. } => Some(run.glyphs.len()),
+                _ => None,
+            })
+            .sum::<usize>()
+    };
+    let (visible, _) = runtime.run_frame(constraints).unwrap();
+    assert_eq!(glyphs(&visible), 3);
+    assert!(!focus.has_focus());
+
+    controller.set_text("");
+    let (cleared, _) = runtime.run_frame(constraints).unwrap();
+    assert_eq!(glyphs(&cleared), 0);
+    assert_eq!(controller.selection_if_set(), None);
+    assert!(!focus.has_focus());
+}

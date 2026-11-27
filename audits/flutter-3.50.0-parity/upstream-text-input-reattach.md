@@ -265,3 +265,19 @@ also reaches a reentrant numeric controller listener and ends at
 `5.5555` with caret 6. This remains partial because the original
 invokes the widget delegate without acquiring focus, not through an
 attached client. All 11 focused full-value input checks passed.
+
+## Clear and empty text updates
+
+Pinned :10977 and :11013 pair. Setting the controller text to an
+empty string removes the previous three dots from the retained paint
+without acquiring focus. After a real tap, an incoming host edit
+produces no echo, then explicit Clear sends exactly one empty wire
+value with a valid caret at zero and no composing range. An unchanged
+frame sends no further message.
+
+A separate native regression found that unmounted Clear left the
+selection unset. It now sets a valid caret at zero and clears
+composition even without a focused editor; assigning the empty
+string through the text setter still leaves an unfocused selection
+unset. All 42 focused controller, copied-value, runtime input and
+undo checks passed.
