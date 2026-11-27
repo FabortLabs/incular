@@ -3178,3 +3178,5 @@ packages/flutter/test/services/keyboard_key_test.dart	86	Synonyms get collapsed 
 packages/flutter/test/services/keyboard_key_test.dart	135	Values are equal	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
 packages/flutter/test/services/keyboard_key_test.dart	140	keyLabel	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
 packages/flutter/test/services/keyboard_key_test.dart	153	debugName	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
+packages/flutter/test/services/platform_channel_test.dart	337	can receive event stream	paired-match	upstream-json-method-channel.md#json-event-broadcasts
+packages/flutter/test/services/platform_channel_test.dart	358	can receive error event	paired-match	upstream-json-method-channel.md#json-event-broadcasts

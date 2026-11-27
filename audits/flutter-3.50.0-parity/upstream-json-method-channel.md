@@ -50,3 +50,20 @@ hands the codec a nullable payload unchanged; older method callers wrap
 their encoded request in `Some`. Three new native channel tests and 36
 nearby platform tests passed; the browser platform crate was checked for
 Wasm and the mounted editor integration was re-run.
+
+## JSON event broadcasts
+
+Both original EventChannel registrations pair. The inbound handler is
+installed before the first `listen` call, retains the supplied
+arguments for `cancel`, and delivers the two data events in order.
+A null binary message ends the stream and triggers a single cancellation.
+A success envelope containing a null value remains a data event instead.
+
+A platform error retains its code, message and details as a stream error
+event without ending the stream. Start/stop failures go to the operation
+reporter rather than the subscribers. Additional controls check multiple
+subscribers, removal before delivery, no replay for late subscribers,
+and one terminal event for a subscriber after close. All four focused
+event-channel tests and seven existing JSON method-channel tests passed.
+The JSON-specific adapter matches the codec used by these originals;
+the standard-codec event adapter and unrelated mock APIs are not claimed.
