@@ -1110,9 +1110,18 @@ impl RouteOutlet {
                 .route_focus_scopes
                 .borrow_mut()
                 .entry(route.id)
-                .or_insert_with(|| MountedRouteFocusScope {
-                    node: FocusScopeNode::new(),
-                    key: GlobalKey::new().into(),
+                .or_insert_with(|| {
+                    use incular_widgets::TraversalEdgeBehavior;
+                    let node = FocusScopeNode::new();
+                    node.set_traversal_edge_behavior(if cfg!(target_arch = "wasm32") {
+                        TraversalEdgeBehavior::LeaveFlutterView
+                    } else {
+                        TraversalEdgeBehavior::ParentScope
+                    });
+                    MountedRouteFocusScope {
+                        node,
+                        key: GlobalKey::new().into(),
+                    }
                 })
                 .clone();
             content = Widget::from(FocusScope::new(content).node(scope.node)).with_key(scope.key);

@@ -43,7 +43,7 @@ use incular_semantics::{SemanticAction, SemanticNodeId};
 use incular_widgets::internal::InvalidationCause;
 use incular_widgets::internal::{
     ActionId, ButtonInk, Diagnostics, DirectionalFocusResolution, ElementId, MouseCursor, PlatformMenuBinding,
-    PointerDeviceKind, PointerHitTest, RawPointerEvent, TextEditingController, TextRange,
+    PointerDeviceKind, PointerHitTest, RawPointerEvent, SequentialFocusResolution, TextEditingController, TextRange,
     TextSelection, TreeError, WidgetTree, WindowInteraction,
 };
 use incular_widgets::{
@@ -3167,22 +3167,19 @@ impl Runtime {
     }
 
     fn focus_next(&mut self, reverse: bool) -> bool {
-        let fields = self.tree.focus_traversal_elements(self.focused);
-        if fields.is_empty() {
-            return false;
+        self.directional_focus_history = None;
+        match self.tree.resolve_sequential_focus(self.focused, reverse) {
+            SequentialFocusResolution::Move(next) => {
+                let previous = self.focused;
+                self.set_focus(Some(next));
+                self.focused != previous
+            }
+            SequentialFocusResolution::LeaveView => {
+                self.set_focus(None);
+                false
+            }
+            SequentialFocusResolution::Unchanged => false,
         }
-        let index = self
-            .focused
-            .and_then(|focused| fields.iter().position(|id| *id == focused));
-        let next = match index {
-            Some(index) if reverse => fields[(index + fields.len() - 1) % fields.len()],
-            Some(index) => fields[(index + 1) % fields.len()],
-            None if reverse => *fields.last().expect("not empty"),
-            None => fields[0],
-        };
-        let previous = self.focused;
-        self.set_focus(Some(next));
-        self.focused != previous
     }
     /// Flutter's native `WidgetsApp` defaults: unmodified arrows traverse
     /// focus, the platform's modifier with an arrow scrolls by a line, and
@@ -3573,8 +3570,7 @@ impl Runtime {
             && !event.modifiers.alt()
             && !event.modifiers.meta()
         {
-            self.focus_next(event.modifiers.shift());
-            return true;
+            return self.focus_next(event.modifiers.shift());
         }
         if let Some(label) = self.focused.filter(|id| self.tree.is_selectable_text(*id)) {
             let handled = self.run_selectable_text_key(label, &event);

@@ -1996,6 +1996,7 @@ struct ScopeFocusAnchor {
 }
 
 struct FocusScopeState {
+    traversal_edge_behavior: Cell<TraversalEdgeBehavior>,
     directional_traversal_edge_behavior: Cell<TraversalEdgeBehavior>,
     anchor: OnceCell<ScopeFocusAnchor>,
     hosted_history: RefCell<Vec<Weak<FocusState>>>,
@@ -2041,6 +2042,7 @@ impl FocusScopeNode {
     pub fn new() -> Self {
         Self {
             state: Rc::new(FocusScopeState {
+                traversal_edge_behavior: Cell::new(TraversalEdgeBehavior::ClosedLoop),
                 directional_traversal_edge_behavior: Cell::new(TraversalEdgeBehavior::Stop),
                 anchor: OnceCell::new(),
                 hosted_history: RefCell::new(Vec::new()),
@@ -2051,6 +2053,25 @@ impl FocusScopeNode {
                 revision: Cell::new(0),
             }),
         }
+    }
+
+    /// The behavior at the edge of Tab and Shift+Tab. Defaults to ClosedLoop.
+    #[must_use]
+    pub fn traversal_edge_behavior(&self) -> TraversalEdgeBehavior {
+        self.state.traversal_edge_behavior.get()
+    }
+
+    /// Changes sequential traversal without replacing the scope.
+    pub fn set_traversal_edge_behavior(&self, behavior: TraversalEdgeBehavior) {
+        if self.state.traversal_edge_behavior.replace(behavior) != behavior {
+            self.state.bump_revision();
+        }
+    }
+
+    /// Discards the focused-child memory after traversal unfocuses this scope.
+    #[doc(hidden)]
+    pub fn clear_hosted_focus_history(&self) {
+        self.state.hosted_history.borrow_mut().clear();
     }
 
     /// The behavior at the edge of arrow-key traversal. Defaults to Stop.

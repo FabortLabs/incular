@@ -100,7 +100,7 @@ mod descriptors;
 mod external_drop;
 mod flex_overflow;
 mod focus;
-pub use focus::DirectionalFocusResolution;
+pub use focus::{DirectionalFocusResolution, SequentialFocusResolution};
 mod global_keys;
 mod interaction;
 mod scroll_contacts;

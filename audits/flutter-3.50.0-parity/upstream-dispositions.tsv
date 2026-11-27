@@ -2955,3 +2955,5 @@ packages/flutter/test/widgets/focus_traversal_test.dart	1808	Directional focus a
 packages/flutter/test/widgets/focus_traversal_test.dart	1927	Directional focus history is cleared on explicit focus request	paired-match	upstream-directional-focus-history.md
 packages/flutter/test/widgets/focus_traversal_test.dart	2336	Can find first focus in all directions.	paired-match	upstream-directional-focus-history.md
 packages/flutter/test/widgets/focus_traversal_test.dart	3977	Edge cases for inDirection	paired-match	upstream-directional-focus-edge-policies.md
+packages/flutter/test/widgets/focus_traversal_test.dart	3817	FocusScopeNode.traversalEdgeBehavior takes effect after update	paired-match	upstream-sequential-focus-edge-policies.md
+packages/flutter/test/widgets/focus_traversal_test.dart	3749	Default route edge traversal behavior	partial-match	upstream-sequential-focus-edge-policies.md

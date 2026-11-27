@@ -14,6 +14,14 @@ pub enum DirectionalFocusResolution {
     Unchanged,
 }
 
+/// A sequential traversal result for a runtime-owned tree.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SequentialFocusResolution {
+    Move(ElementId),
+    LeaveView,
+    Unchanged,
+}
+
 #[derive(Clone, Copy, Default)]
 struct TraversalScan {
     anchor: Option<ElementId>,
@@ -744,6 +752,122 @@ impl WidgetTree {
     #[must_use]
     pub fn focus_traversal_elements(&self, anchor: Option<ElementId>) -> Vec<ElementId> {
         with_recursive_tree_stack(|| self.focusable_elements_recursive(anchor))
+    }
+
+    /// Resolves Tab traversal using mounted scope membership and its edge policy.
+    #[doc(hidden)]
+    pub fn resolve_sequential_focus(
+        &self,
+        focused: Option<ElementId>,
+        reverse: bool,
+    ) -> SequentialFocusResolution {
+        use SequentialFocusResolution::{LeaveView, Move, Unchanged};
+        use incular_gestures::TraversalEdgeBehavior;
+
+        let mut ordered = self.focus_traversal_elements(focused);
+        if reverse {
+            ordered.reverse();
+        }
+        let remembered_or = |id, within: Option<&crate::FocusScopeNode>| {
+            let mut nested = self.scope_of_focus_boundary(id);
+            let mut child = None;
+            while let Some(scope) = nested {
+                if within == Some(&scope) {
+                    break;
+                }
+                nested = scope.scope_focus_node().host_enclosing_scope();
+                child = Some(scope);
+            }
+            let Some(scope) = child else { return id };
+            let anchor = scope.scope_focus_node();
+            let Some(owner) = self.hosted_focus_nodes.as_ref().and_then(|hosted| {
+                hosted.iter().find_map(|(&id, binding)| {
+                    (binding.node() == &anchor && self.can_request_focus(id)).then_some(id)
+                })
+            }) else {
+                return id;
+            };
+            let retained = self.restore_scope_history(owner, scope, None);
+            if retained == owner
+                || self
+                    .focus_boundary_at(retained)
+                    .is_some_and(|n| n.scope_owner().is_some())
+            {
+                id
+            } else {
+                retained
+            }
+        };
+
+        let mut scope = focused.and_then(|id| self.scope_of_focus_boundary(id));
+        let mut departing_scope = None;
+        loop {
+            let local: Vec<_> = ordered
+                .iter()
+                .copied()
+                .filter(|id| {
+                    scope
+                        .as_ref()
+                        .is_none_or(|scope| self.is_in_focus_scope(*id, scope))
+                })
+                .collect();
+            let Some(&first) = local.first() else {
+                return Unchanged;
+            };
+            let anchor = if let Some(departing) = &departing_scope {
+                local
+                    .iter()
+                    .rposition(|id| self.is_in_focus_scope(*id, departing))
+            } else if focused.is_some_and(|id| {
+                self.focus_boundary_at(id)
+                    .is_some_and(|node| node.scope_owner().is_some())
+            }) {
+                // A focused scope with no active child enters from its first
+                // eligible target rather than treating the scope as a stop.
+                None
+            } else {
+                focused.and_then(|id| local.iter().position(|candidate| *candidate == id))
+            };
+            let next = match anchor {
+                Some(index) => local.get(index + 1).copied(),
+                None => local
+                    .iter()
+                    .copied()
+                    .find(|candidate| Some(*candidate) != focused),
+            };
+            if let Some(next) = next {
+                return Move(remembered_or(next, scope.as_ref()));
+            }
+            match scope
+                .as_ref()
+                .map_or(TraversalEdgeBehavior::ClosedLoop, |scope| {
+                    scope.traversal_edge_behavior()
+                }) {
+                TraversalEdgeBehavior::Stop => return Unchanged,
+                TraversalEdgeBehavior::LeaveFlutterView => {
+                    if let Some(scope) = &scope {
+                        scope.clear_hosted_focus_history();
+                    }
+                    return LeaveView;
+                }
+                TraversalEdgeBehavior::ParentScope => {
+                    if let Some(old) = &scope
+                        && let Some(parent) = old.scope_focus_node().host_enclosing_scope()
+                    {
+                        old.clear_hosted_focus_history();
+                        departing_scope = scope;
+                        scope = Some(parent);
+                        continue;
+                    }
+                }
+                TraversalEdgeBehavior::ClosedLoop => {}
+            }
+            return if Some(first) == focused {
+                Unchanged
+            } else {
+                Move(remembered_or(first, scope.as_ref()))
+            };
+        }
     }
 
     fn focusable_elements_recursive(&self, anchor: Option<ElementId>) -> Vec<ElementId> {

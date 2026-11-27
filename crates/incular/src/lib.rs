@@ -385,7 +385,7 @@ pub mod prelude {
         TextInputTypeHint, TickerMode, TileMode, Title, TitleController, TitleData, TitleError,
         ToolbarOptions, TooltipAnimationBuilder, TooltipComponentBuilder, TooltipDurations, TooltipPositionContext,
         TooltipPositionDelegate, TooltipTriggerMode,
-        TooltipVisibility, Transform, TransformationController, TreeRowAnimation, TreeSliver,
+        TooltipVisibility, Transform, TransformationController, TraversalEdgeBehavior, TreeRowAnimation, TreeSliver,
         TreeSliverController, TreeSliverIndentation, TreeSliverNode, TreeSliverNodeId,
         TweenAnimation, TweenAnimationBuilder, TweenAnimationWidgetBuilder,
         TwoDimensionalChildDelegate, TwoDimensionalChildLayout, TwoDimensionalConstraints,

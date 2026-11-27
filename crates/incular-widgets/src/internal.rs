@@ -15,7 +15,7 @@ pub use crate::hero::{HeroFlights, RouteHeroes};
 pub use crate::navigation::ModalBarrierDismissScope;
 pub use crate::provider_image::ImagePlaybackLoader;
 pub use crate::recursion::FramePhase;
-pub use crate::tree::DirectionalFocusResolution;
+pub use crate::tree::{DirectionalFocusResolution, SequentialFocusResolution};
 
 /// Callback-bearing compilation of Flutter's semantic platform-menu model.
 /// Native application-shell integrations receive only the immutable snapshot;
