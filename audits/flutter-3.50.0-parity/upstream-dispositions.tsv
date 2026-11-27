@@ -2822,3 +2822,6 @@ packages/flutter/test/widgets/semantics_test.dart	1947	blocking user interaction
 packages/flutter/test/widgets/semantics_test.dart	1980	does not merge conflicting actions even if one of them is blocked	paired-match	upstream-box-block-user-actions.md
 packages/flutter/test/widgets/semantics_test.dart	706	Actions can be replaced without triggering semantics update	paired-match	upstream-box-block-user-actions.md#ordinary-callback-lifetime
 packages/flutter/test/widgets/semantics_test.dart	1552	Can change handlers	paired-match	upstream-box-block-user-actions.md#ordinary-callback-lifetime
+packages/flutter/test/widgets/semantics_test.dart	2105	applies heading semantics to semantics tree	paired-match	upstream-semantic-headings-clamping-and-dilation.md#published-heading-levels-and-validation-precedence
+packages/flutter/test/widgets/semantics_test.dart	2137	RenderSemanticsAnnotations provides validation result	paired-match	upstream-semantic-headings-clamping-and-dilation.md#published-heading-levels-and-validation-precedence
+packages/flutter/test/widgets/semantics_test.dart	2175	validation result precedence	paired-match	upstream-semantic-headings-clamping-and-dilation.md#published-heading-levels-and-validation-precedence

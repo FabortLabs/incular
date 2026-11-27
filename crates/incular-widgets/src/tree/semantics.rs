@@ -484,9 +484,11 @@ impl WidgetTree {
             let can_own_hints = can_own_hint_value(entry, block);
             let can_own_controls = can_own_control_relations(entry);
             let can_own_sliver_labels = self.sliver_label_annotation_candidate(visit.element, entry);
+            let can_own_validation = can_own_validation_labels(entry);
             let merges_child_fragments = can_own_hints
                 || can_own_controls
                 || can_own_sliver_labels
+                || can_own_validation
                 || can_own_blocked_labels(entry, block)
                 || super::focus::annotated_focus_node(entry.widget.kind()).is_some();
             let render = entry.render;
@@ -509,7 +511,10 @@ impl WidgetTree {
                 subtree_content: visit.force_content
                     || dirty.subtree_content()
                     // A value becoming conflicting affects clean siblings as well.
-                    || (can_own_hints || can_own_sliver_labels || can_own_controls)
+                    || (can_own_hints
+                        || can_own_sliver_labels
+                        || can_own_controls
+                        || can_own_validation)
                         && dirty.has_descendant_content(),
                 own_bounds: visit.force_bounds || dirty.own_bounds(),
                 bounds_below: visit.force_bounds || dirty.bounds_below(),
@@ -1148,6 +1153,7 @@ impl WidgetTree {
         } else if action_fragments.is_some() {
             SemanticTextMerge::CompatibleActions
         } else if can_own_blocked_labels(entry, own_focus_block)
+            || can_own_validation_labels(entry)
             || self.is_sliver_label_annotation_owner(element, entry)
         {
             SemanticTextMerge::CompatibleLabels
@@ -2320,13 +2326,19 @@ impl WidgetTree {
         {
             return None;
         }
-        match entry
-            .parent
-            .and_then(|parent| self.viewport_sliver_child(parent, element))
-        {
-            Some((_, id)) if crate::scrolling::is_semantics_anchor(id) => {}
-            None if can_own_hint_value(entry, effective_focus_block(entry, false)) => {}
-            _ => return None,
+        let parent_viewport = entry.parent.filter(|parent| {
+            self.elements.get(parent.0).is_some_and(|entry| {
+                matches!(entry.widget.kind(), WidgetKind::SliverViewport { .. })
+            })
+        });
+        let eligible = if let Some(viewport) = parent_viewport {
+            self.viewport_sliver_child(viewport, element)
+                .is_some_and(|(_, id)| crate::scrolling::is_semantics_anchor(id))
+        } else {
+            can_own_hint_value(entry, effective_focus_block(entry, false))
+        };
+        if !eligible {
+            return None;
         }
 
         let mut work = self.visible_semantic_children(element, entry).into_owned();
@@ -3443,6 +3455,31 @@ fn can_own_blocked_labels(entry: &Element, block: AccessibilityFocusBlockType) -
     block == AccessibilityFocusBlockType::BlockSubtree
         && entry.widget.semantic_properties().explicit.is_some()
         && !keeps_explicit_child_nodes(entry)
+}
+
+/// A non-boundary annotation can absorb the label whose validity it
+/// describes. Explicit child boundaries and independent actions stay separate.
+fn can_own_validation_labels(entry: &Element) -> bool {
+    let properties = entry.widget.semantic_properties();
+    let Some(explicit) = properties.explicit.as_deref() else {
+        return false;
+    };
+    let state = &explicit.state;
+    !entry.children.is_empty()
+        && explicit.role == SemanticRole::GenericContainer
+        && explicit.label.is_none()
+        && explicit.value.is_none()
+        && explicit.description.is_none()
+        && explicit.actions.is_empty()
+        && !properties.merge_descendants
+        && properties.callbacks == SemanticCallbacks::default()
+        && state.effective_validation_result() != SemanticValidationResult::None
+        && *state == (SemanticState {
+            text_direction: state.text_direction,
+            invalid: state.invalid,
+            validation_result: state.validation_result,
+            ..SemanticState::default()
+        })
 }
 
 fn can_own_control_relations(entry: &Element) -> bool {

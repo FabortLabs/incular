@@ -96,3 +96,22 @@ and velocity along the 90Hz trajectory, agree within 1e-10. The runtime's
 existing f32 scrolling/layout boundary is unchanged. Native controls
 also verify that a zero-velocity simulation is finite and increased
 friction shortens travel.
+
+## Published heading levels and validation precedence
+
+Exact pinned `widgets/semantics_test.dart:2105,2137,2175` all passed.
+The native `flutter350_box_semantics_metadata` suite mounts six labeled
+headings and ordinary text inside a ListView. It verifies that both the
+retained graph and desktop AccessKit projection expose the six levels as
+headings and do not reinterpret adjacent plain text.
+
+The direct annotation check compares unspecified, valid, and invalid in
+the retained declaration and the resulting mounted node. For ordinary
+nested annotations the nine original combinations use invalid over
+valid over unspecified. Before the repair an outer invalid annotation
+could leave the displayed inner label marked valid. Compatible labels and
+their validity now reach the same node; an explicit semantic boundary
+stops the merge. That boundary was also exercised by an authored pinned
+Flutter test. Native tests confirm that the projected invalid flag clears
+when the active result becomes valid. All 38 focused runtime checks in
+this batch passed.
