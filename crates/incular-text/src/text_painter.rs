@@ -231,10 +231,18 @@ impl TextLayout {
             .saturating_sub(1);
         let x = point.x;
         let stops = self.line_caret_positions(index);
-        let right = stops.partition_point(|stop| stop.x < x);
-        let left = right.checked_sub(1).and_then(|index| stops.get(index));
-        let right = stops.get(right);
+        let index_at_x = stops.partition_point(|stop| stop.x < x);
+        let left = index_at_x.checked_sub(1).and_then(|index| stops.get(index));
+        let right = stops.get(index_at_x);
         let closest = match (left, right) {
+            (_, Some(right)) if right.x == x => {
+                let same_x = &stops[index_at_x..];
+                let last = &same_x[same_x.partition_point(|stop| stop.x == x) - 1];
+                // At an ordinary shared edge, choose the leading edge of
+                // the next visual glyph. Coincident bidi stops with different
+                // logical positions are not interchangeable.
+                Some(if last.offset == right.offset { last } else { right })
+            }
             (Some(left), Some(right)) if x - left.x <= right.x - x => Some(left),
             (_, Some(right)) => Some(right),
             (left, None) => left,

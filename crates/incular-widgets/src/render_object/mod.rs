@@ -66,6 +66,9 @@ impl Default for RenderButtonState {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RenderTextState {
     pub(crate) layout: Option<Arc<TextLayout>>,
+    /// Width available for position-only alignment updates, when the box
+    /// is width-constrained and there are no inline child offsets to move.
+    pub(crate) fixed_alignment_width: Option<f32>,
     /// Set only when a rich paragraph omitted one or more inline children.
     inline_visible_children: Option<Box<[RenderObjectId]>>,
 }
@@ -629,6 +632,12 @@ impl RenderNode {
             RenderFeatureState::SelectableText(state) => state.text.layout = Some(layout),
             RenderFeatureState::TextField(state) => state.text.layout = Some(layout),
             _ => debug_assert!(false, "text layout assigned to non-text render object"),
+        }
+    }
+
+    pub(crate) fn set_fixed_text_alignment_width(&mut self, width: Option<f32>) {
+        if let RenderFeatureState::Text(state) = &mut self.object.feature {
+            state.fixed_alignment_width = width;
         }
     }
 

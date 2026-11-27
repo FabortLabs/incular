@@ -403,6 +403,85 @@ impl TextLayout {
         }
     }
 
+    /// Repositions a paragraph whose width and line breaks stay fixed.
+    /// Justification changes spacing within lines and must be shaped again.
+    #[doc(hidden)]
+    pub fn realign_fixed_width(
+        layout: &mut Arc<Self>,
+        width: f32,
+        align: TextAlign,
+        direction: TextDirection,
+    ) {
+        debug_assert_ne!(align, TextAlign::Justify);
+        let factor = match (align, direction) {
+            (TextAlign::Left, _)
+            | (TextAlign::Start, TextDirection::Ltr)
+            | (TextAlign::End, TextDirection::Rtl) => 0.,
+            (TextAlign::Center, _) => 0.5,
+            _ => 1.,
+        };
+        let rtl = direction == TextDirection::Rtl;
+        let no_source = layout.retained_source_end == 0;
+        let offset = |line: &TextLine| {
+            // An empty paragraph can have a phantom space from shaping its
+            // font sample, but the sample has no effect on visible alignment.
+            if no_source && line.glyphs.is_empty() && line.clusters.is_empty() {
+                return width * factor;
+            }
+            // Shaping includes hanging whitespace in the advance. It lies
+            // outside the line's aligned body, on the left for RTL.
+            let free = width - line.width + line.hanging_advance;
+            if rtl {
+                free.max(0.) * factor + free.min(0.) - line.hanging_advance
+            } else {
+                free.max(0.) * factor
+            }
+        };
+        if layout.lines.iter().all(|line| line.offset == offset(line)) {
+            return;
+        }
+        let layout = Arc::make_mut(layout);
+        let lines = Arc::make_mut(&mut layout.lines);
+        let deltas: Vec<_> = lines.iter().map(|line| offset(line) - line.offset).collect();
+        for (line, &dx) in lines.iter_mut().zip(&deltas) {
+            if dx == 0. {
+                continue;
+            }
+            line.offset = offset(line);
+            for cluster in Arc::make_mut(&mut line.clusters) {
+                cluster.left += dx;
+                cluster.right += dx;
+            }
+            let move_glyphs = |glyphs: &mut Arc<[GlyphPosition]>| {
+                for glyph in Arc::make_mut(glyphs) {
+                    glyph.offset.x += dx;
+                }
+            };
+            let shared = line.runs.len() == 1 && Arc::ptr_eq(&line.glyphs, &line.runs[0].glyphs);
+            for run in Arc::make_mut(&mut line.runs) {
+                move_glyphs(&mut Arc::make_mut(run).glyphs);
+            }
+            if shared {
+                line.glyphs = line.runs[0].glyphs.clone();
+            } else {
+                move_glyphs(&mut line.glyphs);
+            }
+        }
+        if let Some(backgrounds) = &mut layout.backgrounds {
+            for background in Arc::make_mut(backgrounds) {
+                background.rect.origin.x += deltas[background.line];
+            }
+        }
+        if let Some(carets) = layout.caret_positions.get_mut() {
+            // Join controls need the original full caret map, before their
+            // invisible clusters were excluded from selection coverage.
+            for caret in Arc::make_mut(carets) {
+                caret.x += deltas[caret.line];
+            }
+        }
+        layout.line_carets.take();
+    }
+
     /// Finds the shaped font covering this UTF-8 byte. Its natural
     /// dimensions do not include extra line spacing or a strut.
     #[must_use]

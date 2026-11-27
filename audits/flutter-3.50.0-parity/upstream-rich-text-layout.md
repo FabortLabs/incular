@@ -141,3 +141,33 @@ embedded test font has no glyph for the ASCII apostrophe. The seven
 retained geometry, seven selection-pointer and 55 standalone painter
 and bidi checks passed. The latter suite's previously ignored case
 was not run or credited.
+
+## Live line caps, alignment, and hit affinity
+
+The pinned `rendering/paragraph_test.dart:348`, `:377`, and `:1173`
+registrations passed on Linux. At width 100, changing an existing
+paragraph's cap from unlimited to one, two, or three lines yields
+heights 130, 10, 20, and 30. The native comparison checks the same
+retained render object and restoration to unlimited.
+
+At tight width 100, changing a single 10-pixel glyph from left to right
+alignment places its selection box and paint command at x=90 without a
+box layout pass. The left and center controls place it at x=0 and x=45.
+Incular previously measured the render tree again on this change.
+For fixed-width paragraphs without inline children, changing between
+non-justified alignments now shifts the existing lines, foreground,
+backgrounds, clusters, and cached caret positions without reshaping.
+The direct geometry regression compares fresh layout for RTL, wrapped
+LTR, trailing whitespace, join controls, and an empty paragraph. Loose
+constraints, justification, and inline-child updates still use the
+ordinary layout path.
+
+The exact hit at (42, 14) in `1234567` reports byte 3 with downstream
+affinity, not upstream. The authored `paragraph_hit_affinity_test.dart`
+also verifies just to either side, in both directions. At a shared
+visual edge for one logical position, the leading edge of the next
+glyph owns the precise hit. This does not resolve coincident bidi
+stops that correspond to different logical positions.
+
+The final two focused native targets passed 63 tests (one pre-existing
+Unicode trailing-space case stayed ignored).

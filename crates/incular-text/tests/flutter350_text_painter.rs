@@ -1833,3 +1833,70 @@ fn text_caret_preserves_unicode_trailing_space_policies_at_tight_width() {
         assert_eq!(lines[0].width, 14., "trailing {trailing:?}");
     }
 }
+
+#[test]
+fn fixed_width_realignment_matches_fresh_geometry_without_changing_the_source_layout() {
+    use incular_core::Color;
+    use incular_text::{TextLayout, TextLayoutOptions};
+
+    let mut engine = TextEngine::new();
+    // Compare against new shaping rather than the width/rebreak pools.
+    engine.set_cache_byte_budget(0);
+    let style = TextStyle::new().background_color(Color::WHITE);
+    for (source, direction) in [
+        ("", TextDirection::Rtl),
+        ("loose end  \nnext word", TextDirection::Ltr),
+        ("אבג \u{200c}דה   \nXYZ", TextDirection::Rtl),
+    ] {
+        let options = TextLayoutOptions::new(Some(80.), TextAlign::Left)
+            .text_direction(direction);
+        let original = engine.layout_with_options(source, &style, options);
+        let original_offsets: Vec<_> = original.lines.iter().map(|line| line.offset).collect();
+        let _ = original.line_caret_positions(0);
+        let mut edited = original.clone();
+        for align in [TextAlign::Right, TextAlign::Center, TextAlign::Start, TextAlign::Left] {
+            let fresh = engine.layout_with_options(
+                source,
+                &style,
+                TextLayoutOptions { align, ..options },
+            );
+            TextLayout::realign_fixed_width(&mut edited, 80., align, direction);
+            assert_eq!(edited.metrics, fresh.metrics);
+            assert_eq!(edited.glyph_count(), fresh.glyph_count());
+            assert_eq!(edited.lines.len(), fresh.lines.len());
+            let near = |actual: f32, expected: f32| {
+                assert!((actual - expected).abs() < 0.0001,
+                    "{direction:?} {align:?} {source:?}: {actual} != {expected}");
+            };
+            for (index, (actual, expected)) in edited.lines.iter().zip(fresh.lines.iter()).enumerate() {
+                near(actual.offset, expected.offset);
+                assert_eq!(actual.width, expected.width);
+                assert_eq!(actual.glyphs.len(), expected.glyphs.len());
+                let original_glyphs = &original.lines[index].glyphs;
+                for ((a, b), source_glyph) in actual.glyphs.iter().zip(expected.glyphs.iter()).zip(original_glyphs.iter()) {
+                    assert_eq!(a.id, b.id, "{direction:?} {align:?} {source:?}, line {index}");
+                    assert_eq!(a.cluster, source_glyph.cluster, "alignment changes only positions");
+                    near(a.offset.x, b.offset.x);
+                    near(a.offset.y, b.offset.y);
+                }
+                let a = edited.line_caret_positions(index);
+                let b = fresh.line_caret_positions(index);
+                assert_eq!(a.len(), b.len());
+                for (a, b) in a.iter().zip(b.iter()) {
+                    assert_eq!((a.offset, a.affinity), (b.offset, b.affinity));
+                    near(a.x, b.x);
+                }
+            }
+            let a = edited.backgrounds.as_deref().unwrap_or(&[]);
+            let b = fresh.backgrounds.as_deref().unwrap_or(&[]);
+            assert_eq!(a.len(), b.len());
+            for (a, b) in a.iter().zip(b.iter()) {
+                assert_eq!(a.line, b.line);
+                near(a.rect.origin.x, b.rect.origin.x);
+                near(a.rect.origin.y, b.rect.origin.y);
+                near(a.rect.size.width, b.rect.size.width);
+            }
+        }
+        assert!(original.lines.iter().map(|line| line.offset).eq(original_offsets));
+    }
+}

@@ -3651,3 +3651,6 @@ packages/flutter/test/widgets/editable_text_test.dart	1232	EditableText sends en
 packages/flutter/test/widgets/editable_text_test.dart	1286	EditableText sends viewId to config	paired-match	upstream-full-text-input-channel.md#view-identity-in-mounted-keyboard-configuration
 packages/flutter/test/widgets/text_selection_test.dart	706	test TextSelectionGestureDetectorBuilder tap	paired-match	upstream-editor-selection-causes.md#original-platform-variant-tap-registrations
 packages/flutter/test/widgets/text_selection_test.dart	730	test TextSelectionGestureDetectorBuilder toggles toolbar on single tap on previous selection iOS	paired-match	upstream-editor-selection-causes.md#original-platform-variant-tap-registrations
+packages/flutter/test/rendering/paragraph_test.dart	348	maxLines	paired-match	upstream-rich-text-layout.md#live-line-caps-alignment-and-hit-affinity
+packages/flutter/test/rendering/paragraph_test.dart	377	textAlign triggers TextPainter relayout in the paint method	paired-match	upstream-rich-text-layout.md#live-line-caps-alignment-and-hit-affinity
+packages/flutter/test/rendering/paragraph_test.dart	1173	getPositionForOffset works	paired-match	upstream-rich-text-layout.md#live-line-caps-alignment-and-hit-affinity

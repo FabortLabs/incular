@@ -3,6 +3,7 @@
 use super::{RenderFeatureState, RenderKind, RenderObjectPayload};
 
 use incular_core::Invalidation;
+use incular_text::TextAlign;
 
 impl RenderObjectPayload {
     /// Applies new declarative configuration and returns the minimum phase
@@ -38,6 +39,25 @@ impl RenderObjectPayload {
             // still receive the next update as the retained old delegate.
             self.replace_kind(kind);
             return Invalidation::NONE;
+        }
+        if let (
+            RenderKind::Text { align: before, spans: before_spans, .. },
+            RenderKind::Text { align: after, text_direction, spans: after_spans, .. },
+            RenderFeatureState::Text(state),
+        ) = (&*self.kind, &kind, &mut self.feature)
+            && before != after
+            && *before != TextAlign::Justify
+            && *after != TextAlign::Justify
+            && text_paint_only_change(&self.kind, &kind, true)
+            && let Some(width) = state.fixed_alignment_width
+            && let Some(layout) = &mut state.layout
+        {
+            incular_text::TextLayout::realign_fixed_width(layout, width, *after, *text_direction);
+            if before_spans != after_spans && let Some(spans) = after_spans {
+                incular_text::TextLayout::refresh_span_foregrounds(layout, spans);
+            }
+            self.replace_kind(kind);
+            return Invalidation::PAINT | Invalidation::HIT_TEST | Invalidation::SEMANTICS;
         }
         let invalidation = invalidation_for_change(&self.kind, &kind);
         if invalidation == Invalidation::PAINT
@@ -109,7 +129,7 @@ fn invalidation_for_change(old: &RenderKind, new: &RenderKind) -> Invalidation {
 }
 
 fn paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
-    text_paint_only_change(old, new)
+    text_paint_only_change(old, new, false)
         || custom_paint_only_change(old, new)
         || visual_paint_only_change(old, new)
         || image_paint_only_change(old, new)
@@ -205,7 +225,11 @@ fn image_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
     )
 }
 
-fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
+fn text_paint_only_change(
+    old: &RenderKind,
+    new: &RenderKind,
+    allow_alignment: bool,
+) -> bool {
     let (
         RenderKind::Text {
             text: old_text,
@@ -238,7 +262,7 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
         return false;
     };
     old_text == new_text
-        && old_align == new_align
+        && (allow_alignment || old_align == new_align)
         && old_direction == new_direction
         && old_soft_wrap == new_soft_wrap
         && old_max_lines == new_max_lines

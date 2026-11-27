@@ -224,6 +224,9 @@ impl WidgetTree {
                 let size = constraints.constrain(layout.metrics.size);
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(layout.clone());
+                node.set_fixed_text_alignment_width(width.filter(|width| {
+                    inline.is_none() && *width == constraints.min_width()
+                }));
                 node.baseline = Some(layout.metrics.baseline);
                 // A placeholder with no laid-out box has no paint offset
                 // in Flutter. Retain the widget and its geometry but exclude

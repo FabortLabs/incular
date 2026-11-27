@@ -224,3 +224,110 @@ fn laid_out_word_boundaries_preserve_spaces_and_embedded_apostrophes() {
         assert_eq!(&SOURCE[bounds.as_range()], word);
     }
 }
+
+#[test]
+fn changing_alignment_repositions_selection_and_glyphs_without_box_layout() {
+    use incular_rendering::PaintCommand;
+    use incular_text::TextAlign;
+    use incular_widgets::SizedBox;
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let key = GlobalKey::new();
+    let make = |align| {
+        Widget::from(RichText::new(TextSpan::new("A").style(style.clone().font_size(10.))).align(align))
+            .with_key(key)
+    };
+    let root = Directionality::new(
+        TextDirection::Ltr,
+        Align::new(
+            Alignment::TOP_LEFT,
+            SizedBox::new().width(100.).child(make(TextAlign::Left)),
+        ),
+    );
+    let mut tree = WidgetTree::with_text_engine(engine);
+    tree.mount(root.into()).unwrap();
+    let limits = Constraints::tight(Size::new(800., 600.));
+    tree.layout(limits).unwrap();
+    let field = tree.element_with_key(&key.into()).unwrap();
+    let render = tree.render_id(field).unwrap();
+    let before = tree.diagnostics().layouts;
+
+    for (align, x) in [(TextAlign::Left, 0.), (TextAlign::Right, 90.), (TextAlign::Center, 45.), (TextAlign::Left, 0.)] {
+        tree.update(field, make(align)).unwrap();
+        tree.layout(limits).unwrap();
+        let painted = tree.paint();
+        let bounds = tree.paragraph_selection_boxes(field, TextRange::new(0, 1)).unwrap();
+        assert_eq!(bounds.len(), 1);
+        assert_eq!(edges(bounds[0].rect), [x, 0., x + 10., 10.]);
+        let glyph = painted.commands().iter().find_map(|command| match command {
+            PaintCommand::GlyphRun { run, .. } => Some(run.origin.x + run.glyphs[0].offset.x),
+            _ => None,
+        });
+        assert_eq!(glyph, Some(x));
+        assert_eq!(tree.render_id(field), Some(render));
+        assert_eq!(tree.diagnostics().layouts, before, "alignment {align:?}");
+    }
+}
+
+#[test]
+fn a_live_line_cap_changes_the_height_at_the_same_paragraph_width() {
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let source = "How do you write like you're running out of time? Write day and night like you're running out of time?";
+    let span = TextSpan::new(source).style(style.font_size(10.));
+    let (mut tree, key) = mount(span.clone(), engine, 100., false);
+    let field = tree.element_with_key(&key.into()).unwrap();
+    let render = tree.render_id(field).unwrap();
+    let constraints = Constraints::tight(Size::new(100., 600.));
+    for (max, height) in [(None, 130.), (Some(1), 10.), (Some(2), 20.), (Some(3), 30.), (None, 130.)] {
+        tree.update(field, Widget::from(RichText::new(span.clone()).max_lines(max)).with_key(key))
+            .unwrap();
+        tree.layout(constraints).unwrap();
+        let layout = tree.text_layout(render).unwrap();
+        assert_eq!(tree.element_bounds(field).unwrap().size.height, height, "cap {max:?}");
+        assert_eq!(layout.metrics.size.height, height);
+        assert_eq!(layout.overflowed, max.is_some());
+    }
+}
+
+#[test]
+fn laid_out_paragraph_maps_an_exact_glyph_boundary_to_the_next_visual_glyph() {
+    use incular_text::TextAffinity::{Downstream, Upstream};
+    for (source, direction, to_left, at_or_right) in [
+        ("1234567", TextDirection::Ltr, Upstream, Downstream),
+        ("אבגדהוז", TextDirection::Rtl, Downstream, Upstream),
+    ] {
+        let Some((style, engine)) = flutter_test_style() else {
+            return;
+        };
+        let key = GlobalKey::new();
+        let span = TextSpan::new(source).style(style.font_size(14.));
+        let paragraph = Widget::from(RichText::new(span)).with_key(key);
+        let mut tree = WidgetTree::with_text_engine(engine);
+        tree.mount(Directionality::new(direction, paragraph).into()).unwrap();
+        tree.layout(Constraints::loose(Size::new(800., 600.))).unwrap();
+        let field = tree.element_with_key(&key.into()).unwrap();
+        let start = source.char_indices().nth(3).unwrap().0;
+        let end = source.char_indices().nth(4).unwrap().0;
+        let boxes = tree.paragraph_selection_boxes(field, TextRange::new(start, end)).unwrap();
+        let [rect] = boxes.as_slice() else {
+            panic!("expected a single box for the boundary glyph");
+        };
+        let boundary = if direction == TextDirection::Ltr {
+            assert_eq!(rect.rect.origin.x, 42.);
+            rect.rect.origin.x
+        } else {
+            rect.rect.origin.x + rect.rect.size.width
+        };
+        for (dx, affinity) in [(-1., to_left), (0., at_or_right), (1., at_or_right)] {
+            assert_eq!(
+                tree.selectable_text_affinity_position_at(field, Offset::new(boundary + dx, 14.)),
+                Some((start, affinity)),
+                "{direction:?}, boundary {boundary}, delta {dx}",
+            );
+        }
+    }
+}
