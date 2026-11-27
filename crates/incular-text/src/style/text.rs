@@ -1,6 +1,8 @@
 use super::fonts::{FontFamily, FontWeight};
 use super::text_style::TextStyle;
+use incular_core::debug_format_double;
 use incular_rendering::Shadow;
+use std::fmt;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -213,6 +215,59 @@ impl StrutStyle {
     pub fn force_strut_height(mut self, force: bool) -> Self {
         self.force_strut_height = Some(force);
         self
+    }
+}
+
+impl fmt::Display for StrutStyle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut properties = Vec::new();
+        let scalar = |value: f32| debug_format_double(Some(f64::from(value)));
+        if let Some(family) = &self.font_family {
+            properties.push(format!("family: {}", family.name()));
+        }
+        if !self.font_family_fallback.is_empty() {
+            let names: Vec<_> = self
+                .font_family_fallback
+                .iter()
+                .map(FontFamily::name)
+                .collect();
+            properties.push(format!("familyFallback: {}", names.join(", ")));
+        }
+        if let Some(size) = self.font_size {
+            properties.push(format!("size: {}", scalar(size)));
+        }
+        if let Some(weight) = self.font_weight {
+            properties.push(format!("weight: w{}", weight.value()));
+        }
+        if let Some(style) = self.font_style {
+            let name = match style {
+                FontStyle::Normal => "normal",
+                FontStyle::Italic => "italic",
+            };
+            properties.push(format!("style: {name}"));
+        }
+        if let Some(height) = self.height {
+            properties.push(format!("height: {}x", scalar(height)));
+        }
+        if let Some(force) = self.force_strut_height {
+            properties.push(if force {
+                "<strut height forced>".into()
+            } else {
+                "<strut height normal>".into()
+            });
+        }
+        if let (Some(_), Some(distribution)) = (self.height, self.leading_distribution) {
+            let name = match distribution {
+                TextLeadingDistribution::Even => "even",
+                TextLeadingDistribution::Proportional => "proportional",
+            };
+            properties.push(format!("leadingDistribution: {name}"));
+        }
+        if properties.is_empty() {
+            f.write_str("StrutStyle")
+        } else {
+            write!(f, "StrutStyle({})", properties.join(", "))
+        }
     }
 }
 

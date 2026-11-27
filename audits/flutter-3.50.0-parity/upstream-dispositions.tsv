@@ -3792,3 +3792,4 @@ packages/flutter/test/rendering/selection_test.dart	21	selectionBasedOnRect work
 packages/flutter/test/rendering/selection_test.dart	33	adjustDragOffset works	paired-match	upstream-selection-rectangle-order.md
 packages/flutter/test/rendering/view_test.dart	71	ViewConfiguration == and hashCode	paired-match	upstream-view-configuration.md
 packages/flutter/test/rendering/view_constraints_test.dart	11	Properly constraints the physical size	paired-match	upstream-view-configuration.md
+packages/flutter/test/painting/strut_style_test.dart	9	StrutStyle diagnostics test	paired-match	upstream-strut-diagnostics.md
