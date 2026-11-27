@@ -16,6 +16,10 @@ node, `descendants_are_traversable` omits descendants from traversal only,
 and `descendants_are_focusable` prevents descendant focus requests.
 `with_external_focus_node` leaves these settings under the node's control.
 
+`Placeholder` fills bounded axes without a child and uses its fallback
+width and height only on unbounded axes. With `.child(...)`, it paints
+behind that child without intercepting pointer input.
+
 ## Frame recursion diagnostics
 
 Build, layout, paint, semantics, and compositor traversal track their active

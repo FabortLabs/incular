@@ -2751,3 +2751,9 @@ packages/flutter/test/widgets/focus_scope_test.dart	1508	skipTraversal works as 
 packages/flutter/test/widgets/focus_scope_test.dart	1602	descendantsAreTraversable works as expected.	paired-match	upstream-mounted-focus-scope-nodes.md#scope-and-descendant-traversal-permissions
 packages/flutter/test/widgets/focus_manager_test.dart	1406	Key handling bubbles up and terminates when handled.	paired-match	upstream-focus-key-stages.md#focused-ancestry-consumes-raw-keys-once
 packages/flutter/test/widgets/focus_manager_test.dart	1015	Can move focus between scopes and keep focus	paired-match	upstream-mounted-focus-scope-nodes.md#restoring-a-scopes-last-focused-child
+packages/flutter/test/rendering/repaint_boundary_2_test.dart	9	repaint boundary with constraint changes	paired-match	upstream-placeholder-layout-and-paint.md#child-hits-and-layout-updates
+packages/flutter/test/widgets/placeholder_test.dart	9	Placeholder	paired-match	upstream-placeholder-layout-and-paint.md#bounded-axes-and-a-real-child
+packages/flutter/test/widgets/placeholder_test.dart	39	Placeholder color	paired-match	upstream-placeholder-layout-and-paint.md#bounded-axes-and-a-real-child
+packages/flutter/test/widgets/placeholder_test.dart	52	Placeholder stroke width	paired-match	upstream-placeholder-layout-and-paint.md#bounded-axes-and-a-real-child
+packages/flutter/test/widgets/placeholder_test.dart	59	Placeholder child widget	paired-match	upstream-placeholder-layout-and-paint.md#bounded-axes-and-a-real-child
+packages/flutter/test/widgets/placeholder_test.dart	70	Placeholder does not crash at zero area	paired-match	upstream-placeholder-layout-and-paint.md#bounded-axes-and-a-real-child

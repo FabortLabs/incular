@@ -9,7 +9,7 @@ use typed_builder::TypedBuilder;
 
 use super::SizedBox;
 use crate::painting_effects::PainterDelegate;
-use crate::{IgnorePointer, Positioned, Stack, Widget, WidgetKind, macros::widget_from_kind};
+use crate::{LimitedBox, Positioned, Stack, Widget, WidgetKind, macros::widget_from_kind};
 
 /// Paints a solid background color behind a child widget.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -250,6 +250,8 @@ pub struct Placeholder {
     fallback_width: f32,
     #[builder(default = 400.0, setter(transform = |height: f32| height.max(0.0)))]
     fallback_height: f32,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
 impl Default for Placeholder {
@@ -266,6 +268,7 @@ impl Placeholder {
             stroke_width: 2.0,
             fallback_width: 400.0,
             fallback_height: 400.0,
+            child: None,
         }
     }
 
@@ -290,6 +293,13 @@ impl Placeholder {
     #[must_use]
     pub fn fallback_height(mut self, height: f32) -> Self {
         self.fallback_height = height.max(0.0);
+        self
+    }
+
+    /// Paints the outline behind a child without blocking its hit targets.
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
         self
     }
 }
@@ -332,26 +342,28 @@ impl crate::CustomPainter for PlaceholderPainter {
     fn should_repaint(&self, old: &Self) -> bool {
         self != old
     }
+
+    fn hit_test(&self, _position: Offset) -> Option<bool> {
+        Some(false)
+    }
 }
 
 impl From<Placeholder> for Widget {
     fn from(value: Placeholder) -> Self {
-        // Flutter's placeholder painter reports `hitTest` as false, so the
-        // outline never absorbs pointer events.
         let painter = PlaceholderPainter {
             color: value.color,
             stroke_width: value.stroke_width,
         };
-        IgnorePointer::new(
-            SizedBox::new()
-                .width(value.fallback_width)
-                .height(value.fallback_height)
-                .child(CustomPaint::from_painter(
-                    Size::new(value.fallback_width, value.fallback_height),
-                    painter,
-                )),
-        )
-        .into()
+        let paint = CustomPaint::from_painter_filling(painter);
+        let paint = if let Some(child) = value.child {
+            paint.child(child)
+        } else {
+            paint
+        };
+        LimitedBox::new(paint)
+            .max_width(value.fallback_width)
+            .max_height(value.fallback_height)
+            .into()
     }
 }
 

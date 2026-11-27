@@ -65,3 +65,8 @@ pub fn max_height(mut self, max_height: f32) -> Self
 
 Related: [`ConstrainedBox`](/docs/api/layout-widgets/constrained-box),
 [`OverflowBox`](/docs/api/layout-widgets/overflow-box).
+
+`Placeholder::new()` uses the same unbounded-axis rules for its fallback
+width and height. By default it fills bounded space. Add `.child(...)`
+to paint the placeholder behind content; the outline itself does not
+intercept pointer events.
