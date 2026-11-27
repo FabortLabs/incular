@@ -160,3 +160,57 @@ fn precise_hsl_saturation_and_lightness_sweeps_match_the_pinned_bytes() {
         }
     }
 }
+
+#[test]
+fn wikipedia_color_vectors_match_float_and_packed_rgb_in_both_color_models() {
+    use incular_core::{ColorSpace, FloatColor};
+
+    // Packed ARGB, encoded RGB, hue, value, lightness, HSV and HSL saturation.
+    let vectors = [
+        (0xffffffff, [1., 1., 1.], 0., 1., 1., 0., 0.),
+        (0xff808080, [0.5, 0.5, 0.5], 0., 0.5, 0.5, 0., 0.),
+        (0xff000000, [0., 0., 0.], 0., 0., 0., 0., 0.),
+        (0xffff0000, [1., 0., 0.], 0., 1., 0.5, 1., 1.),
+        (0xffbfbf00, [0.75, 0.75, 0.], 60., 0.75, 0.375, 1., 1.),
+        (0xff008000, [0., 0.5, 0.], 120., 0.5, 0.25, 1., 1.),
+        (0xff80ffff, [0.5, 1., 1.], 180., 1., 0.75, 0.5, 1.),
+        (0xff8080ff, [0.5, 0.5, 1.], 240., 1., 0.75, 0.5, 1.),
+        (
+            0xffbf40bf,
+            [0.75, 0.25, 0.75],
+            300.,
+            0.75,
+            0.5,
+            2. / 3.,
+            0.5,
+        ),
+    ];
+    let channels = |color: Color| {
+        let color = FloatColor::from(color);
+        [color.red, color.green, color.blue, color.alpha]
+    };
+    for (packed, [r, g, b], hue, value, lightness, hsv_s, hsl_s) in vectors {
+        let color = FloatColor::new(r, g, b, 1., ColorSpace::Srgb);
+        let expected_rgb = [r, g, b, 1.];
+        let hsv = HsvColor::new(hue, hsv_s, value, 1.);
+        let hsl = HslColor::new(hue, hsl_s, lightness, 1.);
+        require_close(expected_rgb, channels(Color::from_argb32(packed)));
+        assert_eq!(color.to_srgba8(), Color::from_argb32(packed));
+        require_close(expected_rgb, channels(hsv.to_color()));
+        require_close(expected_rgb, channels(hsl.to_color()));
+
+        // Flutter's RGB-to-hue factories read the rounded byte getters,
+        // including for a Color constructed with unquantized channels.
+        let rgb = color.to_srgba8();
+        let out = HsvColor::from_color(rgb);
+        require_close(
+            [hue / 360., hsv_s, value, 1.],
+            [out.hue / 360., out.saturation, out.value, out.alpha],
+        );
+        let out = HslColor::from_color(rgb);
+        require_close(
+            [hue / 360., hsl_s, lightness, 1.],
+            [out.hue / 360., out.saturation, out.lightness, out.alpha],
+        );
+    }
+}

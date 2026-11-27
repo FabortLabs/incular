@@ -206,3 +206,18 @@ authored pinned and native tests also verify that a missing endpoint
 scales alpha without normalizing a stored 360° hue or changing its
 other channels. Both-present, nonidentical inputs retain the usual
 short-arc interpolation.
+
+## RGB examples and color inspector metadata
+
+Two pinned `painting/colors_test.dart` cases now pair. All nine
+examples agree between the floating RGB constructor and packed
+ARGB, forward HSV and HSL conversion, and both reverse conversions
+using the original component tolerance. The pinned hue constructors
+read the rounded RGB byte getters, so the native inverse starts
+from the packed representation too.
+
+A typed color inspector property preserves its four packed channel
+bytes under `valueProperties`, with no extra scalar value. The slot
+is absent for null and present with four zero channels for transparent
+black. An ordinary untyped diagnostic does not gain this metadata.
+This checks serialization, not a color-picker UI.

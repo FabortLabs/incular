@@ -363,6 +363,9 @@ enum Presentation<T> {
     Flag,
     ObjectFlag,
     Message,
+    Color {
+        channels: fn(&T) -> [u8; 4],
+    },
     FlagsSummary {
         member_type: &'static str,
         has_names: fn(&T) -> bool,
@@ -678,6 +681,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             Presentation::String { .. } => "StringProperty",
             Presentation::Flag => "FlagProperty",
             Presentation::Message => "MessageProperty",
+            Presentation::Color { .. } => "ColorProperty",
             Presentation::FlagsSummary { member_type, .. } => {
                 generated_type = format!("FlagsSummary<{member_type}>");
                 flags_property_type = format!("Map<String, {member_type}?>");
@@ -753,6 +757,13 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                 output["numberToString"] = json!(format(self.value()));
                 if let Some(unit) = &self.unit {
                     output["unit"] = json!(unit);
+                }
+            }
+            Presentation::Color { channels } => {
+                if let Some([red, green, blue, alpha]) = self.value().map(channels) {
+                    output["valueProperties"] = json!({
+                        "red": red, "green": green, "blue": blue, "alpha": alpha,
+                    });
                 }
             }
             Presentation::FlagsSummary { names_for_json, .. } => {
@@ -852,6 +863,19 @@ impl DiagnosticsProperty<bool> {
         let mut property = Self::new(name, value).show_name(false).default_value(None);
         property.presentation = Presentation::Flag;
         property.flag_labels = [if_false.map(str::to_owned), if_true.map(str::to_owned)];
+        property
+    }
+}
+
+impl DiagnosticsProperty<crate::Color> {
+    /// Creates an inspector color property with 8-bit channels in
+    /// `valueProperties` when present. Transparent black is still a value.
+    #[must_use]
+    pub fn color(name: impl Into<String>, value: Option<crate::Color>) -> Self {
+        let mut property = Self::new(name, value);
+        property.presentation = Presentation::Color {
+            channels: |color| [color.red, color.green, color.blue, color.alpha],
+        };
         property
     }
 }

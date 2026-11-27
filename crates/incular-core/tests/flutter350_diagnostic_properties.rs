@@ -366,3 +366,28 @@ fn an_integer_property_retains_the_base_visibility_and_display_options() {
     assert_eq!(json["style"], "none");
     assert_eq!(json["level"], "off");
 }
+
+#[test]
+fn color_property_publishes_packed_channels_only_for_a_present_color() {
+    use incular_core::Color;
+    let color = Color::from_argb32(0x0a141e28);
+    let property = DiagnosticsProperty::color("foo", Some(color));
+    let json = property.to_json();
+    assert_eq!(json["type"], "ColorProperty");
+    assert_eq!(json["propertyType"], "Color");
+    assert_eq!(
+        json["valueProperties"],
+        json!({"alpha": 10, "red": 20, "green": 30, "blue": 40})
+    );
+    assert!(json.get("value").is_none());
+
+    let absent = DiagnosticsProperty::color("foo", None).to_json();
+    assert!(absent.get("valueProperties").is_none());
+    let transparent = DiagnosticsProperty::color("foo", Some(Color::TRANSPARENT)).to_json();
+    assert_eq!(
+        transparent["valueProperties"],
+        json!({"alpha": 0, "red": 0, "green": 0, "blue": 0})
+    );
+    let ordinary_color = DiagnosticsProperty::new("foo", Some(color)).to_json();
+    assert!(ordinary_color.get("valueProperties").is_none());
+}
