@@ -58,3 +58,12 @@ be skipped in traversal while remaining explicitly focusable. Its
 focus semantics default on, can be removed independently, and leave
 the descendant labels intact. All 53 focused Rust runtime, focus,
 keyboard, and semantics tests passed.
+
+## Direct callback adapters
+
+Both pinned Action subclasses originals passed. A CallbackAction
+passes its invocation's typed intent unchanged and returns the
+callback's result. Its optional binding into a Rust command registry
+still uses an explicit command key. VoidCallbackAction invokes the
+callback carried on the supplied intent and returns no value. All 11
+focused native callback and dispatcher tests passed.

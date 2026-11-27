@@ -66,11 +66,11 @@ pub use incular_core::DeviceGestureSettings;
 pub use keyboard::{
     Action, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase, ActionInvocationSubscription,
     ActionListenerSubscription,
-    ActionResult, Actions, CharacterActivator, Command, CommandId, ErasedActionScope, ErasedIntent,
+    ActionResult, Actions, CallbackAction, CharacterActivator, Command, CommandId, ErasedActionScope, ErasedIntent,
     ErasedShortcutScope, FocusKeyEventHandler, FocusRawKeyEventHandler, Intent, KeyEventResult,
     LockState, LogicalKeySet, LogicalShortcutKey, RawKeyDelivery, RawKeyEvent, ShortcutActivator, ShortcutKey,
     ScopedActionDispatcher, ShortcutMatch, ShortcutTrigger, Shortcuts, SingleActivator,
-    combine_key_event_results,
+    VoidCallbackAction, VoidCallbackIntent, combine_key_event_results,
 };
 pub use least_squares::{LeastSquaresSolver, PolynomialFit};
 pub use long_press::LongPressGestureRecognizer;

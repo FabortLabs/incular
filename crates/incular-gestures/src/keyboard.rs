@@ -632,6 +632,54 @@ impl<C: CommandId> Action<C> {
     }
 }
 
+/// An action whose implementation is a callback receiving the typed intent.
+/// Direct invocation passes the supplied payload through unchanged.
+pub struct CallbackAction<I, R = ActionResult> {
+    callback: Rc<dyn Fn(&I) -> R>,
+}
+
+impl<I, R> CallbackAction<I, R> {
+    #[must_use]
+    pub fn new(callback: impl Fn(&I) -> R + 'static) -> Self {
+        Self { callback: Rc::new(callback) }
+    }
+
+    pub fn invoke(&self, intent: &I) -> R {
+        (self.callback)(intent)
+    }
+}
+
+impl<C: CommandId, R: Into<ActionResult> + 'static> CallbackAction<Intent<C>, R> {
+    /// Registers this callback for a concrete command key.
+    #[must_use]
+    pub fn bind(self, command: impl Into<Intent<C>>) -> Action<C> {
+        Action::with_handler(command, move |intent| self.invoke(intent))
+    }
+}
+
+/// Carries a callback to the stateless [VoidCallbackAction].
+#[derive(Clone)]
+pub struct VoidCallbackIntent {
+    callback: Rc<dyn Fn()>,
+}
+
+impl VoidCallbackIntent {
+    #[must_use]
+    pub fn new(callback: impl Fn() + 'static) -> Self {
+        Self { callback: Rc::new(callback) }
+    }
+}
+
+/// Invokes the callback supplied by the intent without returning a value.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VoidCallbackAction;
+
+impl VoidCallbackAction {
+    pub fn invoke(&self, intent: &VoidCallbackIntent) {
+        (intent.callback)();
+    }
+}
+
 /// Invokes an action with its intent and returns the handler's result.
 ///
 /// The default dispatcher uses the action's enabled check and emits its
