@@ -3275,3 +3275,5 @@ packages/flutter/test/widgets/scrollable_list_hit_testing_test.dart	104	Padding 
 packages/flutter/test/widgets/scrollable_list_hit_testing_test.dart	138	Padding scroll anchor end	paired-match	upstream-scrollable-list-hit-testing.md
 packages/flutter/test/widgets/scrollable_list_hit_testing_test.dart	173	Tap immediately following clamped overscroll	paired-match	upstream-scrollable-list-hit-testing.md
 packages/flutter/test/rendering/overflow_test.dart	13	overflow should not affect baseline	paired-match	upstream-overflow-text-baseline.md
+packages/flutter/test/widgets/hit_testing_test.dart	18	A mouse click should only cause one hit test	paired-match	upstream-contact-hit-test-reuse.md
+packages/flutter/test/widgets/hit_testing_test.dart	38	Non-mouse events should not cause movement hit tests	paired-match	upstream-contact-hit-test-reuse.md

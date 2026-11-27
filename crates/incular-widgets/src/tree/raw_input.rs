@@ -161,6 +161,16 @@ impl WidgetTree {
         self.dispatch_raw_gesture_stream(key, event, hit.raw())
     }
 
+    /// Whether the normalized event belongs to a captured contact, even if
+    /// the host omitted pressed-button bits from a touch move.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn has_raw_pointer_contact(&self, window: u64, event: RawPointerEvent) -> bool {
+        self.input.raw_pointer_routes.contains_key(&GestureArenaKey::pointer_device(
+            window, event.device, event.pointer,
+        ))
+    }
+
     /// Whether a consuming tap region owns this pointer rather than an
     /// arena participant that still has to compete with ordinary recognizers.
     #[doc(hidden)]
@@ -308,7 +318,13 @@ impl WidgetTree {
     /// pressed.
     #[must_use]
     pub fn preserves_text_field_focus(&self, point: Offset) -> bool {
-        self.raw_hit_elements(point).into_iter().any(|id| {
+        self.preserves_text_field_focus_with_hit(&self.pointer_hit_test(point))
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn preserves_text_field_focus_with_hit(&self, hit: &PointerHitTest) -> bool {
+        hit.raw().iter().copied().any(|id| {
             matches!(
                 self.raw_input_kind(id),
                 Some(RawInputKind::TextFieldTapRegion { enabled: true, .. })
@@ -322,7 +338,16 @@ impl WidgetTree {
     #[doc(hidden)]
     #[must_use]
     pub fn window_interaction_at(&self, point: Offset) -> Option<(ElementId, WindowInteraction)> {
-        self.raw_hit_elements(point).into_iter().find_map(|id| {
+        self.window_interaction_with_hit(&self.pointer_hit_test(point))
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn window_interaction_with_hit(
+        &self,
+        hit: &PointerHitTest,
+    ) -> Option<(ElementId, WindowInteraction)> {
+        hit.raw().iter().copied().find_map(|id| {
             let interaction = match self.raw_input_kind(id)? {
                 RawInputKind::WindowDragRegion => WindowInteraction::Move,
                 RawInputKind::WindowResizeRegion { direction } => {
@@ -330,14 +355,17 @@ impl WidgetTree {
                 }
                 _ => return None,
             };
-            (!self.window_interaction_blocked_by_descendant(id, point)).then_some((id, interaction))
+            (!self.window_interaction_blocked_by_descendant(id, hit.target()))
+                .then_some((id, interaction))
         })
     }
 
-    fn window_interaction_blocked_by_descendant(&self, region: ElementId, point: Offset) -> bool {
-        let Some(mut current) = self
-            .hit_test(point)
-            .and_then(|render| self.element_for_render(render))
+    fn window_interaction_blocked_by_descendant(
+        &self,
+        region: ElementId,
+        target: Option<RenderObjectId>,
+    ) -> bool {
+        let Some(mut current) = target.and_then(|render| self.element_for_render(render))
         else {
             return true;
         };

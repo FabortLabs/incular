@@ -271,6 +271,7 @@ pub struct Runtime {
     pub(crate) legacy_pointer: Option<(u64, u64)>,
     pub(crate) last_pointer: Offset,
     hover_devices: hover_devices::HoverDevices,
+    hover_press_hit: Option<HoverPressHit>,
     touch_resampling: touch_resampling::TouchResampling,
     mouse_cursor_update_handler: Option<Rc<dyn Fn(MouseCursorUpdate)>>,
     hover_hit_revision: u64,
@@ -417,6 +418,23 @@ pub(crate) fn diagnostic_input_trigger(event: &InputEvent) -> String {
     }
 }
 
+/// Kept only for hover-capable presses so a same-position release needn't
+/// walk the tree again. A frame or mutable tree borrow invalidates it.
+struct HoverPressHit {
+    window: u64,
+    device: u64,
+    pointer: u64,
+    position: Offset,
+    revision: u64,
+    hit: PointerHitTest,
+}
+
+impl HoverPressHit {
+    fn owns(&self, window: u64, event: RawPointerEvent) -> bool {
+        (self.window, self.device, self.pointer) == (window, event.device, event.pointer)
+    }
+}
+
 fn kind_supports_hover(kind: PointerDeviceKind) -> bool {
     matches!(
         kind,
@@ -524,6 +542,7 @@ impl Runtime {
             legacy_pointer: None,
             last_pointer: Offset::ZERO,
             hover_devices: hover_devices::HoverDevices::default(),
+            hover_press_hit: None,
             touch_resampling: touch_resampling::TouchResampling::default(),
             mouse_cursor_update_handler: None,
             hover_hit_revision: 0,
@@ -1189,6 +1208,7 @@ impl Runtime {
     }
     #[must_use]
     pub fn tree_mut(&mut self) -> &mut WidgetTree {
+        self.hover_press_hit = None;
         &mut self.tree
     }
 
@@ -2112,6 +2132,13 @@ impl Runtime {
             phase,
             self.input_now(),
         );
+        if self
+            .hover_press_hit
+            .as_ref()
+            .is_some_and(|press| press.owns(window, raw))
+        {
+            self.hover_press_hit = None;
+        }
         match event.change {
             HoverDeviceChange::Added => {
                 self.last_pointer = event.position;
@@ -2161,6 +2188,69 @@ impl Runtime {
         let result = self.route_pointer_input(raw_event, metadata_rich);
         self.hover_devices.notify_connection_change();
         result
+    }
+
+    fn hit_for_pointer_event(
+        &mut self,
+        window: u64,
+        event: RawPointerEvent,
+        hover_capable: bool,
+    ) -> PointerHitTest {
+        let owns_press = self
+            .hover_press_hit
+            .as_ref()
+            .is_some_and(|press| press.owns(window, event));
+        match event.phase {
+            PointerPhase::Enter | PointerPhase::Exit => {
+                if owns_press {
+                    self.hover_press_hit = None;
+                }
+                return PointerHitTest::default();
+            }
+            PointerPhase::Cancel if !hover_capable => return PointerHitTest::default(),
+            PointerPhase::Cancel | PointerPhase::Up if owns_press => {
+                let press = self.hover_press_hit.take().expect("matching press exists");
+                if event.phase == PointerPhase::Up
+                    && press.position == event.position
+                    && press.revision == self.tree.hover_hit_revision()
+                {
+                    return press.hit;
+                }
+            }
+            PointerPhase::Move if !hover_capable => {
+                let contact = event.down || self.tree.has_raw_pointer_contact(window, event);
+                let moving_selection = self.captured_selectable_text.is_some()
+                    || self.text_long_press.is_some_and(|press| {
+                        matches!(press.target, text_gestures::LongPressTarget::Label(_))
+                    });
+                if contact && !moving_selection && self.pressed_button.is_none() {
+                    // Raw listeners, gestures and tap regions already route
+                    // through the retained press. No hover is delivered.
+                    return PointerHitTest::default();
+                }
+            }
+            PointerPhase::Up
+                if !hover_capable
+                    && self.pressed_button.is_none()
+                    && self.pending_mobile_text_touch.is_none()
+                    && self.secondary_text_press.is_none() =>
+            {
+                return PointerHitTest::default();
+            }
+            _ => {}
+        }
+        let hit = self.tree.pointer_hit_test(event.position);
+        if hover_capable && event.phase == PointerPhase::Down {
+            self.hover_press_hit = Some(HoverPressHit {
+                window,
+                device: event.device,
+                pointer: event.pointer,
+                position: event.position,
+                revision: self.tree.hover_hit_revision(),
+                hit: hit.clone(),
+            });
+        }
+        hit
     }
 
     fn route_pointer_input(
@@ -2218,11 +2308,7 @@ impl Runtime {
         }
         // One hit test serves the whole event: raw regions and listeners,
         // retained gestures, text editing and buttons.
-        let hit = if matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
-            PointerHitTest::default()
-        } else {
-            self.tree.pointer_hit_test(position)
-        };
+        let hit = self.hit_for_pointer_event(gesture_window, raw_event, hover_capable);
         let raw_target = self
             .tree
             .dispatch_raw_pointer_with_hit(gesture_window, raw_event, &hit);
@@ -2437,7 +2523,7 @@ impl Runtime {
                 if selectable_target.is_none()
                     && text_target.is_none()
                     && target.is_none()
-                    && let Some((element, interaction)) = self.tree.window_interaction_at(position)
+                    && let Some((element, interaction)) = self.tree.window_interaction_with_hit(&hit)
                     && let (Some(window_id), Some(manager)) =
                         (self.window_id, self.window_manager.as_ref())
                 {
@@ -2473,7 +2559,7 @@ impl Runtime {
                     && self
                         .focused
                         .is_some_and(|focused| self.tree.is_text_field(focused))
-                    && (mobile_touch || self.tree.preserves_text_field_focus(position));
+                    && (mobile_touch || self.tree.preserves_text_field_focus_with_hit(&hit));
                 // Flutter on desktop: a press focuses the text field it hits, a
                 // press outside a focused text field unfocuses it
                 // (`EditableText` tap-outside), and any other press leaves
@@ -4287,6 +4373,7 @@ impl Runtime {
         now: Instant,
         warm_up: bool,
     ) -> Result<(DisplayList, FrameStats), TreeError> {
+        self.hover_press_hit = None;
         let message_guard = tracing::info_span!("incular.messages").entered();
         let message_span = profiling::PhaseSpan::start();
         // Writes made during the previous build invalidate their dependents
