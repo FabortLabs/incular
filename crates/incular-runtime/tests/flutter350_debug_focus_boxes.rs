@@ -118,3 +118,15 @@ fn the_mixed_focus_state_scene_still_paints_and_lays_out() {
         [PRIMARY, NOT_FOCUSABLE, SKIPPED]
     );
 }
+
+#[test]
+fn a_focus_scope_does_not_add_a_second_outline_over_its_focus_child() {
+    use incular_widgets::FocusScope;
+
+    let child = FocusNode::new();
+    let mut runtime = scene(FocusScope::new(boxed(&child, 10.).autofocus(true)));
+    runtime.set_debug_paint_focus_boxes(true);
+    let list = draw(&mut runtime);
+    assert!(child.has_primary_focus());
+    assert_eq!(colors(&list), [PRIMARY]);
+}

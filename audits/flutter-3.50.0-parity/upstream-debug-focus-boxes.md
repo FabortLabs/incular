@@ -14,3 +14,11 @@ scene is unchanged. A separate EditableText check still emits no
 unrequested border when focused. The diagnostics are off by default
 and inert in release builds. They do not change layout, focus, or
 semantic annotations.
+
+An authored nested FocusScope control verifies that its regular
+Focus child paints the green primary outline, but the scope itself
+does not paint a second blue outline over it. The pinned reference
+scopes its finder to the mounted fixture, excluding the test
+binding's own wrappers. The native baseline drew both outlines.
+The corrected five outline tests and four scope-semantics tests
+passed. This authored control does not add an original case.

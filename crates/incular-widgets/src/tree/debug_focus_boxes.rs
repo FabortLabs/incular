@@ -14,6 +14,16 @@ struct BorderBinding {
     _subscription: incular_gestures::FocusNodeSubscription,
 }
 
+fn debug_focus_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
+    let WidgetKind::Gesture { callbacks, .. } = kind else {
+        return None;
+    };
+    // FocusScope builds a semantics boundary, not a second debug decoration.
+    (!callbacks.owns_focus_scope && callbacks.focus_scope.is_none())
+        .then(|| super::focus::focus_boundary_node(kind))
+        .flatten()
+}
+
 fn outline_color(node: &incular_gestures::FocusNode) -> Color {
     Color::from_argb32(if node.has_primary_focus() {
         0xF000FF00
@@ -36,7 +46,7 @@ impl WidgetTree {
         let mut dirty = Vec::new();
         if state.enabled {
             for (_, element) in self.elements.iter() {
-                let Some(node) = super::focus::focus_boundary_node(element.widget.kind()) else {
+                let Some(node) = debug_focus_node(element.widget.kind()) else {
                     continue;
                 };
                 let color = outline_color(node);
@@ -63,7 +73,7 @@ impl WidgetTree {
                 let current = self
                     .element_for_render(render)
                     .and_then(|id| self.elements.get(id.0))
-                    .and_then(|element| super::focus::focus_boundary_node(element.widget.kind()));
+                    .and_then(|element| debug_focus_node(element.widget.kind()));
                 if current == Some(&binding.node) {
                     true
                 } else {
