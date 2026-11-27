@@ -22,7 +22,7 @@ All 12 original detailed serialization cases passed on the pinned Linux
 reference, as did 12 native cases and 10 adjacent scalar diagnostic tests.
 The property adapters represent snapshots, not Flutter's lazy diagnostic
 builder; expansion of live object values and full inspector integration are
-not claimed. The two Element-backed cases remain open in this batch.
+not claimed.
 
 `DiagnosticsNode::to_json_iterative` implements the separate compact export.
 It walks breadth first with no recursive serialization, returns the essential
@@ -31,3 +31,14 @@ descendants. It omits leaf child arrays and sets the truncation flag on the
 owner of a truncated list, not its sentinel. The pinned compact original and
 15 native diagnostics tests passed, including delegate ordering and the
 quirk that depth is not decremented in this mode.
+
+The live widget-tree adapter reads retained elements, rather than guessing
+a widget's type from the paint/layout object that it produced. In particular
+the Placeholder keeps its own identity while using the same limited-box
+lowering for size and geometry. The public StatefulBuilder owns retained
+local state before its first layout; a plain builder does not. A stale
+element ID gives no snapshot, and children are returned in retained order.
+Both pinned Element originals passed, as did three native identity/lifecycle
+tests and seven native Placeholder size, paint, and pointer regressions.
+This is not an exhaustive per-widget audit of Flutter's StatefulWidget
+hierarchy or a change to the existing DevTools transport.

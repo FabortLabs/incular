@@ -9,7 +9,7 @@ use typed_builder::TypedBuilder;
 
 use super::SizedBox;
 use crate::painting_effects::PainterDelegate;
-use crate::{LimitedBox, Positioned, Stack, Widget, WidgetKind, macros::widget_from_kind};
+use crate::{Positioned, Stack, Widget, WidgetKind, macros::widget_from_kind};
 
 /// Paints a solid background color behind a child widget.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -361,10 +361,11 @@ impl From<Placeholder> for Widget {
         } else {
             paint
         };
-        LimitedBox::new(paint)
-            .max_width(value.fallback_width)
-            .max_height(value.fallback_height)
-            .into()
+        Widget::from_kind(WidgetKind::Placeholder {
+            max_width: value.fallback_width,
+            max_height: value.fallback_height,
+            child: Some(paint.into()),
+        })
     }
 }
 

@@ -71,6 +71,14 @@ impl DiagnosticsNode {
         self
     }
 
+    /// Adds a node-specific field to the detailed view after delegate fields.
+    /// The compact view intentionally discards subclass fields.
+    #[must_use]
+    pub fn with_detail(mut self, key: impl Into<String>, value: impl Into<Value>) -> Self {
+        self.specialized.insert(key.into(), value.into());
+        self
+    }
+
     /// Sets the ordered diagnostic properties.
     #[must_use]
     pub fn with_properties(mut self, properties: Vec<Self>) -> Self {

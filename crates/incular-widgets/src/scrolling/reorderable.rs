@@ -121,6 +121,7 @@ pub(crate) fn install_listener(
         | WidgetKind::FittedBox { child, .. }
         | WidgetKind::Colored { child, .. }
         | WidgetKind::Limited { child, .. }
+        | WidgetKind::Placeholder { child, .. }
         | WidgetKind::Fractional { child, .. }
         | WidgetKind::ProxyLayout { child, .. }
         | WidgetKind::Overflow { child, .. }

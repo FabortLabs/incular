@@ -45,6 +45,11 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             max_width,
             max_height,
             ..
+        }
+        | WidgetKind::Placeholder {
+            max_width,
+            max_height,
+            ..
         } => RenderKind::Limited {
             max_width: *max_width,
             max_height: *max_height,

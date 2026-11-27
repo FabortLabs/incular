@@ -158,6 +158,16 @@ impl std::fmt::Debug for WidgetKind {
                 .field("max_height", max_height)
                 .field("child", child)
                 .finish(),
+            Self::Placeholder {
+                max_width,
+                max_height,
+                child,
+            } => f
+                .debug_struct("Placeholder")
+                .field("fallback_width", max_width)
+                .field("fallback_height", max_height)
+                .field("paint", child)
+                .finish(),
             Self::Overflow {
                 min_width,
                 max_width,
@@ -834,6 +844,18 @@ impl PartialEq for WidgetKind {
                     child: c,
                 },
                 Self::Limited {
+                    max_width: d,
+                    max_height: e,
+                    child: f,
+                },
+            )
+            | (
+                Self::Placeholder {
+                    max_width: a,
+                    max_height: b,
+                    child: c,
+                },
+                Self::Placeholder {
                     max_width: d,
                     max_height: e,
                     child: f,
@@ -2022,6 +2044,7 @@ pub(crate) enum WidgetType {
     Padding,
     Constrained,
     Limited,
+    Placeholder,
     Overflow,
     SizedOverflow,
     Unconstrained,
@@ -2120,6 +2143,7 @@ impl WidgetType {
             Self::Padding => "Padding",
             Self::Constrained => "ConstrainedBox",
             Self::Limited => "LimitedBox",
+            Self::Placeholder => "Placeholder",
             Self::Overflow => "OverflowBox",
             Self::SizedOverflow => "SizedOverflowBox",
             Self::Unconstrained => "UnconstrainedBox",
@@ -2402,6 +2426,12 @@ impl WidgetKind {
             ),
             WidgetKind::Limited { child, .. } => (
                 WidgetType::Limited,
+                Layout,
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
+            ),
+            WidgetKind::Placeholder { child, .. } => (
+                WidgetType::Placeholder,
                 Layout,
                 Optional,
                 WidgetChildren::Optional(child.as_ref()),

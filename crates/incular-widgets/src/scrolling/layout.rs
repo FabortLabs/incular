@@ -4386,6 +4386,11 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             max_width,
             max_height,
             child,
+        }
+        | WidgetKind::Placeholder {
+            max_width,
+            max_height,
+            child,
         } => {
             let max = if axis.is_vertical() {
                 *max_height

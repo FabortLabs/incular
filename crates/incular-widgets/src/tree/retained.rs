@@ -1063,6 +1063,49 @@ impl WidgetTree {
         self.elements.get(id.0).map(|e| e.children.as_slice())
     }
 
+    /// Captures a mounted element's diagnostic identity and retained descendants.
+    ///
+    /// A stale element ID has no snapshot. The data is collected only on
+    /// request, leaving the normal build/layout/paint paths untouched.
+    #[must_use]
+    pub fn element_diagnostics(&self, id: ElementId) -> Option<incular_core::DiagnosticsNode> {
+        use incular_core::DiagnosticsNode;
+
+        self.elements.get(id.0)?;
+        let mut pending = vec![(None, id)];
+        let mut visited: Vec<(Option<usize>, DiagnosticsNode, Vec<DiagnosticsNode>)> = Vec::new();
+        while let Some((parent, id)) = pending.pop() {
+            let Some(element) = self.elements.get(id.0) else {
+                continue;
+            };
+            let widget_type = match element.widget.kind() {
+                WidgetKind::Flex { axis: Axis::Horizontal, .. } => "Row",
+                WidgetKind::Flex { axis: Axis::Vertical, .. } => "Column",
+                _ => element.widget.debug_type_name(),
+            };
+            let stateful = matches!(
+                element.widget.kind(),
+                WidgetKind::LayoutBuilder { retained: Some(_), .. }
+            );
+            let node = DiagnosticsNode::new(widget_type, "_ElementDiagnosticableTreeNode")
+                .with_detail("widgetRuntimeType", widget_type)
+                .with_detail("stateful", stateful);
+            let index = visited.len();
+            pending.extend(element.children.iter().map(|&child| (Some(index), child)));
+            visited.push((parent, node, Vec::new()));
+        }
+        // Depth first in reverse sibling order, then children before parents.
+        while let Some((parent, node, children)) = visited.pop() {
+            let node = node.with_children(children);
+            if let Some(parent) = parent {
+                visited[parent].2.push(node);
+            } else {
+                return Some(node);
+            }
+        }
+        None
+    }
+
     /// Returns the viewport-local approximate paint clip for a laid-out
     /// sliver child. This is a geometry query, not a painted layer: a
     /// fitting viewport still reports its bounds with clipping enabled.
