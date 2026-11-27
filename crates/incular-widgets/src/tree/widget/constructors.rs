@@ -270,9 +270,11 @@ impl Widget {
     pub(crate) fn with_owned_focus_group(
         mut self,
         callback: Option<Rc<dyn Fn(incular_gestures::FocusNode)>>,
+        custom_policy: Option<crate::CustomFocusTraversalPolicy>,
     ) -> Self {
         let properties = self.semantic_properties_mut();
         properties.owns_focus_group = true;
+        properties.custom_focus_policy = custom_policy;
         properties.owned_focus_creation = callback.map(super::super::specs::OwnedFocusCreation);
         self
     }

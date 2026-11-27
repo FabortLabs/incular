@@ -229,8 +229,8 @@ pub use incular_gestures::RawKeyDelivery;
 pub use focus_keyboard::{
     Action, ActionContext, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase, ActionListener,
     ActionLookupError, ActionOutput, ActionResult, ActionScope, Actions, CallbackAction, CallbackShortcuts,
-    Command, CommandId, DirectionalFocusIntent, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
-    FocusOrder, FocusScope, FocusScopeNode, FocusScopeSubscription, FocusTraversalGroup,
+    Command, CommandId, CustomFocusTraversalPolicy, DirectionalFocusIntent, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
+    FocusOrder, FocusScope, FocusScopeNode, FocusScopeSubscription, FocusTraversalCandidate, FocusTraversalGroup,
     FocusTraversalOrder, FocusTraversalPolicy, FocusTraversalPolicyKind, FocusableActionDetector,
     Intent, KeyEventResult, KeyboardListener, LockState, LogicalKeySet, LogicalShortcutKey,
     RawKeyboardListener,

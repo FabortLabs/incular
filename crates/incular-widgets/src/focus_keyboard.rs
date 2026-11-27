@@ -1260,10 +1260,60 @@ impl From<RawKeyboardListener> for Widget {
     }
 }
 
+/// A visible, eligible member or nested group supplied to a custom sorter.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FocusTraversalCandidate {
+    /// An explicit or widget-owned node, if this member exposes one.
+    pub node: Option<FocusNode>,
+    /// Logical bounds in the mounted view.
+    pub bounds: incular_core::Rect,
+    /// A nested group is kept together and sorts its own descendants.
+    pub is_group: bool,
+}
+
+type FocusSort = dyn Fn(&[FocusTraversalCandidate], Option<&FocusNode>) -> Vec<usize>;
+
+/// A custom sequential policy. Return candidate indices in traversal order,
+/// omitting any stops to skip. Returning an index twice or outside the supplied
+/// candidates does not add a stop. The current node is supplied even if a
+/// caller wants to exclude it from future traversal.
+#[derive(Clone)]
+pub struct CustomFocusTraversalPolicy(Rc<FocusSort>);
+
+impl CustomFocusTraversalPolicy {
+    #[must_use]
+    pub fn new(
+        sort: impl Fn(&[FocusTraversalCandidate], Option<&FocusNode>) -> Vec<usize> + 'static,
+    ) -> Self {
+        Self(Rc::new(sort))
+    }
+
+    pub(crate) fn sort(
+        &self,
+        candidates: &[FocusTraversalCandidate],
+        current: Option<&FocusNode>,
+    ) -> Vec<usize> {
+        (self.0)(candidates, current)
+    }
+}
+
+impl std::fmt::Debug for CustomFocusTraversalPolicy {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("CustomFocusTraversalPolicy(..)")
+    }
+}
+
+impl PartialEq for CustomFocusTraversalPolicy {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 /// Establishes a focus traversal policy group for its descendants.
 #[derive(Clone)]
 pub struct FocusTraversalGroup {
     policy: FocusTraversalPolicyKind,
+    custom_policy: Option<CustomFocusTraversalPolicy>,
     descendants_are_focusable: bool,
     descendants_are_traversable: bool,
     parent_node: Option<FocusNode>,
@@ -1275,6 +1325,7 @@ impl Default for FocusTraversalGroup {
     fn default() -> Self {
         Self {
             policy: FocusTraversalPolicyKind::ReadingOrder,
+            custom_policy: None,
             descendants_are_focusable: true,
             descendants_are_traversable: true,
             parent_node: None,
@@ -1289,6 +1340,7 @@ impl FocusTraversalGroup {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             policy: FocusTraversalPolicyKind::ReadingOrder,
+            custom_policy: None,
             descendants_are_focusable: true,
             descendants_are_traversable: true,
             parent_node: None,
@@ -1328,10 +1380,29 @@ impl FocusTraversalGroup {
         self
     }
 
+    /// Installs a sorter for next/previous traversal. Explicit requests
+    /// and directional spatial focus still use the eligible node set.
+    #[must_use]
+    pub fn custom_policy(mut self, policy: CustomFocusTraversalPolicy) -> Self {
+        self.custom_policy = Some(policy);
+        self
+    }
+
+    /// Reads the nearest mounted focus group's custom policy. An explicitly
+    /// reparented focus subtree uses its focus ancestry, not visual nesting.
+    #[must_use]
+    pub fn maybe_custom_policy_of(
+        tree: &crate::tree::WidgetTree,
+        element: crate::tree::ElementId,
+    ) -> Option<CustomFocusTraversalPolicy> {
+        tree.custom_focus_policy_of(element)
+    }
+
     /// Selects the policy used for descendants of this group.
     #[must_use]
     pub fn policy(mut self, policy: FocusTraversalPolicyKind) -> Self {
         self.policy = policy;
+        self.custom_policy = None;
         self
     }
 
@@ -1372,7 +1443,7 @@ impl From<FocusTraversalGroup> for Widget {
                 .parent_node(value.parent_node),
         )
         .with_focus_traversal_policy(policy)
-        .with_owned_focus_group(value.on_focus_node_created)
+        .with_owned_focus_group(value.on_focus_node_created, value.custom_policy)
     }
 }
 

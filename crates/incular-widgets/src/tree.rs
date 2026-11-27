@@ -1697,19 +1697,36 @@ fn sort_focus_members(
 fn flatten_focus_group(
     tree: &WidgetTree,
     group: FocusTraversalGroupMembers,
+    anchor: Option<ElementId>,
+    use_custom_policy: bool,
     out: &mut Vec<ElementId>,
 ) {
-    let mut members = group.members;
-    sort_focus_members(tree, group.policy, &mut members);
-    let mut work = members.into_iter().rev().collect::<Vec<_>>();
+    let current = use_custom_policy.then(|| anchor.and_then(|id| tree.focus_node_at(id))).flatten();
+    let order_group = |mut group: FocusTraversalGroupMembers| {
+        if use_custom_policy
+            && let Some(custom) = group.owner
+                .and_then(|id| tree.elements.get(id.0))
+                .and_then(|entry| entry.widget.semantic_properties().custom_focus_policy.as_ref())
+        {
+            let candidates = group.members.iter().map(|member| crate::FocusTraversalCandidate {
+                node: member.direction_owner().and_then(|id| tree.focus_node_at(id)),
+                bounds: member.representative_bounds(),
+                is_group: matches!(member, FocusTraversalMember::Group(_)),
+            }).collect::<Vec<_>>();
+            let indices = custom.sort(&candidates, current.as_ref());
+            let mut slots: Vec<_> = group.members.into_iter().map(Some).collect();
+            return indices.into_iter()
+                .filter_map(|index| slots.get_mut(index).and_then(Option::take))
+                .collect();
+        }
+        sort_focus_members(tree, group.policy, &mut group.members);
+        group.members
+    };
+    let mut work = order_group(group).into_iter().rev().collect::<Vec<_>>();
     while let Some(member) = work.pop() {
         match member {
             FocusTraversalMember::Candidate(candidate) => out.push(candidate.id),
-            FocusTraversalMember::Group(group) => {
-                let mut members = group.members;
-                sort_focus_members(tree, group.policy, &mut members);
-                work.extend(members.into_iter().rev());
-            }
+            FocusTraversalMember::Group(group) => work.extend(order_group(group).into_iter().rev()),
         }
     }
 }

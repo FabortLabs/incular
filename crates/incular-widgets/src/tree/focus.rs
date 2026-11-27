@@ -403,6 +403,21 @@ impl WidgetTree {
         self.resolved_focus_parents.get(&element).copied().or_else(|| self.parent(element))
     }
 
+    pub(crate) fn custom_focus_policy_of(
+        &self,
+        element: ElementId,
+    ) -> Option<crate::CustomFocusTraversalPolicy> {
+        let mut current = self.parent(element);
+        while let Some(id) = current {
+            let properties = self.elements.get(id.0)?.widget.semantic_properties();
+            if properties.owns_focus_group {
+                return properties.custom_focus_policy.clone();
+            }
+            current = self.mounted_focus_parent(id);
+        }
+        None
+    }
+
     fn is_focus_descendant_or_self(&self, candidate: ElementId, ancestor: ElementId) -> bool {
         let mut current = Some(candidate);
         while let Some(id) = current {
@@ -669,7 +684,7 @@ impl WidgetTree {
 
     #[must_use]
     pub fn focusable_elements(&self) -> Vec<ElementId> {
-        self.focus_traversal_elements(None)
+        with_recursive_tree_stack(|| self.focusable_elements_recursive(None, false))
     }
 
     /// The mounted focus nodes below `root`, in depth-first descendant order.
@@ -760,7 +775,7 @@ impl WidgetTree {
     #[doc(hidden)]
     #[must_use]
     pub fn focus_traversal_elements(&self, anchor: Option<ElementId>) -> Vec<ElementId> {
-        with_recursive_tree_stack(|| self.focusable_elements_recursive(anchor))
+        with_recursive_tree_stack(|| self.focusable_elements_recursive(anchor, true))
     }
 
     /// Resolves Tab traversal using mounted scope membership and its edge policy.
@@ -936,7 +951,11 @@ impl WidgetTree {
         }
     }
 
-    fn focusable_elements_recursive(&self, anchor: Option<ElementId>) -> Vec<ElementId> {
+    fn focusable_elements_recursive(
+        &self,
+        anchor: Option<ElementId>,
+        use_custom_policy: bool,
+    ) -> Vec<ElementId> {
         let mut members = Vec::new();
         let mut sequence = 0;
         let scan = TraversalScan {
@@ -977,6 +996,8 @@ impl WidgetTree {
                 order: None,
                 members,
             },
+            anchor,
+            use_custom_policy,
             &mut result,
         );
         result
