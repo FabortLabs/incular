@@ -1426,9 +1426,9 @@ impl EditableText {
         self
     }
 
-    /// Observes selection changes made by platform editing input and
-    /// floating-cursor gestures. Changes made directly to the controller
-    /// do not call this callback.
+    /// Observes selection changes from keyboard actions, platform editing
+    /// input and floating-cursor gestures. Changes made directly to the
+    /// controller do not call this callback.
     #[must_use]
     pub fn on_selection_changed(
         mut self,

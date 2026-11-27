@@ -39,3 +39,15 @@ changes, one formatter for the text change, no duplicate caret revision,
 and no echo. The default native IME and delta adapter paths were not
 changed. Four focused native targets passed 29 tests. This is authored
 coverage and adds no upstream registration count.
+
+## Physical keyboard selection callbacks
+
+Without waiting for an IME JSON message, physical Right Arrow moves
+the mounted editor from offset 2 to 3 and Shift+Right selects 3→4.
+Both the pinned `editor_keyboard_selection_cause_test.dart` and retained
+Rust dispatch report `Keyboard` once for each changed selection. Native
+typed text replacing that range reports its resulting collapsed selection
+as `Keyboard`; key release and direct controller setters do not add
+notifications. The shared comparison does no selection snapshot work when no
+callback is installed. Three focused native targets passed 27 tests.
+No original registration count was added for the authored cases.

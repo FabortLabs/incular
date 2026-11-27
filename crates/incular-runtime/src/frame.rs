@@ -100,6 +100,7 @@ pub struct PointerPacketDispatchError<E> {
 
 type PacketContactKey = (u64, u64);
 type PendingPacketCancels = RefCell<Vec<PacketContactKey>>;
+type EditorSelectionSnapshot = (Option<TextSelection>, incular_text::TextAffinity, bool);
 
 enum WarmUpPacketInput {
     Event(ConvertedPointerEvent),
@@ -4195,9 +4196,15 @@ impl Runtime {
         };
         // Flutter's `DefaultTextEditingShortcuts` pick the intent for the
         // chord on the target platform and the field's actions run it.
+        let previous = self.observed_editor_selection(field);
         if !self.run_text_field_key(field, &controller, &event, lock_modes) {
             return false;
         }
+        self.report_editor_selection_delta(
+            field,
+            previous,
+            incular_text::SelectionChangedCause::Keyboard,
+        );
         self.hide_text_field_overlays(field);
         controller.reset_caret(self.input_now());
         self.frame_requested = true;
@@ -4362,7 +4369,13 @@ impl Runtime {
             return;
         }
         if let Some(controller) = self.tree.text_controller(field) {
+            let previous = self.observed_editor_selection(field);
             controller.insert(text);
+            self.report_editor_selection_delta(
+                field,
+                previous,
+                incular_text::SelectionChangedCause::Keyboard,
+            );
             self.editing_diagnostics.text_commits += 1;
             controller.reset_caret(self.input_now());
             self.frame_requested = true;
@@ -4448,6 +4461,33 @@ impl Runtime {
             }
         }
         handled
+    }
+
+    fn observed_editor_selection(&self, field: ElementId) -> Option<EditorSelectionSnapshot> {
+        if !self.tree.observes_text_selection_changes(field) {
+            return None;
+        }
+        let controller = self.tree.text_controller(field)?;
+        Some((
+            controller.selection_if_set(),
+            controller.caret_affinity(),
+            controller.selection_is_directional(),
+        ))
+    }
+
+    fn report_editor_selection_delta(
+        &self,
+        field: ElementId,
+        previous: Option<EditorSelectionSnapshot>,
+        cause: incular_text::SelectionChangedCause,
+    ) {
+        if let Some(previous) = previous
+            && let Some(current) = self.observed_editor_selection(field)
+            && current != previous
+            && let Some(selection) = current.0
+        {
+            self.report_text_selection_changed(field, selection, cause);
+        }
     }
 
     fn report_text_selection_changed(
@@ -4677,13 +4717,7 @@ impl Runtime {
         let text_changed = controller.with_value(|current| {
             current.text != value.text || current.composing != value.composing
         });
-        let selection_snapshot = || (
-            controller.selection_if_set(),
-            controller.caret_affinity(),
-            controller.selection_is_directional(),
-        );
-        let previous_selection = self.tree.observes_text_selection_changes(owner.field)
-            .then(selection_snapshot);
+        let previous_selection = self.observed_editor_selection(owner.field);
         let refresh_caret = if let Some((affinity, directional)) = metadata {
             // EditableTextState keeps the visual caret side when an IME
             // reports a different affinity without moving its origin.
@@ -4722,17 +4756,13 @@ impl Runtime {
                 text: value.text,
             });
         }
-        if let Some(previous) = previous_selection
-            && let current = selection_snapshot()
-            && current != previous
-            && let Some(selection) = current.0
-        {
+        if previous_selection.is_some() {
             let cause = if self.has_floating_caret_for(owner.field) {
                 incular_text::SelectionChangedCause::ForcePress
             } else {
                 incular_text::SelectionChangedCause::Keyboard
             };
-            self.report_text_selection_changed(owner.field, selection, cause);
+            self.report_editor_selection_delta(owner.field, previous_selection, cause);
         }
         if refresh_caret {
             controller.reset_caret(self.input_now());

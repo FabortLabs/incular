@@ -264,3 +264,59 @@ fn a_full_edit_only_trusts_affinity_when_the_text_or_selection_origin_changes() 
             .any(|command| matches!(command, TextInputCommand::Update { .. }))
     );
 }
+
+#[test]
+fn physical_keys_and_native_typed_text_report_user_selection_changes() {
+    use incular_core::{Code, InputEvent, KeyboardEvent, KeyboardKey, Modifiers, NamedKey};
+    use incular_text::SelectionChangedCause::Keyboard;
+    use std::{cell::RefCell, rc::Rc};
+
+    let focus = FocusNode::new();
+    let controller = TextEditingController::with_text("abcdef");
+    controller.set_selection(TextSelection::collapsed(2));
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let editor = field(&controller, &focus, true).on_selection_changed({
+        let log = log.clone();
+        move |selection, cause| log.borrow_mut().push((selection, cause))
+    });
+    let mut runtime = Runtime::new(editor.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Linux);
+    frame(&mut runtime);
+    assert!(focus.has_primary_focus());
+    assert!(log.borrow().is_empty());
+    let right = |runtime: &mut Runtime, modifiers| {
+        let key = KeyboardKey::Named(NamedKey::ArrowRight);
+        let _ = runtime.dispatch_keyboard_event(KeyboardEvent {
+            modifiers,
+            ..KeyboardEvent::key_down(key.clone(), Code::ArrowRight)
+        });
+        let _ = runtime.dispatch_keyboard_event(KeyboardEvent {
+            modifiers,
+            ..KeyboardEvent::key_up(key, Code::ArrowRight)
+        });
+    };
+
+    right(&mut runtime, Modifiers::empty());
+    assert_eq!(controller.selection(), TextSelection::collapsed(3));
+    assert_eq!(*log.borrow(), [(TextSelection::collapsed(3), Keyboard)]);
+    right(&mut runtime, Modifiers::SHIFT);
+    assert_eq!(controller.selection(), TextSelection::new(3, 4));
+    assert_eq!(
+        *log.borrow(),
+        [
+            (TextSelection::collapsed(3), Keyboard),
+            (TextSelection::new(3, 4), Keyboard),
+        ],
+    );
+
+    let _ = runtime.handle_input(InputEvent::Text("X".into()));
+    assert_eq!(controller.text(), "abcXef");
+    assert_eq!(controller.selection(), TextSelection::collapsed(4));
+    assert_eq!(
+        log.borrow().last(),
+        Some(&(TextSelection::collapsed(4), Keyboard))
+    );
+    controller.set_selection(TextSelection::collapsed(1));
+    frame(&mut runtime);
+    assert_eq!(log.borrow().len(), 3, "programmatic changes are silent");
+}
