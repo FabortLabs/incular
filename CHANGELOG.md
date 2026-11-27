@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Standalone velocity trackers expose typed errors for out-of-order samples
+  and empty platform fling histories.
+
 - `OffsetPair` keeps local and global pointer positions or deltas together
   and performs arithmetic in each coordinate space.
 

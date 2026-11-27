@@ -176,3 +176,7 @@ scroll activity and follow the inherited movement policy.
 
 For raw recognizers, `incular::gestures::OffsetPair` can carry a pointer's
 local and global position, or its two deltas, without mixing the spaces.
+
+`incular::gestures::VelocityTracker` estimates one pointer's velocity from
+timed samples. Its checked API rejects an older sample without changing the
+history and reports an empty iOS/macOS fling history.

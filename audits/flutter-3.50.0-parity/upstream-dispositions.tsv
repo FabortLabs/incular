@@ -2786,3 +2786,6 @@ packages/flutter/test/widgets/transform_test.dart	624	Transform.rotate with Filt
 packages/flutter/test/widgets/transform_test.dart	656	Offset Transform.rotate with FilterQuality produces filter layer	paired-match	upstream-transform-quarter-turns.md#filtered-transforms-in-the-retained-renderer
 packages/flutter/test/widgets/transform_test.dart	693	Transform layers update to match child and filterQuality	partial-match	upstream-transform-quarter-turns.md#filtered-transforms-in-the-retained-renderer
 packages/flutter/test/gestures/recognizer_test.dart	42	OffsetPair	paired-match	upstream-gesture-offset-pair.md
+packages/flutter/test/gestures/velocity_tracker_test.dart	82	FreeScrollStartVelocityTracker.getVelocity throws when no points	paired-match	upstream-checked-fling-velocity.md
+packages/flutter/test/gestures/velocity_tracker_test.dart	96	FreeScrollStartVelocityTracker.getVelocity throws when the new point precedes the previous point	paired-match	upstream-checked-fling-velocity.md
+packages/flutter/test/gestures/velocity_tracker_test.dart	114	Estimate does not throw when there are more than 1 point	paired-match	upstream-checked-fling-velocity.md

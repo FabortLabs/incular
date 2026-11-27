@@ -34,7 +34,7 @@ mod velocity;
 pub use arena_member::{ArenaGestureRecognizer, ArenaRecognizer, ArenaResolver};
 pub use arena_team::{GestureArenaTeam, GestureTeamRegistration};
 pub use buttons::{is_single_button, nth_mouse_button, nth_stylus_button, smallest_button};
-pub use velocity::VelocityTrackerKind;
+pub use velocity::{VelocityTracker, VelocityTrackerError, VelocityTrackerKind};
 
 pub use arena::{
     GestureArena, GestureArenaEntry, GestureArenaKey, GestureArenaMember, GestureArenaSource,

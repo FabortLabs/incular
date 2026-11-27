@@ -57,3 +57,8 @@ averaging supplies the current system-frame timestamp through
 `set_multitouch_frame_time`; pointer timestamps do not reset the frame.
 `OffsetPair` carries local and global offsets together. Construct it from a
 raw event's position or delta to preserve the two spaces.
+
+Use `VelocityTracker::try_add_position` and `try_velocity_at` to estimate a
+single pointer's velocity independently from a recognizer. Checked samples
+must have nondecreasing timestamps; the platform fling estimators require
+at least one sample.

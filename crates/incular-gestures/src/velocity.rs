@@ -3,6 +3,8 @@ use std::collections::VecDeque;
 
 use incular_core::Offset;
 
+use crate::Velocity;
+
 /// Flutter's `VelocityEstimate`: the fitted velocity and the displacement
 /// across the samples that produced it. A default estimate has no motion.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -28,13 +30,22 @@ pub enum VelocityTrackerKind {
     MacOsScrollViewFling,
 }
 
-/// Port of Flutter's `VelocityTracker` estimate: a degree-2 least-squares fit
+/// Flutter's `VelocityTracker`: a degree-2 least-squares fit
 /// over the recent position samples of one pointer, or one of its scroll view
 /// fling trackers.
 #[derive(Clone, Debug, Default)]
-pub(crate) struct VelocityTracker {
+pub struct VelocityTracker {
     samples: VecDeque<(Instant, Offset)>,
     kind: VelocityTrackerKind,
+}
+
+/// Invalid sample history supplied to a checked velocity tracker.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum VelocityTrackerError {
+    #[error("There must be at least 1 point in the scroll-view fling tracker")]
+    MissingSamples,
+    #[error("The new position has a smaller timestamp than its predecessor")]
+    OutOfOrderTimestamp,
 }
 
 impl VelocityTracker {
@@ -43,11 +54,42 @@ impl VelocityTracker {
     const ASSUME_POINTER_MOVE_STOPPED_MILLISECONDS: f64 = 40.0;
     const MIN_SAMPLE_SIZE: usize = 3;
 
-    pub(crate) fn new(kind: VelocityTrackerKind) -> Self {
+    /// Starts a tracker for one pointer, using the selected estimator.
+    #[must_use]
+    pub fn new(kind: VelocityTrackerKind) -> Self {
         Self {
             samples: VecDeque::new(),
             kind,
         }
+    }
+
+    /// Adds a position without accepting an out-of-order sample.
+    ///
+    /// # Errors
+    /// A timestamp preceding the latest accepted sample leaves the
+    /// history unchanged. Equal timestamps are allowed.
+    pub fn try_add_position(
+        &mut self,
+        time: Instant,
+        position: Offset,
+    ) -> Result<(), VelocityTrackerError> {
+        if self.samples.back().is_some_and(|(previous, _)| time < *previous) {
+            return Err(VelocityTrackerError::OutOfOrderTimestamp);
+        }
+        self.add_position(time, position);
+        Ok(())
+    }
+
+    /// Estimates velocity for the caller's frame time.
+    ///
+    /// # Errors
+    /// The iOS and macOS fling estimators need at least one sample. The
+    /// least-squares tracker returns zero for empty history.
+    pub fn try_velocity_at(&self, now: Instant) -> Result<Velocity, VelocityTrackerError> {
+        if self.samples.is_empty() && self.kind != VelocityTrackerKind::LeastSquares {
+            return Err(VelocityTrackerError::MissingSamples);
+        }
+        Ok(Velocity::new(self.estimate_at(now).pixels_per_second))
     }
 
     pub(crate) fn add_position(&mut self, time: Instant, position: Offset) {
