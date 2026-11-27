@@ -2024,6 +2024,7 @@ pub(crate) enum WidgetType {
     Unconstrained,
     IntrinsicWidth,
     IntrinsicHeight,
+    MaxIntrinsicSize,
     IgnoreBaseline,
     SemanticAnnotation,
     TableCell,
@@ -2121,6 +2122,7 @@ impl WidgetType {
             Self::Unconstrained => "UnconstrainedBox",
             Self::IntrinsicWidth => "IntrinsicWidth",
             Self::IntrinsicHeight => "IntrinsicHeight",
+            Self::MaxIntrinsicSize => "MaxIntrinsicSize",
             Self::IgnoreBaseline => "IgnoreBaseline",
             Self::SemanticAnnotation => "Semantics",
             Self::TableCell => "TableCell",
@@ -2423,6 +2425,7 @@ impl WidgetKind {
                 match mode {
                     ChildLayoutMode::IntrinsicWidth { .. } => WidgetType::IntrinsicWidth,
                     ChildLayoutMode::IntrinsicHeight => WidgetType::IntrinsicHeight,
+                    ChildLayoutMode::MaxIntrinsicSize(_) => WidgetType::MaxIntrinsicSize,
                     ChildLayoutMode::IgnoreBaseline => WidgetType::IgnoreBaseline,
                     ChildLayoutMode::SemanticAnnotation => WidgetType::SemanticAnnotation,
                     ChildLayoutMode::TableCell(_) => WidgetType::TableCell,

@@ -586,7 +586,7 @@ impl TextFieldSpec {
 }
 
 /// Child layouts that transform the incoming constraints or the child size before
-/// placing it. Each mode maps to one Flutter proxy render object.
+/// placing it; some pass through ordinary layout and only affect measurement.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ChildLayoutMode {
     /// Tightens a child's width and any separately requested height step.
@@ -596,6 +596,8 @@ pub enum ChildLayoutMode {
     },
     /// `RenderIntrinsicHeight`: tightens the child height to its intrinsic height.
     IntrinsicHeight,
+    /// Declares maximum intrinsic extents while passing through ordinary layout.
+    MaxIntrinsicSize(Size),
     /// Passes through layout without exposing the child’s baseline.
     IgnoreBaseline,
     /// A pure semantics annotation wrapper that leaves layout unchanged.

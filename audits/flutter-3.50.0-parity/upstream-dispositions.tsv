@@ -3019,3 +3019,9 @@ packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	28	RenderAsp
 packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	37	RenderIntrinsicWidth getters and setters	paired-match	upstream-render-proxy-properties.md
 packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	47	RenderOpacity getters and setters	paired-match	upstream-render-proxy-properties.md
 packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	54	RenderShaderMask getters and setters	paired-match	upstream-render-proxy-properties.md
+packages/flutter/test/rendering/intrinsic_width_test.dart	246	RenderIntrinsicWidth when parent is given loose constraints smaller than intrinsic width of child	paired-match	upstream-render-intrinsic-constraints.md
+packages/flutter/test/rendering/intrinsic_width_test.dart	266	RenderIntrinsicWidth when parent is given tight constraints larger than intrinsic width of child	paired-match	upstream-render-intrinsic-constraints.md
+packages/flutter/test/rendering/intrinsic_width_test.dart	286	RenderIntrinsicWidth when parent is given tight constraints smaller than intrinsic width of child	paired-match	upstream-render-intrinsic-constraints.md
+packages/flutter/test/rendering/intrinsic_width_test.dart	379	RenderIntrinsicHeight when parent is given loose constraints smaller than intrinsic height of child	paired-match	upstream-render-intrinsic-constraints.md
+packages/flutter/test/rendering/intrinsic_width_test.dart	399	RenderIntrinsicHeight when parent is given tight constraints larger than intrinsic height of child	paired-match	upstream-render-intrinsic-constraints.md
+packages/flutter/test/rendering/intrinsic_width_test.dart	419	RenderIntrinsicHeight when parent is given tight constraints smaller than intrinsic height of child	paired-match	upstream-render-intrinsic-constraints.md

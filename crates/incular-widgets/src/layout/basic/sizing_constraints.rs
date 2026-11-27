@@ -661,6 +661,50 @@ impl From<IntrinsicHeight> for Widget {
     }
 }
 
+/// Declares a child's maximum intrinsic size independently of its normal layout.
+///
+/// Use this for a custom component whose natural upper extents are fixed, but
+/// which can choose a different size during layout. It does not constrain the
+/// child or change its ordinary size, hit testing, or baseline. Intrinsic
+/// width and height layout use the declared extents and still clamp the result
+/// to the incoming constraints.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MaxIntrinsicSize {
+    maximum: Size,
+    child: Widget,
+}
+
+impl MaxIntrinsicSize {
+    /// Creates an intrinsic measurement override.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either extent is negative or not finite.
+    #[must_use]
+    pub fn new(maximum: Size, child: impl Into<Widget>) -> Self {
+        assert!(
+            maximum.width.is_finite()
+                && maximum.height.is_finite()
+                && maximum.width >= 0.
+                && maximum.height >= 0.,
+            "maximum intrinsic extents must be finite and nonnegative"
+        );
+        Self {
+            maximum,
+            child: child.into(),
+        }
+    }
+}
+
+impl From<MaxIntrinsicSize> for Widget {
+    fn from(value: MaxIntrinsicSize) -> Self {
+        Widget::from_kind(WidgetKind::ProxyLayout {
+            mode: ChildLayoutMode::MaxIntrinsicSize(value.maximum),
+            child: value.child,
+        })
+    }
+}
+
 /// A box with specified size that allows its child to overflow with alignment.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct SizedOverflowBox {

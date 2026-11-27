@@ -38,7 +38,7 @@ pub use painting::{
 pub use sizing_constraints::{
     Builder, ConstrainedBox, ConstrainedBoxBuilder, ConstraintsTransformBox, IntrinsicHeight,
     IntrinsicHeightBuilder, IntrinsicWidth, IntrinsicWidthBuilder, LayoutBuilder, LimitedBox,
-    LimitedBoxBuilder, OverflowBox, OverflowBoxBuilder, OverflowBoxFit, PreferredSize,
+    LimitedBoxBuilder, MaxIntrinsicSize, OverflowBox, OverflowBoxBuilder, OverflowBoxFit, PreferredSize,
     PreferredSizeBuilder, SizedBox, SizedBoxBuilder, SizedOverflowBox, SizedOverflowBoxBuilder,
     UnconstrainedBox, UnconstrainedBoxBuilder,
 };
