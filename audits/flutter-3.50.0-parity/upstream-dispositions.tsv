@@ -3359,3 +3359,5 @@ packages/flutter/test/widgets/editable_text_test.dart	18599	onTapOutside is not 
 packages/flutter/test/widgets/editable_text_test.dart	18635	onTapUpOutside is called upon tap up outside	paired-match	upstream-editable-outside-pointer.md
 packages/flutter/test/widgets/editable_text_test.dart	18672	onTapUpOutside is not called upon tap up outside when field is not focused	paired-match	upstream-editable-outside-pointer.md
 packages/flutter/test/widgets/editable_text_test.dart	6847	Composing text is underlined and underline is cleared when losing focus	paired-match	upstream-editable-composing-decoration.md
+packages/flutter/test/widgets/editable_text_test.dart	496	Text with selection can be shown on the screen when the keyboard shown	paired-match	upstream-editable-keyboard-inset-reveal.md
+packages/flutter/test/widgets/editable_text_test.dart	542	ScheduleShowCaretOnScreen with no animation when the view changes metrics	paired-match	upstream-editable-keyboard-inset-reveal.md

@@ -310,6 +310,7 @@ pub struct Runtime {
     /// The focused field, content revision and selection whose caret was
     /// last shown on screen (Flutter's `_scheduleShowCaretOnScreen`).
     pub(crate) caret_reveal_key: Option<(ElementId, u64, TextSelection)>,
+    caret_reveal_after_inset_growth: bool,
     ime_composition: Option<ImeCompositionOwner>,
     pub(crate) text_histories: HashMap<ElementId, UndoHistoryController>,
     text_history_time: Option<Instant>,
@@ -572,6 +573,7 @@ impl Runtime {
             late_focus_key_handlers: FocusKeyHandlers::default(),
             keyboard_event_debug_listener: None,
             caret_reveal_key: None,
+            caret_reveal_after_inset_growth: false,
             ime_composition: None,
             text_histories: HashMap::new(),
             text_history_time: None,
@@ -992,6 +994,15 @@ impl Runtime {
             return false;
         }
         let changed = environment_change_mask(&previous, &environment);
+        if environment.view_insets.bottom > previous.view_insets.bottom
+            && self.focused.is_some_and(|field| self.tree.is_text_field(field))
+        {
+            // Keyboard bounds arrive on successive frames. The focused
+            // editor re-reveals on each growth without animating from a
+            // stale scroll offset, even when the selection is unchanged.
+            self.caret_reveal_after_inset_growth = true;
+            self.frame_requested = true;
+        }
         *self.environment.borrow_mut() = environment.clone();
         // WidgetTree owns renderer-neutral runtime geometry and direction used
         // by retained policies such as SafeArea and transient placement. Keep
@@ -3118,9 +3129,10 @@ impl Runtime {
     }
 
     /// Flutter's `EditableTextState._scheduleShowCaretOnScreen`: when the
-    /// focused field gains focus or its value or selection changes, its
-    /// ancestor viewports scroll its caret, with `scrollPadding`, into view.
+    /// focused field gains focus, its value or selection changes, or the
+    /// keyboard covers more of the view, reveal its caret and scroll padding.
     fn show_focused_caret_on_screen(&mut self) -> bool {
+        let inset_grew = std::mem::take(&mut self.caret_reveal_after_inset_growth);
         let Some(field) = self.focused.filter(|id| self.tree.is_text_field(*id)) else {
             self.caret_reveal_key = None;
             return false;
@@ -3129,7 +3141,7 @@ impl Runtime {
             return false;
         };
         let key = (field, controller.revisions().0, controller.selection());
-        if self.caret_reveal_key == Some(key) {
+        if !inset_grew && self.caret_reveal_key == Some(key) {
             return false;
         }
         let entering = self
@@ -3138,7 +3150,7 @@ impl Runtime {
         self.caret_reveal_key = Some(key);
         // Read-only editors can still take keyboard focus, but focus alone
         // must not pull their selection into either enclosing viewport.
-        if entering && !self.tree.text_field_is_editable(field) {
+        if entering && !inset_grew && !self.tree.text_field_is_editable(field) {
             return false;
         }
         self.tree.text_field_show_caret_on_screen(field)
