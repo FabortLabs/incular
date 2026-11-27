@@ -1,3 +1,5 @@
+mod shader_source;
+
 use std::fmt::Write as _;
 use std::{env, fs, path::PathBuf};
 
@@ -36,45 +38,14 @@ fn main() {
             .expect("shader stem")
             .to_str()
             .expect("UTF-8 shader name");
-        let base = if matches!(name, "blend_shader" | "color_matrix_shader") {
-            format!("{base}\n{}", include_str!("src/artistic_blend.wgsl"))
-        } else if name == "composite_shader" {
-            format!("{base}\n{}", include_str!("src/clip_math.wgsl"))
-        } else {
-            base
-        };
+        let base = shader_source::with_shared_functions(name, base);
         #[cfg(feature = "d3d11")]
         if native && name != "bootstrap_shader" {
             fs::write(output.join(format!("{name}.hlsl")), direct3d_shader(&base))
                 .expect("write D3D11 shader");
             writeln!(native_bindings,r#"pub(crate) const {}: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/{name}.hlsl"));"#,name.to_ascii_uppercase()).expect("write to String");
         }
-        let source = if !native
-            && matches!(
-                name,
-                "rect_shader"
-                    | "square_rect_shader"
-                    | "rrect_shader"
-                    | "path_shader"
-                    | "image_shader"
-                    | "text_shader"
-                    | "composite_shader"
-            ) {
-            let (math, coverage) = if name == "composite_shader" {
-                ("", "color * weight")
-            } else {
-                (
-                    include_str!("src/clip_math.wgsl"),
-                    "vec4<f32>(color.rgb, color.a * weight)",
-                )
-            };
-            format!(
-                "{base}\n{math}\n{}\n@fragment fn fs_clipped(input: Out) -> @location(0) vec4<f32> {{ let color = draw_color(input); let weight = clip_weight(input.position.xy); return {coverage}; }}",
-                include_str!("src/soft_clip.wgsl")
-            )
-        } else {
-            base
-        };
+        let source = shader_source::with_soft_clip(name, base, native);
         let module = naga::front::wgsl::parse_str(&source).unwrap_or_else(|error| {
             panic!("{}: {}", path.display(), error.emit_to_string(&source))
         });

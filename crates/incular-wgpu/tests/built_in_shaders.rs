@@ -4,6 +4,9 @@ use std::path::Path;
 #[path = "../src/built_in_shaders.rs"]
 mod built_in_shaders;
 
+#[path = "../shader_source.rs"]
+mod shader_source;
+
 #[test]
 fn embedded_modules_match_sources_and_validate_on_gpu() {
     let instance =
@@ -25,15 +28,16 @@ fn embedded_modules_match_sources_and_validate_on_gpu() {
         if path.extension().is_none_or(|extension| extension != "wgsl") {
             continue;
         }
-        let source = std::fs::read_to_string(&path).unwrap();
-        let parsed = naga::front::wgsl::parse_str(&source).unwrap();
         let stem = path.file_stem().unwrap().to_str().unwrap();
+        let base = std::fs::read_to_string(&path).unwrap();
+        let expanded = shader_source::with_shared_functions(stem, base);
+        let source = shader_source::with_soft_clip(stem, expanded, cfg!(incular_d3d11));
+        let parsed = naga::front::wgsl::parse_str(&source).unwrap();
         let bytes = std::fs::read(Path::new(env!("OUT_DIR")).join(format!("{stem}.naga"))).unwrap();
         let decoded: naga::Module = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(
-            postcard::to_allocvec(&parsed).unwrap(),
-            postcard::to_allocvec(&decoded).unwrap(),
-            "{stem}: embedded IR must retain the full source module"
+        assert!(
+            postcard::to_allocvec(&parsed).unwrap() == postcard::to_allocvec(&decoded).unwrap(),
+            "{stem}: embedded IR must retain the full assembled source module"
         );
         if let Some(device) = &device {
             let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
