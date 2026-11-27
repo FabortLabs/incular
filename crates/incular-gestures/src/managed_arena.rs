@@ -22,9 +22,28 @@ pub struct GestureArenaRegistration {
     manager: Weak<RefCell<State>>,
     key: GestureArenaKey,
     member: u64,
+    epoch: u64,
 }
 
 impl GestureArenaRegistration {
+    pub(crate) fn hold(&self) {
+        if let Some(inner) = self.live_round() {
+            GestureArenaManager { inner }.hold(self.key);
+        }
+    }
+
+    pub(crate) fn release(&self) {
+        if let Some(inner) = self.live_round() {
+            GestureArenaManager { inner }.release(self.key);
+        }
+    }
+
+    fn live_round(&self) -> Option<Rc<RefCell<State>>> {
+        self.manager.upgrade().filter(|inner| {
+            inner.borrow().rounds.get(&self.key).is_some_and(|round| round.epoch == self.epoch)
+        })
+    }
+
     /// Resolves this contender. Only Accepted and Rejected are decisions.
     pub fn resolve(&self, disposition: GestureDisposition) {
         let Some(inner) = self.manager.upgrade() else {
@@ -115,6 +134,7 @@ impl GestureArenaManager {
             manager: Rc::downgrade(&self.inner),
             key,
             member,
+            epoch: round.epoch,
         }
     }
 

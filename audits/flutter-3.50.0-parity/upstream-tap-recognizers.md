@@ -234,3 +234,21 @@ one cancellation immediately and cannot be revived by moving back or
 releasing. Cancelling a first contact stays silent. Down and Cancel
 handlers still work if no completion handler is installed. These
 authored checks supplement rather than repeat original credit.
+
+## Double tap in an independent gesture arena
+
+Six pinned originals pair through the standalone recognizer and the
+actual managed arena. A passive contender cannot win the first sweep
+while the first tap is held, but wins once the hold expires. Another
+contender can explicitly win the first arena before the first sweep or
+between taps without emitting double-tap callbacks. If it wins during
+the qualified second press, it cancels exactly once with no completion
+on release. A primary double recognizer competes with a primary single
+for TapDown but never enters a secondary single's arena.
+
+The hold follows the arena's generation rather than an ID that the
+host can reuse. A clean double accepts both actual arena registrations;
+dropping a waiting recognizer or unwinding a failed cancellation still
+releases the passive contender. All 60 focused native tests passed.
+The older unfinished-double comparison remains partial until its
+standalone companion tap path also verifies stale release ownership.

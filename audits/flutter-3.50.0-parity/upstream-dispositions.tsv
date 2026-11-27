@@ -3103,3 +3103,9 @@ packages/flutter/test/gestures/double_tap_test.dart	511	Button change with allow
 packages/flutter/test/gestures/double_tap_test.dart	564	Button change should start a valid sequence	paired-match	upstream-tap-recognizers.md#double-tap-button-admission
 packages/flutter/test/gestures/double_tap_test.dart	667	A secondary double tap should not trigger primary	paired-match	upstream-tap-recognizers.md#double-tap-button-admission
 packages/flutter/test/gestures/double_tap_test.dart	701	Buttons filter should cancel invalid taps	paired-match	upstream-tap-recognizers.md#double-tap-button-admission
+packages/flutter/test/gestures/double_tap_test.dart	329	Should cancel on arena reject during first tap	paired-match	upstream-tap-recognizers.md#double-tap-in-an-independent-gesture-arena
+packages/flutter/test/gestures/double_tap_test.dart	352	Should cancel on arena reject between taps	paired-match	upstream-tap-recognizers.md#double-tap-in-an-independent-gesture-arena
+packages/flutter/test/gestures/double_tap_test.dart	375	Should cancel on arena reject during last tap	paired-match	upstream-tap-recognizers.md#double-tap-in-an-independent-gesture-arena
+packages/flutter/test/gestures/double_tap_test.dart	403	Passive gesture should trigger on double tap cancel	paired-match	upstream-tap-recognizers.md#double-tap-in-an-independent-gesture-arena
+packages/flutter/test/gestures/double_tap_test.dart	640	A primary double tap recognizer does not form competition with a secondary tap recognizer	paired-match	upstream-tap-recognizers.md#double-tap-in-an-independent-gesture-arena
+packages/flutter/test/gestures/double_tap_test.dart	652	A primary double tap recognizer forms competition with a primary tap recognizer	paired-match	upstream-tap-recognizers.md#double-tap-in-an-independent-gesture-arena
