@@ -17,6 +17,7 @@ mod browser_context_menu;
 mod browser_input_action;
 mod capabilities;
 mod clipboard_channel;
+mod android_text_input;
 mod content_sensitivity;
 mod data_transfer;
 mod display;
@@ -30,6 +31,7 @@ mod flutter_platform_channel;
 mod flutter_text_input_config;
 mod flutter_text_input_style;
 mod keyboard_inserted_content;
+pub use android_text_input::flutter_android_input_type;
 pub use keyboard_inserted_content::{KeyboardInsertedContent, KeyboardInsertedContentError};
 pub use flutter_text_input_config::FlutterTextInputConfiguration;
 pub use flutter_text_input_style::{
@@ -642,6 +644,10 @@ pub enum TextInputType {
     Name,
     StreetAddress,
     DateTime,
+    /// Use a custom keyboard without showing the system soft keyboard.
+    None,
+    WebSearch,
+    Twitter,
 }
 
 impl TextInputType {
@@ -659,6 +665,59 @@ impl TextInputType {
             Self::Name => "TextInputType.name",
             Self::StreetAddress => "TextInputType.address",
             Self::DateTime => "TextInputType.datetime",
+            Self::None => "TextInputType.none",
+            Self::WebSearch => "TextInputType.webSearch",
+            Self::Twitter => "TextInputType.twitter",
+        }
+    }
+
+    /// Whether the system soft keyboard may open for this input type.
+    #[must_use]
+    pub const fn uses_system_keyboard(self) -> bool {
+        !matches!(self, Self::None)
+    }
+
+    /// Browser inputmode for Flutter-compatible keyboard policies.
+    #[must_use]
+    pub const fn flutter_html_input_mode(self) -> &'static str {
+        match self {
+            Self::Number { decimal: true, .. } | Self::NumberPassword { decimal: true, .. } => "decimal",
+            Self::Number { decimal: false, .. } | Self::NumberPassword { decimal: false, .. } => "numeric",
+            Self::Phone => "tel",
+            Self::Email => "email",
+            Self::Url => "url",
+            Self::None => "none",
+            _ => "text",
+        }
+    }
+
+    /// Flutter's versioned public index for this input type.
+    #[must_use]
+    pub const fn flutter_index(self) -> u8 {
+        match self {
+            Self::Text => 0,
+            Self::Multiline => 1,
+            Self::Number { .. } | Self::NumberPassword { .. } => 2,
+            Self::Phone => 3,
+            Self::DateTime => 4,
+            Self::Email => 5,
+            Self::Url => 6,
+            Self::Password => 7,
+            Self::Name => 8,
+            Self::StreetAddress => 9,
+            Self::None => 10,
+            Self::WebSearch => 11,
+            Self::Twitter => 12,
+        }
+    }
+
+    pub(crate) const fn flutter_number_options(
+        self,
+    ) -> (Option<bool>, Option<bool>, Option<bool>) {
+        match self {
+            Self::Number { signed, decimal } => (Some(signed), Some(decimal), Some(false)),
+            Self::NumberPassword { signed, decimal } => (Some(signed), Some(decimal), Some(true)),
+            _ => (None, None, None),
         }
     }
 
@@ -683,6 +742,25 @@ impl TextInputType {
     #[must_use]
     pub const fn number_with_options(signed: bool, decimal: bool) -> Self {
         Self::Number { signed, decimal }
+    }
+}
+
+impl std::fmt::Display for TextInputType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (signed, decimal, password) = self.flutter_number_options();
+        let label = |property| match property {
+            Some(true) => "true",
+            Some(false) => "false",
+            None => "null",
+        };
+        write!(
+            f,
+            "TextInputType(name: {}, signed: {}, decimal: {}, password: {})",
+            self.flutter_name(),
+            label(signed),
+            label(decimal),
+            label(password),
+        )
     }
 }
 

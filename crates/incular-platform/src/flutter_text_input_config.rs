@@ -194,11 +194,7 @@ impl FlutterTextInputConfiguration {
 impl TextInputType {
     #[must_use]
     pub fn to_flutter_json(self) -> Value {
-        let (signed, decimal, password) = match self {
-            Self::Number { signed, decimal } => (Some(signed), Some(decimal), Some(false)),
-            Self::NumberPassword { signed, decimal } => (Some(signed), Some(decimal), Some(true)),
-            _ => (None, None, None),
-        };
+        let (signed, decimal, password) = self.flutter_number_options();
         json!({
             "name": self.flutter_name(),
             "signed": signed,

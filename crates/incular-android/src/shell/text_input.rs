@@ -14,7 +14,7 @@ use incular_core::{Code, InputEvent, KeyState, KeyboardEvent, KeyboardKey, Modif
 use incular_mobile::text_offsets::{utf8_offset, utf16_offset};
 use incular_platform::{
     CapabilitySupport, Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport,
-    DataTransfer, KeyboardInputSource, PlatformEvent, TextCapitalization, TextInputAction, TextInputCommand,
+    DataTransfer, KeyboardInputSource, PlatformEvent, TextInputAction, TextInputCommand,
     TextInputConfiguration, TextInputState, TextInputType, TransferData, TransferFormat,
     TransferFormatCapabilities, TransferReadRequest,
 };
@@ -24,7 +24,7 @@ use std::cell::Cell;
 thread_local! {
     /// Whether the attached field accepts typing, so `Show` may open the
     /// keyboard for it.
-    static EDITABLE_CLIENT: Cell<bool> = const { Cell::new(false) };
+    static EDITABLE_CLIENT: Cell<Option<TextInputType>> = const { Cell::new(None) };
 }
 
 /// Applies the runtime's queued text input commands to the Kotlin side.
@@ -37,7 +37,7 @@ pub(super) fn apply(commands: Vec<TextInputCommand>) {
                 ..
             } => {
                 let editable = configuration.enabled && !configuration.read_only;
-                EDITABLE_CLIENT.set(editable);
+                EDITABLE_CLIENT.set(editable.then_some(configuration.input_type));
                 if !editable {
                     // Flutter opens no input connection for a read-only field.
                     hide(true);
@@ -52,7 +52,7 @@ pub(super) fn apply(commands: Vec<TextInputCommand>) {
                     c"showTextInput",
                     c"(IILjava/lang/String;IIIILjava/lang/String;)V",
                     &[
-                        Arg::Int(input_type(&configuration)),
+                        Arg::Int(incular_platform::flutter_android_input_type(&configuration)),
                         Arg::Int(ime_options(&configuration)),
                         Arg::Str(text),
                         Arg::Int(selection_start),
@@ -79,8 +79,11 @@ pub(super) fn apply(commands: Vec<TextInputCommand>) {
                 );
             }
             TextInputCommand::Show { .. } => {
-                if EDITABLE_CLIENT.get() {
-                    java::call_void(c"showSoftInput", c"()V", &[]);
+                match EDITABLE_CLIENT.get() {
+                    Some(input) if input.uses_system_keyboard() =>
+                        java::call_void(c"showSoftInput", c"()V", &[]),
+                    Some(_) => hide(false),
+                    None => {}
                 }
             }
             TextInputCommand::SetCaretRect { .. } => {}
@@ -89,7 +92,7 @@ pub(super) fn apply(commands: Vec<TextInputCommand>) {
             }
             TextInputCommand::Hide { .. } => hide(false),
             TextInputCommand::Clear { .. } => {
-                EDITABLE_CLIENT.set(false);
+                EDITABLE_CLIENT.set(None);
                 hide(true);
             }
         }
@@ -120,72 +123,6 @@ fn utf16_state(state: &TextInputState) -> (&str, jint, jint, jint, jint) {
 
 /// Flutter `TextInputPlugin.inputTypeFromTextInputType`, as
 /// `android.text.InputType` bits.
-fn input_type(configuration: &TextInputConfiguration) -> jint {
-    const CLASS_TEXT: jint = 0x1;
-    const CLASS_NUMBER: jint = 0x2;
-    const CLASS_PHONE: jint = 0x3;
-    const CLASS_DATETIME: jint = 0x4;
-    const VARIATION_NUMBER_PASSWORD: jint = 0x10;
-    const FLAG_NUMBER_SIGNED: jint = 0x1000;
-    const FLAG_NUMBER_DECIMAL: jint = 0x2000;
-    const VARIATION_URI: jint = 0x10;
-    const VARIATION_EMAIL_ADDRESS: jint = 0x20;
-    const VARIATION_PERSON_NAME: jint = 0x60;
-    const VARIATION_POSTAL_ADDRESS: jint = 0x70;
-    const VARIATION_PASSWORD: jint = 0x80;
-    const VARIATION_VISIBLE_PASSWORD: jint = 0x90;
-    const FLAG_CAP_CHARACTERS: jint = 0x1000;
-    const FLAG_CAP_WORDS: jint = 0x2000;
-    const FLAG_CAP_SENTENCES: jint = 0x4000;
-    const FLAG_AUTO_CORRECT: jint = 0x8000;
-    const FLAG_MULTI_LINE: jint = 0x2_0000;
-    const FLAG_NO_SUGGESTIONS: jint = 0x8_0000;
-    let mut bits = match configuration.input_type {
-        TextInputType::Number { signed, decimal }
-        | TextInputType::NumberPassword { signed, decimal } => {
-            let mut bits = CLASS_NUMBER;
-            if configuration.input_type.is_password_keyboard() {
-                bits |= VARIATION_NUMBER_PASSWORD;
-            }
-            if signed {
-                bits |= FLAG_NUMBER_SIGNED;
-            }
-            if decimal {
-                bits |= FLAG_NUMBER_DECIMAL;
-            }
-            return bits;
-        }
-        TextInputType::Phone => return CLASS_PHONE,
-        TextInputType::DateTime => return CLASS_DATETIME,
-        TextInputType::Name => CLASS_TEXT | VARIATION_PERSON_NAME,
-        TextInputType::StreetAddress => CLASS_TEXT | VARIATION_POSTAL_ADDRESS,
-        TextInputType::Email => CLASS_TEXT | VARIATION_EMAIL_ADDRESS,
-        TextInputType::Url => CLASS_TEXT | VARIATION_URI,
-        TextInputType::Text | TextInputType::Multiline | TextInputType::Password => CLASS_TEXT,
-    };
-    if configuration.multiline {
-        bits |= FLAG_MULTI_LINE;
-    }
-    let traits = &configuration.traits;
-    if configuration.obscure_text || configuration.input_type == TextInputType::Password {
-        bits |= FLAG_NO_SUGGESTIONS | VARIATION_PASSWORD;
-    } else {
-        if traits.autocorrect {
-            bits |= FLAG_AUTO_CORRECT;
-        }
-        if !traits.enable_suggestions {
-            // Flutter's workaround: keyboards ignore NO_SUGGESTIONS alone.
-            bits |= FLAG_NO_SUGGESTIONS | VARIATION_VISIBLE_PASSWORD;
-        }
-    }
-    bits | match traits.text_capitalization {
-        TextCapitalization::Characters => FLAG_CAP_CHARACTERS,
-        TextCapitalization::Words => FLAG_CAP_WORDS,
-        TextCapitalization::Sentences => FLAG_CAP_SENTENCES,
-        TextCapitalization::None => 0,
-    }
-}
-
 /// Flutter `TextInputPlugin.createInputConnection`'s `imeOptions`.
 fn ime_options(configuration: &TextInputConfiguration) -> jint {
     const FLAG_NO_PERSONALIZED_LEARNING: jint = 0x100_0000;

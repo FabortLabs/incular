@@ -215,6 +215,30 @@ impl AutofillEditingValue {
         }
     }
 
+    /// Flutter's explicit text-value description, including the actual text.
+    /// Ordinary Rust Debug remains redacted; opt in only for nonsensitive data.
+    #[must_use]
+    pub fn flutter_debug_description(&self) -> String {
+        let (base, extent) = self.selection;
+        let (start, end) = self.composing;
+        let directional = self.selection_is_directional;
+        let selection = if base < 0 || extent < 0 {
+            "TextSelection.invalid".into()
+        } else if base == extent {
+            let affinity = match self.selection_affinity {
+                AutofillSelectionAffinity::Upstream => "TextAffinity.upstream",
+                AutofillSelectionAffinity::Downstream => "TextAffinity.downstream",
+            };
+            format!("TextSelection.collapsed(offset: {base}, affinity: {affinity}, isDirectional: {directional})")
+        } else {
+            format!("TextSelection(baseOffset: {base}, extentOffset: {extent}, isDirectional: {directional})")
+        };
+        format!(
+            "TextEditingValue(text: ┤{}├, selection: {selection}, composing: TextRange(start: {start}, end: {end}))",
+            self.text,
+        )
+    }
+
     pub fn to_json(&self) -> Result<Value, AutofillMessageError> {
         self.validate()?;
         Ok(json!({

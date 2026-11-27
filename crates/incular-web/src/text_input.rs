@@ -167,18 +167,7 @@ fn configure(
     element: &web_sys::HtmlTextAreaElement,
     configuration: &incular_platform::TextInputConfiguration,
 ) {
-    let mode = match configuration.input_type {
-        // Flutter web: a decimal keypad only when the field takes a decimal point.
-        TextInputType::Number { decimal: true, .. }
-        | TextInputType::NumberPassword { decimal: true, .. } => "decimal",
-        TextInputType::Number { decimal: false, .. }
-        | TextInputType::NumberPassword { decimal: false, .. } => "numeric",
-        TextInputType::Phone => "tel",
-        TextInputType::Email => "email",
-        TextInputType::Url => "url",
-        TextInputType::Text | TextInputType::Multiline | TextInputType::Password
-        | TextInputType::Name | TextInputType::StreetAddress | TextInputType::DateTime => "text",
-    };
+    let mode = configuration.input_type.flutter_html_input_mode();
     incular_platform::update_dom_enter_key_hint(element, configuration.action);
     let assisted = !incular_platform::autofill::is_password_input(
         configuration.obscure_text,
