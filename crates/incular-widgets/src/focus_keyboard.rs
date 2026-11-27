@@ -1100,29 +1100,16 @@ impl FocusableActionDetector {
 
 impl From<FocusableActionDetector> for Widget {
     fn from(value: FocusableActionDetector) -> Self {
-        crate::Builder::new(move |context| {
-            let navigation = context.media_query_navigation_mode()
-                .unwrap_or_else(|| context.navigation_mode());
-            value.clone().build_for_navigation(navigation)
-        }).into()
-    }
-}
-
-impl FocusableActionDetector {
-    fn build_for_navigation(self, navigation: incular_config::NavigationMode) -> Widget {
-        let value = self;
-        let focus_permitted = value.enabled || navigation == incular_config::NavigationMode::Directional;
-        let behavior = FocusBehavior::with_focus_permission(
+        let behavior = FocusBehavior::for_detector(
             value.focus_node.clone(),
             value.enabled,
-            focus_permitted,
             value.on_focus_change.clone(),
             value.on_show_focus_highlight.clone(),
             value.on_show_hover_highlight.clone(),
         );
         let callbacks = incular_gestures::GestureCallbacks {
             shortcut_scope: value.shortcuts.filter(|_| value.enabled),
-            action_scope: value.actions,
+            action_scope: value.actions.filter(|_| value.enabled),
             focus_node: Some(value.focus_node),
             focus_behavior: Some(behavior),
             autofocus: value.autofocus,

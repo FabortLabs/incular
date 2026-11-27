@@ -290,6 +290,7 @@ fn focusable_action_detector_unmount_releases_behavior() {
 
 #[test]
 fn focusable_action_detector_nested_scopes_select_inner_first() {
+    let focus = FocusNode::new();
     let inner_hits = Rc::new(RefCell::new(Vec::new()));
     let outer_hits = Rc::new(RefCell::new(Vec::new()));
     let mut inner_shortcuts = Shortcuts::<TestCommand>::typed();
@@ -324,10 +325,11 @@ fn focusable_action_detector_nested_scopes_select_inner_first() {
     });
 
     let mut tree = WidgetTree::new();
-    let root = layout(
+    layout(
         &mut tree,
         FocusableActionDetector::new(
             FocusableActionDetector::new(SizedBox::shrink())
+                .focus_node(focus.clone())
                 .shortcuts(Rc::new(inner_shortcuts))
                 .actions(Rc::new(inner_actions)),
         )
@@ -335,7 +337,11 @@ fn focusable_action_detector_nested_scopes_select_inner_first() {
         .actions(Rc::new(outer_actions))
         .into(),
     );
-    let inner_el = tree.children(root).expect("outer child")[0];
+    let inner_el = tree
+        .focusable_elements()
+        .into_iter()
+        .find(|&element| tree.focus_node_at(element).as_ref() == Some(&focus))
+        .expect("mounted inner detector");
     let submit = || {
         let mut event = KeyboardEvent::key_down(KeyboardKey::Character("s".into()), Code::KeyS);
         event.modifiers = Modifiers::CONTROL;
@@ -410,10 +416,13 @@ fn focusable_action_detector_disabled_contract() {
     node.request_focus();
     assert!(!node.has_focus());
     assert_eq!((changes.get(), highlights.get()), (0, 0));
-    // Shortcut and action scopes are independently owned registries;
-    // the detector composes but does not gate them.
+    // Flutter omits both local maps while the detector is disabled.
     let mut event = KeyboardEvent::key_down(KeyboardKey::Character("s".into()), Code::KeyS);
     event.modifiers = Modifiers::CONTROL;
-    assert!(tree.dispatch_keyboard(Some(root), event));
-    assert_eq!(fired.get(), 1);
+    assert!(!tree.dispatch_keyboard(Some(root), event));
+    assert_eq!(
+        tree.invoke_action_at(root, &Intent::<TestCommand>::new(TestCommand::Submit)),
+        None
+    );
+    assert_eq!(fired.get(), 0);
 }

@@ -113,3 +113,11 @@ shortcuts still do not invoke actions. The native detector now reads
 the scoped navigation mode separately from its enabled state, and
 tracks that media field independently of unrelated traits. The native
 regression failed before the fix; all 58 focused tests passed after it.
+
+The follow-up keeps the detector's focus element available immediately,
+before layout, and responds to navigation updates without remounting it.
+A pinned authored probe also confirmed that a disabled directional
+detector removes both local maps: Enter no longer activates the local
+action, and explicit invocation falls through to the outer action.
+The native regression checks the same behavior. All 62 targeted native
+tests passed, including the earlier nested dispatch and autofocus tests.

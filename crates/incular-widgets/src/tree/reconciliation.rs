@@ -131,6 +131,27 @@ enum ChildProvenance {
 }
 
 impl WidgetTree {
+    // A detector has static children, but its focus permission depends on
+    // inherited navigation. Apply that permission without introducing a lazy
+    // layout builder or changing the detector's retained element identity.
+    fn sync_detector_navigation(&self, id: ElementId) -> bool {
+        let element = self.element_live(id, "focus detector must remain live");
+        let WidgetKind::Gesture { callbacks, .. } = element.widget.kind() else {
+            return false;
+        };
+        let Some(behavior) = callbacks.focus_behavior.as_ref() else {
+            return false;
+        };
+        let mode = element.build_context.build(|context| {
+            let context = BuildContext::new(context);
+            context
+                .media_query_navigation_mode()
+                .unwrap_or_else(|| context.navigation_mode())
+        });
+        behavior.apply_detector_navigation(mode == incular_config::NavigationMode::Directional);
+        true
+    }
+
     /// Subscribes the field's input formatters and `on_changed` callback to its
     /// controller. The formatters run only on user edits, and `on_changed`
     /// fires only for user edits that change the text (Flutter's contract);
@@ -412,6 +433,7 @@ impl WidgetTree {
                 }
                 element.reset_layout_builder_state();
             }
+            self.sync_detector_navigation(id);
             if matches!(widget.kind(), WidgetKind::TextField(spec) if spec.spell_check.is_some()) {
                 self.sync_spell_check(id);
             }
@@ -698,6 +720,7 @@ impl WidgetTree {
             dev: ElementDevData::default(),
         }));
         self.sync_custom_painter_repaint(RenderObjectId(render));
+        self.sync_detector_navigation(id);
         self.note_mounted_autofocus(id, &widget);
         self.register_autofill_element(id, &widget);
         let previous = self.render_elements.insert(RenderObjectId(render), id);
@@ -778,6 +801,10 @@ impl WidgetTree {
             let render = element.render;
             match kind {
                 InheritedDependencyKind::Build => {
+                    if self.sync_detector_navigation(id) {
+                        self.retrack(id);
+                        continue;
+                    }
                     if let Some(element) = self.elements.get_mut(id.0) {
                         element.reset_layout_builder_state();
                     }
@@ -1161,6 +1188,7 @@ impl WidgetTree {
             }
             element.dirty.remove(DirtyFlags::BUILD);
         }
+        self.sync_detector_navigation(id);
         self.note_updated_autofocus(id, &old, widget);
         self.retrack(id);
         if let WidgetKind::Button(spec) = widget.kind()

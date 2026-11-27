@@ -343,26 +343,30 @@ fn focus_scope_orders_descendants_and_selects_scope_autofocus_candidate() {
     .order(10.);
 
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            FocusScope::new(
-                incular_widgets::Row::new(vec![Widget::from(first), Widget::from(second)])
-                    .text_direction(incular_widgets::TextDirection::Ltr),
-            )
-            .ordered()
-            .autofocus(true)
-            .into(),
+    tree.mount(
+        FocusScope::new(
+            incular_widgets::Row::new(vec![Widget::from(first), Widget::from(second)])
+                .text_direction(incular_widgets::TextDirection::Ltr),
         )
-        .expect("mount focus scope");
+        .ordered()
+        .autofocus(true)
+        .into(),
+    )
+    .expect("mount focus scope");
     tree.layout(Constraints::tight(Size::new(40., 10.)))
         .expect("layout");
 
-    let children = tree.children(root).expect("scope children").to_vec();
-    assert_eq!(children.len(), 2);
-    assert_eq!(tree.focusable_elements(), vec![children[1], children[0]]);
-    assert_eq!(tree.autofocus_element(), Some(children[1]));
+    let candidates = tree.focusable_elements();
+    assert_eq!(
+        candidates
+            .iter()
+            .map(|id| tree.focus_node_at(*id))
+            .collect::<Vec<_>>(),
+        vec![Some(second_node.clone()), Some(first_node.clone())],
+    );
+    assert_eq!(tree.autofocus_element(), Some(candidates[0]));
 
-    tree.set_keyboard_focus(children[1], true);
+    tree.set_keyboard_focus(candidates[0], true);
     assert!(!first_node.has_focus());
     assert!(second_node.has_focus());
 }
