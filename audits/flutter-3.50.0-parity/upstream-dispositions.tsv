@@ -3697,3 +3697,4 @@ packages/flutter/test/widgets/editable_text_test.dart	336	Tight selectionWidthSt
 packages/flutter/test/widgets/editable_text_test.dart	13726	SelectAll toolbar action will not set max scroll on designated platforms	paired-match	upstream-editable-selection-paint.md#select-all-and-private-editor-scroll
 packages/flutter/test/widgets/editable_text_test.dart	13742	Selection will be scrolled into view with SelectionChangedCause	paired-match	upstream-editable-selection-paint.md#clipboard-actions-selection-cause-and-scroll
 packages/flutter/test/widgets/editable_text_test.dart	13797	Should not scroll on paste if caret already visible	paired-match	upstream-editable-selection-paint.md#clipboard-actions-selection-cause-and-scroll
+packages/flutter/test/widgets/editable_text_test.dart	1715	selection overlay will update when text grow bigger	partial-match	upstream-editable-selection-paint.md#selection-handle-anchors-after-font-changes

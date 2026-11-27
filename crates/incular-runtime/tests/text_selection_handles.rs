@@ -805,3 +805,73 @@ fn a_live_two_x_y_transform_doubles_the_global_line_jump_distance() {
     assert!(focus.has_primary_focus());
     assert_eq!(runtime.focused_element(), Some(field));
 }
+
+#[test]
+fn visible_touch_handles_follow_the_retained_editors_larger_font() {
+    use incular_config::Alignment;
+    use incular_text::{TextStyle, register_application_font_as};
+    use incular_widgets::Align;
+
+    let Some(font) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    const FAMILY: &str = "Pinned editable handle relayout FlutterTest";
+    register_application_font_as(FAMILY, std::fs::read(font).unwrap());
+    let controller = TextEditingController::with_text("initial value");
+    let widget = |font_size| {
+        Align::new(
+            Alignment::TOP_LEFT,
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .style(TextStyle::new().font_family(FAMILY).font_size(font_size))
+                .selection_handles_builder(|_, _| SizedBox::shrink().into()),
+        )
+        .into()
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(widget(18.)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let now = Instant::now();
+    runtime.run_frame_at(bounds, now).unwrap();
+    let point = Offset::new(1., 1.);
+    pointer(
+        &mut runtime,
+        PointerPhase::Down,
+        point,
+        PointerDeviceKind::Touch,
+        now,
+    );
+    let held = now + Duration::from_millis(600);
+    runtime.run_frame_at(bounds, held).unwrap();
+    pointer(
+        &mut runtime,
+        PointerPhase::Up,
+        point,
+        PointerDeviceKind::Touch,
+        held,
+    );
+    runtime.run_frame_at(bounds, held).unwrap();
+    let field = runtime
+        .focused_element()
+        .expect("long press focuses the editor");
+    let render = runtime.tree().render_id(field);
+    let selection = TextSelection::new(0, 7);
+    assert_eq!(controller.selection(), selection);
+    let before = shown_handles(&runtime).expect("original handles");
+    let before_end = before.end.unwrap();
+    assert_eq!([before.start.anchor.x, before_end.anchor.x], [0., 126.]);
+
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, widget(30.)).unwrap();
+    runtime
+        .run_frame_at(bounds, held + Duration::from_millis(16))
+        .unwrap();
+    assert_eq!(runtime.focused_element(), Some(field));
+    assert_eq!(runtime.tree().render_id(field), render);
+    assert_eq!(controller.selection(), selection);
+    let after = shown_handles(&runtime).expect("handles survive editor relayout");
+    let after_end = after.end.unwrap();
+    assert_eq!([after.start.anchor.x, after_end.anchor.x], [0., 210.]);
+    assert_eq!(after.start.anchor.y - before.start.anchor.y, 12.);
+    assert_eq!(after_end.anchor.y - before_end.anchor.y, 12.);
+}

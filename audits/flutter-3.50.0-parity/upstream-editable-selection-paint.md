@@ -70,3 +70,15 @@ Pinned :13797 also pairs: pasting the same string at byte 31 in a
 the already-visible caret. Before the fix, native toolbar Copy left
 Linux at the bottom, and keyboard Cut pulled Android back to the top.
 All 33 focused native clipboard, command and toolbar tests passed.
+
+## Selection handle anchors after font changes
+
+Pinned :1715 and the neutral `editable_selection_handle_relayout_test.dart`
+probe passed. For `initial value`, growing the font from 18 to 30 moves
+the selected word's trailing anchor from x=126 to x=210; the leading
+anchor stays at x=0 and both move down 12 px. The retained native test
+opens real touch handles before the update and verifies both anchors,
+the range, focus and render identity after it. All 21 nearby native
+handle and reveal tests passed. The original remains partial because
+its additional absolute Padding coordinates include Material's handle
+artwork, outside the parity scope.
