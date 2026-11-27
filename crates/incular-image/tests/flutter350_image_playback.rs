@@ -802,3 +802,50 @@ fn a_never_observed_codec_can_be_explicitly_disposed() {
     assert!(!stream.maybe_dispose());
     assert!(stream.listen(|_, _| {}).is_none());
 }
+
+#[cfg(debug_assertions)]
+#[test]
+fn keep_alive_handles_report_their_own_create_and_dispose() {
+    use incular_core::memory::allocations::{MemoryAllocations, ObjectEventKind};
+
+    let source = ImagePlayback::scheduled();
+    let driver = Rc::new(Driver::default());
+    driver.attach(&source, 1, Some(0));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let observer = {
+        let events = events.clone();
+        let source = source.clone();
+        MemoryAllocations::current().add_listener(move |event| {
+            if event.class_name == "ImageStreamCompleterHandle" {
+                assert!(source.frame_demand().is_none());
+                events.borrow_mut().push(event);
+            }
+        })
+    };
+    let first = source.keep_alive().unwrap();
+    let second = source.keep_alive().unwrap();
+    assert_eq!(events.borrow().len(), 2);
+    assert!(!source.maybe_dispose());
+    drop(first);
+    assert!(!driver.disposed.get());
+    assert!(!source.maybe_dispose());
+    drop(second);
+    let events = events.borrow();
+    assert_eq!(
+        events.iter().map(|event| event.kind).collect::<Vec<_>>(),
+        [
+            ObjectEventKind::Created,
+            ObjectEventKind::Created,
+            ObjectEventKind::Disposed,
+            ObjectEventKind::Disposed,
+        ]
+    );
+    assert_ne!(events[0].id, events[1].id);
+    assert_eq!(events[0].id, events[2].id);
+    assert_eq!(events[1].id, events[3].id);
+    assert!(events.iter().all(|event| event.library == "painting"));
+    assert_eq!(driver.asked.get(), 0);
+    assert!(source.maybe_dispose());
+    assert!(driver.disposed.get());
+    drop(observer);
+}

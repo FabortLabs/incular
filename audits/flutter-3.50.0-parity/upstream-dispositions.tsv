@@ -3806,3 +3806,4 @@ packages/flutter/test/rendering/wrap_test.dart	112	Compute intrinsic width test	
 packages/flutter/test/rendering/wrap_test.dart	143	Compute intrinsic height for only one run	paired-match	upstream-render-wrap-dry-intrinsics.md
 packages/flutter/test/rendering/wrap_test.dart	163	Compute intrinsic width for only one run	paired-match	upstream-render-wrap-dry-intrinsics.md
 packages/flutter/test/rendering/wrap_test.dart	183	Wrap respects clipBehavior	paired-match	upstream-render-wrap-dry-intrinsics.md
+packages/flutter/test/painting/image_stream_test.dart	1078	ImageStreamCompleterHandle dispatches memory events	paired-match	upstream-image-playback.md#keep-alive-handle-memory-events

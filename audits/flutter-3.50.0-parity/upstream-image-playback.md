@@ -138,3 +138,14 @@ An attached codec that has never had an observer can now be explicitly
 disposed without a throwaway listener. External keep-alive owners delay
 disposal; a disposed session cannot be reopened. Twenty-eight focused
 playback tests and four stream-listener checks passed.
+
+## Keep-alive handle memory events
+
+Pinned `painting/image_stream_test.dart:1078` passed. The native
+keep-alive handle now reports its own debug creation and disposal
+with a stable identity, without participating in frame demand.
+Two handles have distinct IDs. Dropping one does not dispose the
+source or wake playback; dropping the second permits disposal.
+The allocation observer can query the same playback without
+re-entering a borrowed state. All 37 focused playback, handoff,
+and chunk delivery tests passed.

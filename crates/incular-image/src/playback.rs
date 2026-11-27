@@ -1,4 +1,4 @@
-use incular_core::time::Instant;
+use incular_core::{memory::allocations::ObjectLifetime, time::Instant};
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -326,8 +326,16 @@ impl ImagePlayback {
         if state.disposed {
             return None;
         }
-        state.keep_alive += 1;
-        Some(ImagePlaybackKeepAlive(self.clone()))
+        state.keep_alive = state
+            .keep_alive
+            .checked_add(1)
+            .expect("too many image keep-alive handles");
+        // Allocation observers may call back into this playback.
+        drop(state);
+        Some(ImagePlaybackKeepAlive {
+            playback: self.clone(),
+            _lifetime: ObjectLifetime::new("painting", "ImageStreamCompleterHandle"),
+        })
     }
 
     /// Releases an unobserved playback and its codec, even if no listener
@@ -536,11 +544,14 @@ impl Drop for ImagePlaybackIdleSubscription {
 }
 
 #[must_use = "keep the handle while preserving idle image playback"]
-pub struct ImagePlaybackKeepAlive(ImagePlayback);
+pub struct ImagePlaybackKeepAlive {
+    playback: ImagePlayback,
+    _lifetime: ObjectLifetime,
+}
 
 impl Drop for ImagePlaybackKeepAlive {
     fn drop(&mut self) {
-        self.0.retire_if_idle(|state| {
+        self.playback.retire_if_idle(|state| {
             state.keep_alive -= 1;
             None
         });
