@@ -152,6 +152,29 @@ impl WidgetTree {
         true
     }
 
+    fn sync_action_listener(&mut self, id: ElementId, old: Option<&Widget>) {
+        fn listener(widget: &Widget) -> Option<&Rc<incular_gestures::MountActionListener>> {
+            match widget.kind() {
+                WidgetKind::Gesture { callbacks, .. } => callbacks.mount_action_listener.as_ref(),
+                _ => None,
+            }
+        }
+
+        let element = self.element_live_mut(id, "action listener owner must remain live");
+        let previous = old.and_then(listener);
+        let next = listener(&element.widget);
+        match (previous, next) {
+            (None, None) => {}
+            (Some(previous), Some(next)) if Rc::ptr_eq(previous, next) => {}
+            (_, next) => {
+                let next = next.cloned();
+                let state = element.auxiliary_state_mut();
+                state.action_listener_registrations = None;
+                state.action_listener_registrations = next.map(|attach| attach());
+            }
+        }
+    }
+
     /// Subscribes the field's input formatters and `on_changed` callback to its
     /// controller. The formatters run only on user edits, and `on_changed`
     /// fires only for user edits that change the text (Flutter's contract);
@@ -738,6 +761,7 @@ impl WidgetTree {
         if let WidgetKind::SelectionListener { notifier, .. } = widget.kind() {
             notifier.register();
         }
+        self.sync_action_listener(id, None);
         self.sync_edit_callbacks(id);
         if let Some(binding) = platform_menu_binding {
             binding.install_if_bound();
@@ -1203,6 +1227,7 @@ impl WidgetTree {
                 focused: button.focused,
             });
         }
+        self.sync_action_listener(id, Some(&old));
         self.sync_edit_callbacks(id);
         // Carry hover presence across a focus-behavior swap without
         // replaying an enter event. Changes in computed focus or hover

@@ -809,31 +809,41 @@ impl KeyboardListener {
     }
 }
 
-/// Observes invocations of one action while retaining the child in the
-/// focused widget tree.
-///
-/// The action itself remains the source of truth. The listener registration is
-/// stored in the gesture callback record so it survives widget rebuilds and is
-/// removed automatically when the retained element is unmounted.
+/// Observes a mounted action's state changes, with optional Incular
+/// invocation callbacks. Replacing the action or unmounting the
+/// listener immediately removes the previous registration.
 #[derive(Clone)]
-pub struct ActionListener {
-    action: Action,
+pub struct ActionListener<C: CommandId = Command> {
+    action: Action<C>,
+    listener: Option<Rc<ActionStateCallback<C>>>,
     on_action: Option<Rc<dyn Fn()>>,
     on_action_start: Option<Rc<dyn Fn()>>,
     on_action_end: Option<Rc<dyn Fn()>>,
     child: Widget,
 }
 
-impl ActionListener {
+type ActionStateCallback<C> = dyn Fn(&Action<C>);
+
+impl<C: CommandId> ActionListener<C> {
     #[must_use]
-    pub fn new(action: Action, child: impl Into<Widget>) -> Self {
+    pub fn new(action: Action<C>, child: impl Into<Widget>) -> Self {
         Self {
             action,
+            listener: None,
             on_action: None,
             on_action_start: None,
             on_action_end: None,
             child: child.into(),
         }
+    }
+
+    /// Registers for action-state notifications after mounting. The
+    /// callback can read the action's new enabled state and is not invoked
+    /// simply because the widget was mounted or an action was invoked.
+    #[must_use]
+    pub fn listener(mut self, callback: impl Fn(&Action<C>) + 'static) -> Self {
+        self.listener = Some(Rc::new(callback));
+        self
     }
 
     #[must_use]
@@ -855,37 +865,52 @@ impl ActionListener {
     }
 }
 
-impl From<ActionListener> for Widget {
-    fn from(value: ActionListener) -> Self {
-        let on_action = value.on_action.clone();
-        let on_action_start = value.on_action_start.clone();
-        let on_action_end = value.on_action_end.clone();
-        let subscription = value
-            .action
-            .add_invocation_listener(move |phase| match phase {
-                ActionInvocationPhase::Start => {
-                    if let Some(callback) = &on_action_start {
-                        callback();
-                    }
-                }
-                ActionInvocationPhase::End => {
-                    if let Some(callback) = &on_action {
-                        callback();
-                    }
-                    if let Some(callback) = &on_action_end {
-                        callback();
-                    }
-                }
+impl<C: CommandId> From<ActionListener<C>> for Widget {
+    fn from(value: ActionListener<C>) -> Self {
+        let ActionListener {
+            action,
+            listener,
+            on_action,
+            on_action_start,
+            on_action_end,
+            child,
+        } = value;
+        let mount_action_listener = Rc::new(move || {
+            let state = listener.clone().map(|listener| {
+                let observed = action.clone();
+                action.add_action_listener(move || listener(&observed))
             });
-        let callbacks = incular_gestures::GestureCallbacks {
-            action_invocation_listener: Some(Rc::new(subscription)),
-            include_semantics: false,
-            ..incular_gestures::GestureCallbacks::default()
-        };
+            let invocation = (on_action.is_some() || on_action_start.is_some() || on_action_end.is_some())
+                .then(|| {
+                    let on_action = on_action.clone();
+                    let on_action_start = on_action_start.clone();
+                    let on_action_end = on_action_end.clone();
+                    action.add_invocation_listener(move |phase| match phase {
+                        ActionInvocationPhase::Start => {
+                            if let Some(callback) = &on_action_start {
+                                callback();
+                            }
+                        }
+                        ActionInvocationPhase::End => {
+                            if let Some(callback) = &on_action {
+                                callback();
+                            }
+                            if let Some(callback) = &on_action_end {
+                                callback();
+                            }
+                        }
+                    })
+                });
+            (state, invocation)
+        });
         Widget::from_kind(WidgetKind::Gesture {
             behavior: crate::gestures::HitTestBehavior::DeferToChild,
-            callbacks: Box::new(callbacks),
-            child: value.child,
+            callbacks: Box::new(incular_gestures::GestureCallbacks {
+                mount_action_listener: Some(mount_action_listener),
+                include_semantics: false,
+                ..Default::default()
+            }),
+            child,
         })
     }
 }

@@ -121,3 +121,14 @@ detector removes both local maps: Enter no longer activates the local
 action, and explicit invocation falls through to the outer action.
 The native regression checks the same behavior. All 62 targeted native
 tests passed, including the earlier nested dispatch and autofocus tests.
+
+## Action-state listener lifecycle
+
+The pinned Listening original passed. An explicit retained ActionListener
+now reports action-state changes, independently of the existing invocation
+hooks. Mounting the same immutable widget twice creates two subscriptions.
+Replacing the listened-to action disconnects the old action, and unmount
+or tree drop disconnects the remaining subscriptions even if the original
+widget value still exists. Merely mounting, invoking, or setting the same
+enabled flag does not emit a state change. All 16 focused native tests passed.
+The original still has partial credit pending inherited scope subscriptions.

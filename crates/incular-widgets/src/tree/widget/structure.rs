@@ -1974,6 +1974,7 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
         )
         && same_rc(&left.shortcut_scope, &right.shortcut_scope)
         && same_rc(&left.action_scope, &right.action_scope)
+        && same_rc(&left.mount_action_listener, &right.mount_action_listener)
         && same_rc(&left.action_listener, &right.action_listener)
         && same_rc(
             &left.action_invocation_listener,

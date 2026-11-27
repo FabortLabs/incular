@@ -412,6 +412,7 @@ struct ElementAuxiliaryState {
     /// The overscroll indicator of a scroll view that paints one, fed by its own
     /// notifications and kept apart from the notification listeners above.
     overscroll_indicator: Option<OverscrollIndicatorRegistration>,
+    action_listener_registrations: Option<incular_gestures::ActionListenerRegistrations>,
     edit_transform_subscription: Option<incular_core::reactivity::Subscription>,
     edit_changed_subscription: Option<incular_text::TextEditingSubscription>,
     /// Spell checks of user edits (Flutter `_performSpellCheck`).

@@ -557,6 +557,15 @@ pub enum FocusKeyHandlerOwner {
     FocusNode,
 }
 
+#[doc(hidden)]
+pub type ActionListenerRegistrations = (
+    Option<ActionListenerSubscription>,
+    Option<ActionInvocationSubscription>,
+);
+
+#[doc(hidden)]
+pub type MountActionListener = dyn Fn() -> ActionListenerRegistrations;
+
 /// Callbacks understood by Incular's retained pointer gesture recognizer.
 #[derive(Clone, Default)]
 pub struct GestureCallbacks {
@@ -666,6 +675,9 @@ pub struct GestureCallbacks {
     pub shortcut_scope: Option<Rc<ErasedShortcutScope>>,
     /// A typed action scope used by descendant shortcut scopes.
     pub action_scope: Option<Rc<ErasedActionScope>>,
+    /// Creates the listener registrations when the descriptor is mounted.
+    #[doc(hidden)]
+    pub mount_action_listener: Option<Rc<MountActionListener>>,
     /// Lifetime token for a higher-level action-listener registration.
     pub action_listener: Option<Rc<ActionListenerSubscription>>,
     /// Lifetime token for an action invocation listener installed by a

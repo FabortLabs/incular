@@ -40,6 +40,8 @@ pub use arena::{
     GestureArena, GestureArenaEntry, GestureArenaKey, GestureArenaMember, GestureArenaSource,
     GestureDisposition,
 };
+#[doc(hidden)]
+pub use details::{ActionListenerRegistrations, MountActionListener};
 pub use details::{
     ButtonGestureCallbacks, DragCallbacks, DragDownDetails, DragEndDetails, DragStartDetails, FocusKeyHandlerOwner,
     DragUpdateDetails, GestureAction, GestureCallbacks, GestureDecision, LongPressDownDetails,
