@@ -16,6 +16,7 @@ pub mod diagnostic_property;
 mod context;
 mod fast_hash;
 mod float_color;
+mod flutter_version;
 mod geometry;
 mod hardware_keyboard;
 pub mod hot_reload;
@@ -41,6 +42,7 @@ mod value_notifier;
 mod widget;
 
 pub use app_build_version::AppBuildVersion;
+pub use flutter_version::FlutterVersion;
 pub use arena::{Arena, ArenaId};
 pub use bit_field::{BitField, K_MAX_UNSIGNED_SMI};
 pub use caching_iterable::{CachingCursor, CachingIndexError, CachingIterable};

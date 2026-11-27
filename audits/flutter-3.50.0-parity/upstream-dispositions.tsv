@@ -3180,3 +3180,9 @@ packages/flutter/test/services/keyboard_key_test.dart	140	keyLabel	paired-match	
 packages/flutter/test/services/keyboard_key_test.dart	153	debugName	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
 packages/flutter/test/services/platform_channel_test.dart	337	can receive event stream	paired-match	upstream-json-method-channel.md#json-event-broadcasts
 packages/flutter/test/services/platform_channel_test.dart	358	can receive error event	paired-match	upstream-json-method-channel.md#json-event-broadcasts
+packages/flutter/test/services/flutter_version_test.dart	9	FlutterVersion.version contains the current version	paired-match	upstream-flutter-toolchain-version.md
+packages/flutter/test/services/flutter_version_test.dart	13	FlutterVersion.channel contains the current channel	paired-match	upstream-flutter-toolchain-version.md
+packages/flutter/test/services/flutter_version_test.dart	17	FlutterVersion.gitUrl contains the current git URL	paired-match	upstream-flutter-toolchain-version.md
+packages/flutter/test/services/flutter_version_test.dart	21	FlutterVersion.frameworkRevision contains the current framework revision	paired-match	upstream-flutter-toolchain-version.md
+packages/flutter/test/services/flutter_version_test.dart	28	FlutterVersion.engineRevision contains the current engine revision	paired-match	upstream-flutter-toolchain-version.md
+packages/flutter/test/services/flutter_version_test.dart	32	FlutterVersion.dartVersion contains the current Dart version	paired-match	upstream-flutter-toolchain-version.md
