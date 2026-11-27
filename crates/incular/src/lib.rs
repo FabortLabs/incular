@@ -344,7 +344,7 @@ pub mod prelude {
         PageStorageBucket,
         PageStorageIdentifier, PageStorageKey, PageView, PanAxis, PathView, PerformanceOverlay,
         PersistentHeaderShowOnScreenConfiguration, PhysicalModel, PhysicalShape, PinnedHeaderSliver,
-        Placeholder, PointerSignalResolver,
+        Placeholder, PointerSignalResolver, RawKeyboardListener,
         PopAttempt, PopScope, PopScopeController, Positioned, PositionedDirectional,
         PositionedTransition, PreferredSize, PrimaryScrollController, ProviderImage, RadioGroup,
         Radius, RawAutocomplete, RawGestureDetector, RawImage, RawMenuAnchor, RawMenuAnchorGroup,

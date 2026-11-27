@@ -3329,3 +3329,5 @@ packages/flutter/test/services/binding_test.dart	163	Default handleRequestAppExi
 packages/flutter/test/gestures/gesture_config_regression_test.dart	86	Scroll Views get the same ScrollConfiguration as GestureDetectors	paired-match	upstream-shared-gesture-settings.md
 packages/flutter/test/gestures/gesture_config_regression_test.dart	113	Scroll Views get the same ScrollConfiguration as Draggables	paired-match	upstream-shared-gesture-settings.md
 packages/flutter/test/services/binding_test.dart	185	initInstances synchronizes keyboard state	paired-match	upstream-keyboard-startup.md
+packages/flutter/test/widgets/focus_traversal_test.dart	3651	Raw keyboard listener introduces a Semantics node by default	paired-match	upstream-raw-keyboard-listener-semantics.md
+packages/flutter/test/widgets/focus_traversal_test.dart	3674	Raw keyboard listener doesn't introduce a Semantics node when specified	paired-match	upstream-raw-keyboard-listener-semantics.md

@@ -1208,6 +1208,59 @@ impl KeyboardListener {
     }
 }
 
+/// A focus-bound keyboard observer (Flutter's legacy RawKeyboardListener).
+///
+/// Rust receives the normalized platform event here; observing it never
+/// consumes it, and semantics can be disabled without disabling focus.
+#[derive(Clone)]
+pub struct RawKeyboardListener(KeyboardListener);
+
+impl RawKeyboardListener {
+    #[must_use]
+    pub fn new(child: impl Into<Widget>) -> Self {
+        Self(KeyboardListener::new(child))
+    }
+
+    #[must_use]
+    pub fn focus_node(self, node: FocusNode) -> Self {
+        Self(self.0.focus_node(node))
+    }
+
+    #[must_use]
+    pub fn autofocus(self, autofocus: bool) -> Self {
+        Self(self.0.autofocus(autofocus))
+    }
+
+    #[must_use]
+    pub fn include_semantics(self, include: bool) -> Self {
+        Self(self.0.include_semantics(include))
+    }
+
+    #[must_use]
+    pub fn on_key(self, callback: impl Fn(KeyboardEvent) + 'static) -> Self {
+        Self(self.0.on_key_event(move |event| {
+            callback(event);
+            false
+        }))
+    }
+}
+
+impl From<RawKeyboardListener> for Widget {
+    fn from(value: RawKeyboardListener) -> Self {
+        let mut callbacks = value.0.to_callbacks();
+        callbacks.annotates_focus = true;
+        if callbacks.focus_node.is_none() {
+            callbacks.focus_node = Some(FocusNode::new());
+        }
+        let child = value.0.child.unwrap_or_else(|| crate::SizedBox::shrink().into());
+        Widget::from_kind(WidgetKind::Gesture {
+            behavior: crate::gestures::HitTestBehavior::DeferToChild,
+            callbacks: Box::new(callbacks),
+            child,
+        })
+    }
+}
+
 /// Establishes a focus traversal policy group for its descendants.
 #[derive(Clone)]
 pub struct FocusTraversalGroup {
