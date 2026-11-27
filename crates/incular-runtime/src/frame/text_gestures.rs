@@ -10,11 +10,19 @@ use incular_platform::{TextSelectionAction, TextSelectionActionRequest};
 use incular_text::{SelectionChangedCause, TextAffinity, is_layout_whitespace, word_boundary_at};
 use incular_widgets::internal::{
     TextSelectionHandleEndpoint,
-    gesture_constants::{LONG_PRESS_TIMEOUT, TOUCH_SLOP},
+    gesture_constants::{LONG_PRESS_TIMEOUT, PRECISE_POINTER_HIT_SLOP, TOUCH_SLOP},
 };
 use incular_widgets::{
     ContextMenuButtonItem, ContextMenuButtonType, TextSelectionToolbarAnchors,
 };
+
+fn editor_tap_slop(kind: PointerDeviceKind) -> f32 {
+    if kind == PointerDeviceKind::Mouse {
+        PRECISE_POINTER_HIT_SLOP
+    } else {
+        TOUCH_SLOP
+    }
+}
 
 /// A secondary press that went down on a text field
 /// (`onSecondaryTapDown`), waiting for its release.
@@ -755,6 +763,7 @@ pub(crate) struct TextTapRun {
     raw_count: u32,
     effective_count: u32,
     shift: bool,
+    dragged: bool,
     ios_misspelling_tap: bool,
     menu_was_showing: bool,
     /// Whether the field had focus before this press, so its tap asks for
@@ -831,6 +840,7 @@ impl Runtime {
         was_focused: bool,
         kind: PointerDeviceKind,
         menu_was_showing: bool,
+        shift: bool,
     ) {
         let now = self.input_now();
         let consecutive = self.continues_text_tap_series(field, position, now);
@@ -840,7 +850,6 @@ impl Runtime {
             1
         };
         let effective_count = self.effective_tap_count(raw_count);
-        let shift = self.keyboard_modifiers.shift();
         let touch = matches!(
             kind,
             PointerDeviceKind::Touch | PointerDeviceKind::Stylus | PointerDeviceKind::InvertedStylus
@@ -861,13 +870,17 @@ impl Runtime {
             raw_count,
             effective_count,
             shift,
+            dragged: false,
             ios_misspelling_tap,
             menu_was_showing,
             was_focused,
         });
-        // A touch press alone on iOS must preserve the selection. The
-        // release may toggle the toolbar, move to a word edge, or be canceled.
-        if ios_touch_tap {
+        // iOS single taps select at release, including precise devices.
+        // Android Shift-taps also wait before moving the range.
+        if effective_count == 1
+            && (self.text_shortcut_platform == TextShortcutPlatform::Ios
+                || (self.text_shortcut_platform == TextShortcutPlatform::Android && shift))
+        {
             return;
         }
         self.hide_text_field_overlays(field);
@@ -885,9 +898,10 @@ impl Runtime {
             }
             3 => self.text_field_select_boundaries_in_range(field, position, position, now),
             _ => {
-                if self.is_desktop_text_platform() && shift {
-                    self.text_field_shift_tap(field, position, was_focused, now);
-                } else {
+                if !(self.is_desktop_text_platform()
+                    && shift
+                    && self.text_field_shift_tap(field, position, was_focused, now))
+                {
                     self.tree.text_field_set_caret(field, position, false, now);
                     // Flutter `_shouldShowSelectionHandles`: an Android touch tap that
                     // places the caret in a focused field shows the caret handle.
@@ -908,41 +922,40 @@ impl Runtime {
         self.report_editor_selection_delta(field, previous, cause);
     }
 
-    /// `_extendSelection` (Linux, Windows) or `_expandSelection` (macOS).
+    /// `_extendSelection` (Android, Linux, Windows) or
+    /// `_expandSelection` (iOS, macOS).
     fn text_field_shift_tap(
         &mut self,
         field: ElementId,
         position: Offset,
         was_focused: bool,
         now: Instant,
-    ) {
-        let (Some((offset, affinity)), Some(controller)) = (
+    ) -> bool {
+        let (Some((offset, _)), Some(controller)) = (
             self.tree.text_field_position_at(field, position),
             self.tree.text_controller(field),
         ) else {
-            return;
+            return false;
         };
-        let current = controller.selection();
-        let next = if self.text_shortcut_platform == TextShortcutPlatform::MacOs {
-            let from = if was_focused {
-                current
-            } else {
-                TextSelection::collapsed(0)
-            };
-            let base_is_closer = (offset as isize - from.base as isize).abs()
-                < (offset as isize - from.extent as isize).abs();
-            TextSelection::new(
-                if base_is_closer {
-                    from.extent
-                } else {
-                    from.base
-                },
-                offset,
-            )
+        let Some(current) = controller.selection_if_set() else {
+            return false;
+        };
+        let expands = matches!(
+            self.text_shortcut_platform,
+            TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs
+        );
+        let (from, affinity) = if expands && !was_focused {
+            (TextSelection::collapsed(0), TextAffinity::Downstream)
         } else {
-            TextSelection::new(current.base, offset)
+            (current, controller.caret_affinity())
         };
-        self.tree.text_field_select(field, next, affinity, now);
+        let anchor = if expands && offset.abs_diff(from.base) < offset.abs_diff(from.extent) {
+            from.extent
+        } else {
+            from.base
+        };
+        self.tree
+            .text_field_select(field, TextSelection::new(anchor, offset), affinity, now)
     }
 
     /// `onDragSelectionUpdate` for the press that started at the run's
@@ -955,6 +968,18 @@ impl Runtime {
     ) {
         if !self.text_field_touch_drag_selects(field, kind) {
             return;
+        }
+        if self.text_shortcut_platform == TextShortcutPlatform::Ios
+            && let Some(run) = self.text_taps.as_mut()
+            && run.field == field
+            && run.effective_count == 1
+            && !run.dragged
+        {
+            let delta = position - run.down_position;
+            if delta.x.hypot(delta.y) <= editor_tap_slop(kind) {
+                return;
+            }
+            run.dragged = true;
         }
         let previous = self.observed_editor_selection(field);
         let now = self.input_now();
@@ -1006,9 +1031,25 @@ impl Runtime {
         }
         let delta = position - run.down_position;
         let single_tap = run.effective_count == 1
-            && !run.shift
+            && !run.dragged
             && !was_long_press
-            && delta.x.hypot(delta.y) <= TOUCH_SLOP;
+            && delta.x.hypot(delta.y) <= editor_tap_slop(kind);
+        let ios = self.text_shortcut_platform == TextShortcutPlatform::Ios;
+        let android = self.text_shortcut_platform == TextShortcutPlatform::Android;
+        if single_tap && run.shift && (ios || android) {
+            let previous = self.observed_editor_selection(run.field);
+            if android {
+                self.hide_text_field_toolbar_only(run.field);
+            }
+            if self.text_field_shift_tap(run.field, position, run.was_focused, now) {
+                self.report_editor_selection_delta(run.field, previous, SelectionChangedCause::Tap);
+                return;
+            }
+            if android {
+                self.tree.text_field_set_caret(run.field, run.down_position, false, now);
+                self.report_editor_selection_delta(run.field, previous, SelectionChangedCause::Tap);
+            }
+        }
         if single_tap && run.ios_misspelling_tap {
             let Some(controller) = self.tree.text_controller(run.field) else {
                 return;
@@ -1025,15 +1066,19 @@ impl Runtime {
             }
             return;
         }
-        if single_tap
-            && self.text_shortcut_platform == TextShortcutPlatform::Ios
-            && matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown)
-        {
-            self.finish_ios_touch_selection(run, position);
+        if single_tap && ios {
+            if matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown) {
+                self.finish_ios_touch_selection(run, position);
+            } else {
+                let previous = self.observed_editor_selection(run.field);
+                self.tree.text_field_set_caret(run.field, run.down_position, false, now);
+                self.report_editor_selection_delta(run.field, previous, SelectionChangedCause::Tap);
+                self.hide_text_field_overlays(run.field);
+            }
             return;
         }
         if single_tap
-            && self.text_shortcut_platform == TextShortcutPlatform::Android
+            && android
             && !self.show_spell_check_suggestions_toolbar(run.field)
             && matches!(
                 kind,
@@ -1090,7 +1135,13 @@ impl Runtime {
         if toggle && !run.menu_was_showing {
             self.show_text_field_touch_menu(run.field, position);
             self.frame_requested = true;
-        } else if let Some(menu) = self.tree.text_field_toolbar_state(run.field) {
+        } else {
+            self.hide_text_field_toolbar_only(run.field);
+        }
+    }
+
+    fn hide_text_field_toolbar_only(&mut self, field: ElementId) {
+        if let Some(menu) = self.tree.text_field_toolbar_state(field) {
             // toggleToolbar(false) and hideToolbar(false) leave the handles.
             self.frame_requested |= menu.hide();
         }
@@ -1337,6 +1388,7 @@ pub(super) struct PendingMobileTextTouch {
     pub(super) position: Offset,
     pub(super) menu_was_showing: bool,
     pub(super) was_focused: bool,
+    pub(super) shift: bool,
 }
 
 impl PendingMobileTextTouch {

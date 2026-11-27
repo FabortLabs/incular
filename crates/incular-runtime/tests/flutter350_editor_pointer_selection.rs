@@ -410,3 +410,104 @@ fn non_ios_platforms_tap_to_a_precise_caret_instead_of_toggling_the_toolbar() {
         }
     }
 }
+
+#[test]
+fn a_mobile_shift_tap_uses_the_modifiers_captured_at_press() {
+    use incular_core::{Code, InputEvent, KeyState, KeyboardEvent, KeyboardKey, NamedKey};
+
+    let Some(style) = ahem_style() else {
+        return;
+    };
+    for (platform, anchor) in [
+        (TextShortcutPlatform::Android, 2),
+        (TextShortcutPlatform::Ios, 5),
+    ] {
+        let initial = TextSelection::new(2, 5);
+        let controller = TextEditingController::with_text("alpha beta gamma");
+        controller.set_selection(initial);
+        let changes = Rc::new(RefCell::new(Vec::new()));
+        let editor = EditableText::new(controller.clone())
+            .autofocus(true)
+            .text_direction(TextDirection::Ltr)
+            .style(style.clone())
+            .on_selection_changed({
+                let changes = changes.clone();
+                move |selection, cause| changes.borrow_mut().push((selection, cause))
+            });
+        let mut runtime = Runtime::new(editor.into()).unwrap();
+        runtime.set_text_shortcut_platform(platform);
+        let now = Instant::now();
+        runtime.run_frame_at(Constraints::loose(Size::new(800., 100.)), now).unwrap();
+        let mut shift = KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Shift), Code::ShiftLeft);
+        let _ = runtime.handle_input_at(InputEvent::Key(shift.clone()), now);
+
+        let _ = runtime.handle_raw_pointer_event(
+            RawPointerEvent::new(
+                1, 2, PointerDeviceKind::Touch, PRIMARY_POINTER_BUTTON,
+                Offset::new(16., 7.), PointerPhase::Down, now,
+            ).with_button(Some(PRIMARY_POINTER_BUTTON)),
+        );
+        assert_eq!(controller.selection(), initial, "{platform:?} pressed");
+        assert!(changes.borrow().is_empty(), "{platform:?} pressed");
+
+        shift.state = KeyState::Up;
+        let _ = runtime.handle_input_at(InputEvent::Key(shift), now + Duration::from_millis(60));
+        let _ = runtime.handle_raw_pointer_event(
+            RawPointerEvent::new(
+                1, 2, PointerDeviceKind::Touch, 0, Offset::new(16., 7.),
+                PointerPhase::Up, now + Duration::from_millis(80),
+            ).with_button(Some(PRIMARY_POINTER_BUTTON)),
+        );
+        let expected = TextSelection::new(anchor, 1);
+        assert_eq!(controller.selection(), expected, "{platform:?} released");
+        assert_eq!(
+            changes.borrow().as_slice(),
+            &[(expected, SelectionChangedCause::Tap)],
+            "{platform:?} released",
+        );
+    }
+}
+
+#[test]
+fn ios_mouse_places_a_precise_caret_only_after_a_confirmed_tap() {
+    let Some(style) = ahem_style() else {
+        return;
+    };
+    let initial = TextSelection::new(2, 5);
+    let controller = TextEditingController::with_text("alpha beta gamma");
+    controller.set_selection(initial);
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let editor = EditableText::new(controller.clone())
+        .autofocus(true)
+        .text_direction(TextDirection::Ltr)
+        .style(style)
+        .on_selection_changed({
+            let changes = changes.clone();
+            move |selection, cause| changes.borrow_mut().push((selection, cause))
+        });
+    let mut runtime = Runtime::new(editor.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    let now = Instant::now();
+    runtime.run_frame_at(Constraints::loose(Size::new(800., 100.)), now).unwrap();
+    let mut button = |id, phase, ms| {
+        let _ = runtime.handle_raw_pointer_event(
+            RawPointerEvent::new(
+                id, 3, PointerDeviceKind::Mouse, u32::from(phase == PointerPhase::Down),
+                Offset::new(58., 7.), phase, now + Duration::from_millis(ms),
+            ).with_button(Some(PRIMARY_POINTER_BUTTON)),
+        );
+    };
+    button(1, PointerPhase::Down, 0);
+    assert_eq!(controller.selection(), initial);
+    assert!(changes.borrow().is_empty());
+    button(1, PointerPhase::Cancel, 100);
+    assert_eq!(controller.selection(), initial);
+    assert!(changes.borrow().is_empty());
+
+    button(2, PointerPhase::Down, 700);
+    assert_eq!(controller.selection(), initial);
+    button(2, PointerPhase::Up, 780);
+    let caret = TextSelection::collapsed(4);
+    assert_eq!(controller.selection(), caret);
+    assert_eq!(changes.borrow().as_slice(), &[(caret, SelectionChangedCause::Tap)]);
+}

@@ -114,3 +114,20 @@ on iOS versus moving the other platforms' caret and reporting `Tap`.
 The runtime maps Fuchsia to the Android caret policy; these cases make
 no assertion about an actual Fuchsia embedder. All five focused native
 pointer cases passed. Count the two registrations, not twelve variants.
+
+### Mobile Shift taps and precise iOS pointers
+
+The pinned authored `mobile_editor_shift_tap_test.dart` uses physical
+Shift and waits through a finger press before releasing Shift and then
+the pointer. With a starting range of 2→5 and a tap at offset 1, Android
+keeps base 2 while iOS anchors at the farther endpoint 5. Neither moves
+the range on the press; each sends one `Tap` on release. The previous
+runtime collapsed instead. The confirmed Android finger tap now uses
+the modifiers recorded at press time.
+
+The iOS mouse control keeps the range on press and cancellation, then
+places a precise caret at offset 4 after a completed tap. The tap
+route now waits for release on precise iOS devices, and a mouse drag
+beyond tap slop cannot later turn back into a tap. Three pinned
+authored cases and 40 native pointer, spelling, focus and handle tests
+passed. No original registrations were added for these cases.

@@ -2912,12 +2912,14 @@ impl Runtime {
                 if let Some(field) = text_target
                     && !ignores_text_pointer
                 {
+                    let shift = self.keyboard_modifiers.shift();
                     if deferred_text_touch {
                         self.pending_mobile_text_touch = Some(text_gestures::PendingMobileTextTouch {
                             field,
                             position,
                             menu_was_showing: text_menu_was_showing,
                             was_focused: text_target_was_focused,
+                            shift,
                         });
                     }
                     if self.captured_text_field.is_some() {
@@ -2928,6 +2930,7 @@ impl Runtime {
                                 text_target_was_focused,
                                 kind,
                                 text_menu_was_showing,
+                                shift,
                             );
                         }
                         self.text_long_press_begin(
@@ -2973,6 +2976,7 @@ impl Runtime {
                                 was_focused,
                                 kind,
                                 press.menu_was_showing,
+                                press.shift,
                             );
                         }
                     } else {
