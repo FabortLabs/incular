@@ -13,6 +13,7 @@ mod image_filter_config;
 mod paint;
 mod paths;
 mod rsuperellipse;
+mod selection;
 
 pub use backdrop::{
     BackdropCaptures, BackdropSample, backdrop_filter_is_active, backdrop_image_filter_executable,
@@ -48,6 +49,7 @@ pub use paint::{
 };
 pub use paths::{Path, PathBuilder, PathId};
 pub use rsuperellipse::rounded_superellipse_contains;
+pub use selection::{SelectionResult, SelectionUtils};
 
 // Double-precision geometry utilities; retained rendering still uses affine transforms.
 pub use incular_core::{CylindricalOrientation, Matrix4, Point64, Rect64};

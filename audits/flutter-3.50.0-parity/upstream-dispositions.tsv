@@ -3788,3 +3788,5 @@ packages/flutter/test/rendering/platform_view_test.dart	349	RenderAndroidView do
 packages/flutter/test/rendering/platform_view_test.dart	377	RenderAndroidView does not size the platform view when not laid out	paired-match	upstream-platform-view-layout-and-hover.md
 packages/flutter/test/painting/colors_test.dart	547	Wikipedia Examples Table test	paired-match	color-clamp-comparisons.md#rgb-examples-and-color-inspector-metadata
 packages/flutter/test/painting/colors_test.dart	730	ColorDiagnosticsProperty includes valueProperties in JSON	paired-match	color-clamp-comparisons.md#rgb-examples-and-color-inspector-metadata
+packages/flutter/test/rendering/selection_test.dart	21	selectionBasedOnRect works	paired-match	upstream-selection-rectangle-order.md
+packages/flutter/test/rendering/selection_test.dart	33	adjustDragOffset works	paired-match	upstream-selection-rectangle-order.md

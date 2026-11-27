@@ -427,6 +427,7 @@ pub use scrolling::{
     SliverVariedExtentList, SliverVisibility, SliverVisibilityFlagError, Viewport,
     SliverBoxPaintConfiguration, SliverBoxPainter, SliverBoxPainterFactory,
 };
+pub use incular_rendering::{SelectionResult, SelectionUtils};
 pub use selection::{
     SelectableChildPolicy, SelectedContent, SelectedContentRange, SelectionAreaController,
     SelectionContainerDelegate, SelectionDetails, SelectionGeometry, SelectionHandleType,
