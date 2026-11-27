@@ -59,3 +59,16 @@ A separate native fixture also advances actual blink boundaries
 after explicitly scrolling the focused editor horizontally, verifying
 that paint activity never snaps the scroll back. All 24 focused native
 caret, focus, and reveal cases passed.
+
+## Selecting through the native keyboard and selection delegate
+
+Both read-only and editable expansions of both pinned registrations
+passed. A selection-only update from the native keyboard moves the
+selection and reveals the caret in an editable field, but is ignored
+by a read-only native field. The field's own selection delegate
+can reveal the caret even when read-only. The native fixtures reset
+both scroll positions before each update and check both positions,
+the unchanged text, the selection, and retained focus. The same
+results hold with a formatter which would reject replacement text.
+Both focused native tests passed. This completes all 14 registration
+sites in the pinned show-on-screen test file.
