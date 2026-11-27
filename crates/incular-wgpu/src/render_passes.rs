@@ -188,6 +188,9 @@ pub(crate) struct OffscreenCacheEntry {
     pub(crate) height: u32,
     pub(crate) scale_factor_bits: u32,
     pub(crate) generation: u64,
+    /// Mask placement relative to the pixel-aligned offscreen target.
+    /// Integer device-pixel translations can still reuse the group.
+    pub(crate) mask_placement: Option<incular_core::Transform>,
     pub(crate) device_generation: u64,
     pub(crate) last_used_frame: u64,
     pub(crate) bytes: usize,

@@ -634,8 +634,8 @@ pub struct LayerTree {
     flatten_len_hint: usize,
     /// Recently recorded layers, newest first. Generational IDs cannot keep
     /// a picture alive or resolve to a layer that reused its slot.
-    /// The stage transform each resampled `Transform` layer last flattened
-    /// with, reused while it is unchanged so a re-flatten does not allocate.
+    /// The stage transform each resampled `Transform` or shader mask last
+    /// flattened with, reused so an unchanged transform does not allocate.
     /// Only those rare layers have an entry; removal drops it.
     matrix_stages: HashMap<LayerId, Arc<Transform>>,
     recent_pictures: [Option<LayerId>; 4],
@@ -972,6 +972,7 @@ impl LayerTree {
     /// Creates an isolated shader-mask stage. The callback is evaluated by
     /// the retained widget during paint; this layer only owns the resolved,
     /// renderer-neutral shader description and its local coordinate space.
+    /// The supplied mask transform is relative to the layer.
     pub fn create_shader_mask(
         &mut self,
         shader: Brush,
@@ -2295,9 +2296,7 @@ impl LayerTree {
         self.child_stack.truncate(start);
     }
 
-    /// The shared stage transform for a resampled `Transform` layer: the
-    /// previous one when `world` is unchanged, else a fresh one kept for next
-    /// time.
+    /// Reuses a flattened effect stage's transform while it is unchanged.
     fn matrix_stage(&mut self, id: LayerId, world: Transform) -> Arc<Transform> {
         match self.matrix_stages.get(&id) {
             Some(stage) if **stage == world => Arc::clone(stage),
@@ -2517,6 +2516,11 @@ impl LayerTree {
                 {
                     return;
                 }
+                let mask_transform = if world_transform == Transform::IDENTITY {
+                    mask_transform
+                } else {
+                    self.matrix_stage(id, world_transform.then(*mask_transform))
+                };
                 out.push(PaintCommand::PushShaderMask {
                     layer: id,
                     shader: *shader,

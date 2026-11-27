@@ -345,12 +345,7 @@ fn blend_change_updates_layer_without_layout_or_paint() {
 }
 
 #[test]
-fn ancestor_move_keeps_resolve_time_transform_with_live_bounds() {
-    // Placement follows the live transform stack every flatten, but the
-    // recorded mask transform is a resolve-time snapshot: moving an
-    // ancestor without repainting the mask leaves the snapshot behind
-    // while bounds track the move. Both halves are pinned so the
-    // boundary cannot drift silently.
+fn ancestor_move_tracks_live_bounds_without_resolving_the_shader_again() {
     let probe = Probe::new(Color::WHITE);
     let make = |offset: Offset| {
         centered(Widget::from(Transform::translation(
@@ -381,8 +376,8 @@ fn ancestor_move_keeps_resolve_time_transform_with_live_bounds() {
     );
     assert_eq!(
         stages[0].mask_origin,
-        Offset::new(91., 13.),
-        "snapshot stays at resolve time"
+        Offset::new(100., 0.),
+        "mask and content move together"
     );
     assert_rect_eq(
         stages[0].bounds,

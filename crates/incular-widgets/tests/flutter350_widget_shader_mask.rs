@@ -106,3 +106,82 @@ fn tightly_sized_centered_mask_passes_local_not_world_bounds() {
     assert_eq!(transform.translation_offset(), origin);
     assert_eq!(**bounds, Rect::from_origin_size(origin, local.size));
 }
+
+#[test]
+fn preserved_shader_tracks_reflection_even_when_the_mask_bounds_are_unchanged() {
+    use incular_widgets::{Transform, Widget};
+    use std::cell::Cell;
+
+    let calls = Rc::new(Cell::new(0));
+    let shader = ShaderCallback::new({
+        let calls = calls.clone();
+        move |bounds| {
+            assert_eq!(
+                bounds,
+                Rect::from_origin_size(Offset::ZERO, Size::new(16., 16.))
+            );
+            calls.set(calls.get() + 1);
+            Brush::Solid(Color::WHITE)
+        }
+    });
+    let make = |x: f32, reflection: f32| -> Widget {
+        Align::new(
+            Alignment::TOP_LEFT,
+            Transform::translation(
+                Offset::new(x, 8.),
+                Transform::scale_non_uniform(
+                    reflection,
+                    1.,
+                    ShaderMask::new(
+                        shader.clone(),
+                        Widget::box_(Size::new(16., 16.), Color::WHITE),
+                    ),
+                ),
+            ),
+        )
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(make(8., 1.)).unwrap();
+    let constraints = Constraints::tight(Size::new(64., 48.));
+    for (i, (x, reflection)) in [(8., 1.), (32., 1.), (32., -1.), (8., -1.)]
+        .into_iter()
+        .enumerate()
+    {
+        if i != 0 {
+            tree.update(root, make(x, reflection)).unwrap();
+        }
+        tree.layout(constraints).unwrap();
+        let list = tree.paint();
+        let (bounds, mapping) = list
+            .commands()
+            .iter()
+            .find_map(|command| match command {
+                PaintCommand::PushShaderMask {
+                    bounds,
+                    mask_transform,
+                    ..
+                } => Some((bounds, mask_transform)),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(
+            *bounds,
+            Rect::from_origin_size(Offset::new(x, 8.), Size::new(16., 16.))
+        );
+        let edge = |local| {
+            if reflection > 0. {
+                x + local
+            } else {
+                x + (16. - local)
+            }
+        };
+        for point in [Offset::new(3., 7.), Offset::new(12., 7.)] {
+            assert_eq!(
+                mapping.transform_point(point),
+                Offset::new(edge(point.x), 15.)
+            );
+        }
+        assert_eq!(calls.get(), 1);
+    }
+}

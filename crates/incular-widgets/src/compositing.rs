@@ -61,10 +61,9 @@ impl PartialEq for ShaderCallback {
 /// Applies a callback-generated shader to a child using Flutter's default
 /// `BlendMode::modulate` behavior.
 ///
-/// The recorded mask size and transform snapshot resolve time; placement
-/// of resolved content follows the live transform stack every flatten,
-/// while the stage bounds recompute live. Hit testing and semantics pass
-/// through the mask untouched.
+/// The callback resolves the shader in local coordinates. Both the mask
+/// and its child follow live ancestor transforms without resolving the
+/// shader again. Hit testing and semantics pass through untouched.
 ///
 /// The WGPU backend executes the mask like Flutter's `ShaderMaskLayer`:
 /// the child renders into an isolated layer, the mask rectangle (the

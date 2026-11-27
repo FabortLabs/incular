@@ -23,7 +23,7 @@ impl WidgetTree {
                         mask,
                         blend_mode,
                         size,
-                        self.render_world_transform(id),
+                        incular_core::Transform::IDENTITY,
                     );
                 }
             }

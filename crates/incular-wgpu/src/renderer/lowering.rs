@@ -1168,7 +1168,7 @@ impl WgpuRenderer {
         &mut self,
         mask: &ShaderMaskStage<'_>,
         scale: f32,
-        translation: Offset,
+        placement: Transform,
         layer: incular_painting::LayerId,
     ) -> Result<Option<DrawBatch>, RendererError> {
         let size = mask.mask_size;
@@ -1179,11 +1179,10 @@ impl WgpuRenderer {
             return Ok(None);
         }
         let rect = Rect::from_origin_size(Offset::ZERO, size);
-        let initial = Transform::translation(translation);
         let fill = self.lower_commands(
             &[
                 PaintCommand::PushTransform {
-                    transform: mask.mask_transform,
+                    transform: placement,
                 },
                 PaintCommand::RRect {
                     rrect: RRect {
@@ -1195,10 +1194,10 @@ impl WgpuRenderer {
                 PaintCommand::PopTransform,
             ],
             scale,
-            initial,
+            Transform::IDENTITY,
             ClipState::Unbounded,
         )?;
-        let mask_rect = initial.then(mask.mask_transform).transform_rect_bbox(rect);
+        let mask_rect = placement.transform_rect_bbox(rect);
         let (width, height) = (self.target_width, self.target_height);
         if let Some(previous) = self.effect_cache.remove(&layer) {
             self.remove_effect_cache_bytes(previous.bytes);
@@ -1344,9 +1343,12 @@ impl WgpuRenderer {
             width,
             height,
         };
+        let local_translation = translation - (target.origin - active_origin);
+        let placed_mask = mask.map(|mask| (mask, mask.placement_in_target(local_translation)));
         let frame = self.counters.frames;
         if let Some(entry) = self.offscreen_cache.get_mut(&layer)
             && entry.generation == generation
+            && entry.mask_placement == placed_mask.map(|(_, placement)| placement)
             && entry.width == width
             && entry.height == height
             && entry.scale_factor_bits == scale.to_bits()
@@ -1380,11 +1382,11 @@ impl WgpuRenderer {
         let rendered = self.render_offscreen_children(
             commands,
             scale,
-            translation - (target.origin - active_origin),
+            local_translation,
             layer,
             generation,
             label,
-            mask,
+            placed_mask,
         );
         self.target_width = saved_target.0;
         self.target_height = saved_target.1;
@@ -1409,7 +1411,7 @@ impl WgpuRenderer {
         layer: incular_painting::LayerId,
         generation: u64,
         label: &'static str,
-        mask: Option<&ShaderMaskStage<'_>>,
+        mask: Option<(&ShaderMaskStage<'_>, Transform)>,
     ) -> Result<bool, RendererError> {
         let mut batches = self.lower_commands(
             commands,
@@ -1422,8 +1424,8 @@ impl WgpuRenderer {
         if !batches_have_content(&batches) {
             return Ok(false);
         }
-        if let Some(mask) = mask
-            && let Some(batch) = self.lower_shader_mask_fill(mask, scale, translation, layer)?
+        if let Some((mask, placement)) = mask
+            && let Some(batch) = self.lower_shader_mask_fill(mask, scale, placement, layer)?
         {
             // The mask blends over the child already painted in this
             // group, as Flutter's `ShaderMaskLayer` draws its mask rect
@@ -1451,6 +1453,7 @@ impl WgpuRenderer {
                 height,
                 scale_factor_bits: scale.to_bits(),
                 generation,
+                mask_placement: mask.map(|(_, placement)| placement),
                 device_generation: self.device_generation,
                 last_used_frame: self.counters.frames,
                 bytes,
