@@ -1,12 +1,78 @@
 //! An optional Flutter text-input channel adapter for embedders that speak
 //! Flutter's JSON method protocol instead of Incular's native IME events.
 
+use std::{cell::RefCell, rc::Rc};
+
 use incular_platform::{
-    FlutterTextInputConfiguration, TextInputClientId, TextInputState,
+    FlutterInboundMessenger, FlutterJsonMethodChannel, FlutterJsonMethodResult,
+    FlutterScribbleRegistry, FlutterTextInputConfiguration, PlatformEvent, TextInputClientId,
+    TextInputState,
     message_codecs::{JsonMethodCodec, JsonMethodCodecError, MethodCall},
 };
 use incular_text::{FlutterTextDeltaError, FlutterTextEditingDelta};
 use serde_json::{Map, Value, json};
+
+/// The default inbound `flutter/textinput` handler for an opt-in Flutter
+/// embedder. Install this when setting up the runtime, before any field attaches.
+#[derive(Clone)]
+pub struct FlutterTextInputBinding {
+    scribble: Rc<RefCell<FlutterScribbleRegistry>>,
+}
+
+impl FlutterTextInputBinding {
+    pub const CHANNEL: FlutterJsonMethodChannel =
+        FlutterJsonMethodChannel::new(FlutterDeltaTextInputConnection::CHANNEL);
+
+    /// Registers or replaces the local text-input channel handler. The
+    /// messenger does not keep the runtime alive. Route inbound platform
+    /// messages on the UI turn outside of a mutable runtime borrow.
+    #[must_use]
+    pub fn install(inbound: &FlutterInboundMessenger, runtime: &Rc<RefCell<crate::Runtime>>) -> Self {
+        let runtime = Rc::downgrade(runtime);
+        let scribble = Rc::new(RefCell::new(FlutterScribbleRegistry::new()));
+        Self::CHANNEL.set_method_call_handler(inbound, {
+            let scribble = scribble.clone();
+            move |call, reply| {
+                let result = if let Some(runtime) = runtime.upgrade() {
+                    match (runtime.try_borrow_mut(), scribble.try_borrow_mut()) {
+                        (Ok(mut runtime), Ok(mut scribble)) => {
+                            runtime.handle_flutter_text_input_method(&call, &mut scribble)
+                        }
+                        _ => FlutterJsonMethodResult::Error(Box::new(FlutterTextInputBindingBusy)),
+                    }
+                } else {
+                    FlutterJsonMethodResult::NotImplemented
+                };
+                let _ = reply(result);
+            }
+        });
+        Self { scribble }
+    }
+
+    /// The window's mounted handwriting targets, independent of keyboard focus.
+    #[must_use]
+    pub fn scribble_registry(&self) -> Rc<RefCell<FlutterScribbleRegistry>> {
+        self.scribble.clone()
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("text-input channel is busy on this UI turn")]
+struct FlutterTextInputBindingBusy;
+
+fn method_result<T, E>(
+    result: Result<Option<T>, E>,
+    reply: impl FnOnce(T) -> Value,
+) -> FlutterJsonMethodResult
+where
+    E: std::error::Error + 'static,
+{
+    match result {
+        Ok(Some(value)) => FlutterJsonMethodResult::Success(reply(value)),
+        Ok(None) => FlutterJsonMethodResult::NotImplemented,
+        Err(error) => FlutterJsonMethodResult::Error(Box::new(error)),
+    }
+}
 
 /// The opt-in Flutter delta channel for one attached text-input client.
 /// Replace it when another client attaches, and discard it on detach.
@@ -282,6 +348,59 @@ fn decode_full_editing_state(data: &Value) -> Result<TextInputState, FlutterText
 }
 
 impl crate::Runtime {
+    fn handle_flutter_text_input_method(
+        &mut self,
+        call: &MethodCall<Value>,
+        scribble: &mut FlutterScribbleRegistry,
+    ) -> FlutterJsonMethodResult {
+        use FlutterJsonMethodResult::{NotImplemented, Success};
+        match scribble.handle_method(call) {
+            Ok(None) => {}
+            result => return method_result(result, std::convert::identity),
+        }
+        self.adopt_external_focus_change();
+        if call.method == "TextInputClient.onFocusReceived" {
+            return method_result(self.handle_flutter_text_input_lifecycle_method(call), Value::Bool);
+        }
+        if self.active_flutter_editable_client().is_none() {
+            // The installed channel acknowledges delivery even before an
+            // editor attaches. Encoded Success(null) is not a missing plugin.
+            return Success(Value::Null);
+        }
+        let unit = |_| Value::Null;
+        match call.method.as_str() {
+            "TextInputClient.requestExistingInputState" => {
+                self.handle_platform_event(PlatformEvent::RequestExistingTextInputState);
+                Success(Value::Null)
+            }
+            "TextInputClient.updateEditingState" => {
+                method_result(self.handle_flutter_text_input_editing_method(call), unit)
+            }
+            "TextInputClient.performPrivateCommand" => {
+                method_result(self.handle_flutter_text_input_private_command_method(call), unit)
+            }
+            "TextInputClient.showAutocorrectionPromptRect" => {
+                method_result(self.handle_flutter_autocorrection_prompt_method(call), unit)
+            }
+            "TextInputClient.showToolbar" => {
+                method_result(self.handle_flutter_text_toolbar_method(call), unit)
+            }
+            "TextInputClient.updateFloatingCursor" => {
+                method_result(self.handle_flutter_floating_cursor_method(call), unit)
+            }
+            "TextInputClient.performAction" => {
+                method_result(self.handle_flutter_keyboard_content_method(call), unit)
+            }
+            "TextInputClient.performSelectors" => {
+                method_result(self.handle_flutter_text_input_selectors_method(call), unit)
+            }
+            "TextInputClient.onConnectionClosed" => {
+                method_result(self.handle_flutter_text_input_lifecycle_method(call), unit)
+            }
+            _ => NotImplemented,
+        }
+    }
+
     /// Applies a validated Flutter `TextInputClient.updateEditingState`
     /// message to the current editable attachment only. Wrong client IDs
     /// return `Some(false)`; unrelated methods return `None`.
@@ -293,8 +412,14 @@ impl crate::Runtime {
         &mut self,
         data: &[u8],
     ) -> Result<Option<bool>, FlutterTextInputEditingError> {
+        self.handle_flutter_text_input_editing_method(&JsonMethodCodec::decode_method_call(data)?)
+    }
+
+    fn handle_flutter_text_input_editing_method(
+        &mut self,
+        call: &MethodCall<Value>,
+    ) -> Result<Option<bool>, FlutterTextInputEditingError> {
         use FlutterTextInputEditingError::InvalidArguments;
-        let call = JsonMethodCodec::decode_method_call(data)?;
         if call.method != "TextInputClient.updateEditingState" {
             return Ok(None);
         }
@@ -321,8 +446,14 @@ impl crate::Runtime {
         &self,
         data: &[u8],
     ) -> Result<Option<bool>, FlutterTextInputPrivateCommandError> {
+        self.handle_flutter_text_input_private_command_method(&JsonMethodCodec::decode_method_call(data)?)
+    }
+
+    fn handle_flutter_text_input_private_command_method(
+        &self,
+        call: &MethodCall<Value>,
+    ) -> Result<Option<bool>, FlutterTextInputPrivateCommandError> {
         use FlutterTextInputPrivateCommandError::{InvalidAction, InvalidArguments, InvalidData};
-        let call = JsonMethodCodec::decode_method_call(data)?;
         if call.method != "TextInputClient.performPrivateCommand" {
             return Ok(None);
         }
@@ -358,7 +489,13 @@ impl crate::Runtime {
         &mut self,
         data: &[u8],
     ) -> Result<Option<bool>, FlutterTextInputLifecycleError> {
-        let call = JsonMethodCodec::decode_method_call(data)?;
+        self.handle_flutter_autocorrection_prompt_method(&JsonMethodCodec::decode_method_call(data)?)
+    }
+
+    fn handle_flutter_autocorrection_prompt_method(
+        &mut self,
+        call: &MethodCall<Value>,
+    ) -> Result<Option<bool>, FlutterTextInputLifecycleError> {
         if call.method != "TextInputClient.showAutocorrectionPromptRect" {
             return Ok(None);
         }
@@ -389,7 +526,13 @@ impl crate::Runtime {
         &mut self,
         data: &[u8],
     ) -> Result<Option<bool>, FlutterTextInputLifecycleError> {
-        let call = JsonMethodCodec::decode_method_call(data)?;
+        self.handle_flutter_text_toolbar_method(&JsonMethodCodec::decode_method_call(data)?)
+    }
+
+    fn handle_flutter_text_toolbar_method(
+        &mut self,
+        call: &MethodCall<Value>,
+    ) -> Result<Option<bool>, FlutterTextInputLifecycleError> {
         if call.method != "TextInputClient.showToolbar" {
             return Ok(None);
         }
@@ -412,8 +555,14 @@ impl crate::Runtime {
         &mut self,
         data: &[u8],
     ) -> Result<Option<bool>, FlutterTextInputFloatingCursorError> {
+        self.handle_flutter_floating_cursor_method(&JsonMethodCodec::decode_method_call(data)?)
+    }
+
+    fn handle_flutter_floating_cursor_method(
+        &mut self,
+        call: &MethodCall<Value>,
+    ) -> Result<Option<bool>, FlutterTextInputFloatingCursorError> {
         use FlutterTextInputFloatingCursorError::InvalidArguments;
-        let call = JsonMethodCodec::decode_method_call(data)?;
         if call.method != "TextInputClient.updateFloatingCursor" {
             return Ok(None);
         }
@@ -440,8 +589,14 @@ impl crate::Runtime {
         &mut self,
         data: &[u8],
     ) -> Result<Option<bool>, FlutterKeyboardContentError> {
+        self.handle_flutter_keyboard_content_method(&JsonMethodCodec::decode_method_call(data)?)
+    }
+
+    fn handle_flutter_keyboard_content_method(
+        &mut self,
+        call: &MethodCall<Value>,
+    ) -> Result<Option<bool>, FlutterKeyboardContentError> {
         use FlutterKeyboardContentError::InvalidArguments;
-        let call = JsonMethodCodec::decode_method_call(data)?;
         if call.method != "TextInputClient.performAction" {
             return Ok(None);
         }
@@ -469,8 +624,14 @@ impl crate::Runtime {
         &mut self,
         data: &[u8],
     ) -> Result<Option<bool>, FlutterTextInputSelectorError> {
+        self.handle_flutter_text_input_selectors_method(&JsonMethodCodec::decode_method_call(data)?)
+    }
+
+    fn handle_flutter_text_input_selectors_method(
+        &mut self,
+        call: &MethodCall<Value>,
+    ) -> Result<Option<bool>, FlutterTextInputSelectorError> {
         use FlutterTextInputSelectorError::{InvalidArguments, InvalidSelector};
-        let call = JsonMethodCodec::decode_method_call(data)?;
         if call.method != "TextInputClient.performSelectors" {
             return Ok(None);
         }
@@ -508,7 +669,13 @@ impl crate::Runtime {
         &mut self,
         data: &[u8],
     ) -> Result<Option<bool>, FlutterTextInputLifecycleError> {
-        let call = JsonMethodCodec::decode_method_call(data)?;
+        self.handle_flutter_text_input_lifecycle_method(&JsonMethodCodec::decode_method_call(data)?)
+    }
+
+    fn handle_flutter_text_input_lifecycle_method(
+        &mut self,
+        call: &MethodCall<Value>,
+    ) -> Result<Option<bool>, FlutterTextInputLifecycleError> {
         let receive_focus = match call.method.as_str() {
             "TextInputClient.onConnectionClosed" => false,
             "TextInputClient.onFocusReceived" => true,

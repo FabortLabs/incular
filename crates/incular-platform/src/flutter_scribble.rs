@@ -5,7 +5,7 @@ use std::rc::Rc;
 use incular_core::{Offset, Rect, Size};
 use serde_json::{Value, json};
 
-use crate::message_codecs::{JsonMethodCodec, JsonMethodCodecError};
+use crate::message_codecs::{JsonMethodCodec, JsonMethodCodecError, MethodCall};
 
 /// A mounted element available to a host handwriting interaction.
 pub trait FlutterScribbleClient {
@@ -66,7 +66,14 @@ impl FlutterScribbleRegistry {
     /// Decodes a handwriting message, before requiring a focused text
     /// attachment. A recognized void operation returns a JSON null value.
     pub fn handle_call(&mut self, bytes: &[u8]) -> Result<Option<Value>, FlutterScribbleError> {
-        let call = JsonMethodCodec::decode_method_call(bytes)?;
+        self.handle_method(&JsonMethodCodec::decode_method_call(bytes)?)
+    }
+
+    /// Handles a method already decoded by a Flutter JSON channel receiver.
+    pub fn handle_method(
+        &mut self,
+        call: &MethodCall<Value>,
+    ) -> Result<Option<Value>, FlutterScribbleError> {
         let arguments = || {
             call.arguments
                 .as_array()

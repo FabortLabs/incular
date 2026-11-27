@@ -69,7 +69,7 @@ pub use file_dialogs::{
 };
 pub use flutter_text_input::{
     FlutterDeltaTextInputConnection, FlutterDeltaTextInputError, FlutterKeyboardContentError,
-    FlutterTextInputEditingError, FlutterTextInputFloatingCursorError,
+    FlutterTextInputBinding, FlutterTextInputEditingError, FlutterTextInputFloatingCursorError,
     FlutterTextInputLifecycleError, FlutterTextInputPrivateCommandError, FlutterTextInputSelectorError,
 };
 pub use semantics_activation::{SemanticsEnabledSubscription, SemanticsHandle};

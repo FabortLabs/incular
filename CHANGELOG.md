@@ -28,6 +28,9 @@ a version and date when publishing.
 
 ### Added
 
+- Flutter-compatible embedders can install `FlutterTextInputBinding` at
+  startup to acknowledge text-input messages before an editor attaches.
+
 - `Application::observe_window_focus` forwards typed platform focus events
   with the live window ID and direction.
 

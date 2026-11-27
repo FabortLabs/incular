@@ -3474,3 +3474,4 @@ packages/flutter/test/widgets/mouse_region_test.dart	1102	A MouseRegion mounted 
 packages/flutter/test/widgets/mouse_region_test.dart	1152	A MouseRegion unmounted under the pointer should not trigger state change	paired-match	upstream-mouse-region-local-motion.md#hover-transfer-and-feedback-across-frames
 packages/flutter/test/widgets/mouse_region_test.dart	1203	A MouseRegion moved into the mouse should take effect in the next postframe	paired-match	upstream-mouse-region-local-motion.md#hover-transfer-and-feedback-across-frames
 packages/flutter/test/services/binding_test.dart	195	Default handleViewFocusChanged propagates event	paired-match	upstream-window-focus-binding.md
+packages/flutter/test/services/binding_test.dart	134	initInstances sets a default method call handler for SystemChannels.textInput	paired-match	upstream-text-input-startup-binding.md
