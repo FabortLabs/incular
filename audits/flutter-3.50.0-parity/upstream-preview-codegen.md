@@ -24,3 +24,18 @@ The Rust generator accepts portable, trusted analysis records carrying
 ASCII identifiers and zero-argument widget factories; this does not
 discover Rust previews, generate arbitrary Dart annotation expressions,
 run project code, or launch a browser/IDE scaffold.
+
+## Scaffold connection metadata
+
+The exact pinned dynamic registration at :539 passed. The native writer
+generates a real scaffold module containing the same four inputs: the
+connection URI, service, stream, and project root. Its temporary file is
+published as one replacement. The test rewrites the endpoint, verifies
+the old value is gone, and compiles and runs the generated constants
+with a project path containing quotes and a backslash. A Unix-only test
+verifies that a non-Unicode root fails before touching the valid file.
+
+Two dedicated native module tests and nine nearby generator/manifest
+tests passed. Metadata is written to the local scaffold, not used to
+open a socket or upload project paths. No running DTD connection is
+claimed.

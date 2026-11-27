@@ -14,7 +14,8 @@ a version and date when publishing.
 ### Added
 
 - Widget preview tooling can generate Rust factory registrations with
-  stable import aliases, omitting sources outside importable packages.
+  stable import aliases, omitting sources outside importable packages. It can
+  also write local scaffold connection metadata as escaped Rust constants.
 
 - Inline text spans expose speech metadata and UTF-16 position lookup,
   keeping presentation labels separate from literal layout text. Rich paragraph

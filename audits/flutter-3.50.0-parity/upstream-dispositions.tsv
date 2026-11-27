@@ -2723,3 +2723,4 @@ packages/flutter/test/painting/text_span_test.dart	205	TextSpan nested widget ch
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_code_generator_test.dart	466	ignores previews with null packageName for LSP updates	paired-match	upstream-preview-codegen.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_code_generator_test.dart	574	filters out non-package/non-SDK imports and allocates non-colliding prefixes	paired-match	upstream-preview-codegen.md
 packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_code_generator_test.dart	599	throws StateError when prefixes have already been allocated	paired-match	upstream-preview-codegen.md
+packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_code_generator_test.dart	539	'correctly generates ${PreviewCodeGenerator.getGeneratedDtdConnectionInfoFilePath(fs)}'	paired-match	upstream-preview-codegen.md#scaffold-connection-metadata
