@@ -1197,6 +1197,7 @@ pub struct EditableText {
     focused_border_outset: incular_config::EdgeInsets,
     content_padding: incular_config::EdgeInsets,
     clip_behavior: incular_config::Clip,
+    fixed_scroll_offset: Option<f32>,
     on_editing_complete: Option<Rc<dyn Fn()>>,
     on_submit: Option<Rc<dyn Fn(String)>>,
     on_tap_outside: Option<EditableOutsideTap>,
@@ -1273,6 +1274,7 @@ impl EditableText {
             focused_border_outset: incular_config::EdgeInsets::ZERO,
             content_padding: incular_config::EdgeInsets::ZERO,
             clip_behavior: incular_config::Clip::HardEdge,
+            fixed_scroll_offset: None,
             on_editing_complete: None,
             on_submit: None,
             on_tap_outside: None,
@@ -1340,6 +1342,17 @@ impl EditableText {
     #[must_use]
     pub fn clip_behavior(mut self, behavior: incular_config::Clip) -> Self {
         self.clip_behavior = behavior;
+        self
+    }
+
+    /// Sets a caller-controlled viewport offset in logical pixels, like
+    /// Flutter's `ViewportOffset.fixed`. It is horizontal for a single line
+    /// and vertical for multiline text. Automatic caret reveal and scrolling
+    /// leave a fixed offset untouched. Pass `None` to restore automatic
+    /// scrolling; non-finite values are treated as unset.
+    #[must_use]
+    pub fn fixed_scroll_offset(mut self, pixels: impl Into<Option<f32>>) -> Self {
+        self.fixed_scroll_offset = pixels.into().filter(|offset| offset.is_finite());
         self
     }
 
@@ -2088,6 +2101,7 @@ impl From<EditableText> for Widget {
             focused_border_outset: value.focused_border_outset,
             content_padding: value.content_padding,
             clip_behavior: value.clip_behavior,
+            fixed_scroll_offset: value.fixed_scroll_offset,
             on_editing_complete: value.on_editing_complete,
             on_submit: value.on_submit,
             on_tap_outside: value.on_tap_outside,

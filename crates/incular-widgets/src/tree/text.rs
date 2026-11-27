@@ -107,6 +107,18 @@ pub(super) fn reveal_horizontal_caret(
     }
 }
 
+impl TextFieldRender {
+    /// Resolves the externally controlled displacement without changing the
+    /// automatic viewport's saved scroll position.
+    pub(in crate::tree) fn scroll_offset(&self, x: f32, y: f32) -> Offset {
+        match self.fixed_scroll_offset {
+            Some(offset) if self.multiline => Offset::new(0., offset),
+            Some(offset) => Offset::new(offset, 0.),
+            None => Offset::new(x, y),
+        }
+    }
+}
+
 pub(super) fn editable_content_clip(
     field: &TextFieldRender,
     layout: &impl TextGeometry,
@@ -414,7 +426,7 @@ impl WidgetTree {
             field,
             &layout,
             node.size,
-            Offset::new(state.scroll_x, state.scroll_y),
+            field.scroll_offset(state.scroll_x, state.scroll_y),
         )
     }
 
@@ -674,6 +686,9 @@ impl WidgetTree {
         let RenderKind::TextField(field) = node.object.kind() else {
             return false;
         };
+        if field.fixed_scroll_offset.is_some() {
+            return false;
+        }
         let Some(layout) = node.field_layout() else {
             return false;
         };
@@ -726,6 +741,9 @@ impl WidgetTree {
         let RenderKind::TextField(field) = node.object.kind() else {
             return false;
         };
+        if field.fixed_scroll_offset.is_some() {
+            return false;
+        }
         let Some(layout) = node.field_layout() else {
             return false;
         };
@@ -810,9 +828,12 @@ impl WidgetTree {
     #[must_use]
     pub fn text_field_scroll_offset(&self, id: ElementId) -> Option<Offset> {
         let render = self.render_id(id)?;
-        self.renders.get(render.0)?.text_field_state()?;
-        let state = self.text_field_state_live(render);
-        Some(Offset::new(state.scroll_x, state.scroll_y))
+        let node = self.renders.get(render.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let state = node.text_field_state()?;
+        Some(field.scroll_offset(state.scroll_x, state.scroll_y))
     }
     /// Flutter's `_moveToTextBoundary` over `LineBoundary`
     /// (`editable_text.dart`): the line start (backward) or end excluding a
@@ -920,33 +941,21 @@ impl WidgetTree {
         point: Offset,
     ) -> Option<(usize, incular_text::TextAffinity)> {
         let render = self.render_id(id)?;
-        let (layout, scroll_x, scroll_y, multiline, padding, controller, mask) =
-            match self.renders.get(render.0).map(|node| {
-                let state = self.text_field_state_live(render);
-                (
-                    node.object.kind(),
-                    node.field_layout(),
-                    state.scroll_x,
-                    state.scroll_y,
-                )
-            }) {
-                Some((RenderKind::TextField(field), layout, scroll_x, scroll_y)) => (
-                    layout,
-                    scroll_x,
-                    scroll_y,
-                    field.multiline,
-                    field.content_padding,
-                    field.controller.clone(),
-                    field.obscure_text.then_some(field.obscuring_character),
-                ),
-                _ => return None,
-            };
+        let node = self.renders.get(render.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let layout = node.field_layout();
+        let state = node.text_field_state()?;
+        let scroll = field.scroll_offset(state.scroll_x, state.scroll_y);
+        let (multiline, padding) = (field.multiline, field.content_padding);
+        let mask = field.obscure_text.then_some(field.obscuring_character);
         let local = self
             .render_world_transform(render)
             .inverse_transform_point(point)
             .unwrap_or(point);
-        let x = local.x - padding.left + scroll_x;
-        let y = local.y - if multiline { padding.top } else { 0. } + scroll_y;
+        let x = local.x - padding.left + scroll.x;
+        let y = local.y - if multiline { padding.top } else { 0. } + scroll.y;
         let (index, affinity) =
             layout
                 .as_ref()
@@ -960,7 +969,7 @@ impl WidgetTree {
                         })
                 });
         Some((
-            text_field_source_offset(&controller, index, affinity, mask),
+            text_field_source_offset(&field.controller, index, affinity, mask),
             affinity,
         ))
     }
@@ -2037,6 +2046,7 @@ impl WidgetTree {
         };
         let layout = node.field_layout()?;
         let state = self.text_field_state_live(render);
+        let scroll = field.scroll_offset(state.scroll_x, state.scroll_y);
         let preferred_height = layout.metrics().line_height;
         let (selection, empty, edge_clusters) = field.controller.with_value(|value| {
             let selection = value.selection;
@@ -2067,8 +2077,8 @@ impl WidgetTree {
         let endpoint = |byte, affinity| {
             let (x, y, line_height) = text_field_caret_geometry(&layout, byte, affinity, empty, field);
             Offset::new(
-                x + padding.left - state.scroll_x,
-                y + line_height + content_top - state.scroll_y,
+                x + padding.left - scroll.x,
+                y + line_height + content_top - scroll.y,
             )
         };
         let (first, last) = if selection.is_collapsed() {
@@ -2157,6 +2167,7 @@ impl WidgetTree {
             return None;
         };
         let state = self.text_field_state_live(render);
+        let scroll = field.scroll_offset(state.scroll_x, state.scroll_y);
         let (x, y, height) =
             text_field_caret_geometry(&layout, offset, affinity, text_is_empty, field);
         let top = text_field_content_top(
@@ -2166,9 +2177,9 @@ impl WidgetTree {
             field.content_padding,
         );
         let local = Offset::new(
-            editable_caret_x(field, node.size.width, x) - state.scroll_x
+            editable_caret_x(field, node.size.width, x) - scroll.x
                 + field.content_padding.left,
-            y - state.scroll_y + top,
+            y - scroll.y + top,
         );
         let rect = match mode {
             EditableCaret::Visual => Rect::from_origin_size(local, Size::new(1., height.max(1.))),
@@ -2197,6 +2208,7 @@ impl WidgetTree {
         }
         let layout = node.field_layout()?;
         let state = self.text_field_state_live(render);
+        let scroll = field.scroll_offset(state.scroll_x, state.scroll_y);
         let mask = field.obscure_text.then_some(field.obscuring_character);
         let start = text_field_display_offset(&field.controller, selection.start(), mask);
         let end = text_field_display_offset(&field.controller, selection.end(), mask);
@@ -2220,7 +2232,7 @@ impl WidgetTree {
             padding,
         );
         Some(Rect::from_origin_size(
-            rect.origin + Offset::new(padding.left - state.scroll_x, top - state.scroll_y),
+            rect.origin + Offset::new(padding.left - scroll.x, top - scroll.y),
             rect.size,
         ))
     }
@@ -2243,6 +2255,7 @@ impl WidgetTree {
         };
         let layout = node.field_layout()?;
         let state = node.text_field_state()?;
+        let scroll = field.scroll_offset(state.scroll_x, state.scroll_y);
         if node.dirty.contains(DirtyFlags::LAYOUT)
             || field.controller.revisions() != (state.content_revision, state.visual_revision)
         {
@@ -2270,7 +2283,7 @@ impl WidgetTree {
             padding,
         );
         Some(Rect::from_origin_size(
-            rect.origin + Offset::new(padding.left - state.scroll_x, top - state.scroll_y),
+            rect.origin + Offset::new(padding.left - scroll.x, top - scroll.y),
             rect.size,
         ))
     }

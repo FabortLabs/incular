@@ -2400,7 +2400,7 @@ packages/flutter/test/rendering/image_test.dart	210	update image colorBlendMode	
 packages/flutter/test/widgets/routes_test.dart	2051	requestFocus can be updated	paired-match	upstream-route-focus-scopes.md#explicit-route-and-dialog-focus
 packages/flutter/test/widgets/routes_test.dart	2776	requestFocus works correctly in showGeneralDialog.	paired-match	upstream-route-focus-scopes.md#explicit-route-and-dialog-focus
 packages/flutter/test/rendering/editable_test.dart	178	Editable respect clipBehavior in describeApproximatePaintClip	paired-match	upstream-editable-paint-clip.md
-packages/flutter/test/rendering/editable_test.dart	240	correct clipping	reference-ran-incular-open	upstream-editable-paint-clip.md
+packages/flutter/test/rendering/editable_test.dart	240	correct clipping	paired-match	upstream-editable-paint-clip.md#fixed-viewport-offset-even-when-content-fits
 packages/flutter/test/gestures/force_press_test.dart	14	A force press can be recognized	paired-match	upstream-force-press.md
 packages/flutter/test/gestures/force_press_test.dart	200	Invalid pressure ranges capabilities are not recognized	paired-match	upstream-force-press.md
 packages/flutter/test/gestures/force_press_test.dart	266	If minimum pressure is not reached, start and end callbacks are not called	paired-match	upstream-force-press.md

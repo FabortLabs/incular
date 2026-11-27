@@ -23,6 +23,9 @@ a version and date when publishing.
 
 ### Added
 
+- `EditableText::fixed_scroll_offset` can fix the local viewport position
+  without changing the selection or giving up clipping.
+
 - Mounted focus scopes can choose a preferred descendant scope without
   discarding its focused child or stealing focus from another branch.
 

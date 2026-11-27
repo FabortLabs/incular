@@ -59,6 +59,15 @@ impl RenderObjectPayload {
 fn invalidation_for_change(old: &RenderKind, new: &RenderKind) -> Invalidation {
     use Invalidation as I;
 
+    if let (RenderKind::TextField(old), RenderKind::TextField(new)) = (old, new)
+        && old.fixed_scroll_offset != new.fixed_scroll_offset
+    {
+        let mut normalized = (**new).clone();
+        normalized.fixed_scroll_offset = old.fixed_scroll_offset;
+        if **old == normalized {
+            return I::PAINT | I::SEMANTICS | I::HIT_TEST;
+        }
+    }
     if image_composite_only_change(old, new) {
         return I::COMPOSITE;
     }

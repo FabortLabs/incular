@@ -200,7 +200,10 @@ for the caret.
 `WidgetTree::editable_composing_rect` reports local range bounds using
 the editor’s current shaping and scroll.
 Use `WidgetTree::editable_max_scroll_extent` to read the current viewport
-limit without moving the selection or scrolling.
+limit without moving the selection or scrolling. For a viewport whose
+position is controlled outside the editor, `EditableText::fixed_scroll_offset`
+sets the horizontal position in single-line mode or the vertical position
+in multiline mode. Pass `None` to restore automatic scrolling and reveal.
 
 ## Read-only selection
 

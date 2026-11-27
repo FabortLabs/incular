@@ -244,6 +244,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 focused_border_outset: spec.focused_border_outset,
                 content_padding: spec.content_padding,
                 clip_behavior: spec.clip_behavior,
+                fixed_scroll_offset: spec.fixed_scroll_offset,
                 multiline: spec.multiline,
                 min_lines: spec.min_lines,
                 max_lines: spec.max_lines,

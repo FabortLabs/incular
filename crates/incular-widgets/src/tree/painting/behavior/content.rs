@@ -211,8 +211,9 @@ impl WidgetTree {
                     && with_text_field_display(controller, placeholder, mask, |display| {
                         display == placeholder.as_str()
                     });
-                let mut active_scroll_x = scroll_x;
-                let mut active_scroll_y = scroll_y;
+                let initial_scroll = field.scroll_offset(scroll_x, scroll_y);
+                let mut active_scroll_x = initial_scroll.x;
+                let mut active_scroll_y = initial_scroll.y;
                 if let Some(layout) = layout {
                     let (caret, caret_y, caret_height) = text_field_caret_geometry(
                         &layout,
@@ -222,7 +223,7 @@ impl WidgetTree {
                         field,
                     );
                     let available = (size.width - content_padding.horizontal()).max(0.);
-                    if !multiline {
+                    if !multiline && field.fixed_scroll_offset.is_none() {
                         if field.text_direction == TextDirection::Ltr {
                             if reveal {
                                 active_scroll_x = reveal_horizontal_caret(
@@ -269,7 +270,7 @@ impl WidgetTree {
                         layout.metrics().line_height,
                         content_padding,
                     );
-                    if multiline {
+                    if multiline && field.fixed_scroll_offset.is_none() {
                         let viewport = (size.height - content_padding.vertical()).max(0.);
                         if reveal && caret_y - active_scroll_y < 0. {
                             active_scroll_y = caret_y;
@@ -482,10 +483,12 @@ impl WidgetTree {
                 }
                 let state = self.text_field_state_live_mut(id);
                 state.spell_selection_visible = alternate_selection_color.is_some();
-                state.scroll_x = active_scroll_x;
-                state.scroll_y = active_scroll_y;
-                if has_layout {
-                    state.revealed = Some(reveal_key);
+                if field.fixed_scroll_offset.is_none() {
+                    state.scroll_x = active_scroll_x;
+                    state.scroll_y = active_scroll_y;
+                    if has_layout {
+                        state.revealed = Some(reveal_key);
+                    }
                 }
             }
             _ => unreachable!("content paint received a non-content render kind"),

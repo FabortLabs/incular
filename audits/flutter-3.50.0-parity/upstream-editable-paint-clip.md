@@ -17,11 +17,9 @@ and refreshes content when selection changes. The bare editor adds
 no border. These tests inspect paint commands and isolation, not a
 wgpu pixel readback.
 
-The original :240 also passed in Flutter. It supplies a fixed
-nonzero ViewportOffset to a fitting low-level RenderEditable and
-therefore still expects a clip. That exact external-offset input
-does not yet have a native paired fixture. The shared native query
-does account for an actual nonzero editor scroll offset.
+The original :240 supplies a fixed, nonzero viewport offset
+to a fitting low-level RenderEditable and still expects a clip.
+See the fixed-offset comparison below.
 
 All 37 focused native cases passed after excluding one preexisting
 stale semantics expectation (SetSelection while unfocused, confirmed
@@ -55,7 +53,7 @@ The authored pinned Flutter fixture used actual `EditableText`
 and its scroll position, with a 1× device-pixel ratio to avoid
 global pixel snapping. It verified both exact offsets and caret
 edges. This is separate from the original :240 immutable external
-offset case (still open). Right or center alignment was not
+offset case below. Right or center alignment was not
 verified by this probe; the existing path for those is unchanged.
 
 ## Default and live clip mode
@@ -72,7 +70,7 @@ the default live to antiAlias and back.
 The isolated selection test now explicitly supplies a highlight,
 preserving its actual selection-plus-glyph cache assertion after
 the raw editor's default became unpainted. All five focused native
-tests pass. The original :240 external offset case remains open.
+tests pass. The external offset case is covered below.
 
 ## Scroll extent of a line-limited editor
 
@@ -86,3 +84,18 @@ same vertical extent as clipping and paint, and a single-line
 control also verifies the caret tail and the reset after text becomes
 shorter. Twenty focused native extent, caret, alignment and composing
 checks passed.
+
+
+## Fixed viewport offset even when content fits
+
+Exact `rendering/editable_test.dart:240` passes. The editor has one
+10 px Ahem line that fits a 500 px viewport, with no automatic scroll
+extent. An externally fixed 10 px offset still produces an exact
+500×10 hard-edge paint clip. It moves caret geometry by the same
+offset, and page scroll does not replace the fixed choice. Removing the
+offset removes that clip without replacing the renderer or recomputing the layout of
+the text. A multiline control uses the vertical axis in both paint and
+hit testing and preserves its offset during caret reveal.
+
+Two direct and 30 adjacent native editor tests passed, including
+the wrapped CJK extent using the expected Ahem and Noto CJK fonts.
