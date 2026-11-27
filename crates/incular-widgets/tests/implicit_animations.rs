@@ -830,3 +830,123 @@ fn zero_duration_box_and_sliver_opacity_report_the_latest_completion_once() {
         assert_eq!(callbacks.borrow().as_slice(), ["zero", "latest"]);
     }
 }
+
+#[test]
+fn flutter350_animated_padding_description_reports_target_curve_and_duration_on_one_line() {
+    let padding = AnimatedPadding::without_child(EdgeInsets::all(7.), DURATION)
+        .curve(incular_animation::Curves::EASE);
+    let text = format!("{padding:?}");
+    assert_eq!(text.trim(), text);
+    assert!(!text.contains('\n'));
+    assert!(text.starts_with("AnimatedPadding"));
+    for detail in ["padding:", "7.0", "duration:", "200ms", "curve:"] {
+        assert!(text.contains(detail), "{text:?} missing {detail:?}");
+    }
+}
+
+#[test]
+fn flutter350_animated_padding_rtl_visual_to_directional_and_overshoot() {
+    use incular_config::EdgeInsetsDirectional;
+    use incular_widgets::EdgeInsetsGeometry;
+
+    let key = Key::from("expand child");
+    let child: Widget = Widget::from(SizedBox::expand()).with_key(key.clone());
+    let build = |padding, curve| -> Widget {
+        Directionality::new(
+            TextDirection::Rtl,
+            AnimatedPadding::new(padding, DURATION, child.clone()).curve(curve),
+        )
+        .into()
+    };
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    let assert_size = |h: &Harness, width| {
+        let child = h.tree.element_with_key(&key).unwrap();
+        let rect = h.tree.element_bounds(child).unwrap();
+        assert_eq!(rect.size, Size::new(width, 600.));
+        assert_eq!(
+            Offset::new(rect.origin.x + rect.size.width, rect.origin.y),
+            Offset::new(width, 0.)
+        );
+    };
+    let physical = EdgeInsetsGeometry::only(0., 0., 50., 0.);
+    let directional = EdgeInsetsGeometry::from(EdgeInsetsDirectional::only(100., 0., 0., 0.));
+    let mut h = Harness::with_constraints(build(physical, Curve::Linear), constraints);
+    assert_size(&h, 750.);
+    h.update(build(directional, Curve::Linear), 1_000);
+    assert_size(&h, 750.);
+    h.frame(1_100);
+    assert_size(&h, 725.);
+    h.frame(1_600);
+    assert_size(&h, 700.);
+
+    let mut h = Harness::with_constraints(build(physical, Curve::EaseInOutBack), constraints);
+    assert_size(&h, 750.);
+    h.update(build(EdgeInsets::ZERO.into(), Curve::EaseInOutBack), 1_000);
+    assert_size(&h, 750.);
+    h.frame(1_128);
+    assert_size(&h, 800.);
+}
+
+#[test]
+fn flutter350_animated_padding_at_zero_area_remains_zero() {
+    use incular_widgets::{Center, Text};
+    let key = Key::from("animated padding");
+    let padding = Widget::from(AnimatedPadding::new(
+        EdgeInsets::all(1.),
+        DURATION,
+        Text::new("X"),
+    ))
+    .with_key(key.clone());
+    let widget = Directionality::new(
+        TextDirection::Ltr,
+        Center::new(SizedBox::shrink().child(padding)),
+    );
+    let mut h = Harness::with_constraints(widget.into(), Constraints::tight(Size::new(800., 600.)));
+    h.frame(100);
+    h.frame(300);
+    let node = h.tree.element_with_key(&key).unwrap();
+    assert_eq!(h.tree.element_bounds(node).unwrap().size, Size::ZERO);
+}
+
+#[test]
+fn flutter350_animated_padding_without_child_interpolates_its_own_extent() {
+    use incular_widgets::Center;
+    let key = Key::from("childless animated padding");
+    let build = |amount| -> Widget {
+        Directionality::new(
+            TextDirection::Rtl,
+            Center::new(
+                Widget::from(AnimatedPadding::without_child(
+                    EdgeInsets::all(amount),
+                    DURATION,
+                ))
+                .with_key(key.clone()),
+            ),
+        )
+        .into()
+    };
+    let mut h = Harness::with_constraints(build(5.), Constraints::tight(Size::new(800., 600.)));
+    let node = h.tree.element_with_key(&key).unwrap();
+    let check = |h: &Harness, size| {
+        assert_eq!(h.tree.element_with_key(&key), Some(node));
+        assert_eq!(
+            h.tree.element_bounds(node).unwrap().size,
+            Size::new(size, size)
+        );
+    };
+    check(&h, 10.);
+    h.update(build(15.), 1_000);
+    check(&h, 10.);
+    h.frame(1_100);
+    check(&h, 20.);
+    h.frame(1_200);
+    check(&h, 30.);
+    assert!(h.rects().is_empty());
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "padding must be non-negative")]
+fn flutter350_animated_padding_rejects_negative_targets_in_debug() {
+    let _ = AnimatedPadding::without_child(EdgeInsets::only(0., 0., -1., 0.), DURATION);
+}

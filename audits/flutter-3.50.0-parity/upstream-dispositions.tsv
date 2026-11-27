@@ -3576,3 +3576,7 @@ packages/flutter/test/foundation/stack_frame_test.dart	111	debugPrintStack does 
 packages/flutter/test/foundation/assertions_test.dart	413	RepetitiveStackFrameFilter does not go out of range	paired-match	upstream-stack-diagnostics.md
 packages/flutter/test/foundation/stack_trace_test.dart	14	FlutterError.defaultStackFilter	partial-match	upstream-stack-diagnostics.md
 packages/flutter/test/foundation/stack_trace_test.dart	32	FlutterError.defaultStackFilter (async test body)	partial-match	upstream-stack-diagnostics.md
+packages/flutter/test/widgets/animated_padding_test.dart	9	AnimatedPadding.debugFillProperties	paired-match	upstream-animated-padding.md
+packages/flutter/test/widgets/animated_padding_test.dart	19	AnimatedPadding padding visual-to-directional animation	paired-match	upstream-animated-padding.md
+packages/flutter/test/widgets/animated_padding_test.dart	63	AnimatedPadding animated padding clamped to positive values	paired-match	upstream-animated-padding.md
+packages/flutter/test/widgets/animated_padding_test.dart	104	AnimatedPadding does not crash at zero area	paired-match	upstream-animated-padding.md

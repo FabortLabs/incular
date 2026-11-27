@@ -5,6 +5,7 @@
 use std::{
     borrow::Cow,
     cell::{Cell, RefCell},
+    fmt,
     rc::Rc,
     time::Duration,
 };
@@ -15,7 +16,7 @@ use incular_animation::{
 use incular_config::{
     Alignment, Clip, Constraints, EdgeInsets, TextDirection,
 };
-use incular_core::{Color, Lerp, Offset, Transform as CoreTransform};
+use incular_core::{Color, Lerp, Offset, Size, Transform as CoreTransform};
 use incular_text::{TextAlign, TextOverflow, TextStyle};
 
 use crate::dx::motion::config::{MotionConfig, reduce};
@@ -24,7 +25,8 @@ use crate::painting_effects::{BoxShape, PhysicalModel};
 use crate::tree::{FrameDelegate, FrameTick, RetainedState};
 use crate::{
     Align, BorderRadius, BoxDecoration, BuildContext, Container, DefaultTextStyle,
-    FractionalTranslation, FractionallySizedBox, Opacity, Padding, Positioned, Transform, Widget,
+    FractionalTranslation, FractionallySizedBox, Opacity, Padding, Positioned, SizedBox, Transform,
+    Widget,
 };
 
 /// One animated property: Flutter's `Tween` as the implicit animations use it.
@@ -649,7 +651,7 @@ fn resolve_animated_insets(value: EdgeInsetsGeometry, context: &BuildContext<'_>
 #[derive(Clone)]
 pub struct AnimatedPadding {
     padding: EdgeInsetsGeometry,
-    child: Widget,
+    child: Option<Widget>,
     timing: ImplicitTiming,
 }
 
@@ -662,14 +664,41 @@ impl AnimatedPadding {
         duration: Duration,
         child: impl Into<Widget>,
     ) -> Self {
+        Self::without_child(padding, duration).child(child)
+    }
+
+    /// Creates an animated inset with no child. Its size is the padding's
+    /// extent constrained by the parent, and it paints nothing.
+    #[must_use]
+    pub fn without_child(padding: impl Into<EdgeInsetsGeometry>, duration: Duration) -> Self {
+        let padding = padding.into();
+        debug_assert_eq!(padding, padding.non_negative(), "padding must be non-negative");
         Self {
-            padding: padding.into(),
-            child: child.into(),
+            padding,
+            child: None,
             timing: ImplicitTiming::new(duration),
         }
     }
 
+    /// Sets the child to be laid out inside the animated padding.
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
+    }
+
     implicit_timing_options!();
+}
+
+impl fmt::Debug for AnimatedPadding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AnimatedPadding")
+            .field("padding", &self.padding)
+            .field("duration", &self.timing.duration)
+            .field("curve", &self.timing.curve)
+            .finish()
+    }
 }
 
 impl ImplicitlyAnimated for AnimatedPadding {
@@ -686,8 +715,13 @@ impl ImplicitlyAnimated for AnimatedPadding {
     fn build(&self, tween: &Self::Tweens, t: f32, context: &BuildContext<'_>) -> Widget {
         // Clamp each unresolved component before combining physical and
         // directional sides; the current direction is not a tween target.
-        let padding = evaluate(tween, t).unwrap_or(self.padding).non_negative();
-        Padding::new(resolve_animated_insets(padding, context), self.child.clone()).into()
+        let geometry = evaluate(tween, t).unwrap_or(self.padding).non_negative();
+        let padding = resolve_animated_insets(geometry, context);
+        if let Some(child) = &self.child {
+            Padding::new(padding, child.clone()).into()
+        } else {
+            SizedBox::from_size(Size::new(padding.horizontal(), padding.vertical())).into()
+        }
     }
 }
 
@@ -1706,7 +1740,7 @@ impl crate::dx::transition::Transitionable for Padding {
     fn into_transitioning(self, transition: Transition) -> Widget {
         AnimatedPadding {
             padding: self.padding.into(),
-            child: self.child,
+            child: Some(self.child),
             timing: ImplicitTiming::from_transition(transition, Channel::Geometry),
         }
         .into()
