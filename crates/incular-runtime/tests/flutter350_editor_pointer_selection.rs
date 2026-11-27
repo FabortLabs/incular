@@ -340,3 +340,73 @@ fn ios_touch_taps_keep_a_selected_range_or_place_the_caret_at_a_word_edge() {
     assert_eq!(causes.borrow().as_slice(), &[SelectionChangedCause::Tap]);
     assert_eq!(runtime.focused_element(), Some(field));
 }
+
+#[test]
+fn non_ios_platforms_tap_to_a_precise_caret_instead_of_toggling_the_toolbar() {
+    let Some(style) = ahem_style() else {
+        return;
+    };
+    // Android and Fuchsia use the same caret policy in the runtime.
+    for platform in [
+        TextShortcutPlatform::Android,
+        TextShortcutPlatform::Linux,
+        TextShortcutPlatform::MacOs,
+        TextShortcutPlatform::Windows,
+    ] {
+        let controller = TextEditingController::with_text("alpha beta gamma");
+        let changes = Rc::new(RefCell::new(Vec::new()));
+        let editor = EditableText::new(controller.clone())
+            .autofocus(true)
+            .text_direction(TextDirection::Ltr)
+            .style(style.clone())
+            .context_menu_builder(|_, _| SizedBox::square(10.).into())
+            .on_selection_changed({
+                let changes = changes.clone();
+                move |selection, cause| changes.borrow_mut().push((selection, cause))
+            });
+        let mut runtime = Runtime::new(editor.into()).unwrap();
+        runtime.set_text_shortcut_platform(platform);
+        let constraints = Constraints::loose(Size::new(800., 100.));
+        let base = Instant::now();
+        runtime.run_frame_at(constraints, base).unwrap();
+        let field = runtime.focused_element().unwrap();
+        let toolbar = runtime.tree().text_field_context_menu(field).unwrap();
+        for (index, initial, x, expected) in [
+            (0, TextSelection::collapsed(0), 100., 7),
+            (1, TextSelection::new(1, 4), 30., 2),
+        ] {
+            let at = base + Duration::from_millis(600 * index);
+            controller.set_selection(initial);
+            runtime.run_frame_at(constraints, at).unwrap();
+            changes.borrow_mut().clear();
+
+            for (phase, advance) in [(PointerPhase::Down, 0), (PointerPhase::Up, 50)] {
+                runtime.handle_raw_pointer_event(
+                    RawPointerEvent::new(
+                        index + 1,
+                        2,
+                        PointerDeviceKind::Touch,
+                        u32::from(phase == PointerPhase::Down),
+                        Offset::new(x, 7.),
+                        phase,
+                        at + Duration::from_millis(advance),
+                    )
+                    .with_button(Some(PRIMARY_POINTER_BUTTON)),
+                );
+            }
+            runtime
+                .run_frame_at(constraints, at + Duration::from_millis(60))
+                .unwrap();
+
+            let expected = TextSelection::collapsed(expected);
+            assert_eq!(controller.selection(), expected, "{platform:?}");
+            assert_eq!(
+                changes.borrow().as_slice(),
+                &[(expected, SelectionChangedCause::Tap)],
+                "{platform:?}",
+            );
+            assert!(!toolbar.is_showing(), "{platform:?}");
+            assert_eq!(runtime.focused_element(), Some(field), "{platform:?}");
+        }
+    }
+}

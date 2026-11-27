@@ -101,3 +101,16 @@ double taps, long presses, and the spelling path separate.
 
 This is an authored paired comparison for iOS, not full credit for
 the upstream multi-platform registrations in text_selection_test.dart.
+
+### Original platform-variant tap registrations
+
+The original `widgets/text_selection_test.dart:706` single tap and
+`:730` tap on a previous selection both passed on all six Flutter
+platform variants, in four serial batches of three exact names. The
+native counterpart checks the same branch split with the real editor:
+the ordinary tap reports `Tap` at the iOS word edge versus an exact
+caret elsewhere, and a tap inside a selected range toggles the toolbar
+on iOS versus moving the other platforms' caret and reporting `Tap`.
+The runtime maps Fuchsia to the Android caret policy; these cases make
+no assertion about an actual Fuchsia embedder. All five focused native
+pointer cases passed. Count the two registrations, not twelve variants.
