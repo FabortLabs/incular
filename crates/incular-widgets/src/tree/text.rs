@@ -746,6 +746,32 @@ impl WidgetTree {
         // and pinned sliver geometry as every other ShowOnScreen request.
         crate::Scrollable::show_on_screen(self, id, crate::ShowOnScreen::new().rect(target)) != 0
     }
+    /// Marks this selection's private editor scroll as already settled.
+    /// An explicit selection command can change its range without moving
+    /// the edit viewport. A later value, range, focus or size change still
+    /// follows the normal automatic reveal policy.
+    #[doc(hidden)]
+    pub fn preserve_editable_selection_scroll(&mut self, id: ElementId) {
+        let Some(render) = self.render_id(id) else {
+            return;
+        };
+        let Some(node) = self.renders.get(render.0) else {
+            return;
+        };
+        let (RenderKind::TextField(field), Some(state)) =
+            (node.object.kind(), node.text_field_state())
+        else {
+            return;
+        };
+        let key = (
+            field.controller.revisions().0,
+            field.controller.selection(),
+            state.focused,
+            node.size,
+        );
+        self.text_field_state_live_mut(render).revealed = Some(key);
+    }
+
     /// Flutter's `EditableTextState._scrollToDocumentBoundary`: brings the
     /// start or end of the text into view without moving the selection.
     pub fn text_field_scroll_to_document_boundary(&mut self, id: ElementId, forward: bool) -> bool {

@@ -35,3 +35,20 @@ coordinates; segmentation does not restart the first/last-line rules.
 Three authored probes, 34 focused widget tests and 55 painter tests
 passed; the existing separate Unicode separator case remains ignored.
 The themed selection goldens at :297 and :9728 remain open.
+
+## Select All and private editor scroll
+
+Pinned :13726 passes on both iOS and macOS. The native counterpart uses
+the same 64 lines, two-line field and initial 0→1 range. Before the fix,
+toolbar Select All moved the private iOS editor viewport from zero
+to its maximum (1184 px in the native fixture). Suppression needed
+both automatic paths: the enclosing-viewport reveal and the text
+painter's private scroll. The fixed editor selects all without moving
+after the command or on the next frame. A later collapsed caret moves
+into view normally.
+
+The non-Apple native controls still reveal the end on toolbar Select All,
+while an explicit keyboard cause preserves the original offset. The
+pinned Android companion also passed; its other clipboard observations
+are tracked separately. All 20 focused native editor, clipboard and
+viewport tests passed.

@@ -3694,3 +3694,4 @@ packages/flutter/test/widgets/editable_text_test.dart	2834	pasteText reports err
 packages/flutter/test/widgets/editable_text_test.dart	687	when backgroundCursorColor is updated, RenderEditable should be updated	paired-match	upstream-floating-caret.md#retained-cursor-colors-and-configured-opacity
 packages/flutter/test/widgets/editable_text_test.dart	18145	Cursor color with an opacity is respected	paired-match	upstream-floating-caret.md#retained-cursor-colors-and-configured-opacity
 packages/flutter/test/widgets/editable_text_test.dart	336	Tight selectionWidthStyle does not expand to a longer next line	paired-match	upstream-editable-selection-paint.md#height-and-width-styles-at-the-actual-highlight
+packages/flutter/test/widgets/editable_text_test.dart	13726	SelectAll toolbar action will not set max scroll on designated platforms	paired-match	upstream-editable-selection-paint.md#select-all-and-private-editor-scroll

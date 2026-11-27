@@ -107,26 +107,40 @@ impl Runtime {
         }
         self.report_editor_selection_delta(field, previous, cause);
         controller.reset_caret(self.input_now());
-        if cause == SelectionChangedCause::Toolbar {
-            if matches!(
+        if cause == SelectionChangedCause::Toolbar
+            && matches!(
                 self.text_shortcut_platform,
                 TextShortcutPlatform::Linux
                     | TextShortcutPlatform::MacOs
                     | TextShortcutPlatform::Windows
-            ) {
-                self.hide_text_field_overlays(field);
-            }
-            if matches!(
+            )
+        {
+            self.hide_text_field_overlays(field);
+        }
+        if cause == SelectionChangedCause::Toolbar
+            && matches!(
                 self.text_shortcut_platform,
                 TextShortcutPlatform::Android
                     | TextShortcutPlatform::Linux
                     | TextShortcutPlatform::Windows
-            ) {
-                self.caret_reveal_key = None;
-            }
+            )
+        {
+            self.caret_reveal_key = None;
+        } else {
+            self.preserve_selection_scroll(field, &controller);
         }
         self.frame_requested = true;
         true
+    }
+
+    fn preserve_selection_scroll(&mut self, field: ElementId, controller: &TextEditingController) {
+        // The window's enclosing viewport and the field's own text viewport
+        // have separate reveal keys. A deferred pass must not turn this
+        // command into an ordinary change that reveals the selected end.
+        if self.focused == Some(field) {
+            self.caret_reveal_key = Some((field, controller.revisions().0, controller.selection()));
+        }
+        self.tree.preserve_editable_selection_scroll(field);
     }
 
     /// Copies a mounted editor's selection without invoking its keyboard
@@ -383,6 +397,7 @@ impl Runtime {
                     return false;
                 }
                 controller.select_all();
+                self.preserve_selection_scroll(field, controller);
                 true
             }
             Undo | Redo => {

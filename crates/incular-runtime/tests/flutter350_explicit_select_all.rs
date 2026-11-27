@@ -62,3 +62,74 @@ fn explicit_select_all_uses_utf8_boundaries_and_leaves_text_unchanged() {
     assert_eq!(controller.selection(), TextSelection::new(0, "é😀a".len()));
     assert_eq!(controller.text(), "é😀a");
 }
+
+fn scroll_after_select_all(
+    platform: incular_runtime::TextShortcutPlatform,
+    cause: SelectionChangedCause,
+) -> (f32, f32) {
+    let text = (0..64)
+        .map(|index| index.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let controller = TextEditingController::with_text(text.clone());
+    controller.set_selection(TextSelection::new(0, 1));
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(
+        EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .focus_node(focus.clone())
+            .max_lines(Some(2))
+            .size(Size::new(300., 32.))
+            .into(),
+    )
+    .unwrap();
+    runtime.set_text_shortcut_platform(platform);
+    let bounds = Constraints::tight(Size::new(300., 32.));
+    runtime.run_frame(bounds).unwrap();
+    let field = runtime.tree().root().unwrap();
+    let scroll = |runtime: &Runtime| runtime.tree().text_field_scroll_offset(field).unwrap().y;
+    assert_eq!(scroll(&runtime), 0.);
+    let max = runtime.tree().editable_max_scroll_extent(field).unwrap();
+    assert!(max > 600.);
+
+    assert!(runtime.select_all_text(field, cause));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(controller.selection(), TextSelection::new(0, text.len()));
+    assert_eq!(controller.text(), text);
+    assert!(focus.has_focus());
+    let offset = scroll(&runtime);
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(
+        scroll(&runtime),
+        offset,
+        "the next frame must not replay the reveal"
+    );
+    controller.set_selection(TextSelection::collapsed(text.len()));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(
+        scroll(&runtime),
+        max,
+        "a later real caret movement still reveals"
+    );
+    (offset, max)
+}
+
+#[test]
+fn toolbar_select_all_does_not_scroll_the_editor_on_ios_or_macos() {
+    use incular_runtime::TextShortcutPlatform::*;
+    for platform in [Ios, MacOs] {
+        let (offset, _) = scroll_after_select_all(platform, SelectionChangedCause::Toolbar);
+        assert_eq!(offset, 0., "{platform:?}");
+    }
+}
+
+#[test]
+fn toolbar_reveals_selection_at_end_except_on_apple_but_keyboard_cause_does_not() {
+    use incular_runtime::TextShortcutPlatform::*;
+    for platform in [Android, Linux, Windows] {
+        let (offset, max) = scroll_after_select_all(platform, SelectionChangedCause::Toolbar);
+        assert_eq!(offset, max, "toolbar on {platform:?}");
+        let (offset, _) = scroll_after_select_all(platform, SelectionChangedCause::Keyboard);
+        assert_eq!(offset, 0., "keyboard cause on {platform:?}");
+    }
+}
