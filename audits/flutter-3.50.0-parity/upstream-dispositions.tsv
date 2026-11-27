@@ -2974,3 +2974,5 @@ packages/flutter/test/rendering/layers_test.dart	504	mutating ShaderMaskLayer fi
 packages/flutter/test/rendering/box_test.dart	801	clipBehavior is respected	paired-match	upstream-box-clip-and-baseline-offset.md
 packages/flutter/test/rendering/box_test.dart	1359	minOf	paired-match	upstream-box-clip-and-baseline-offset.md
 packages/flutter/test/rendering/box_test.dart	1369	+	paired-match	upstream-box-clip-and-baseline-offset.md
+packages/flutter/test/rendering/layers_test.dart	664	OpacityLayer does not push an OffsetLayer if there are no children	partial-match	upstream-empty-opacity-layers.md
+packages/flutter/test/rendering/layers_test.dart	711	OpacityLayer dispose its engineLayer if there are no children	partial-match	upstream-empty-opacity-layers.md

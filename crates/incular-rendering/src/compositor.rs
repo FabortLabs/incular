@@ -2124,9 +2124,15 @@ impl LayerTree {
         clip: Option<Rect>,
         out: &mut DisplayList,
     ) {
-        let Some(kind) = self.layers.get(id.0).map(|layer| layer.kind.clone()) else {
+        let Some(layer) = self.layers.get(id.0) else {
             return;
         };
+        // An opacity layer without children has no source to isolate.
+        // Keep its retained identity, but do not submit an empty pass.
+        if layer.children.is_empty() && matches!(layer.kind, LayerKind::Opacity { .. }) {
+            return;
+        }
+        let kind = layer.kind.clone();
         match kind {
             LayerKind::Picture {
                 display_list,
