@@ -49,6 +49,16 @@ pub enum FlutterKeyboardContentError {
     Content(#[from] incular_platform::KeyboardInsertedContentError),
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum FlutterTextInputFloatingCursorError {
+    #[error(transparent)]
+    Codec(#[from] JsonMethodCodecError),
+    #[error("expected a client ID, floating cursor state and position")]
+    InvalidArguments,
+    #[error(transparent)]
+    Position(#[from] incular_platform::FlutterFloatingCursorPointError),
+}
+
 fn sender_matches(sender: &Value, client: TextInputClientId) -> Option<bool> {
     if let Some(id) = sender.as_u64() {
         Some(id == client.get())
@@ -337,6 +347,34 @@ impl crate::Runtime {
             _ => return Err(InvalidData),
         };
         self.dispatch_flutter_app_private_command(action, data);
+        Ok(Some(true))
+    }
+
+    /// Receives Flutter's keyboard floating-cursor gesture for the current
+    /// attachment. Updates without a start are valid wire messages and do
+    /// not implicitly start a gesture.
+    pub fn handle_flutter_floating_cursor_call(
+        &mut self,
+        data: &[u8],
+    ) -> Result<Option<bool>, FlutterTextInputFloatingCursorError> {
+        use FlutterTextInputFloatingCursorError::InvalidArguments;
+        let call = JsonMethodCodec::decode_method_call(data)?;
+        if call.method != "TextInputClient.updateFloatingCursor" {
+            return Ok(None);
+        }
+        self.adopt_external_focus_change();
+        let Some(active) = self.active_flutter_editable_client() else {
+            return Ok(Some(false));
+        };
+        let args = call.arguments.as_array().ok_or(InvalidArguments)?;
+        let sender = args.first().ok_or(InvalidArguments)?;
+        if !sender_matches(sender, active).ok_or(InvalidArguments)? {
+            return Ok(Some(false));
+        }
+        let state = args.get(1).and_then(Value::as_str).ok_or(InvalidArguments)?;
+        let position = args.get(2).ok_or(InvalidArguments)?;
+        let point = incular_platform::FlutterFloatingCursorPoint::from_flutter_json(state, position)?;
+        self.dispatch_flutter_floating_cursor(active, point);
         Ok(Some(true))
     }
 

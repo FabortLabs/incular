@@ -173,7 +173,7 @@ impl WidgetTree {
                     spell_check_selection_color,
                     ..
                 } = **field;
-                let (layout, focused, scroll_x, scroll_y, revealed, decorations, cursor_frame) = {
+                let (layout, focused, scroll_x, scroll_y, revealed, decorations, cursor_frame, floating_cursor) = {
                     let node = self.render_live(id, "retained render must remain live");
                     let state = self.text_field_state_live(id);
                     (
@@ -184,6 +184,7 @@ impl WidgetTree {
                         state.revealed,
                         state.decorations.clone(),
                         state.cursor_frame,
+                        state.floating_cursor,
                     )
                 };
                 let alternate_selection_color = spell_check_selection_color.filter(|_| {
@@ -347,33 +348,43 @@ impl WidgetTree {
                         && show_cursor
                         && selection.is_empty()
                         && controller.selection_if_set().is_some()
-                        && caret_alpha > 0
                     {
-                        let cursor_color = Color {
-                            alpha: caret_alpha,
-                            ..cursor_color
-                        };
-                        let rect = editable_cursor_rect(
-                            field,
-                            Offset::new(
-                                editable_caret_x(field, size.width, caret) - active_scroll_x
-                                    + content_padding.left,
-                                top + caret_y - active_scroll_y,
-                            ),
-                            caret_height,
-                        );
-                        if rect.size.width > 0.0 && rect.size.height > 0.0 {
-                            caret_command = Some(if cursor_radius > 0.0 {
-                                PaintCommand::RRect {
-                                    rrect: RRect::uniform(rect, cursor_radius),
-                                    brush: cursor_color.into(),
+                        if let Some(rect) = floating_cursor {
+                            caret_command = Some(PaintCommand::RRect {
+                                rrect: RRect::uniform(rect, 1.),
+                                brush: Color {
+                                    alpha: 191,
+                                    ..cursor_color
                                 }
-                            } else {
-                                PaintCommand::Rect {
-                                    rect,
-                                    color: cursor_color,
-                                }
+                                .into(),
                             });
+                        } else if caret_alpha > 0 {
+                            let cursor_color = Color {
+                                alpha: caret_alpha,
+                                ..cursor_color
+                            };
+                            let rect = editable_cursor_rect(
+                                field,
+                                Offset::new(
+                                    editable_caret_x(field, size.width, caret) - active_scroll_x
+                                        + content_padding.left,
+                                    top + caret_y - active_scroll_y,
+                                ),
+                                caret_height,
+                            );
+                            if rect.size.width > 0.0 && rect.size.height > 0.0 {
+                                caret_command = Some(if cursor_radius > 0.0 {
+                                    PaintCommand::RRect {
+                                        rrect: RRect::uniform(rect, cursor_radius),
+                                        brush: cursor_color.into(),
+                                    }
+                                } else {
+                                    PaintCommand::Rect {
+                                        rect,
+                                        color: cursor_color,
+                                    }
+                                });
+                            }
                         }
                     }
                     if !paint_cursor_above_text && let Some(command) = caret_command.take() {

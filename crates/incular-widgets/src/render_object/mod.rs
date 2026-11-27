@@ -156,6 +156,7 @@ pub(crate) struct RenderTextFieldState {
     pub(crate) scroll_y: f32,
     pub(crate) focused: bool,
     pub(crate) cursor_frame: CursorFrame,
+    pub(crate) floating_cursor: Option<incular_core::Rect>,
     /// The editing value (content revision and selection), focus and size
     /// whose caret the scroll offsets last revealed. Like Flutter's
     /// `_scheduleShowCaretOnScreen`, the caret is brought into view only

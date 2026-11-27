@@ -131,7 +131,68 @@ pub(super) fn editable_cursor_alpha(base_alpha: u8, opacity: f32) -> u8 {
     f32::from(base_alpha).min(opacity * 255.0).round() as u8
 }
 
+/// Local editable geometry used by the native floating-caret gesture.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct FloatingCaretGeometry {
+    pub caret: Rect,
+    pub preferred_height: f32,
+    pub minimum: Offset,
+    pub maximum: Offset,
+    pub world: incular_core::Transform,
+}
+
 impl WidgetTree {
+    #[doc(hidden)]
+    pub fn floating_caret_geometry(
+        &self,
+        id: ElementId,
+        offset: usize,
+        affinity: incular_text::TextAffinity,
+    ) -> Option<FloatingCaretGeometry> {
+        let (render, caret) =
+            self.text_field_local_offset_rect_with(id, offset, affinity, EditableCaret::ImeAnchor)?;
+        let node = self.renders.get(render.0)?;
+        let layout = node.field_layout()?;
+        let metrics = layout.metrics();
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let padding = field.content_padding;
+        let top = text_field_content_top(
+            field.multiline,
+            node.size.height,
+            metrics.line_height,
+            padding,
+        );
+        let minimum = Offset::new(padding.left - 4., top - 4.);
+        let viewport_width = (node.size.width - padding.horizontal()).max(0.);
+        let viewport_height = (node.size.height - top - padding.bottom).max(0.);
+        Some(FloatingCaretGeometry {
+            caret,
+            preferred_height: metrics.line_height,
+            minimum,
+            maximum: Offset::new(
+                padding.left + viewport_width.min(metrics.size.width) + 4.,
+                (top + viewport_height.min(metrics.size.height) - metrics.line_height + 5.)
+                    .max(minimum.y),
+            ),
+            world: self.render_world_transform(render),
+        })
+    }
+
+    #[doc(hidden)]
+    pub fn set_floating_caret(&mut self, id: ElementId, rect: Option<Rect>) {
+        let Some(render) = self.render_id(id) else { return; };
+        let Some(state) = self.renders.get(render.0).and_then(|node| node.text_field_state()) else {
+            return;
+        };
+        if state.floating_cursor != rect {
+            self.text_field_state_live_mut(render).floating_cursor = rect;
+            self.mark_render_paint(render);
+        }
+    }
+
     /// Samples the focused editor's caret before paint, returning the next
     /// deadline only while blinking. No paragraph layout is invalidated.
     #[doc(hidden)]
@@ -149,6 +210,7 @@ impl WidgetTree {
         };
         let previous = state.cursor_frame;
         let eligible = state.focused
+            && state.floating_cursor.is_none()
             && field.show_cursor
             && field
                 .controller

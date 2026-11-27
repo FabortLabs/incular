@@ -61,6 +61,7 @@ use std::{
 mod hover_devices;
 pub use hover_devices::MouseCursorUpdate;
 mod system_chrome;
+mod floating_cursor;
 mod text_actions;
 mod autofill;
 mod text_gestures;
@@ -252,6 +253,7 @@ pub struct Runtime {
     input_clock: Option<Instant>,
     /// The focused cursor can arm a timer without keeping the frame loop hot.
     cursor_blink_deadline: Option<Instant>,
+    floating_caret: Option<floating_cursor::FloatingCaretRun>,
     debug_deterministic_cursor: bool,
     pub(crate) pending: HashMap<ElementId, Widget>,
     pub(crate) order: VecDeque<ElementId>,
@@ -506,6 +508,7 @@ impl Runtime {
             pending_event_processing_us: 0,
             input_clock: None,
             cursor_blink_deadline: None,
+            floating_caret: None,
             debug_deterministic_cursor: false,
             tree,
             system_sound,
@@ -4426,6 +4429,7 @@ impl Runtime {
             self.hover_hit_revision = hit_revision;
             self.refresh_hover_after_layout();
         }
+        let floating_caret_live = self.sample_floating_caret(now);
         self.sync_text_selection_handles();
         self.cursor_blink_deadline = self.focused.and_then(|editor| {
             self.tree
@@ -4463,6 +4467,7 @@ impl Runtime {
             || tooltip_timers_live
             || text_long_press_live
             || scrollbar_live
+            || floating_caret_live
             || !self.pending.is_empty()
             || self.reactive.borrow().has_work()
             || crate::environment::has_deferred_invalidations()

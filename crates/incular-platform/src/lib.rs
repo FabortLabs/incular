@@ -27,6 +27,7 @@ mod flutter_lifecycle;
 mod flutter_basic_message_channel;
 mod flutter_inbound_messenger;
 mod flutter_event_channel;
+mod flutter_floating_cursor;
 mod flutter_platform_channel;
 mod flutter_text_input_config;
 mod flutter_text_input_style;
@@ -113,6 +114,7 @@ pub use flutter_basic_message_channel::{
 pub use flutter_inbound_messenger::{
     FlutterBinaryPayload, FlutterBinaryReply, FlutterChannelMicrotask, FlutterInboundMessenger,
 };
+pub use flutter_floating_cursor::{FloatingCursorDragState, FlutterFloatingCursorPoint, FlutterFloatingCursorPointError};
 pub use flutter_event_channel::{
     FlutterEventOperation, FlutterEventSubscription, FlutterEventTask, FlutterJsonBroadcast,
     FlutterJsonEventChannel, FlutterJsonStreamEvent,
