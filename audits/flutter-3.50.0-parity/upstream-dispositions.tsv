@@ -3423,3 +3423,6 @@ packages/flutter/test/widgets/app_test.dart	555	WidgetsApp.router passes FocusSc
 packages/flutter/test/widgets/app_test.dart	585	WidgetsApp.router produces expected semantics tree structure	paired-match	upstream-widgets-app-focus-scope.md#route-and-overlay-semantics-remain-separate
 packages/flutter/test/widgets/app_test.dart	637	WidgetsApp.router with routerConfig produces expected semantics tree structure	paired-match	upstream-widgets-app-focus-scope.md#route-and-overlay-semantics-remain-separate
 packages/flutter/test/widgets/app_test.dart	666	WidgetsApp with navigator produces expected semantics tree structure	paired-match	upstream-widgets-app-focus-scope.md#route-and-overlay-semantics-remain-separate
+packages/flutter/test/widgets/app_test.dart	29	WidgetsApp with builder only	paired-match	upstream-widgets-app-focus-scope.md#builder-only-defaults-and-zero-area-layout
+packages/flutter/test/widgets/app_test.dart	694	WidgetsApp has correct default ScrollBehavior	paired-match	upstream-widgets-app-focus-scope.md#builder-only-defaults-and-zero-area-layout
+packages/flutter/test/widgets/app_test.dart	1008	WidgetsApp does not crash at zero area	paired-match	upstream-widgets-app-focus-scope.md#builder-only-defaults-and-zero-area-layout

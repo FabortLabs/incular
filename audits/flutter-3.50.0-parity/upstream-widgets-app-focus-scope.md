@@ -32,3 +32,14 @@ previous IDs; the overlay is a separate direct child of the
 navigation scope. The delegate configurations and the named-route
 controller all preserve the two-level semantic boundary. Four
 direct and 59 adjacent focus/shortcut checks passed.
+
+## Builder-only defaults and zero-area layout
+
+Pinned `widgets/app_test.dart:29,694,1008` passed. A builder-only
+app mounts its keyed root and builder content, and the same app
+under a shrink box lays out at exactly zero size without crashing.
+The new `ScrollConfiguration::of` reads the mounted builder's
+inherited behavior, falling back to the standard behavior when no
+ancestor provides it. An additional native control changes the
+nearest configuration from touch to mouse and verifies the mounted
+builder is notified. Four focused and eight adjacent tests passed.

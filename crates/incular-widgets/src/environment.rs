@@ -716,6 +716,13 @@ impl ScrollConfiguration {
         self
     }
 
+    /// The nearest inherited scroll behavior, or the platform defaults if
+    /// no ancestor supplied one. A build that reads this value tracks it.
+    #[must_use]
+    pub fn of(context: &BuildContext<'_>) -> crate::ScrollBehavior {
+        context.depend_on::<crate::ScrollBehavior>().unwrap_or_default()
+    }
+
     /// Shorthand for a behavior whose physics override the platform's.
     #[must_use]
     pub fn physics(mut self, physics: ScrollPhysics) -> Self {
