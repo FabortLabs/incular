@@ -392,8 +392,18 @@ impl Runtime {
             .collect()
     }
 
+    /// Whether the mounted editor can use the native context menu instead
+    /// of the in-widget toolbar. The feature is exposed by capable iOS hosts.
+    #[must_use]
+    pub fn supports_system_context_menu_for_field(&self, field: ElementId) -> bool {
+        self.text_shortcut_platform == TextShortcutPlatform::Ios
+            && self.tree.system_context_menu_field_eligible(field)
+    }
+
     /// Queries the focused text editor's default system menu and builds its
     /// platform command. This does not open an in-widget toolbar or move focus.
+    /// Widget integrations should first check [Self::supports_system_context_menu_for_field]
+    /// to decide whether the host can display this command.
     pub fn show_focused_system_context_menu(
         &mut self,
         menus: &mut incular_platform::SystemContextMenus,
@@ -409,8 +419,9 @@ impl Runtime {
             .tree
             .editable_selection_menu_rect(connection.target)
             .ok_or(SystemContextMenuError::InvalidTarget)?;
-        let items = self
-            .text_field_context_menu_button_types(connection.target)
+        let field = connection.target;
+        let mut items: Vec<_> = self
+            .text_field_context_menu_button_types(field)
             .into_iter()
             .flatten()
             .filter_map(|kind| {
@@ -423,6 +434,47 @@ impl Runtime {
                 })
             })
             .collect();
+        let (legacy, options) = self.tree.text_field_toolbar_policy(field).unwrap_or_default();
+        // Explicit nonempty legacy toolbar options bypass Flutter's adaptive
+        // text processing actions even when modern controls are installed.
+        let has_adaptive_actions = !legacy
+            && options.is_none_or(|options| options == incular_widgets::ToolbarOptions::EMPTY);
+        let target = self.text_shortcut_platform;
+        if has_adaptive_actions
+            && matches!(target, TextShortcutPlatform::Ios | TextShortcutPlatform::Android)
+            && !self.text_field_obscured(field)
+            && self.tree.text_controller(field).is_some_and(|editor| {
+                editor.with_value(|value| value.text.get(value.selection.range().as_range())
+                    .is_some_and(|text| {
+                        !text.trim_matches(|c: char| c.is_whitespace() || c == '\u{FEFF}').is_empty()
+                    }))
+            })
+        {
+            let label = |kind: ContextMenuButtonType, key: &str| {
+                self.tree.localized_text_at(field, key)
+                    .or_else(|| kind.default_label().map(str::to_owned))
+                    .unwrap_or_default()
+            };
+            if target == TextShortcutPlatform::Ios {
+                items.push(SystemContextMenuItem::LookUp(label(
+                    ContextMenuButtonType::LookUp, "widgets.look_up_button_label",
+                )));
+                items.push(SystemContextMenuItem::SearchWeb(label(
+                    ContextMenuButtonType::SearchWeb, "widgets.search_web_button_label",
+                )));
+            }
+            let share = SystemContextMenuItem::Share(label(
+                ContextMenuButtonType::Share,
+                "widgets.share_button_label",
+            ));
+            if target == TextShortcutPlatform::Android
+                && matches!(items.last(), Some(SystemContextMenuItem::SelectAll))
+            {
+                items.insert(items.len() - 1, share);
+            } else {
+                items.push(share);
+            }
+        }
         menus.show_with_items(controller, Some(connection.client), rect, items)
     }
 

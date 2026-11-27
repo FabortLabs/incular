@@ -31,8 +31,9 @@ impl FlutterPlatformMessenger for Wire {
         payload: Option<Vec<u8>>,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
         assert_eq!(channel, "flutter/platform");
-        self.0
-            .push(JsonMethodCodec::decode_method_call(&payload.expect("method call bytes")).unwrap());
+        self.0.push(
+            JsonMethodCodec::decode_method_call(&payload.expect("method call bytes")).unwrap(),
+        );
         ready(Ok(None))
     }
 }
@@ -186,4 +187,222 @@ fn ahem_menu_targets_caret_single_line_and_multiline_selection_exactly() {
         );
         wire.check_show(expected);
     }
+}
+
+fn ios_editor(value: &TextEditingController, read_only: bool, obscured: bool) -> EditableText {
+    EditableText::new(value.clone())
+        .text_direction(TextDirection::Ltr)
+        .read_only(read_only)
+        .obscure_text(obscured)
+        .size(Size::new(400., 28.))
+        .context_menu_builder(|_, _| SizedBox::shrink().into())
+}
+
+fn with_ios_capability(child: impl Into<incular_widgets::Widget>) -> incular_widgets::MediaQuery {
+    incular_widgets::MediaQuery::new(
+        incular_config::RuntimeEnvironment {
+            supports_showing_system_context_menu: true,
+            ..Default::default()
+        },
+        child,
+    )
+}
+
+fn focus_by_press(runtime: &mut Runtime) {
+    use incular_core::{
+        InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
+        PointerSampleMetadata,
+    };
+    for (phase, buttons) in [
+        (PointerPhase::Down, PRIMARY_POINTER_BUTTON),
+        (PointerPhase::Up, 0),
+    ] {
+        let _ = runtime.handle_input(InputEvent::PointerWithMetadata {
+            pointer: 1,
+            device: 1,
+            kind: PointerDeviceKind::Mouse,
+            buttons,
+            button: Some(PRIMARY_POINTER_BUTTON),
+            sample: PointerSampleMetadata::default(),
+            phase,
+            position: Offset::new(10., 10.),
+        });
+    }
+    frame(runtime);
+}
+
+#[test]
+fn selected_ios_text_offers_localized_lookup_search_and_share_in_order() {
+    let value = TextEditingController::with_text("Hello world");
+    let mut runtime = Runtime::new(
+        with_ios_capability(Align::new(
+            Alignment::TOP_LEFT,
+            ios_editor(&value, false, false),
+        ))
+        .into(),
+    )
+    .unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    runtime.set_clipboard_text("Clipboard data");
+    frame(&mut runtime);
+    focus_by_press(&mut runtime);
+    let field = runtime.focused_element().unwrap();
+    assert!(runtime.supports_system_context_menu_for_field(field));
+    assert!(
+        runtime
+            .take_text_input_commands()
+            .iter()
+            .any(|command| matches!(command, TextInputCommand::SetClient { .. }))
+    );
+
+    let mut wire = Wire::default();
+    let mut menus = SystemContextMenus::default();
+    let menu = SystemContextMenuController::new();
+    for (selection, share) in [
+        (TextSelection::new(0, 5), true),
+        (TextSelection::new(5, 6), false),
+        (TextSelection::new(2, 2), false),
+    ] {
+        value.set_selection(selection);
+        frame(&mut runtime);
+        assert!(wire.0.is_empty());
+        wire.send(
+            runtime
+                .show_focused_system_context_menu(&mut menus, &menu)
+                .unwrap()
+                .unwrap(),
+        );
+        assert_eq!(runtime.focused_element(), Some(field));
+        assert_eq!(value.selection(), selection);
+        let commands = std::mem::take(&mut wire.0);
+        let [call] = &commands[..] else {
+            panic!("expected one system-menu request")
+        };
+        assert_eq!(call.method, "ContextMenu.showSystemContextMenu");
+        let items = call.arguments["items"].as_array().unwrap();
+        if share {
+            assert_eq!(
+                items
+                    .iter()
+                    .map(|i| (i["type"].as_str().unwrap(), i["title"].as_str()))
+                    .collect::<Vec<_>>(),
+                [
+                    ("cut", None),
+                    ("copy", None),
+                    ("paste", None),
+                    ("lookUp", Some("Look Up")),
+                    ("searchWeb", Some("Search Web")),
+                    ("share", Some("Share")),
+                ],
+            );
+        } else {
+            assert!(
+                items
+                    .iter()
+                    .all(|i| !matches!(i["type"].as_str(), Some("lookUp" | "searchWeb" | "share")))
+            );
+        }
+    }
+}
+
+#[test]
+fn native_menu_capability_requires_a_writable_ios_editor_and_effective_media_query() {
+    use incular_core::Offset;
+    for (platform, supported, read_only, obscured, expected) in [
+        (TextShortcutPlatform::Ios, true, false, false, true),
+        (TextShortcutPlatform::Ios, true, true, false, false),
+        (TextShortcutPlatform::Ios, false, false, false, false),
+        (TextShortcutPlatform::Ios, true, false, true, true),
+        (TextShortcutPlatform::Android, true, false, false, false),
+        (TextShortcutPlatform::MacOs, true, false, false, false),
+        (TextShortcutPlatform::Linux, true, false, false, false),
+        (TextShortcutPlatform::Windows, true, false, false, false),
+    ] {
+        let value = TextEditingController::with_text("one two three");
+        let editor = Align::new(Alignment::TOP_LEFT, ios_editor(&value, read_only, obscured));
+        let widget = if supported {
+            with_ios_capability(editor).into()
+        } else {
+            editor.into()
+        };
+        let mut runtime = Runtime::new(widget).unwrap();
+        runtime.set_text_shortcut_platform(platform);
+        frame(&mut runtime);
+        let field = runtime.tree().text_field_at(Offset::new(10., 10.)).unwrap();
+        assert_eq!(
+            runtime.supports_system_context_menu_for_field(field),
+            expected
+        );
+        if obscured {
+            runtime.set_clipboard_text("Clipboard data");
+            focus_by_press(&mut runtime);
+            value.set_selection(TextSelection::new(0, 5));
+            frame(&mut runtime);
+            let mut wire = Wire::default();
+            let mut menus = SystemContextMenus::default();
+            wire.send(
+                runtime
+                    .show_focused_system_context_menu(
+                        &mut menus,
+                        &SystemContextMenuController::new(),
+                    )
+                    .unwrap()
+                    .unwrap(),
+            );
+            let items = wire.0[0].arguments["items"].as_array().unwrap();
+            assert_eq!(
+                items
+                    .iter()
+                    .map(|item| item["type"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
+                ["paste"]
+            );
+        }
+    }
+}
+
+#[test]
+fn nearest_widgets_label_catalog_overrides_system_action_titles() {
+    use incular_config::{Locale, LocalizationCatalog};
+    use incular_widgets::Localizations;
+
+    struct Labels([Locale; 1]);
+    impl LocalizationCatalog for Labels {
+        fn supported_locales(&self) -> &[Locale] {
+            &self.0
+        }
+
+        fn message(&self, locale: &Locale, key: &str) -> Option<&str> {
+            (locale == &self.0[0] && key == "widgets.share_button_label").then_some("Partager")
+        }
+    }
+    let locale: Locale = "fr".parse().unwrap();
+    let value = TextEditingController::with_text("Bonjour a tous");
+    let widget = Localizations::new(
+        locale.clone(),
+        Labels([locale]),
+        with_ios_capability(Align::new(
+            Alignment::TOP_LEFT,
+            ios_editor(&value, false, false),
+        )),
+    );
+    let mut runtime = Runtime::new(widget.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    frame(&mut runtime);
+    focus_by_press(&mut runtime);
+    value.set_selection(TextSelection::new(0, 7));
+    frame(&mut runtime);
+
+    let mut wire = Wire::default();
+    let mut menus = SystemContextMenus::default();
+    wire.send(
+        runtime
+            .show_focused_system_context_menu(&mut menus, &SystemContextMenuController::new())
+            .unwrap()
+            .unwrap(),
+    );
+    let items = wire.0[0].arguments["items"].as_array().unwrap();
+    let last = items.last().unwrap();
+    assert_eq!(last["type"], "share");
+    assert_eq!(last["title"], "Partager");
 }

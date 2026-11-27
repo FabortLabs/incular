@@ -62,3 +62,21 @@ modern controls account for selection and clipboard state.
 No claim is made for actual UIKit display, automatic widget lifecycle,
 additional platform-only actions, complex bidi/soft-wrap endpoint
 resolution, or the other `widgets/system_context_menu_test.dart` cases.
+
+## iOS selection actions and read-only eligibility
+
+The exact pinned widget registration :1179 focused a writable iOS-mode
+editor, selected `Hello` in `Hello world`, and checked the platform's
+show message for Share. Incular now sends that built-in item after
+Look Up and Search Web for the same focused, retained selection.
+Selecting blanks, collapsing the selection, or obscuring the field
+suppresses those actions. A native localization control checks that
+the nearest application catalog can change the Share title instead of
+sending a hard-coded label. The three optional catalog keys are
+`widgets.look_up_button_label`, `widgets.search_web_button_label`, and
+`widgets.share_button_label`, with Flutter's stock English defaults.
+
+Both pinned iOS variants at :728 passed. The mounted editor's support
+query combines iOS policy, inherited media capability, and writability
+without needing focus. A capable iOS view cannot opt a read-only field
+into the native menu. No actual UIKit presentation is claimed.

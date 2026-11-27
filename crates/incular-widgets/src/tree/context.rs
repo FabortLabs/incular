@@ -227,6 +227,33 @@ pub(super) struct VisibilityScope {
 #[derive(Clone, Copy)]
 pub(super) struct VisibilityObservation(pub(super) bool);
 
+impl WidgetTree {
+    /// Reads the mounted editor's effective platform menu capability, including
+    /// an inherited MediaQuery override. A read-only field cannot use this route.
+    #[doc(hidden)]
+    pub fn system_context_menu_field_eligible(&self, id: ElementId) -> bool {
+        let Some(element) = self.elements.get(id.0) else {
+            return false;
+        };
+        matches!(element.widget.kind(), WidgetKind::TextField(spec) if spec.enabled && !spec.read_only)
+            && element.build_context
+                .read::<RuntimeSupportsShowingSystemContextMenu>()
+                .is_some_and(|value| value.0)
+    }
+
+    /// Reads an application catalog message at a mounted element without
+    /// introducing a retained build dependency.
+    #[doc(hidden)]
+    pub fn localized_text_at(&self, id: ElementId, key: &str) -> Option<String> {
+        use incular_config::{Locale, LocaleResolver, LocalizationCatalog};
+
+        let context = &self.elements.get(id.0)?.build_context;
+        let scope = context.read_shared::<(Locale, Rc<dyn LocalizationCatalog>)>()?;
+        LocaleResolver::resolve_message(std::slice::from_ref(&scope.0), scope.1.as_ref(), key)
+            .map(|message| message.value.to_owned())
+    }
+}
+
 /// A borrowed view of the retained inherited environment for one live build
 /// operation. The reference cannot escape the callback that receives it.
 pub struct BuildContext<'a> {
