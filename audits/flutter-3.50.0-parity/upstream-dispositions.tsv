@@ -47,7 +47,7 @@ packages/flutter/test/semantics/semantics_binding_test.dart	78	SemanticsBinding.
 packages/flutter/test/semantics/semantics_binding_test.dart	135	getRectOfSemanticsNodeInViewCoordinates returns transformed logical rect	paired-match	upstream-semantics-binding.md
 packages/flutter/test/semantics/semantics_owner_test.dart	12	Performing SemanticsAction.showOnScreen does not crash if node no longer exist	paired-match	upstream-semantics-binding.md
 packages/flutter/test/semantics/semantics_test.dart	453	updateWith marks node as dirty when role changes	paired-match	upstream-semantic-native-updates.md
-packages/flutter/test/semantics/semantics_test.dart	528	OrdinalSortKey compares correctly when names are the same	partial-match	upstream-semantics-binding.md#ordinal-sort-keys-and-role-updates
+packages/flutter/test/semantics/semantics_test.dart	528	OrdinalSortKey compares correctly when names are the same	paired-match	upstream-semantics-binding.md#checked-sort-key-comparisons
 packages/flutter/test/semantics/semantics_test.dart	553	OrdinalSortKey compares correctly when the names are different	paired-match	upstream-semantics-binding.md#ordinal-sort-keys-and-role-updates
 packages/flutter/test/semantics/traversal_order_test.dart	11	Traversal order handles touching elements	partial-match	upstream-semantics-binding.md#touching-traversal-grid
 packages/flutter/test/widgets/semantics_test.dart	875	AccessiblityFocusBlockType.blockSubtree is applied to the subtree,	paired-match	upstream-semantics-binding.md#label-absorption-in-blocked-subtrees
@@ -3667,3 +3667,4 @@ packages/flutter/test/gestures/recognizer_test.dart	133	works properly when recy
 packages/flutter/test/gestures/recognizer_test.dart	168	uses expected pre-accept slop tolerance	paired-match	upstream-primary-pointer-recognizer.md
 packages/flutter/test/gestures/events_test.dart	829	Ensure certain event types are allowed	paired-match	upstream-pointer-packet-converter.md#trackpad-signals-are-not-contacts
 packages/flutter/test/gestures/events_test.dart	839	Ensure certain event types are not allowed	partial-match	upstream-pointer-packet-converter.md#trackpad-signals-are-not-contacts
+packages/flutter/test/semantics/semantics_test.dart	521	Incompatible OrdinalSortKey throw AssertionError when compared	paired-match	upstream-semantics-binding.md#checked-sort-key-comparisons

@@ -275,3 +275,40 @@ fn semantics_owner_dispatches_one_create_and_dispose_for_same_object() {
             .all(|event| event.library == "semantics" && event.class_name == "SemanticsOwner")
     );
 }
+
+#[test]
+fn sort_keys_reject_incompatible_concrete_types_before_consulting_names() {
+    use incular_semantics::{
+        CustomSemanticsSortKey as Custom, IncompatibleSemanticsSortKeyTypes,
+        SemanticsSortKeyRef as Key,
+    };
+    let ordinal = OrdinalSortKey::new(0.);
+    let number = Custom::new(0_i32);
+    let other_type = Custom::named(0_i64, "elsewhere");
+    assert_eq!(Key::Ordinal(&ordinal).compare_to(Key::Custom(&number)),
+        Err(IncompatibleSemanticsSortKeyTypes));
+    assert_eq!(Key::Custom(&number).compare_to(Key::Ordinal(&ordinal)),
+        Err(IncompatibleSemanticsSortKeyTypes));
+    assert_eq!(Key::Custom(&number).compare_to(Key::Custom(&other_type)),
+        Err(IncompatibleSemanticsSortKeyTypes));
+    assert!(!Key::Custom(&number).shares_group_with(Key::Custom(&other_type)));
+
+    let another_group = Custom::named(-99_i32, "group");
+    assert_eq!(Key::Custom(&number).compare_to(Key::Custom(&another_group)), Ok(Less));
+    assert!(!Key::Custom(&number).shares_group_with(Key::Custom(&another_group)));
+}
+
+#[test]
+fn ordinal_comparison_within_the_same_name_has_all_eight_cases() {
+    use incular_semantics::SemanticsSortKeyRef as Key;
+    for name in [None, Some("a")] {
+        for (left, right, expected) in [
+            (0., 0., Equal), (0., 1., Less), (1., 0., Greater), (1., 1., Equal),
+        ] {
+            let left = ordinal(left, name);
+            let right = ordinal(right, name);
+            assert!(Key::Ordinal(&left).shares_group_with(Key::Ordinal(&right)));
+            assert_eq!(Key::Ordinal(&left).compare_to(Key::Ordinal(&right)), Ok(expected));
+        }
+    }
+}

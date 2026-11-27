@@ -2138,7 +2138,7 @@ impl WidgetTree {
                 group[run_start..run_end].sort_by(|a, b| {
                     let a = self.element_sort_key(a.2).expect("keyed sort run");
                     let b = self.element_sort_key(b.2).expect("keyed sort run");
-                    a.compare_to(b)
+                    a.compare_to(b).expect("compatible semantic sort run")
                 });
             }
             run_start = run_end;
@@ -3585,21 +3585,7 @@ fn semantics_hidden(entry: &Element) -> bool {
         )
 }
 
-#[derive(Clone, Copy)]
-enum TraversalSortKey<'a> {
-    Ordinal(&'a incular_semantics::OrdinalSortKey),
-    Custom(&'a incular_semantics::CustomSemanticsSortKey),
-}
-
-impl TraversalSortKey<'_> {
-    fn compare_to(self, other: Self) -> std::cmp::Ordering {
-        match (self, other) {
-            (Self::Ordinal(a), Self::Ordinal(b)) => a.compare_to(b),
-            (Self::Custom(a), Self::Custom(b)) => a.compare_to(b).expect("compatible custom run"),
-            _ => unreachable!("incompatible semantic keys cannot share a sort run"),
-        }
-    }
-}
+type TraversalSortKey<'a> = incular_semantics::SemanticsSortKeyRef<'a>;
 
 /// The sort key a widget's explicit semantics declares, if any.
 fn widget_sort_key(widget: &Widget) -> Option<TraversalSortKey<'_>> {
@@ -3617,11 +3603,9 @@ fn sort_keys_compatible(
     left: Option<TraversalSortKey<'_>>,
     right: Option<TraversalSortKey<'_>>,
 ) -> bool {
-    use TraversalSortKey::{Custom, Ordinal};
     match (left, right) {
         (None, None) => true,
-        (Some(Ordinal(a)), Some(Ordinal(b))) => a.name == b.name,
-        (Some(Custom(a)), Some(Custom(b))) => a.is_compatible_with(b),
+        (Some(left), Some(right)) => left.shares_group_with(right),
         _ => false,
     }
 }

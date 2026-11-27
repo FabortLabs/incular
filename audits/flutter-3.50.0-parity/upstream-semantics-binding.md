@@ -167,3 +167,19 @@ native state changes. The retained fixture drains the queued closure
 and confirms the disabled tree has no published root. The existing
 change-only observer still does not replay. Twenty targeted runtime
 tests passed.
+
+### Checked sort-key comparisons
+
+Pinned `semantics/semantics_test.dart:521` and `:528` passed. The
+borrowed Rust sort-key API rejects different concrete kinds before
+considering either the group name or payload. A typed incompatibility
+error represents Flutter's assertion without executing either ordering.
+The eight equal-name ordinal comparisons preserve less, equal, and
+greater results for both unnamed and named keys. The controls also
+compare two differently named custom keys of the same type without
+allowing their numeric values to reorder the groups.
+
+Mounted traversal uses the same compatibility check when partitioning
+siblings into contiguous runs. It still leaves other types and group
+runs in their original positions. The fourteen direct semantics and
+five mounted traversal tests passed.

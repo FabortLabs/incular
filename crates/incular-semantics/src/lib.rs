@@ -23,7 +23,9 @@ pub use attributed_string::{
 pub use custom_action::{CustomSemanticsAction, CustomSemanticsActionId};
 pub use incular_core::TextDirection;
 pub use label_builder::SemanticsLabelBuilder;
-pub use sort_key::CustomSemanticsSortKey;
+pub use sort_key::{
+    CustomSemanticsSortKey, IncompatibleSemanticsSortKeyTypes, SemanticsSortKeyRef,
+};
 
 /// Framework-only metadata used to identify a node without changing what
 /// assistive technology says. The name is diagnostic; cloning a tag
@@ -305,15 +307,9 @@ impl OrdinalSortKey {
     /// defer to the numeric value. Signed zero remains a numeric tie.
     #[must_use]
     pub fn compare_to(&self, other: &Self) -> Ordering {
-        match (&self.name, &other.name) {
-            (None, Some(_)) => Ordering::Less,
-            (Some(_), None) => Ordering::Greater,
-            (Some(left), Some(right)) if left != right => {
-                left.encode_utf16().cmp(right.encode_utf16())
-            }
-            _ if self.order == other.order => Ordering::Equal,
-            _ => self.order.total_cmp(&other.order),
-        }
+        sort_key::compare_names(self.name.as_deref(), other.name.as_deref()).then_with(|| {
+            if self.order == other.order { Ordering::Equal } else { self.order.total_cmp(&other.order) }
+        })
     }
 }
 
