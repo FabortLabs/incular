@@ -3328,3 +3328,4 @@ packages/flutter/test/services/binding_test.dart	146	Calling exitApplication sen
 packages/flutter/test/services/binding_test.dart	163	Default handleRequestAppExit returns exit	paired-match	upstream-app-exit-channel.md
 packages/flutter/test/gestures/gesture_config_regression_test.dart	86	Scroll Views get the same ScrollConfiguration as GestureDetectors	paired-match	upstream-shared-gesture-settings.md
 packages/flutter/test/gestures/gesture_config_regression_test.dart	113	Scroll Views get the same ScrollConfiguration as Draggables	paired-match	upstream-shared-gesture-settings.md
+packages/flutter/test/services/binding_test.dart	185	initInstances synchronizes keyboard state	paired-match	upstream-keyboard-startup.md

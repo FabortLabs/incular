@@ -24,6 +24,7 @@ mod display;
 mod file_dialog;
 mod haptic_feedback;
 mod flutter_app_exit;
+mod flutter_keyboard_state;
 mod flutter_lifecycle;
 mod flutter_scribble;
 mod flutter_basic_message_channel;
@@ -113,6 +114,7 @@ pub use file_dialog::{
     FileDialogSelection, FileDialogValidationError, FileExtension,
 };
 pub use flutter_app_exit::{AppExitResponse, AppExitType, FlutterAppExit};
+pub use flutter_keyboard_state::{FlutterKeyboardState, FlutterKeyboardSyncError};
 pub use flutter_lifecycle::{
     AppLifecycleBinding, AppLifecycleCallback, AppLifecycleError, AppLifecycleState,
     AppLifecycleStateChange,
