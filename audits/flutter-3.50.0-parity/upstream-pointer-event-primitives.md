@@ -34,3 +34,12 @@ counted as a pass.
 The later [overlapping region and absorber fix](upstream-mouse-region-local-motion.md#overlapping-regions-and-absorber-boundaries)
 identifies the off-box absorber and restores both the expected
 retained action and the Flutter hover route.
+
+## Default press and contact-motion buttons
+
+The pinned :228 and :233 registrations passed. Synthetic contact presses
+and contact moves default to the primary button (bit 1), without changing
+the explicit-mask constructor used by native adapters. Native controls
+also preserve an explicitly empty button mask and keep that motion in
+contact rather than treating it as hover. A new motion initially reports
+the same delta in global and local space. All 31 focused native tests passed.

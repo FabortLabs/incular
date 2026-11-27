@@ -181,7 +181,9 @@ fn projective_pointer_delta_uses_both_positions_without_mutating_globals() {
     let pointer = RawPointerEvent::remove_perspective_transform(matrix);
     assert_eq!(
         *pointer.columns(),
-        [2., 0., 0., 0.01, 0., 3., 0., 0., 0., 0., 1., 0., 10., 20., 0., 1.]
+        [
+            2., 0., 0., 0.01, 0., 3., 0., 0., 0., 0., 1., 0., 10., 20., 0., 1.
+        ]
     );
     let mut original = RawPointerEvent::new(
         34,
@@ -200,12 +202,61 @@ fn projective_pointer_delta_uses_both_positions_without_mutating_globals() {
     original.delta = Offset::new(5., 5.);
     assert_eq!(original.transformed_matrix4(None), original);
     let actual = original.transformed_matrix4(Some(pointer));
-    assert_eq!(actual.in_global_coordinates(), original.in_global_coordinates());
+    assert_eq!(
+        actual.in_global_coordinates(),
+        original.in_global_coordinates()
+    );
     let check = |actual: f32, expected: f32| {
-        assert!((actual - expected).abs() < 0.000_02, "{actual} != {expected}");
+        assert!(
+            (actual - expected).abs() < 0.000_02,
+            "{actual} != {expected}"
+        );
     };
     check(actual.local_position.x, 50. / 1.2);
     check(actual.local_position.y, 110. / 1.2);
     check(actual.local_delta.x, 50. / 1.2 - 40. / 1.15);
     check(actual.local_delta.y, 110. / 1.2 - 95. / 1.15);
+}
+
+#[test]
+fn down_contact_defaults_to_primary_and_keeps_an_explicit_empty_mask() {
+    let time = Instant::now();
+    let event = RawPointerEvent::contact_down(0, 0, Kind::Touch, Offset::ZERO, time, None);
+    assert_eq!(event.buttons, 1);
+    assert_eq!(event.phase, PointerPhase::Down);
+    assert!(event.down);
+    assert_eq!(event.delta, Offset::ZERO);
+    assert_eq!(event.time, time);
+    let empty = RawPointerEvent::contact_down(0, 0, Kind::Touch, Offset::ZERO, time, Some(0));
+    assert_eq!(empty.buttons, 0);
+    assert!(empty.down);
+}
+
+#[test]
+fn moving_contact_defaults_to_primary_and_is_not_hover_when_buttons_are_zero() {
+    let time = Instant::now();
+    let event =
+        RawPointerEvent::contact_move(0, 0, Kind::Touch, Offset::ZERO, Offset::ZERO, time, None);
+    assert_eq!(event.buttons, 1);
+    assert_eq!(event.phase, PointerPhase::Move);
+    assert!(event.down);
+
+    let global_position = Offset::new(20., 30.);
+    let delta = Offset::new(5., 7.);
+    let empty =
+        RawPointerEvent::contact_move(1, 2, Kind::Stylus, global_position, delta, time, Some(0));
+    assert_eq!(empty.buttons, 0);
+    assert!(empty.down);
+    assert_eq!(empty.local_position, global_position);
+    assert_eq!(empty.local_delta, delta);
+    let hover = RawPointerEvent::new(
+        1,
+        2,
+        Kind::Stylus,
+        0,
+        global_position,
+        PointerPhase::Move,
+        time,
+    );
+    assert!(!hover.down);
 }

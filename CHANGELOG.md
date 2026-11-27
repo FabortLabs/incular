@@ -34,6 +34,10 @@ a version and date when publishing.
 
 ### Added
 
+- Synthetic raw pointer presses and contact moves default to the primary
+  button unless given an explicit button mask. Zero is not treated as hover
+  by the contact-motion constructor.
+
 - `Runtime::select_editable_position_at` selects from laid-out global points
   without requesting focus, and preserves backward selection direction.
 

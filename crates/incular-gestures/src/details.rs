@@ -6,10 +6,9 @@ use std::{
 use incular_core::time::Instant;
 
 use incular_core::{
-    DragStartBehavior, KeyboardEvent, Matrix4, NormalizedPressure, Offset, Point64,
-    PRIMARY_POINTER_BUTTON, PointerPhase,
-    PointerSampleMetadata, SECONDARY_POINTER_BUTTON, TERTIARY_POINTER_BUTTON, TrackpadGesture,
-    Transform,
+    DragStartBehavior, KeyboardEvent, Matrix4, NormalizedPressure, Offset, PRIMARY_POINTER_BUTTON,
+    Point64, PointerPhase, PointerSampleMetadata, SECONDARY_POINTER_BUTTON,
+    TERTIARY_POINTER_BUTTON, TrackpadGesture, Transform,
 };
 
 use crate::focus::{FocusBehavior, FocusNode};
@@ -147,6 +146,66 @@ impl RawPointerEvent {
             down: pointer_is_down(phase, buttons),
             synthesized: false,
             scroll_delta: Offset::ZERO,
+        }
+    }
+
+    /// Creates a synthetic contact press with Flutter's primary button
+    /// by default. Supply a button mask, including zero, to override it.
+    /// Native adapters with explicit phase and button data can use [Self::new].
+    #[must_use]
+    pub const fn contact_down(
+        pointer: u64,
+        device: u64,
+        kind: PointerDeviceKind,
+        position: Offset,
+        time: Instant,
+        buttons: Option<u32>,
+    ) -> Self {
+        let buttons = match buttons {
+            Some(buttons) => buttons,
+            None => PRIMARY_POINTER_BUTTON,
+        };
+        Self::new(
+            pointer,
+            device,
+            kind,
+            buttons,
+            position,
+            PointerPhase::Down,
+            time,
+        )
+    }
+
+    /// Creates synthetic motion while a pointer is in contact. Like Flutter,
+    /// this defaults to the primary button and remains down even if the
+    /// caller explicitly supplies a zero button mask.
+    #[must_use]
+    pub const fn contact_move(
+        pointer: u64,
+        device: u64,
+        kind: PointerDeviceKind,
+        position: Offset,
+        delta: Offset,
+        time: Instant,
+        buttons: Option<u32>,
+    ) -> Self {
+        let buttons = match buttons {
+            Some(buttons) => buttons,
+            None => PRIMARY_POINTER_BUTTON,
+        };
+        Self {
+            delta,
+            local_delta: delta,
+            down: true,
+            ..Self::new(
+                pointer,
+                device,
+                kind,
+                buttons,
+                position,
+                PointerPhase::Move,
+                time,
+            )
         }
     }
 
