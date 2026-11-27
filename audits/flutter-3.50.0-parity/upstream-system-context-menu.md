@@ -80,3 +80,16 @@ Both pinned iOS variants at :728 passed. The mounted editor's support
 query combines iOS policy, inherited media capability, and writability
 without needing focus. A capable iOS view cannot opt a read-only field
 into the native menu. No actual UIKit presentation is claimed.
+
+## System menu and iOS title diagnostics
+
+Four pinned services originals pair. A new controller reports visible
+false, callback present true, hidden by system false, and disposed
+false in the prescribed order. Showing it updates visibility, system
+dismissal sets the hidden flag, and showing it again clears that flag.
+Disposal removes the visible menu once and prevents later shows.
+
+Look Up, Search Web and Share each expose just their supplied title
+as a diagnostic property. No custom callback or platform action is
+invoked by collecting diagnostics. Fourteen focused native context-menu
+tests passed.

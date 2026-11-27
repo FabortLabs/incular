@@ -3197,3 +3197,7 @@ packages/flutter/test/services/text_input_test.dart	1629	hashCode works correctl
 packages/flutter/test/services/text_input_test.dart	1642	toJson produces expected map	paired-match	upstream-text-input-style.md
 packages/flutter/test/services/text_input_test.dart	1655	toJson handles null values	paired-match	upstream-text-input-style.md
 packages/flutter/test/services/text_input_test.dart	2079	updateStyle reports error when setStyle fails	paired-match	upstream-text-input-style.md
+packages/flutter/test/services/text_input_test.dart	1544	SystemContextMenuController debugFillProperties	paired-match	upstream-system-context-menu.md#system-menu-and-ios-title-diagnostics
+packages/flutter/test/services/text_input_test.dart	1558	IOSSystemContextMenuItemDataLookUp debugFillProperties	paired-match	upstream-system-context-menu.md#system-menu-and-ios-title-diagnostics
+packages/flutter/test/services/text_input_test.dart	1567	IOSSystemContextMenuItemDataSearchWeb debugFillProperties	paired-match	upstream-system-context-menu.md#system-menu-and-ios-title-diagnostics
+packages/flutter/test/services/text_input_test.dart	1576	IOSSystemContextMenuItemDataShare debugFillProperties	paired-match	upstream-system-context-menu.md#system-menu-and-ios-title-diagnostics

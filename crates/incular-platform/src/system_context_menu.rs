@@ -1,8 +1,8 @@
 //! State and platform-channel messages for system-owned text editing menus.
 
-use std::{collections::HashMap, rc::Rc};
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 
-use incular_core::Rect;
+use incular_core::{Rect, diagnostic_property::DiagnosticsProperty};
 use serde_json::{Value, json};
 
 use crate::{
@@ -61,6 +61,17 @@ impl PartialEq for SystemContextMenuItem {
 }
 
 impl SystemContextMenuItem {
+    /// The user-supplied title on Flutter's titled iOS menu items.
+    #[must_use]
+    pub fn debug_properties(&self) -> Vec<Value> {
+        match self {
+            Self::LookUp(title) | Self::SearchWeb(title) | Self::Share(title) => {
+                vec![DiagnosticsProperty::string("title", Some(title.clone())).to_json()]
+            }
+            _ => Vec::new(),
+        }
+    }
+
     fn encode(&self) -> Value {
         let (kind, title) = match self {
             Self::Copy => ("copy", None),
@@ -90,6 +101,8 @@ pub struct SystemContextMenuController(Rc<Controller>);
 #[derive(Default)]
 struct Controller {
     on_system_hide: Option<Box<dyn Fn()>>,
+    hidden_by_system: Cell<bool>,
+    disposed: Cell<bool>,
 }
 
 impl SystemContextMenuController {
@@ -100,7 +113,27 @@ impl SystemContextMenuController {
     pub fn with_system_hide_handler(handler: impl Fn() + 'static) -> Self {
         Self(Rc::new(Controller {
             on_system_hide: Some(Box::new(handler)),
+            ..Controller::default()
         }))
+    }
+
+    /// Flutter-compatible controller diagnostics for this menu host.
+    #[must_use]
+    pub fn debug_properties(&self, menus: &SystemContextMenus) -> [Value; 4] {
+        [
+            DiagnosticsProperty::new("isVisible", Some(menus.is_visible(self))).to_json(),
+            DiagnosticsProperty::flag(
+                "onSystemHide",
+                Some(self.0.on_system_hide.is_some()),
+                Some("callback set"),
+                Some("callback null"),
+            )
+            .show_name(true)
+            .to_json(),
+            DiagnosticsProperty::new("_hiddenBySystem", Some(self.0.hidden_by_system.get()))
+                .to_json(),
+            DiagnosticsProperty::new("_isDisposed", Some(self.0.disposed.get())).to_json(),
+        ]
     }
 
     fn same(&self, other: &Self) -> bool {
@@ -143,6 +176,8 @@ impl SystemContextMenuCommand {
 pub enum SystemContextMenuError {
     #[error("the system menu requires an active text input connection")]
     NoTextInput,
+    #[error("this system menu controller has been disposed")]
+    Disposed,
     #[error("the system menu requires at least one item")]
     EmptyItems,
     #[error("the system menu target must be finite")]
@@ -173,6 +208,9 @@ impl SystemContextMenus {
         target: Rect,
         items: Vec<SystemContextMenuItem>,
     ) -> Result<Option<SystemContextMenuCommand>, SystemContextMenuError> {
+        if controller.0.disposed.get() {
+            return Err(SystemContextMenuError::Disposed);
+        }
         if items.is_empty() {
             return Err(SystemContextMenuError::EmptyItems);
         }
@@ -209,6 +247,7 @@ impl SystemContextMenus {
                 encoded.push(item.encode());
             }
         }
+        controller.0.hidden_by_system.set(false);
         self.visible = Some(VisibleMenu {
             owner: controller.clone(),
             target,
@@ -238,6 +277,17 @@ impl SystemContextMenus {
         })
     }
 
+    /// Retires the controller. Returns one hide operation when it was visible.
+    pub fn dispose_controller(
+        &mut self,
+        controller: &SystemContextMenuController,
+    ) -> Option<SystemContextMenuCommand> {
+        if controller.0.disposed.replace(true) {
+            return None;
+        }
+        self.hide(controller)
+    }
+
     /// Handles a corresponding inbound method call. Other platform methods
     /// remain available for the embedding host to dispatch.
     pub fn handle_platform_message(
@@ -251,6 +301,7 @@ impl SystemContextMenus {
                     .visible
                     .take()
                     .ok_or(SystemContextMenuError::NoVisibleMenu)?;
+                menu.owner.0.hidden_by_system.set(true);
                 if let Some(callback) = &menu.owner.0.on_system_hide {
                     callback();
                 }

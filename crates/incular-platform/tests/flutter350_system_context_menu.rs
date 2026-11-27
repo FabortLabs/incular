@@ -449,3 +449,78 @@ fn showing_new_contents_invalidates_ids_but_an_identical_show_does_not_publish()
     assert!(click(&mut menus, &new_id).unwrap());
     assert_eq!((old_count.get(), new_count.get()), (0, 1));
 }
+
+#[test]
+fn controller_diagnostics_reflect_visibility_callback_system_hide_and_disposal() {
+    let mut menus = Menus::default();
+    let controller = Controller::with_system_hide_handler(|| {});
+    let values = |menus: &Menus| {
+        controller
+            .debug_properties(menus)
+            .map(|node| (node["name"].clone(), node["value"].clone()))
+    };
+    assert_eq!(
+        values(&menus),
+        [
+            (json!("isVisible"), json!(false)),
+            (json!("onSystemHide"), json!(true)),
+            (json!("_hiddenBySystem"), json!(false)),
+            (json!("_isDisposed"), json!(false)),
+        ]
+    );
+
+    let client = Some(incular_platform::TextInputClientId::new(1));
+    assert!(
+        menus
+            .show_with_items(&controller, client, rect(0., 20.), vec![Item::Copy])
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(values(&menus)[0].1, true);
+    let dismissal = JsonMethodCodec::encode_method_call(&MethodCall {
+        method: "ContextMenu.onDismissSystemContextMenu".into(),
+        arguments: Value::Null,
+    })
+    .unwrap();
+    assert!(menus.handle_platform_message(&dismissal).unwrap());
+    assert_eq!(values(&menus)[0].1, false);
+    assert_eq!(values(&menus)[2].1, true);
+
+    assert!(
+        menus
+            .show_with_items(&controller, client, rect(0., 20.), vec![Item::Copy])
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(values(&menus)[2].1, false);
+    assert!(menus.dispose_controller(&controller).is_some());
+    assert!(menus.dispose_controller(&controller).is_none());
+    assert_eq!(values(&menus)[0].1, false);
+    assert_eq!(values(&menus)[3].1, true);
+    assert!(matches!(
+        menus.show_with_items(&controller, client, rect(0., 20.), vec![Item::Copy]),
+        Err(Error::Disposed)
+    ));
+}
+
+#[test]
+fn look_up_interoperable_menu_item_exposes_only_its_title() {
+    assert_item_title(Item::LookUp("my title".into()));
+}
+
+#[test]
+fn search_web_interoperable_menu_item_exposes_only_its_title() {
+    assert_item_title(Item::SearchWeb("my title".into()));
+}
+
+#[test]
+fn share_interoperable_menu_item_exposes_only_its_title() {
+    assert_item_title(Item::Share("my title".into()));
+}
+
+fn assert_item_title(item: Item) {
+    let properties = item.debug_properties();
+    assert_eq!(properties.len(), 1);
+    assert_eq!(properties[0]["name"], "title");
+    assert_eq!(properties[0]["value"], "my title");
+}
