@@ -268,6 +268,7 @@ pub(crate) struct SemanticProperties {
     pub(super) label: Option<String>,
     /// Pronunciation for an implicit text label, not its explicit replacement.
     pub(super) implicit_text_attributes: Option<std::sync::Arc<incular_semantics::SemanticTextAttributes>>,
+    pub(super) paragraph_parts: Option<std::sync::Arc<[super::semantics::paragraph::ParagraphSemanticPart]>>,
     pub(super) description: Option<String>,
     pub(super) hidden: bool,
     /// Boxed: it is several hundred bytes and most widgets that carry

@@ -263,6 +263,7 @@ pub struct TextLayout {
     pub lines: Arc<[TextLine]>,
     pub metrics: TextMetrics,
     pub font_runs: Arc<[FontRunDebug]>,
+    retained_source_end: usize,
     /// Caret stops of every line, usually derived on first use. Layouts
     /// containing join controls retain the complete shaping boundaries
     /// before selection coverage excludes those controls.
@@ -384,6 +385,13 @@ impl Default for TextLayoutOptions {
 }
 
 impl TextLayout {
+    /// Last retained source byte, exclusive. A synthesized ellipsis does
+    /// not occupy any byte of the original text.
+    #[must_use]
+    pub const fn retained_source_end(&self) -> usize {
+        self.retained_source_end
+    }
+
     #[must_use]
     pub fn glyph_count(&self) -> usize {
         self.lines.iter().map(|line| line.glyphs.len()).sum()
@@ -1458,6 +1466,7 @@ impl TextEngine {
                 line_height,
             },
             font_runs: font_runs.clone(),
+            retained_source_end: text.len(),
             caret_positions: document_carets
                 .map(|carets| OnceLock::from(Arc::from(carets)))
                 .unwrap_or_default(),
@@ -1634,6 +1643,7 @@ impl TextEngine {
             if shaped.lines.len() <= limit && fits_width {
                 return TextLayout {
                     overflowed: true,
+                    retained_source_end: end,
                     ..shaped
                 };
             }
@@ -1641,6 +1651,7 @@ impl TextEngine {
             if previous == end {
                 return TextLayout {
                     overflowed: true,
+                    retained_source_end: end,
                     ..shaped
                 };
             }
@@ -2179,6 +2190,7 @@ impl TextEngine {
                 line_height,
             },
             font_runs: font_runs.into(),
+            retained_source_end: text.len(),
             caret_positions: OnceLock::new(),
             line_carets: OnceLock::new(),
             overflowed: false,
@@ -2547,6 +2559,7 @@ fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {
     let height = lines.last().map_or(0., |line| line.top + line.height);
     layout.metrics.size = Size::new(width, height);
     layout.metrics.baseline = lines.first().map_or(0.0, |line| line.baseline);
+    layout.retained_source_end = lines.last().map_or(0, |line| line.end.min(layout.retained_source_end));
     layout.lines = lines;
     layout.line_carets = OnceLock::new();
     layout.overflowed = true;

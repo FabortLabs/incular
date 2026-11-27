@@ -53,6 +53,7 @@ impl WidgetTree {
             semantic_point_order: FastHashMap::default(),
             semantic_bounds_insets: FastHashMap::default(),
             table_semantic_wrappers: FastHashMap::default(),
+            paragraph_semantic_nodes: FastHashMap::default(),
             viewport_semantic_panes: FastHashMap::default(),
             semantics_block_reach: FastHashSet::default(),
             semantics_full_pass: true,

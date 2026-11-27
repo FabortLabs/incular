@@ -2837,6 +2837,11 @@ impl WidgetTree {
                             let _ = self.semantics.remove(node);
                         }
                     }
+                    if let Some(parts) = self.paragraph_semantic_nodes.remove(&id) {
+                        for part in parts {
+                            let _ = self.semantics.remove(part);
+                        }
+                    }
                     let build_consumer = element.build_context.consumer_id();
                     let render_consumer = element.render_context.consumer_id();
                     element.build_context.clear_dependencies();

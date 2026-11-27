@@ -1507,6 +1507,7 @@ pub struct WidgetTree {
     /// Most nodes use their unmodified layout rectangle.
     semantic_bounds_insets: FastHashMap<RenderObjectId, EdgeInsets>,
     table_semantic_wrappers: FastHashMap<ElementId, semantics::table::TableSemanticWrappers>,
+    paragraph_semantic_nodes: FastHashMap<ElementId, Vec<SemanticNodeId>>,
     // Each blocker and the non-boundary ancestors through which it reaches siblings.
     semantics_block_reach: FastHashSet<ElementId>,
     /// Collect every element on the next semantics pass, ignoring the

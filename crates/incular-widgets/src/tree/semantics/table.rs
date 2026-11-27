@@ -22,21 +22,6 @@ impl TableSemanticWrappers {
 }
 
 #[derive(Default)]
-pub(super) struct TableSemanticChanges {
-    pub(super) kept: Vec<SemanticNodeId>,
-    pub(super) dropped: Vec<SemanticNodeId>,
-    pub(super) detached: Vec<SemanticNodeId>,
-}
-
-impl TableSemanticChanges {
-    pub(super) fn clear(&mut self) {
-        self.kept.clear();
-        self.dropped.clear();
-        self.detached.clear();
-    }
-}
-
-#[derive(Default)]
 struct Cell {
     geometry: Rect,
     raw_ids: Vec<SemanticNodeId>,
@@ -51,7 +36,7 @@ impl WidgetTree {
         table: ElementId,
         raw_edges: &[(u32, u32, ElementId)],
         result: &mut Vec<SemanticNodeId>,
-        changes: &mut TableSemanticChanges,
+        changes: &mut SyntheticSemanticChanges,
     ) {
         let entry = self.element_live(table, "semantic table stays mounted");
         let render = self.render_live(entry.render, "semantic table render stays mounted");

@@ -17,6 +17,7 @@ use incular_semantics::{
 };
 use std::{borrow::Cow, rc::Rc};
 
+pub(super) mod paragraph;
 pub(super) mod table;
 mod traversal;
 mod viewport;
@@ -286,6 +287,21 @@ const TOP_LEVEL: u32 = u32::MAX;
 /// not visited.
 const RETAINED_LIST: u32 = u32::MAX - 1;
 
+#[derive(Default)]
+struct SyntheticSemanticChanges {
+    pub(super) kept: Vec<SemanticNodeId>,
+    pub(super) dropped: Vec<SemanticNodeId>,
+    pub(super) detached: Vec<SemanticNodeId>,
+}
+
+impl SyntheticSemanticChanges {
+    pub(super) fn clear(&mut self) {
+        self.kept.clear();
+        self.dropped.clear();
+        self.detached.clear();
+    }
+}
+
 /// Buffers the semantics pass reuses, so a pass that collects a few nodes
 /// allocates only for those nodes.
 #[derive(Default)]
@@ -302,8 +318,8 @@ pub(super) struct SemanticsScratch {
     /// Every semantic node with a parent edge (or top-level slot) this pass,
     /// sorted for lookup.
     attached: Vec<SemanticNodeId>,
-    /// Layout-only nodes created while assembling semantic table rows.
-    table_changes: table::TableSemanticChanges,
+    /// Synthetic nodes created by tables and rich paragraph ranges.
+    synthetic_changes: SyntheticSemanticChanges,
     /// Pane-relevant state changes from the current collection pass.
     changed_viewport_children: FastHashMap<SemanticNodeId, viewport::PaneChild>,
     /// Nodes dropped from a re-collected child list.
@@ -331,6 +347,11 @@ impl WidgetTree {
             }
             for (_, wrappers) in self.table_semantic_wrappers.drain() {
                 for id in wrappers.into_ids() {
+                    let _ = self.semantics.remove(id);
+                }
+            }
+            for (_, parts) in self.paragraph_semantic_nodes.drain() {
+                for id in parts {
                     let _ = self.semantics.remove(id);
                 }
             }
@@ -750,7 +771,7 @@ impl WidgetTree {
             edges,
             traversal_items,
             attached,
-            table_changes,
+            synthetic_changes,
             changed_viewport_children,
             detached,
             ..
@@ -820,7 +841,7 @@ impl WidgetTree {
                 .map(|(_, _, child)| semantic_id(&self.semantic_ids, child)),
         );
         attached.sort_unstable_by_key(|id| id.0);
-        table_changes.clear();
+        synthetic_changes.clear();
         detached.clear();
         let mut cursor = 0;
         // Collection builds fresh values each pass, so moving them into the
@@ -860,7 +881,7 @@ impl WidgetTree {
                         element,
                         &edges[start..cursor],
                         child_ids,
-                        table_changes,
+                        synthetic_changes,
                     );
                 } else {
                     // An explicit role can replace the widget's table role.
@@ -868,6 +889,15 @@ impl WidgetTree {
                     // detached child sweep as all other old nodes.
                     self.table_semantic_wrappers.remove(&element);
                 }
+            }
+
+            if matches!(
+                self.element_live(element, "semantic element remains live").widget.kind(),
+                WidgetKind::Text { .. }
+            ) {
+                self.assemble_paragraph_semantics(
+                    element, id, &edges[start..cursor], child_ids, synthetic_changes,
+                );
             }
 
             #[cfg(feature = "devtools")]
@@ -921,18 +951,18 @@ impl WidgetTree {
                 element.dev.semantic_updates = element.dev.semantic_updates.saturating_add(1);
             }
         }
-        // Synthetic rows/cells were not part of the element-edge collection.
+        // Synthetic table wrappers and paragraph ranges have no element edges.
         // Keep the IDs they reused out of the detached-subtree sweep.
-        if !table_changes.dropped.is_empty() {
-            table_changes.dropped.sort_unstable_by_key(|id| id.0);
-            attached.retain(|id| !is_attached(&table_changes.dropped, *id));
-            detached.append(&mut table_changes.dropped);
+        if !synthetic_changes.dropped.is_empty() {
+            synthetic_changes.dropped.sort_unstable_by_key(|id| id.0);
+            attached.retain(|id| !is_attached(&synthetic_changes.dropped, *id));
+            detached.append(&mut synthetic_changes.dropped);
         }
-        if !table_changes.kept.is_empty() {
-            attached.append(&mut table_changes.kept);
+        if !synthetic_changes.kept.is_empty() {
+            attached.append(&mut synthetic_changes.kept);
             attached.sort_unstable_by_key(|id| id.0);
         }
-        detached.append(&mut table_changes.detached);
+        detached.append(&mut synthetic_changes.detached);
         let top_level = &edges[cursor..];
         // Every top-level node is a root: layout-only ancestors create no
         // semantic node, so the graph is a forest whenever one has several
@@ -976,6 +1006,8 @@ impl WidgetTree {
             self.semantic_ids
                 .retain(|_, node| semantics.node(*node).is_some());
             self.table_semantic_wrappers
+                .retain(|element, _| self.semantic_ids.contains_key(element));
+            self.paragraph_semantic_nodes
                 .retain(|element, _| self.semantic_ids.contains_key(element));
             self.viewport_semantic_panes.retain(|element, pane| {
                 self.semantic_ids.contains_key(element) && semantics.node(*pane).is_some()
@@ -1219,6 +1251,7 @@ impl WidgetTree {
             }
             let regroups = self.regroups_sliver_semantics(entry);
             let table = matches!(entry.widget.kind(), WidgetKind::Table { .. });
+            let paragraph_parts = entry.widget.semantic_properties().paragraph_parts.is_some();
             let reorder = scope.descendant_bounds
                 && self.semantic_reading_direction(element).is_some()
                 && self
@@ -1226,7 +1259,7 @@ impl WidgetTree {
                     .get(&element)
                     .and_then(|id| self.semantics.node(*id))
                     .is_some_and(|node| node.children.len() > 1);
-            if !scope.own_bounds && !regroups && !reorder && !table {
+            if !scope.own_bounds && !regroups && !reorder && !table && !paragraph_parts {
                 // The node only lies on the path to a marked one: its bounds
                 // and its child list stand, and only its marked children
                 // are entered.
@@ -1347,6 +1380,7 @@ impl WidgetTree {
                 set_size: config.delegate.child_count(),
             });
         }
+        let properties = entry.widget.semantic_properties();
         let (mut role, mut default_label, mut value, mut state, mut actions) = match entry
             .widget
             .kind()
@@ -1373,6 +1407,17 @@ impl WidgetTree {
                 None,
                 None,
                 SemanticState { container: true, ..SemanticState::default() },
+                Vec::new(),
+            ),
+            WidgetKind::Text { .. } if properties.paragraph_parts.is_some() => (
+                Some(SemanticRole::GenericContainer),
+                None,
+                None,
+                SemanticState {
+                    container: true,
+                    explicit_child_nodes: true,
+                    ..SemanticState::default()
+                },
                 Vec::new(),
             ),
             WidgetKind::Text { text, .. } => (
@@ -1498,7 +1543,6 @@ impl WidgetTree {
             }
             _ => (None, None, None, SemanticState::default(), vec![]),
         };
-        let properties = entry.widget.semantic_properties();
         // An action-only annotation also creates a node.
         if role.is_none()
             && (properties.merge_descendants || !properties.callbacks.custom.is_empty())
@@ -2220,6 +2264,7 @@ impl WidgetTree {
     fn focus_semantics_boundary(&self, element: ElementId, entry: &Element) -> bool {
         let properties = entry.widget.semantic_properties();
         if properties.explicit.is_some()
+            || properties.paragraph_parts.is_some()
             || properties.merge_descendants
             || !properties.callbacks.custom.is_empty()
         {
@@ -2399,6 +2444,7 @@ impl WidgetTree {
         let properties = entry.widget.semantic_properties();
         if !self.can_contribute_merged_semantics(entry)
             || properties.merge_descendants
+            || properties.paragraph_parts.is_some()
             || properties.tag_for_children.is_some()
             || properties.locale_for_subtree.is_some()
             || properties.description.is_some()
@@ -2917,8 +2963,8 @@ impl WidgetTree {
             Some(id) => self.semantics.node(id).map_or(&[][..], |node| node.children.as_slice()),
             None => self.semantics.roots(),
         };
-        // The viewport or table can replace collected children with
-        // synthetic groups. Never bypass one to use a flat permutation.
+        // Viewports, tables and rich paragraphs can replace collected
+        // children with synthetic ranges or groups. Never bypass one to use a flat permutation.
         if published.len() != traversal_edges.len()
             || published
                 .iter()
@@ -3201,6 +3247,7 @@ fn element_own_label(entry: &Element) -> Option<Cow<'_, str>> {
         .or(properties.label.as_deref())
         .map(Cow::Borrowed)
         .or_else(|| match entry.widget.kind() {
+            WidgetKind::Text { .. } if properties.paragraph_parts.is_some() => None,
             WidgetKind::Text { text, .. } | WidgetKind::SelectableText { text, .. } => {
                 Some(Cow::Borrowed(text.as_str()))
             }
