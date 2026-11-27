@@ -1,6 +1,8 @@
 //! Last positioned sample per hover device, independent of touch input.
 
-use incular_core::PointerDeviceKind;
+use std::{cell::Cell, rc::Rc};
+
+use incular_core::{ChangeNotifier, ChangeNotifierSubscription, PointerDeviceKind};
 use incular_widgets::{MouseCursor, internal::RawPointerEvent};
 
 /// A newly activated native cursor for one positioned hover device.
@@ -23,12 +25,42 @@ struct Sample {
 /// order. Recency is separate: the runtime exposes one window cursor.
 #[derive(Default)]
 pub(super) struct HoverDevices {
+    connection: Option<ConnectionListeners>,
     first: Option<Sample>,
     rest: Vec<Sample>,
     recency: u64,
 }
 
+struct ConnectionListeners {
+    current: Rc<Cell<bool>>,
+    changes: ChangeNotifier,
+}
+
 impl HoverDevices {
+    pub(super) fn add_connection_listener(
+        &mut self,
+        callback: impl Fn(bool) + 'static,
+    ) -> ChangeNotifierSubscription {
+        let connected = !self.is_empty();
+        let listeners = self.connection.get_or_insert_with(|| ConnectionListeners {
+            current: Rc::new(Cell::new(connected)),
+            changes: ChangeNotifier::new(),
+        });
+        let current = Rc::clone(&listeners.current);
+        listeners
+            .changes
+            .add_listener(move || callback(current.get()))
+    }
+
+    pub(super) fn notify_connection_change(&self) {
+        if let Some(listeners) = &self.connection {
+            let connected = !self.is_empty();
+            if listeners.current.replace(connected) != connected {
+                listeners.changes.notify_listeners();
+            }
+        }
+    }
+
     pub(super) fn record(&mut self, event: RawPointerEvent) {
         let key = event.hover_device_identity();
         self.recency = self

@@ -2125,12 +2125,13 @@ impl Runtime {
                 }
             }
             HoverDeviceChange::Removed => {
+                let was_primary = self.hover_devices.remove(raw);
                 let _ = self.tree.dispatch_raw_pointer_with_hit(
                     window,
                     raw,
                     &PointerHitTest::default(),
                 );
-                if self.hover_devices.remove(raw) {
+                if was_primary {
                     self.refresh_primary_button_hover();
                     self.frame_requested |= self
                         .tree
@@ -2141,6 +2142,7 @@ impl Runtime {
         if event.kind == PointerDeviceKind::Mouse {
             self.sync_initial_focus_highlight_mouse();
         }
+        self.hover_devices.notify_connection_change();
     }
 
     fn sync_initial_focus_highlight_mouse(&self) {
@@ -2152,6 +2154,16 @@ impl Runtime {
     }
 
     fn handle_pointer_input(
+        &mut self,
+        raw_event: RawPointerEvent,
+        metadata_rich: bool,
+    ) -> Option<EventTarget> {
+        let result = self.route_pointer_input(raw_event, metadata_rich);
+        self.hover_devices.notify_connection_change();
+        result
+    }
+
+    fn route_pointer_input(
         &mut self,
         raw_event: RawPointerEvent,
         metadata_rich: bool,
@@ -2659,6 +2671,16 @@ impl Runtime {
     #[must_use]
     pub fn has_hover_device(&self) -> bool {
         !self.hover_devices.is_empty()
+    }
+
+    /// Observes transitions between no positioned hover device and at least
+    /// one. Signals are delivered after region callbacks, not for movement or
+    /// for adding/removing a device while another remains connected.
+    pub fn add_hover_device_connection_listener(
+        &mut self,
+        listener: impl Fn(bool) + 'static,
+    ) -> incular_core::ChangeNotifierSubscription {
+        self.hover_devices.add_connection_listener(listener)
     }
 
     fn release_legacy_pointer(

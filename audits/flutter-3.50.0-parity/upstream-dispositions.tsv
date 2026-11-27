@@ -3245,3 +3245,12 @@ packages/flutter/test/foundation/diagnostics_json_test.dart	10	Element diagnosti
 packages/flutter/test/foundation/diagnostics_json_test.dart	20	StatefulElement diagnostics are stateful	paired-match	upstream-diagnostic-tree-json.md
 packages/flutter/test/foundation/diagnostics_test.dart	1458	iterable flags property test	paired-match	upstream-diagnostic-messages-and-flags.md
 packages/flutter/test/foundation/diagnostics_test.dart	1658	message test	paired-match	upstream-diagnostic-messages-and-flags.md
+packages/flutter/test/rendering/mouse_tracker_test.dart	77	should detect enter, hover, and exit from Added, Hover, and Removed events for stylus	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/rendering/mouse_tracker_test.dart	313	should not handle non-hover events	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/rendering/mouse_tracker_test.dart	413	should correctly handle when the annotation moves in or out of the pointer	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/rendering/mouse_tracker_test.dart	475	should correctly handle when the pointer is added or removed on the annotation	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/rendering/mouse_tracker_test.dart	527	should correctly handle when the pointer moves in or out of the annotation	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/rendering/mouse_tracker_test.dart	591	should not schedule post-frame callbacks when no mouse is connected	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/rendering/mouse_tracker_test.dart	607	should not flip out if not all mouse events are listened to	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/rendering/mouse_tracker_test.dart	635	should trigger callbacks between parents and children in correct order	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/rendering/mouse_tracker_test.dart	695	should trigger callbacks between disjoint siblings in correctly order	paired-match	upstream-mouse-tracker-callbacks.md

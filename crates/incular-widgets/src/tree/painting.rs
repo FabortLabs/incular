@@ -148,20 +148,26 @@ fn paints_own_hit_surface(kind: Option<&WidgetKind>) -> bool {
     )
 }
 
-// RenderAbsorbPointer tests its own box instead of consulting its child.
 // Flutter Size.contains is half-open at the lower and right edges.
-fn absorb_pointer_hit(size: Size, local: Offset) -> bool {
+fn half_open_hit(size: Size, local: Offset) -> bool {
     local.x >= 0.0 && local.y >= 0.0 && local.x < size.width && local.y < size.height
 }
 
-fn hit_box_contains(kind: &RenderKind, size: Size, origin: Offset, point: Offset) -> bool {
+fn hit_box_contains(
+    kind: &RenderKind,
+    widget: Option<&WidgetKind>,
+    size: Size,
+    origin: Offset,
+    point: Offset,
+) -> bool {
     if matches!(
         kind,
         RenderKind::Colored { .. } | RenderKind::CustomPaint { .. } | RenderKind::Image { .. }
-    ) {
+    ) || matches!(widget, Some(WidgetKind::RawInput { kind, .. }) if kind.mouse_region_opaque().is_some())
+    {
         // Flutter's RenderBox covers its half-open layout box, even if
         // its fill is transparent or the image has no decoded source.
-        absorb_pointer_hit(size, point - origin)
+        half_open_hit(size, point - origin)
     } else {
         Rect::from_origin_size(origin, size).contains(point)
     }
@@ -565,7 +571,7 @@ impl WidgetTree {
                 ..
             })
         ) {
-            if !absorb_pointer_hit(node.size, point - self.hit_origin(id, node, origin)) {
+            if !half_open_hit(node.size, point - self.hit_origin(id, node, origin)) {
                 return (RawHitResult::default(), None);
             }
             return (
@@ -616,7 +622,7 @@ impl WidgetTree {
             return (result, target);
         }
         let current = self.hit_origin(id, node, origin);
-        if !hit_box_contains(node.object.kind(), node.size, current, point) {
+        if !hit_box_contains(node.object.kind(), kind, node.size, current, point) {
             return (RawHitResult::default(), None);
         }
         let child_origin = hit_child_origin(node.object.kind(), current);
@@ -1125,7 +1131,7 @@ impl WidgetTree {
             Some(WidgetKind::AbsorbPointer {
                 absorbing: true, ..
             }) => {
-                return absorb_pointer_hit(node.size, point - self.hit_origin(id, node, origin))
+                return half_open_hit(node.size, point - self.hit_origin(id, node, origin))
                     .then_some(id);
             }
             _ => {}
@@ -1157,7 +1163,7 @@ impl WidgetTree {
             return None;
         }
         let current = self.hit_origin(id, node, origin);
-        if !hit_box_contains(node.object.kind(), node.size, current, point) {
+        if !hit_box_contains(node.object.kind(), kind, node.size, current, point) {
             return None;
         }
         if matches!(
