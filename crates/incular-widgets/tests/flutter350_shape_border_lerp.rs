@@ -200,3 +200,53 @@ fn a_successful_forward_hook_prevents_any_other_interpolation_call() {
         Size::new(25., 60.)
     );
 }
+
+#[test]
+fn standard_outlines_keep_the_same_geometry_when_endpoints_and_time_are_reversed() {
+    use incular_widgets::{OvalBorder, StadiumBorder, StarBorder};
+    let outlines: [(&str, Rc<dyn ShapeBorder>); 5] = [
+        ("rounded", Rc::new(RoundedRectangleBorder::default())),
+        ("stadium", Rc::new(StadiumBorder::default())),
+        ("circle", Rc::new(CircleBorder::default())),
+        ("oval", Rc::new(OvalBorder::default())),
+        ("star", Rc::new(StarBorder::default())),
+    ];
+
+    for (from_name, from) in &outlines {
+        for (to_name, to) in &outlines {
+            let forward = lerp_shape_border(Some(from), Some(to), 0.25).unwrap();
+            let reverse = lerp_shape_border(Some(to), Some(from), 0.75).unwrap();
+            assert_eq!(
+                forward.star_geometry().is_some(),
+                reverse.star_geometry().is_some(),
+                "intermediate family differs for {from_name} → {to_name}",
+            );
+            assert_eq!(
+                forward.rounded_circle_outline().is_some(),
+                reverse.rounded_circle_outline().is_some(),
+                "intermediate family differs for {from_name} → {to_name}",
+            );
+            for bounds in [
+                frame(),
+                Rect::from_origin_size(Offset::new(11., 15.), Size::new(60., 100.)),
+            ] {
+                let a = forward.outer_path(bounds);
+                let b = reverse.outer_path(bounds);
+                for step_x in 0..22 {
+                    for step_y in 0..19 {
+                        let sample = bounds.origin
+                            + Offset::new(
+                                bounds.size.width * (step_x as f32 + 0.37) / 22.,
+                                bounds.size.height * (step_y as f32 + 0.61) / 19.,
+                            );
+                        assert_eq!(
+                            a.contains(sample, FillRule::NonZero),
+                            b.contains(sample, FillRule::NonZero),
+                            "{from_name} → {to_name} at {sample:?} in {bounds:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+}

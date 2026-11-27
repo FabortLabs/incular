@@ -3608,3 +3608,4 @@ packages/flutter/test/widgets/default_text_height_behavior_test.dart	71	DefaultT
 packages/flutter/test/widgets/default_text_height_behavior_test.dart	99	DefaultTextHeightBehavior.of(context) returns null if no DefaultTextHeightBehavior widget in tree	partial-match	upstream-text-height-defaults.md
 packages/flutter/test/widgets/default_text_editing_shortcuts_test.dart	532	are triggered when numlock is locked	partial-match	upstream-linux-numpad-editing.md
 packages/flutter/test/widgets/default_text_editing_shortcuts_test.dart	690	are triggered when numlock is unlocked	partial-match	upstream-linux-numpad-editing.md
+packages/flutter/test/painting/shape_border_test.dart	61	Outlined shape borders interpolate symmetrically	partial-match	upstream-shape-outline-symmetry.md
