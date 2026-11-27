@@ -3944,13 +3944,13 @@ impl WidgetTree {
                         if let Some(opacity) = layers.opacity()
                             && self
                                 .compositor
-                                .update_opacity(opacity, controller.opacity())
+                                .update_opacity(opacity, incular_rendering::flutter_layer_opacity(controller.opacity()))
                         {
                             changed = true;
                             self.diagnostics.compositor_only_updates += 1;
                         }
                     } else if let Some(opacity) = layers.opacity()
-                        && self.compositor.update_opacity(opacity, alpha)
+                        && self.compositor.update_opacity(opacity, incular_rendering::flutter_layer_opacity(alpha))
                     {
                         changed = true;
                         self.diagnostics.compositor_only_updates += 1;

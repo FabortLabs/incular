@@ -47,6 +47,16 @@ pub fn normalize_opacity(alpha: f32) -> f32 {
     }
 }
 
+/// Widget opacity on Flutter's 8-bit layer boundary, in the compositor's
+/// normalized units. Generic float effects may still use `normalize_opacity`.
+#[must_use]
+pub fn flutter_layer_opacity(alpha: f32) -> f32 {
+    // Keep the product in the public f32 domain: decimal 0.9, for
+    // example, is just below its exact value after f32 conversion, and
+    // promoting it ahead of multiplication would round the half byte down.
+    (normalize_opacity(alpha) * 255.).round() / 255.
+}
+
 /// Whether opacity becomes zero at Flutter's 8-bit paint threshold.
 #[must_use]
 pub fn opacity_is_transparent(alpha: f32) -> bool {
@@ -2206,9 +2216,12 @@ impl LayerTree {
             }
             LayerKind::Opacity { alpha } => {
                 let invisible = opacity_is_transparent(alpha);
-                let bounds = self
-                    .subtree_bounds(id, world_transform)
-                    .unwrap_or_else(|| Rect::from_origin_size(Offset::ZERO, Size::ZERO));
+                let bounds = if invisible {
+                    Rect::from_origin_size(Offset::ZERO, Size::ZERO)
+                } else {
+                    self.subtree_bounds(id, world_transform)
+                        .unwrap_or_else(|| Rect::from_origin_size(Offset::ZERO, Size::ZERO))
+                };
                 // Keep the command marker and layer identity for retained
                 // diagnostics, but send no source draw work for zero alpha.
                 out.push(PaintCommand::PushOpacity {

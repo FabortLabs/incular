@@ -127,8 +127,8 @@ fn sliver_fade_transition_follows_its_controller() {
             })
             .collect()
     };
-    assert_eq!(alphas(&mut harness.tree), [0.25]);
+    assert_eq!(alphas(&mut harness.tree), [64. / 255.]);
     let _ = opacity.set_opacity(0.75);
     harness.frame(16);
-    assert_eq!(alphas(&mut harness.tree), [0.75]);
+    assert_eq!(alphas(&mut harness.tree), [191. / 255.]);
 }

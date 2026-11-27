@@ -56,3 +56,24 @@ bounds when the effective alpha is zero. The adjacent visible value
 restores the same retained geometry. Targeted compositor, widget
 opacity and hit/semantics checks passed. This is not a GPU screenshot
 comparison.
+
+## Opacity layer bytes and composition gates
+
+All six pinned original opacity compositing cases at
+`rendering/proxy_box_test.dart:346,356,365,386,399,412` passed.
+The native cases inspect the real opacity group, nonzero child draw
+work, and retained generation for zero, partial and full opacity.
+A zero-alpha debug marker can retain a layer identity without any
+source draw, bounds scan or isolation. Repainting the child at half
+opacity updates its source generation under the same opacity layer.
+
+The authored probe checks actual Flutter `OpacityLayer.alpha`
+values across the first visible byte and the 0.1, 0.5, 0.7, 0.9,
+0.99 and 1.0 inputs. Widget opacity now passes these same bytes
+(as normalized values) to the retained renderer, rather than leaving
+fractional values to be rounded only after compositing. An animated
+opacity at 0.49/255 still reports that its child is eligible, as in
+Flutter's raw animation-value query, while submitting no raster work.
+The generic continuous effect API remains unchanged. Fifty-three
+focused native tests and the authored Flutter control passed; no
+GPU device was required or exercised.

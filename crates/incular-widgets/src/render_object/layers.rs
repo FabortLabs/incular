@@ -452,7 +452,7 @@ impl RenderLayers {
                 LayerAttachment::Transform { layer }
             }
             WidgetKind::Opacity { alpha, .. } => {
-                let layer = compositor.create_opacity(*alpha);
+                let layer = compositor.create_opacity(incular_rendering::flutter_layer_opacity(*alpha));
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::Opacity { layer }
             }

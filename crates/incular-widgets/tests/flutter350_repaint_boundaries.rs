@@ -41,9 +41,9 @@ fn nested_repaint_boundaries_survive_consecutive_opacity_updates() {
         let inner_render = tree.render_id(inner_element);
 
         for (next, expected) in [
-            ([1., 1., 0.9], &[0.9][..]),
+            ([1., 1., 0.9], &[230. / 255.][..]),
             ([0.8, 1., 0.8], &[0.8, 0.8][..]),
-            ([0.7, 0.7, 0.7], &[0.7, 0.7, 0.7][..]),
+            ([0.7, 0.7, 0.7], &[179. / 255.; 3][..]),
         ] {
             tree.update(root, scene(next)).unwrap();
             let list = frame(&mut tree);

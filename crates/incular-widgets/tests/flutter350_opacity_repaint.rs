@@ -90,16 +90,24 @@ fn fade_animates_to_one_and_nonopaque_endpoints_without_repainting() {
         assert_eq!(counts.get(), 1);
         assert!(shows_child(&mid));
         let (layer, mid_alpha, generation) = opacity_group(&mid).unwrap();
-        assert!((mid_alpha - end / 2.).abs() < 0.001);
+        let (middle, final_alpha) = if end == 1. {
+            (128. / 255., 1.)
+        } else {
+            (126. / 255., 252. / 255.)
+        };
+        assert_eq!(mid_alpha, middle);
 
         let finished = frame(&mut tree, start + DURATION);
         assert_eq!(counts.get(), 1);
-        assert_eq!(opacity_group(&finished), Some((layer, end, generation)));
+        assert_eq!(
+            opacity_group(&finished),
+            Some((layer, final_alpha, generation))
+        );
         assert!(shows_child(&finished));
         controller.stop();
         assert_eq!(
             opacity_group(&frame(&mut tree, start + DURATION)),
-            Some((layer, end, generation))
+            Some((layer, final_alpha, generation))
         );
         assert_eq!(counts.get(), 1);
     }

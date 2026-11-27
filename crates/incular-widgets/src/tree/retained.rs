@@ -1479,7 +1479,7 @@ impl WidgetTree {
             render_node.object.layers.opacity()
         };
         if let Some(layer) = opacity_layer {
-            let _ = self.compositor.update_opacity(layer, value);
+            let _ = self.compositor.update_opacity(layer, incular_rendering::flutter_layer_opacity(value));
         }
         self.diagnostics.compositor_only_updates =
             self.diagnostics.compositor_only_updates.wrapping_add(1);

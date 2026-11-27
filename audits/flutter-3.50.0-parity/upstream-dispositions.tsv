@@ -2918,3 +2918,9 @@ packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	328	RenderSliver
 packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	358	RenderSliver.getMaxPaintRect maxPaintExtent > remainingPaintExtent	paired-match	upstream-sliver-max-paint-rect.md
 packages/flutter/test/rendering/box_constraints_test.dart	11	BoxConstraints toString	paired-match	upstream-box-constraint-diagnostics.md
 packages/flutter/test/rendering/box_constraints_test.dart	89	BoxConstraints.lerp identical a,b	paired-match	upstream-box-constraint-diagnostics.md
+packages/flutter/test/rendering/proxy_box_test.dart	346	RenderOpacity does not composite if it is transparent	paired-match	upstream-render-proxies.md#opacity-layer-bytes-and-composition-gates
+packages/flutter/test/rendering/proxy_box_test.dart	356	RenderOpacity does composite if it is opaque	paired-match	upstream-render-proxies.md#opacity-layer-bytes-and-composition-gates
+packages/flutter/test/rendering/proxy_box_test.dart	365	RenderOpacity does composite if it is partially opaque	paired-match	upstream-render-proxies.md#opacity-layer-bytes-and-composition-gates
+packages/flutter/test/rendering/proxy_box_test.dart	386	RenderAnimatedOpacity does not composite if it is transparent	paired-match	upstream-render-proxies.md#opacity-layer-bytes-and-composition-gates
+packages/flutter/test/rendering/proxy_box_test.dart	399	RenderAnimatedOpacity does composite if it is opaque	paired-match	upstream-render-proxies.md#opacity-layer-bytes-and-composition-gates
+packages/flutter/test/rendering/proxy_box_test.dart	412	RenderAnimatedOpacity does composite if it is partially opaque	paired-match	upstream-render-proxies.md#opacity-layer-bytes-and-composition-gates

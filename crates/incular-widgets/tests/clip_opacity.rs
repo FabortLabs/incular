@@ -1076,7 +1076,7 @@ fn fade_transition_follows_its_controller() {
     // through layout: an explicit change reaches the layer on demand.
     tree.update_compositor(std::time::Instant::now())
         .expect("compositor tick");
-    assert_eq!(opacity_alphas(&tree.paint()), vec![0.25]);
+    assert_eq!(opacity_alphas(&tree.paint()), vec![64. / 255.]);
 }
 
 #[test]

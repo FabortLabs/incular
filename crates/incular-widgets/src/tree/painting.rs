@@ -763,13 +763,16 @@ impl WidgetTree {
     }
 
     /// Whether a render object paints the given direct child at its
-    /// current state. This uses the same gates as the retained paint pass.
+    /// current state. A controlled opacity's child query is based on its
+    /// animation value; raster work itself starts at the first nonzero byte.
     #[must_use]
     pub fn paints_child(&self, parent: RenderObjectId, child: RenderObjectId) -> bool {
         self.renders.get(parent.0).is_some_and(|node| {
-            !node.parked
-                && !self.hides_render_paint(parent, node.object.kind())
-                && visible_paint_children(node).contains(&child)
+            let visible = match node.object.kind() {
+                RenderKind::Opacity { controller: Some(controller), .. } => controller.opacity() > 0.,
+                kind => !self.hides_render_paint(parent, kind),
+            };
+            !node.parked && visible && visible_paint_children(node).contains(&child)
         })
     }
 
