@@ -524,6 +524,34 @@ impl PartialEq for AnimationController {
     }
 }
 
+/// A repeated disposal attempt with the controller identity that failed.
+#[derive(Clone, Debug)]
+pub struct AnimationControllerDisposeError {
+    controller: AnimationController,
+}
+
+impl AnimationControllerDisposeError {
+    /// The named diagnostic property and the original disposed controller.
+    pub fn diagnostic_property(&self) -> (&'static str, &AnimationController) {
+        (
+            "The following AnimationController object was disposed multiple times",
+            &self.controller,
+        )
+    }
+}
+
+impl fmt::Display for AnimationControllerDisposeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "AnimationController.dispose() called more than once.")?;
+        writeln!(f, "A given AnimationController cannot be disposed more than once.")?;
+        writeln!(f, "The following AnimationController object was disposed multiple")?;
+        writeln!(f, "times:")?;
+        write!(f, "  {}", self.controller)
+    }
+}
+
+impl std::error::Error for AnimationControllerDisposeError {}
+
 enum MissingDuration {
     Forward,
     Reverse,
@@ -588,15 +616,25 @@ impl AnimationController {
     ///
     /// A pending animation is canceled. A disposed controller cannot be
     /// reused. Reading its last value remains possible through another handle.
+    #[track_caller]
     pub fn dispose(&self) {
+        if let Err(error) = self.try_dispose() {
+            panic!("{error}");
+        }
+    }
+
+    /// Disposes the controller once, or reports the original controller on
+    /// a repeated attempt without changing its last value.
+    pub fn try_dispose(&self) -> Result<(), AnimationControllerDisposeError> {
         #[cfg(debug_assertions)]
         let allocation;
         let (ticker, future, run, listeners, status_listeners, error_handler) = {
             let mut controller = self.inner.borrow_mut();
-            assert!(
-                !controller.disposed,
-                "AnimationController.dispose() called more than once."
-            );
+            if controller.disposed {
+                return Err(AnimationControllerDisposeError {
+                    controller: self.clone(),
+                });
+            }
             controller.disposed = true;
             controller.state.started_at = None;
             controller.state.pending_start = false;
@@ -628,6 +666,7 @@ impl AnimationController {
         drop((run, listeners, status_listeners, error_handler));
         #[cfg(debug_assertions)]
         drop(allocation);
+        Ok(())
     }
 
     #[must_use]

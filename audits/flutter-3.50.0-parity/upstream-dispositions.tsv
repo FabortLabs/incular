@@ -2691,3 +2691,4 @@ packages/flutter/test/widgets/system_context_menu_test.dart	728	read only fields
 packages/flutter/test/widgets/system_context_menu_test.dart	1179	Default iOS SystemContextMenu includes Share for non-empty selection	paired-match	upstream-system-context-menu.md#ios-selection-actions-and-read-only-eligibility
 packages/flutter/test/animation/listener_helpers_test.dart	9	AnimationLocalStatusListenersMixin with AnimationLazyListenerMixin - removing unregistered listener is no-op	paired-match	upstream-lazy-animation-listeners.md
 packages/flutter/test/animation/listener_helpers_test.dart	17	AnimationLocalListenersMixin with AnimationLazyListenerMixin - removing unregistered listener is no-op	paired-match	upstream-lazy-animation-listeners.md
+packages/flutter/test/animation/animation_controller_test.dart	502	AnimationController error handling	paired-match	upstream-animation-controller-disposal.md#missing-timing-configuration-and-duplicate-disposal

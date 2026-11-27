@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Animation controllers can return an identity-preserving diagnostic when an
+  already disposed controller is disposed again.
+
 - Custom animations can track local value and status listeners and start or
   stop observing a parent only on the first or last actual registration.
 

@@ -557,3 +557,51 @@ fn missing_duration_diagnostics_include_the_complete_pinned_remediation() {
     assert!(!controller.is_animating());
     assert_eq!(controller.status(), AnimationStatus::Dismissed);
 }
+
+#[test]
+fn controller_errors_keep_operation_context_and_the_disposed_controller_identity() {
+    let controller = AnimationController::without_duration();
+    let alias = controller.clone();
+    let now = Instant::now();
+    for (diagnostic, operation) in [
+        (
+            panic_text(|| { let _ = controller.forward(now); }),
+            "AnimationController.forward()",
+        ),
+        (
+            panic_text(|| { let _ = controller.reverse(now); }),
+            "AnimationController.reverse()",
+        ),
+        (
+            panic_text(|| { let _ = controller.animate_to(now, 0.5); }),
+            "AnimationController.animateTo()",
+        ),
+        (
+            panic_text(|| { let _ = controller.repeat(now, false); }),
+            "AnimationController.repeat()",
+        ),
+    ] {
+        assert!(diagnostic.contains(operation), "{diagnostic:?}");
+        assert!(diagnostic.contains("duration") || diagnostic.contains("period"), "{diagnostic:?}");
+    }
+
+    controller.try_dispose().unwrap();
+    let error = alias.try_dispose().unwrap_err();
+    let (property, actual) = error.diagnostic_property();
+    assert_eq!(
+        property,
+        "The following AnimationController object was disposed multiple times"
+    );
+    assert_eq!(actual, &controller);
+    assert_eq!(actual.value(), 0.);
+    assert!(actual.is_disposed());
+    let expected = concat!(
+        "AnimationController.dispose() called more than once.\n",
+        "A given AnimationController cannot be disposed more than once.\n",
+        "The following AnimationController object was disposed multiple\n",
+        "times:\n",
+        "  AnimationController(⏮ 0.000; paused; DISPOSED)",
+    );
+    assert_eq!(error.to_string(), expected);
+    assert_eq!(panic_text(|| alias.dispose()), expected);
+}

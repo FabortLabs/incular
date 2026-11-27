@@ -34,3 +34,15 @@ original six operations then reject use after disposal without changing
 the retained value or restarting the animation. This is an observable
 lifecycle check, not a claim that Dart's private ticker is represented
 identically in Rust. All 28 focused controller tests passed.
+
+## Missing timing configuration and duplicate disposal
+
+The exact pinned `animation/animation_controller_test.dart:502`
+registration passed. Incular rejects all four missing-timing operations
+(forward, reverse, animate to 0.5, and repeat). After a valid first
+disposal, a repeated attempt returns a typed error exposing both the
+named diagnostic property and the original disposed controller identity.
+The formatted message carries the same remediation and paused/disposed
+state. Rust omits Dart's object hash and outer FlutterError formatting;
+the panic wrapper still gives the actionable message. Nineteen focused
+controller tests and eight nearby listener tests passed.
