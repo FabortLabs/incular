@@ -133,6 +133,14 @@ fn deletion_range(
     }
 }
 
+/// Whether a handled shortcut uses the common overlay cleanup or manages
+/// the toolbar and handles separately as part of its own action.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum ShortcutOverlays {
+    HideAll,
+    ManagedByIntent,
+}
+
 impl Runtime {
     /// Explicitly selects all text in a mounted editable field, like
     /// EditableTextState.selectAll. This is distinct from enabling a
@@ -372,7 +380,7 @@ impl Runtime {
     }
 
     /// Runs the text-editing intent that `event` is bound to on the focused
-    /// field. Returns whether anything happened, in which case the caller
+    /// field. A handled shortcut returns its overlay policy; the caller
     /// resets the caret blink and requests a frame.
     pub(super) fn run_text_field_key(
         &mut self,
@@ -380,7 +388,7 @@ impl Runtime {
         controller: &TextEditingController,
         event: &KeyboardEvent,
         effective_modifiers: Modifiers,
-    ) -> bool {
+    ) -> Option<ShortcutOverlays> {
         let editable = self.tree.text_field_is_editable(field);
         // Enter is not a text shortcut (Flutter maps it to
         // `DoNothingAndStopPropagationTextIntent` and relies on the IME's
@@ -388,13 +396,13 @@ impl Runtime {
         // the key itself performs the field's input action.
         if event.code == Code::Enter {
             if !editable {
-                return false;
+                return None;
             }
             if matches!(
                 self.text_shortcut_platform,
                 TextShortcutPlatform::Android | TextShortcutPlatform::Ios
             ) {
-                return true;
+                return Some(ShortcutOverlays::HideAll);
             }
             // Desktop raw keys have no second text-input action. Insert
             // here, not in the native multiline newline notification.
@@ -403,11 +411,9 @@ impl Runtime {
             } else {
                 self.handle_text_input_action(TextInputAction::Newline);
             }
-            return true;
+            return Some(ShortcutOverlays::HideAll);
         }
-        let Some(intent) = resolve(self.text_shortcut_platform, event.code, effective_modifiers) else {
-            return false;
-        };
+        let intent = resolve(self.text_shortcut_platform, event.code, effective_modifiers)?;
         self.run_text_shortcut_intent(field, controller, intent, editable)
     }
 
@@ -419,14 +425,23 @@ impl Runtime {
         controller: &TextEditingController,
         intent: TextIntent,
         editable: bool,
-    ) -> bool {
-        if matches!(intent, TextIntent::Copy | TextIntent::Cut | TextIntent::Paste)
-            && (!self.tree.text_field_keyboard_selection_enabled(field)
-                || controller.selection_if_set().is_none())
+    ) -> Option<ShortcutOverlays> {
+        if matches!(
+            intent,
+            TextIntent::Copy | TextIntent::Cut | TextIntent::Paste
+        ) && (!self.tree.text_field_keyboard_selection_enabled(field)
+            || controller.selection_if_set().is_none())
         {
-            return false;
+            return None;
         }
+        let overlays = match intent {
+            TextIntent::DeleteCharacter { .. }
+            | TextIntent::DeleteToNextWordBoundary { .. }
+            | TextIntent::DeleteToLineBreak { .. } => ShortcutOverlays::ManagedByIntent,
+            _ => ShortcutOverlays::HideAll,
+        };
         self.run_text_intent(field, controller, intent, editable)
+            .then_some(overlays)
     }
 
     pub(super) fn run_text_intent(
@@ -582,6 +597,12 @@ impl Runtime {
                     None
                 };
                 let range = deletion_range(text, selection, obscured, forward, target);
+                if range.start != range.end {
+                    // _DeleteTextAction hides only the toolbar, and only
+                    // when the proposed replacement actually removes text.
+                    // Selection geometry updates the handles independently.
+                    self.hide_text_field_toolbar_only(field);
+                }
                 // One replacement leaves empty ranges alone and does not
                 // publish a temporary expanded selection to observers.
                 let _ = controller.replace_range_as_user_edit(range, "");

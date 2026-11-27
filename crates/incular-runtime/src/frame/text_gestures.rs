@@ -1156,7 +1156,7 @@ impl Runtime {
         }
     }
 
-    fn hide_text_field_toolbar_only(&mut self, field: ElementId) {
+    pub(super) fn hide_text_field_toolbar_only(&mut self, field: ElementId) {
         if let Some(menu) = self.tree.text_field_toolbar_state(field) {
             // toggleToolbar(false) and hideToolbar(false) leave the handles.
             self.frame_requested |= menu.hide();

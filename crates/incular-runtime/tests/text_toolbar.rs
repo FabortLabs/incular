@@ -242,3 +242,56 @@ fn direct_context_menu_replaces_the_focused_editor_toolbar_without_losing_focus(
     assert_eq!(runtime.focused_element(), Some(field));
     assert_eq!(editor.selection(), state);
 }
+
+#[test]
+fn deletion_preserves_the_toolbar_on_a_no_op_and_closes_it_for_an_edit() {
+    use incular_core::{Code, KeyboardEvent, KeyboardKey, NamedKey};
+    use incular_platform::TextInputCommand;
+    use incular_text::TextSelection;
+    use serde_json::json;
+
+    for (key, code, caret, remaining, visible) in [
+        (NamedKey::Backspace, Code::Backspace, 0, "abc", true),
+        (NamedKey::Delete, Code::Delete, 3, "abc", true),
+        (NamedKey::Delete, Code::Delete, 1, "ac", false),
+    ] {
+        let (mut runtime, controller, _) = mount("abc");
+        let start = Instant::now();
+        tap(
+            &mut runtime,
+            Offset::new(12., 10.),
+            PointerDeviceKind::Mouse,
+            start,
+        );
+        let selection = TextSelection::collapsed(caret);
+        controller.set_selection(selection);
+        runtime.run_frame_at(bounds(), start).unwrap();
+        let focused = runtime.focused_element().unwrap();
+        let client = runtime
+            .take_text_input_commands()
+            .into_iter()
+            .find_map(|command| match command {
+                TextInputCommand::SetClient { configuration, .. } => Some(configuration.client),
+                _ => None,
+            })
+            .expect("mounted input client");
+        let wire = json!({"method": "TextInputClient.showToolbar", "args": [client.get(), 0, 1]});
+        assert_eq!(
+            runtime
+                .handle_flutter_text_toolbar_call(wire.to_string().as_bytes())
+                .unwrap(),
+            Some(true)
+        );
+        runtime.run_frame(bounds()).unwrap();
+        assert!(toolbar_open(&runtime));
+
+        let key = KeyboardKey::Named(key);
+        let _ = runtime.handle_input(InputEvent::Key(KeyboardEvent::key_down(key.clone(), code)));
+        let _ = runtime.handle_input(InputEvent::Key(KeyboardEvent::key_up(key, code)));
+        runtime.run_frame(bounds()).unwrap();
+        assert_eq!(controller.text(), remaining, "{code:?} at {caret}");
+        assert_eq!(controller.selection(), selection);
+        assert_eq!(runtime.focused_element(), Some(focused));
+        assert_eq!(toolbar_open(&runtime), visible, "{code:?} at {caret}");
+    }
+}

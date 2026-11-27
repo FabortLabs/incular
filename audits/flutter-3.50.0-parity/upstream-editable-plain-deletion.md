@@ -60,3 +60,19 @@ removes the following one; the opposite pair are no-ops and preserve
 affinity. The hard-break checks confirm that the newline is not
 deleted with the rest of its line. The document edges, readonly
 selection and whole emoji boundaries also match.
+
+## Deletion and the visible selection toolbar
+
+Three authored Flutter controls show a mounted context toolbar
+before a key press. With nothing to remove at either document
+edge, Backspace and Delete preserve it. A Delete that really
+removes a character closes it and leaves focus and the caret in
+the same editor. The reference uses handle-capable selection
+controls so Flutter recognizes the context toolbar as visible.
+
+The native Backspace control initially hid the toolbar despite
+changing nothing. Deletion now dismisses only the toolbar and only
+for a nonempty replacement range, leaving handle lifetime to
+selection geometry. Other editing shortcuts keep their existing
+overlay behavior. These authored comparisons do not add original
+registration credit.

@@ -4285,16 +4285,20 @@ impl Runtime {
         // Flutter's `DefaultTextEditingShortcuts` pick the intent for the
         // chord on the target platform and the field's actions run it.
         let previous = self.observed_editor_selection(field);
-        let _notifications = previous.is_some().then(|| controller.batch_user_edit_notifications());
-        if !self.run_text_field_key(field, &controller, &event, lock_modes) {
+        let _notifications = previous
+            .is_some()
+            .then(|| controller.batch_user_edit_notifications());
+        let Some(overlays) = self.run_text_field_key(field, &controller, &event, lock_modes) else {
             return false;
-        }
+        };
         self.report_editor_selection_delta(
             field,
             previous,
             incular_text::SelectionChangedCause::Keyboard,
         );
-        self.hide_text_field_overlays(field);
+        if overlays == text_actions::ShortcutOverlays::HideAll {
+            self.hide_text_field_overlays(field);
+        }
         controller.reset_caret(self.input_now());
         self.frame_requested = true;
         true
@@ -4639,8 +4643,12 @@ impl Runtime {
                     return;
                 };
                 let editable = self.tree.text_field_is_editable(field);
-                if self.run_text_shortcut_intent(field, &controller, intent, editable) {
-                    self.hide_text_field_overlays(field);
+                if let Some(overlays) =
+                    self.run_text_shortcut_intent(field, &controller, intent, editable)
+                {
+                    if overlays == text_actions::ShortcutOverlays::HideAll {
+                        self.hide_text_field_overlays(field);
+                    }
                     controller.reset_caret(self.input_now());
                     self.frame_requested = true;
                 }
