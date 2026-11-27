@@ -129,6 +129,7 @@ pub(crate) enum CursorFrame {
     Unmanaged,
     Hidden,
     Blinking(u8),
+    Steady(u8),
 }
 
 impl CursorFrame {
@@ -136,7 +137,7 @@ impl CursorFrame {
         match self {
             Self::Unmanaged => None,
             Self::Hidden => Some(0),
-            Self::Blinking(alpha) => Some(alpha),
+            Self::Blinking(alpha) | Self::Steady(alpha) => Some(alpha),
         }
     }
 }

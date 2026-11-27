@@ -38,3 +38,14 @@ disarms the timer and showing again restarts the visible phase without
 losing focus. All 15 focused runtime and text tests passed. This
 validates runtime deadlines and paint commands, not a compositor
 screenshot or a separate mobile/web host wake test.
+
+## Deterministic cursor mode
+
+The exact pinned debug-deterministic original passed even with opacity
+animation enabled. The native fixture keeps the focused multiline
+cursor fully painted through and well beyond an ordinary fade cycle,
+without active animation or a pending cursor deadline. Disabling the
+flag starts a fresh normal blink without changing focus. Incular
+scopes the debug setting to one runtime so tests and unrelated windows
+can coexist; Flutter uses a process-wide flag. All 10 focused native
+cursor tests passed.

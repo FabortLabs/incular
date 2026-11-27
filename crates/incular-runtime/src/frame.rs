@@ -252,6 +252,7 @@ pub struct Runtime {
     input_clock: Option<Instant>,
     /// The focused cursor can arm a timer without keeping the frame loop hot.
     cursor_blink_deadline: Option<Instant>,
+    debug_deterministic_cursor: bool,
     pub(crate) pending: HashMap<ElementId, Widget>,
     pub(crate) order: VecDeque<ElementId>,
     pub(crate) reactive: Rc<RefCell<ReactiveQueue>>,
@@ -505,6 +506,7 @@ impl Runtime {
             pending_event_processing_us: 0,
             input_clock: None,
             cursor_blink_deadline: None,
+            debug_deterministic_cursor: false,
             tree,
             system_sound,
             pending: HashMap::new(),
@@ -1773,6 +1775,17 @@ impl Runtime {
             || (self.lifecycle != ApplicationLifecycle::Suspended
                 && incular_animation::scheduler::has_ready_scheduled_task())
     }
+    /// Keeps focused carets steadily visible for reproducible display tests.
+    ///
+    /// Unlike Flutter's process-wide debug flag, this setting is scoped to
+    /// this runtime so one window or test fixture cannot affect another.
+    pub fn set_debug_deterministic_cursor(&mut self, enabled: bool) {
+        if self.debug_deterministic_cursor != enabled {
+            self.debug_deterministic_cursor = enabled;
+            self.request_frame();
+        }
+    }
+
     /// Earliest deadline that needs a frame but does not need continuous
     /// redraws while waiting. Hosts can sleep until this instant.
     #[must_use]
@@ -4325,9 +4338,10 @@ impl Runtime {
             self.refresh_hover_after_layout();
         }
         self.sync_text_selection_handles();
-        self.cursor_blink_deadline = self
-            .focused
-            .and_then(|editor| self.tree.sample_focused_cursor(editor, now));
+        self.cursor_blink_deadline = self.focused.and_then(|editor| {
+            self.tree
+                .sample_focused_cursor(editor, now, self.debug_deterministic_cursor)
+        });
         let _semantics_guard = tracing::info_span!("incular.semantics").entered();
         let semantics_span = profiling::PhaseSpan::start();
         self.sync_semantics_activation();

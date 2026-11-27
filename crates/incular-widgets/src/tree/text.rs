@@ -118,7 +118,12 @@ impl WidgetTree {
     /// Samples the focused editor's caret before paint, returning the next
     /// deadline only while blinking. No paragraph layout is invalidated.
     #[doc(hidden)]
-    pub fn sample_focused_cursor(&mut self, id: ElementId, now: Instant) -> Option<Instant> {
+    pub fn sample_focused_cursor(
+        &mut self,
+        id: ElementId,
+        now: Instant,
+        deterministic: bool,
+    ) -> Option<Instant> {
         let render = self.render_id(id)?;
         let node = self.renders.get(render.0)?;
         let state = node.text_field_state()?;
@@ -133,7 +138,11 @@ impl WidgetTree {
                 .selection_if_set()
                 .is_some_and(TextSelection::is_collapsed)
             && !self.animation_muted(id);
-        let (frame, deadline) = if eligible {
+        let (frame, deadline) = if !eligible {
+            (CursorFrame::Hidden, None)
+        } else if deterministic {
+            (CursorFrame::Steady(field.cursor_color.alpha), None)
+        } else {
             if !matches!(previous, CursorFrame::Blinking(_)) {
                 field.controller.restart_caret_clock(now);
             }
@@ -144,8 +153,6 @@ impl WidgetTree {
                 CursorFrame::Blinking(editable_cursor_alpha(field.cursor_color.alpha, opacity)),
                 deadline,
             )
-        } else {
-            (CursorFrame::Hidden, None)
         };
         if frame != previous {
             self.text_field_state_live_mut(render).cursor_frame = frame;
