@@ -47,6 +47,7 @@ pub use physics::{
 pub use scheduler::{
     ActiveTimeDilation, FrameCallbackId, InvalidTimeDilation, PerformanceMode,
     PerformanceModeRequestHandle, Priority, Ticker, TickerCanceled, TickerFuture, TickerOrCancel,
+    TickerStartDiagnostic, TickerStartError,
     add_persistent_frame_callback, add_post_frame_callback, cancel_frame_callback,
     current_frame_time, current_system_frame_time,
     debug_assert_no_pending_performance_mode_requests, debug_assert_no_time_dilation,

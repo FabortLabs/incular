@@ -291,3 +291,14 @@ A directly driven Runtime continues to report the existing
 cargo test --locked -j 1 -p incular-runtime --features hot-reload --test flutter350_scheduler_warm_up -- --test-threads=1
 bash audits/flutter-3.50.0-parity/run-reference-linux.sh probe scheduler_warm_up_interleave_test.dart
 ```
+
+## Typed duplicate ticker start diagnostics
+
+Pinned `scheduler/ticker_test.dart:21` now pairs. In addition to the
+active, ticking and muted counts at each of the five frames, an
+invalid restart produces three ordered typed parts: summary,
+description and a reference to the actual affected Ticker. The
+non-panicking `try_start` path preserves the existing ticker run.
+The debug `start` path still raises the same human-readable error,
+and optimized Rust keeps its existing idempotent fallback.
+The exact Flutter case and seven targeted native controls passed.

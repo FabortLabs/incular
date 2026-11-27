@@ -3,7 +3,7 @@
 use std::{cell::Cell, rc::Rc, time::Duration};
 
 use incular_animation::{
-    Ticker,
+    Ticker, TickerStartDiagnostic,
     scheduler::{begin_frame, end_frame},
 };
 use incular_core::time::Instant;
@@ -38,6 +38,26 @@ fn active_ticker_rejects_duplicate_start_without_disturbing_muting_or_run() {
     };
     state(false, false, 0);
     let _future = ticker.start();
+    state(true, true, 0);
+    let error = ticker
+        .try_start()
+        .err()
+        .expect("duplicate start has a typed diagnostic");
+    let [
+        TickerStartDiagnostic::Summary(summary),
+        TickerStartDiagnostic::Description(detail),
+        TickerStartDiagnostic::AffectedTicker(affected),
+    ] = error.diagnostics()
+    else {
+        panic!("the three typed parts must retain their Flutter order")
+    };
+    assert_eq!(summary, "A ticker was started twice.");
+    assert_eq!(
+        detail,
+        "A ticker that is already active cannot be started again without first stopping it."
+    );
+    assert!(std::ptr::eq(affected, &ticker));
+    assert_eq!(affected.debug_description(false), "Ticker()");
     state(true, true, 0);
     let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ticker.start()))
         .err()

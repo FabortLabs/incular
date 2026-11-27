@@ -704,6 +704,47 @@ impl TickerState {
 /// Flutter `Ticker`: calls its callback once per frame while active, with the
 /// time elapsed since the first frame after [`start`](Self::start).
 ///
+const DUPLICATE_TICKER_SUMMARY: &str = "A ticker was started twice.";
+const DUPLICATE_TICKER_REASON: &str =
+    "A ticker that is already active cannot be started again without first stopping it.";
+
+/// The three parts of Flutter's invalid ticker-start diagnostic.
+#[derive(Debug)]
+pub enum TickerStartDiagnostic<'a> {
+    Summary(&'static str),
+    Description(&'static str),
+    AffectedTicker(&'a Ticker),
+}
+
+/// Starting an already active ticker leaves the original run untouched.
+#[derive(Debug)]
+pub struct TickerStartError<'a> {
+    ticker: &'a Ticker,
+}
+
+impl TickerStartError<'_> {
+    #[must_use]
+    pub fn diagnostics(&self) -> [TickerStartDiagnostic<'_>; 3] {
+        [
+            TickerStartDiagnostic::Summary(DUPLICATE_TICKER_SUMMARY),
+            TickerStartDiagnostic::Description(DUPLICATE_TICKER_REASON),
+            TickerStartDiagnostic::AffectedTicker(self.ticker),
+        ]
+    }
+}
+
+impl std::fmt::Display for TickerStartError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{DUPLICATE_TICKER_SUMMARY}\n{DUPLICATE_TICKER_REASON}\nThe affected ticker was:\n{}",
+            self.ticker.debug_description(true),
+        )
+    }
+}
+
+impl std::error::Error for TickerStartError<'_> {}
+
 /// A muted ticker keeps its clock but skips its callback and asks for no
 /// frames, as `TickerMode` mutes the tickers of offstage subtrees. Dropping
 /// the ticker stops it.
@@ -779,28 +820,34 @@ impl Ticker {
     /// Stop the previous run first to restart the clock.
     #[track_caller]
     pub fn start(&self) -> TickerFuture {
-        debug_assert!(
-            !self.state.active.get(),
-            "A ticker was started twice.\nA ticker that is already active cannot be started again without first stopping it.\nThe affected ticker was:\n{}",
-            self.debug_description(true),
-        );
-        if !self.state.active.replace(true) {
-            self.state.started.set(SCHEDULER.with(|scheduler| {
-                let scheduler = scheduler.borrow();
-                if scheduler.post_frame_active {
-                    None
-                } else {
-                    scheduler.frame_time
-                }
-            }));
-            *self.state.future.borrow_mut() = Some(TickerFuture::pending());
-            self.state.schedule();
+        match self.try_start() {
+            Ok(future) => future,
+            Err(error) => {
+                debug_assert!(false, "{error}");
+                self.state.future.borrow().clone().unwrap_or_else(TickerFuture::complete)
+            }
         }
-        self.state
-            .future
-            .borrow()
-            .clone()
-            .unwrap_or_else(TickerFuture::complete)
+    }
+
+    /// Starts a new run, or exposes a structured diagnostic without
+    /// panicking or replacing the running ticker.
+    pub fn try_start(&self) -> Result<TickerFuture, TickerStartError<'_>> {
+        if self.state.active.get() {
+            return Err(TickerStartError { ticker: self });
+        }
+        self.state.active.set(true);
+        self.state.started.set(SCHEDULER.with(|scheduler| {
+            let scheduler = scheduler.borrow();
+            if scheduler.post_frame_active {
+                None
+            } else {
+                scheduler.frame_time
+            }
+        }));
+        let future = TickerFuture::pending();
+        self.state.future.replace(Some(future.clone()));
+        self.state.schedule();
+        Ok(future)
     }
 
     /// Flutter `stop()`: stops ticking and completes the run's future. The
