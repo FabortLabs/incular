@@ -3135,3 +3135,6 @@ packages/flutter/test/painting/decoration_test.dart	671	paintImage with repeatX 
 packages/flutter/test/painting/decoration_test.dart	716	paintImage with repeatY and fitWidth	paired-match	upstream-decoration-image-paint.md#translated-fits-repeated-tiles-and-shape-clipping
 packages/flutter/test/painting/decoration_test.dart	761	DecorationImage scale test	paired-match	upstream-decoration-image-paint.md#translated-fits-repeated-tiles-and-shape-clipping
 packages/flutter/test/painting/decoration_test.dart	411	DecorationImage - error listener	paired-match	upstream-async-decoration-image.md#provider-error-callback
+packages/flutter/test/painting/decoration_test.dart	306	DecorationImage test	partial-match	upstream-decoration-image-paint.md#image-options-and-diagnostics
+packages/flutter/test/painting/decoration_test.dart	346	DecorationImage.toString	paired-match	upstream-decoration-image-paint.md#image-options-and-diagnostics
+packages/flutter/test/painting/decoration_test.dart	357	DecorationImage with null textDirection configuration should throw Error	partial-match	upstream-decoration-image-paint.md#image-options-and-diagnostics

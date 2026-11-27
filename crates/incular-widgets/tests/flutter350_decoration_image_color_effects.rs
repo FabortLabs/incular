@@ -13,6 +13,10 @@ fn commands(mut image: DecorationImage, fill: bool) -> Vec<PaintCommand> {
     if fill {
         image.fit = Some(BoxFit::Fill);
     }
+    commands_in(image, Size::new(16., 16.))
+}
+
+fn commands_in(image: DecorationImage, size: Size) -> Vec<PaintCommand> {
     let mut tree = WidgetTree::new();
     tree.mount(
         DecoratedBox::new(SizedBox::shrink())
@@ -24,8 +28,7 @@ fn commands(mut image: DecorationImage, fill: bool) -> Vec<PaintCommand> {
             .into(),
     )
     .unwrap();
-    tree.layout(Constraints::tight(Size::new(16., 16.)))
-        .unwrap();
+    tree.layout(Constraints::tight(size)).unwrap();
     tree.update_compositor(incular_core::time::Instant::now())
         .unwrap();
     tree.paint().commands().to_vec()
@@ -122,4 +125,51 @@ fn a_filter_that_affects_transparent_pixels_is_bounded_to_the_image_draw() {
         bounds,
         Rect::from_origin_size(Offset::new(7.5, 7.5), Size::new(1., 1.))
     );
+}
+
+#[test]
+fn retained_nine_slice_keeps_geometry_filter_and_opacity_together() {
+    use incular_config::Alignment;
+    use incular_rendering::{FilterQuality, ImageSampling};
+    use incular_widgets::ImageRepeat;
+    let tuple = |x, y, w, h| Rect::from_origin_size(Offset::new(x, y), Size::new(w, h));
+    let bitmap = ImageHandle::from_rgba8(100, 100, [255, 0, 0, 255].repeat(10000)).unwrap();
+    let mut image = DecorationImage::new(bitmap.clone())
+        .invert_colors(true)
+        .color_filter(ColorFilter::blend(
+            Color::rgba(0, 255, 0, 255),
+            BlendMode::Src,
+        ));
+    image.fit = Some(BoxFit::Contain);
+    image.alignment = Alignment::BOTTOM_LEFT;
+    image.center_slice = Some(tuple(10., 20., 30., 40.));
+    image.repeat = ImageRepeat::RepeatY;
+    image.opacity = 0.5;
+    image.filter_quality = FilterQuality::High;
+    let commands = commands_in(image, Size::new(100., 100.));
+    let tiles = commands
+        .iter()
+        .filter_map(|command| match command {
+            PaintCommand::Image {
+                image,
+                source,
+                destination,
+                sampling,
+                ..
+            } => {
+                assert_eq!(image.id(), bitmap.id());
+                assert_eq!(*sampling, ImageSampling::Linear);
+                Some((*source, *destination))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(tiles.len(), 9);
+    assert_eq!(
+        tiles[4],
+        (tuple(10., 20., 30., 40.), tuple(10., 20., 30., 40.))
+    );
+    assert_eq!(tiles[0].1.origin, Offset::ZERO);
+    assert_eq!(tiles[8].1, tuple(40., 60., 60., 40.));
+    assert_eq!(sample_center(&commands), [128, 0, 255, 255]);
 }

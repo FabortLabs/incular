@@ -878,6 +878,84 @@ impl DecorationImage {
     }
 }
 
+impl std::fmt::Display for DecorationImage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn source(
+            image: &DecorationImageSource,
+            formatter: &mut std::fmt::Formatter<'_>,
+        ) -> std::fmt::Result {
+            match image {
+                DecorationImageSource::Decoded(image) => {
+                    write!(formatter, "Image({}×{})", image.decoded().width(), image.decoded().height())
+                }
+                DecorationImageSource::Provider(provider) => write!(formatter, "{provider:?}"),
+            }
+        }
+        formatter.write_str("DecorationImage(")?;
+        source(&self.image, formatter)?;
+        if let Some(placeholder) = &self.placeholder {
+            formatter.write_str(", placeholder: ")?;
+            source(placeholder, formatter)?;
+        }
+        if let Some(filter) = self.color_filter {
+            write!(formatter, ", {filter:?}")?;
+        }
+        if let Some(fit) = self.fit
+            && !matches!(
+                (fit, self.center_slice.is_some()),
+                (ImageFit::Fill, true) | (ImageFit::ScaleDown, false)
+            )
+        {
+            let name = match fit {
+                ImageFit::Fill => "fill",
+                ImageFit::Contain => "contain",
+                ImageFit::Cover => "cover",
+                ImageFit::FitWidth => "fitWidth",
+                ImageFit::FitHeight => "fitHeight",
+                ImageFit::None => "none",
+                ImageFit::ScaleDown => "scaleDown",
+            };
+            write!(formatter, ", BoxFit.{name}")?;
+        }
+        let alignment = self.alignment_geometry.unwrap_or(self.alignment.into());
+        write!(formatter, ", {alignment}")?;
+        if let Some(slice) = self.center_slice {
+            write!(
+                formatter,
+                ", centerSlice: Rect.fromLTRB({:.1}, {:.1}, {:.1}, {:.1})",
+                slice.origin.x, slice.origin.y,
+                slice.origin.x + slice.size.width, slice.origin.y + slice.size.height,
+            )?;
+        }
+        let repeat = match self.repeat {
+            ImageRepeat::NoRepeat => None,
+            ImageRepeat::Repeat => Some("repeat"),
+            ImageRepeat::RepeatX => Some("repeatX"),
+            ImageRepeat::RepeatY => Some("repeatY"),
+        };
+        if let Some(repeat) = repeat {
+            write!(formatter, ", ImageRepeat.{repeat}")?;
+        }
+        if self.match_text_direction {
+            formatter.write_str(", match text direction")?;
+        }
+        let quality = match self.filter_quality {
+            FilterQuality::None => "none",
+            FilterQuality::Low => "low",
+            FilterQuality::Medium => "medium",
+            FilterQuality::High => "high",
+        };
+        write!(
+            formatter, ", scale {:.1}, opacity {:.1}, FilterQuality.{quality}",
+            self.scale, self.opacity,
+        )?;
+        if self.invert_colors {
+            formatter.write_str(", invert colors")?;
+        }
+        formatter.write_str(")")
+    }
+}
+
 pub(super) fn faded_decoration_image(
     image: Option<&DecorationImage>,
     factor: f32,

@@ -288,3 +288,77 @@ fn a_decoration_applies_its_scale_to_a_synchronously_resolved_provider() {
         )]
     );
 }
+
+#[derive(Clone, PartialEq, Eq)]
+struct SynchronousTestImageProvider(Ready);
+
+impl std::fmt::Debug for SynchronousTestImageProvider {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("SynchronousTestImageProvider()")
+    }
+}
+
+impl incular_widgets::ImageProvider for SynchronousTestImageProvider {
+    fn load(&self) -> Result<ImageHandle, incular_image::ImageError> {
+        self.0.load()
+    }
+    fn resolve(
+        &self,
+        configuration: &incular_widgets::ImageConfiguration,
+    ) -> incular_widgets::ImageStream {
+        self.0.resolve(configuration)
+    }
+}
+
+#[test]
+fn decoration_image_description_keeps_provider_alignment_and_scaled_fields() {
+    let mut image = DecorationImage::from_provider(SynchronousTestImageProvider(Ready(
+        incular_widgets::ImageStream::ready(pixels(100, 100)),
+    )));
+    image.opacity = 0.99;
+    image.scale = 2.01;
+    assert_eq!(
+        image.to_string(),
+        "DecorationImage(SynchronousTestImageProvider(), Alignment.center, scale 2.0, opacity 1.0, FilterQuality.medium)"
+    );
+    image.fit = Some(BoxFit::ScaleDown);
+    assert!(!image.to_string().contains("BoxFit"));
+    image.fit = Some(BoxFit::Contain);
+    assert!(image.to_string().contains("BoxFit.contain"));
+}
+
+#[test]
+fn explicit_image_direction_settings_report_a_missing_scope_before_paint() {
+    use incular_widgets::internal::TreeError;
+    let mut image = DecorationImage::new(pixels(100, 100));
+    image.match_text_direction = true;
+    image.center_slice = Some(rect(10., 20., 30., 40.));
+    image.fit = Some(BoxFit::Contain);
+    image.scale = 0.5;
+    image.opacity = 0.5;
+    image.invert_colors = true;
+    image.repeat = incular_widgets::ImageRepeat::RepeatY;
+    let widget: Widget = incular_widgets::DecoratedBox::new(incular_widgets::SizedBox::shrink())
+        .decoration(BoxDecoration::new().image(image))
+        .into();
+    let mut tree = WidgetTree::new();
+    let mounted = tree.mount(widget).map(|_| ());
+    let failure = mounted.and_then(|_| {
+        tree.layout(Constraints::tight(Size::new(100., 100.)))
+            .map(|_| ())
+    });
+    fn missing_direction(failure: &TreeError) -> bool {
+        match failure {
+            TreeError::MissingDirectionality {
+                widget: "DecorationImage",
+                ..
+            } => true,
+            TreeError::InvalidGeneratedChild { source, .. } => missing_direction(source),
+            _ => false,
+        }
+    }
+    assert!(
+        failure.as_ref().is_err_and(missing_direction),
+        "expected an image direction error, got {failure:?}",
+    );
+}

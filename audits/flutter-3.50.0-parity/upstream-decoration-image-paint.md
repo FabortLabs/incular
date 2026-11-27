@@ -86,3 +86,19 @@ transparent input is bounded to the actual image draw, not the
 allocated box. The same path handles fallback images and nine-slices.
 All 19 focused native tests passed. The native comparison evaluates
 the emitted effects and bounds without claiming a wgpu pixel readback.
+
+## Image options and diagnostics
+
+The original DecorationImage description now pairs: provider and
+alignment, one-decimal scale and opacity, and default medium quality
+appear in the expected order. An explicit null-fit equivalent is
+omitted; non-default fits and optional settings stay visible.
+
+Two originals remain partial. The native nine-slice fixture keeps
+the source center and full destination, the color filter followed by
+inversion, and the outer opacity. High sampling currently lowers to
+linear; the anti-alias paint flag has not been matched. Without a
+direction the native fixture reports a typed image-direction error
+before painting, but does not reproduce Flutter's four diagnostic
+nodes. These probes passed on pinned Flutter, and all 21 focused
+Rust tests passed.
