@@ -155,4 +155,105 @@ mod tests {
         assert_eq!(open.size(), Size::new(800., 935.));
         assert_eq!(open.rect.origin, Offset::new(0., -300.));
     }
+
+    #[test]
+    fn exact_flutter_maximum_rects_use_physical_axes_and_reverse_growth() {
+        use SliverGrowthDirection::{Forward, Reverse};
+        let size = Size::new(100., 100.);
+        for (axis, reverse, growth, scroll, origin) in [
+            (Axis::Vertical, false, Forward, 0., Offset::ZERO),
+            (Axis::Vertical, false, Reverse, 0., Offset::ZERO),
+            (Axis::Vertical, false, Forward, 50., Offset::new(0., -50.)),
+            (Axis::Vertical, true, Forward, 0., Offset::ZERO),
+            (Axis::Vertical, true, Forward, 50., Offset::ZERO),
+            (Axis::Horizontal, false, Forward, 0., Offset::ZERO),
+            (Axis::Horizontal, false, Forward, 50., Offset::new(-50., 0.)),
+            (Axis::Horizontal, true, Forward, 0., Offset::ZERO),
+            (Axis::Horizontal, true, Forward, 50., Offset::ZERO),
+        ] {
+            let paint = 100. - scroll;
+            let remaining = if scroll == 0. { 300. } else { 50. };
+            let mut constraints = SliverConstraints::new(
+                axis, reverse, scroll, 0., 0., remaining, 100., 100., 100., 0.,
+            );
+            constraints.growth_direction = growth;
+            let geometry = SliverGeometry {
+                scroll_extent: 100.,
+                paint_extent: paint,
+                max_paint_extent: 100.,
+                ..SliverGeometry::ZERO
+            };
+            let actual = SliverPaintBounds::new(constraints, geometry, None)
+                .unwrap()
+                .rect;
+            assert_eq!(
+                actual,
+                Rect::from_origin_size(origin, size),
+                "{axis:?} reverse={reverse}, growth={growth:?}, offset={scroll}"
+            );
+        }
+    }
+
+    #[test]
+    fn exact_flutter_maximum_rects_resolve_obstruction_cache_and_cross_axis_override() {
+        let vertical = |scroll, remaining, cache, cache_origin| {
+            SliverConstraints::new(
+                Axis::Vertical,
+                false,
+                scroll,
+                0.,
+                0.,
+                remaining,
+                100.,
+                100.,
+                cache,
+                cache_origin,
+            )
+        };
+        let geometry = |scroll_extent, paint_extent, max_paint_extent| SliverGeometry {
+            scroll_extent,
+            paint_extent,
+            max_paint_extent,
+            ..SliverGeometry::ZERO
+        };
+        for (constraints, geometry, cross, expected) in [
+            (
+                vertical(95., 10., 100., 0.),
+                SliverGeometry {
+                    max_scroll_obstruction_extent: 10.,
+                    ..geometry(100., 10., 100.)
+                },
+                None,
+                Rect::from_origin_size(Offset::new(0., -90.), Size::new(100., 100.)),
+            ),
+            (
+                vertical(50., 300., 200., -50.),
+                SliverGeometry {
+                    cache_extent: 150.,
+                    ..geometry(f32::INFINITY, 100., f32::INFINITY)
+                },
+                None,
+                Rect::from_origin_size(Offset::new(0., -50.), Size::new(100., 150.)),
+            ),
+            (
+                vertical(0., 300., 100., 0.),
+                geometry(100., 100., 100.),
+                Some(50.),
+                Rect::from_origin_size(Offset::ZERO, Size::new(50., 100.)),
+            ),
+            (
+                vertical(0., 100., 100., 0.),
+                geometry(200., 100., 150.),
+                None,
+                Rect::from_origin_size(Offset::ZERO, Size::new(100., 150.)),
+            ),
+        ] {
+            assert_eq!(
+                SliverPaintBounds::new(constraints, geometry, cross)
+                    .unwrap()
+                    .rect,
+                expected
+            );
+        }
+    }
 }

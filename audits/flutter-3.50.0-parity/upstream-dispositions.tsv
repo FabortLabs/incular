@@ -2903,3 +2903,16 @@ packages/flutter/test/rendering/transform_test.dart	135	RenderTransform - rotati
 packages/flutter/test/rendering/transform_test.dart	166	RenderTransform - perspective - globalToLocal	paired-match	upstream-render-transform-coordinates.md
 packages/flutter/test/rendering/transform_test.dart	190	RenderTransform - globalToLocal with parallel view direction returns zero	paired-match	upstream-render-transform-coordinates.md
 packages/flutter/test/rendering/transform_test.dart	206	RenderTransform - perspective - localToGlobal	paired-match	upstream-render-transform-coordinates.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	13	RenderSliver.getMaxPaintRect AxisDirection.down	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	38	RenderSliver.getMaxPaintRect AxisDirection.down and GrowthDirection.reverse	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	63	RenderSliver.getMaxPaintRect AxisDirection.down scrolled	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	90	RenderSliver.getMaxPaintRect AxisDirection.up	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	115	RenderSliver.getMaxPaintRect AxisDirection.up scrolled	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	151	RenderSliver.getMaxPaintRect AxisDirection.right	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	176	RenderSliver.getMaxPaintRect AxisDirection.right scrolled	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	204	RenderSliver.getMaxPaintRect AxisDirection.left	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	229	RenderSliver.getMaxPaintRect AxisDirection.left scrolled	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	262	RenderSliver.getMaxPaintRect pinned	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	295	RenderSliver.getMaxPaintRect infinite maxPaintExtent	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	328	RenderSliver.getMaxPaintRect with crossAxisExtent set (e.g. SliverCrossAxisGroup)	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	358	RenderSliver.getMaxPaintRect maxPaintExtent > remainingPaintExtent	paired-match	upstream-sliver-max-paint-rect.md
