@@ -240,6 +240,38 @@ impl HslColor {
     }
 
     #[must_use]
+    pub fn with_hue(self, hue: f32) -> Self {
+        Self {
+            hue: normalize_hue(hue),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn with_saturation(self, saturation: f32) -> Self {
+        Self {
+            saturation: unit(saturation),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn with_lightness(self, lightness: f32) -> Self {
+        Self {
+            lightness: unit(lightness),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn with_alpha(self, alpha: f32) -> Self {
+        Self {
+            alpha: unit(alpha),
+            ..self
+        }
+    }
+
+    #[must_use]
     pub fn from_color(color: Color) -> Self {
         let source = palette_color(color);
         let hsl = Hsl::from_color(source.color);
@@ -283,6 +315,38 @@ impl HsvColor {
     }
 
     #[must_use]
+    pub fn with_hue(self, hue: f32) -> Self {
+        Self {
+            hue: normalize_hue(hue),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn with_saturation(self, saturation: f32) -> Self {
+        Self {
+            saturation: unit(saturation),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn with_value(self, value: f32) -> Self {
+        Self {
+            value: unit(value),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn with_alpha(self, alpha: f32) -> Self {
+        Self {
+            alpha: unit(alpha),
+            ..self
+        }
+    }
+
+    #[must_use]
     pub fn from_color(color: Color) -> Self {
         let source = palette_color(color);
         let hsv = Hsv::from_color(source.color);
@@ -302,6 +366,26 @@ impl HsvColor {
             unit(self.value),
         );
         color_from_palette(Srgba::from_color(hsv).with_alpha(unit(self.alpha)))
+    }
+}
+
+// PartialEq compares signed zeros as equal. The hash must do the same even
+// when a caller constructs a model directly with public float fields.
+fn hash_color_channels(channels: [f32; 4], state: &mut impl std::hash::Hasher) {
+    for value in channels {
+        state.write_u32(if value == 0.0 { 0 } else { value.to_bits() });
+    }
+}
+
+impl std::hash::Hash for HslColor {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        hash_color_channels([self.hue, self.saturation, self.lightness, self.alpha], state);
+    }
+}
+
+impl std::hash::Hash for HsvColor {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        hash_color_channels([self.hue, self.saturation, self.value, self.alpha], state);
     }
 }
 

@@ -2844,3 +2844,5 @@ packages/flutter/test/painting/colors_test.dart	376	Pink	paired-match	color-clam
 packages/flutter/test/painting/colors_test.dart	385	White	paired-match	color-clamp-comparisons.md#hsl-and-hsv-conversion-vectors
 packages/flutter/test/painting/colors_test.dart	394	Black	paired-match	color-clamp-comparisons.md#hsl-and-hsv-conversion-vectors
 packages/flutter/test/painting/colors_test.dart	403	Gray	paired-match	color-clamp-comparisons.md#hsl-and-hsv-conversion-vectors
+packages/flutter/test/painting/colors_test.dart	14	HSVColor control test	paired-match	color-clamp-comparisons.md#independent-color-channel-replacement
+packages/flutter/test/painting/colors_test.dart	261	HSLColor control test	paired-match	color-clamp-comparisons.md#independent-color-channel-replacement

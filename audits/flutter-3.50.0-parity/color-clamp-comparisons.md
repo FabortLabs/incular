@@ -147,3 +147,14 @@ tolerance of 0.01 with hue divided by 360, and excludes only the
 duplicate 360° endpoint, as the reference does. Pink, white, black,
 and gray use the original RGB inputs and exact saturation/alpha
 or original hue/lightness tolerances.
+
+## Independent color-channel replacement
+
+Exact `painting/colors_test.dart:14,261` passed alongside the
+native `flutter350_color_channel_options` controls. The immutable
+channel setters only change the selected field; the native models
+use constructor sanitization for out-of-range fields. The original
+packed colors and four interpolated components agree at their
+specified tolerances. Equal values also hash equally and format
+on one line, without equating the Rust hash number to Dart's.
+A signed-zero control protects the Rust equality/hash contract.

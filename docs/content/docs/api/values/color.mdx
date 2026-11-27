@@ -19,6 +19,8 @@ fn main() {
 HSL and HSV interpolation take the shorter path around the hue circle.
 Extrapolation continues along that arc; saturation, lightness or value, and
 alpha clamp independently.
+Use `with_hue`, `with_saturation`, `with_alpha`, and either
+`with_lightness` or `with_value` to copy a model with one changed channel.
 
 Swatches with a linear round-trip — copy, paste, and run:
 
