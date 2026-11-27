@@ -3778,3 +3778,4 @@ packages/flutter/test/widgets/editable_text_shortcuts_test.dart	858	readonly	pai
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	876	at start	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	894	at end	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	926	at cluster boundary	paired-match	upstream-editable-plain-deletion.md#line-modified-backspace-and-delete
+packages/flutter/test/widgets/text_selection_toolbar_layout_delegate_test.dart	9	positions itself at anchorAbove if it fits	paired-match	upstream-text-selection-toolbar-placement.md
