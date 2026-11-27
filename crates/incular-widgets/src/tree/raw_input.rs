@@ -1163,57 +1163,51 @@ impl WidgetTree {
                 .map(|member| (member.element, member.member, member.type_id))
                 .collect::<Vec<_>>()
         })?;
-        let dispositions = self.input.gesture_arena.entries(key);
-        let mut accepts = Vec::new();
-        let mut rejects = Vec::new();
         for (element, member, type_id) in active_members {
-            match disposition_for(&dispositions, member) {
-                GestureDisposition::Pending => {}
-                // A winner keeps receiving its pointer's events, as in
-                // Flutter, where the arena only decides who listens on.
-                GestureDisposition::Accepted => {
-                    if let Some(recognizer) = self
-                        .input
-                        .raw_recognizers
-                        .get_mut(&element)
-                        .and_then(|recognizers| recognizers.get_mut(&type_id))
-                    {
-                        match recognizer.observe_raw(event) {
-                            GestureDecision::Accept(action) => recognizer.dispatch(action),
-                            GestureDecision::Cancelled => recognizer.cancel(),
-                            GestureDecision::Pending | GestureDecision::Reject => {}
-                        }
-                    }
-                    continue;
-                }
-                GestureDisposition::Rejected | GestureDisposition::Cancelled => continue,
+            let Some(disposition) = self.input.gesture_arena.disposition(key, member) else {
+                continue;
+            };
+            if matches!(disposition, GestureDisposition::Rejected | GestureDisposition::Cancelled) {
+                continue;
             }
-            let Some(recognizer) = self
+            let recognizer = self
                 .input
                 .raw_recognizers
                 .get_mut(&element)
-                .and_then(|recognizers| recognizers.get_mut(&type_id))
-            else {
-                rejects.push(member);
+                .and_then(|recognizers| recognizers.get_mut(&type_id));
+            if disposition == GestureDisposition::Accepted {
+                // A winner keeps receiving its pointer's events.
+                if let Some(recognizer) = recognizer {
+                    match recognizer.observe_raw(event) {
+                        GestureDecision::Accept(action) => recognizer.dispatch(action),
+                        GestureDecision::Cancelled => recognizer.cancel(),
+                        GestureDecision::Pending | GestureDecision::Reject => {}
+                    }
+                }
                 continue;
-            };
-            match recognizer.observe_raw(event) {
-                GestureDecision::Accept(action) => accepts.push((member, action)),
-                GestureDecision::Reject | GestureDecision::Cancelled => rejects.push(member),
-                GestureDecision::Pending => {}
             }
-        }
-        for member in rejects {
-            self.input.gesture_arena.reject(key, member);
-            self.apply_arena_entries(key, self.input.gesture_arena.entries(key));
-        }
-        for (member, action) in accepts {
-            let entries = self.input.gesture_arena.accept(key, member);
-            self.apply_arena_entries(key, entries);
-            if disposition_for(&self.input.gesture_arena.entries(key), member)
-                == GestureDisposition::Accepted
-            {
-                self.dispatch_raw_gesture_action(key, member, action);
+            let decision = recognizer.map_or(GestureDecision::Reject, |recognizer| {
+                recognizer.observe_raw(event)
+            });
+            // A resolution in a closed Flutter arena takes effect during
+            // routing, before the next contender sees this same movement.
+            // Otherwise a losing drag can consume its pending cancel while
+            // attempting acceptance, then never report it to the app.
+            match decision {
+                GestureDecision::Accept(action) => {
+                    let entries = self.input.gesture_arena.accept(key, member);
+                    self.apply_arena_entries(key, entries);
+                    if self.input.gesture_arena.disposition(key, member)
+                        == Some(GestureDisposition::Accepted)
+                    {
+                        self.dispatch_raw_gesture_action(key, member, action);
+                    }
+                }
+                GestureDecision::Reject | GestureDecision::Cancelled => {
+                    self.input.gesture_arena.reject(key, member);
+                    self.apply_arena_entries(key, self.input.gesture_arena.entries(key));
+                }
+                GestureDecision::Pending => {}
             }
         }
         let element = self.input.raw_gesture_streams.get(&key)?.element;

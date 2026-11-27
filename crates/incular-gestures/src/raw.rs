@@ -147,7 +147,9 @@ impl ErasedGestureRecognizerFactory {
 
     #[must_use]
     pub fn type_id(&self) -> TypeId {
-        self.0.type_id()
+        // Calling `type_id` on the Rc itself instead selects
+        // Any::type_id for the wrapper, making all factories the same key.
+        GestureRecognizerFactory::type_id(self.0.as_ref())
     }
 
     pub fn create(&self) -> Box<dyn GestureRecognizer> {

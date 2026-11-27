@@ -3386,3 +3386,8 @@ packages/flutter/test/gestures/events_test.dart	143	PointerExitEvent.fromMouseEv
 packages/flutter/test/gestures/events_test.dart	170	PointerEnterEvent.fromMouseEvent(move)	partial-match	upstream-pointer-boundary-metadata.md
 packages/flutter/test/gestures/events_test.dart	197	PointerExitEvent.fromMouseEvent(move)	partial-match	upstream-pointer-boundary-metadata.md
 packages/flutter/test/gestures/events_test.dart	239	paintTransformToPointerEventTransform	paired-match	upstream-pointer-boundary-metadata.md#the-pointer-plane-of-a-paint-matrix
+packages/flutter/test/gestures/tap_and_drag_test.dart	424	Beats TapGestureRecognizer when mouse pointer moves past kPrecisePointerPanSlop	paired-match	upstream-tap-drag-arena-competition.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	453	Recognizer declares self-victory in a non-empty arena when pointer travels minimum distance to be considered a drag	paired-match	upstream-tap-drag-arena-competition.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	509	TapAndHorizontalDragGestureRecognizer loses to VerticalDragGestureRecognizer on a vertical drag	paired-match	upstream-tap-drag-arena-competition.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	543	TapAndPanGestureRecognizer loses to VerticalDragGestureRecognizer on a vertical drag	paired-match	upstream-tap-drag-arena-competition.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	649	Recognizer loses when competing against a DragGestureRecognizer for a drag when eagerVictoryOnDrag is disabled	paired-match	upstream-tap-drag-arena-competition.md
