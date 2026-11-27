@@ -1,9 +1,10 @@
 use incular_config::{Constraints, TextDirection};
-use incular_core::{Code, InputEvent, KeyboardEvent, KeyboardKey, NamedKey, Size};
+use incular_core::{Code, InputEvent, KeyboardEvent, KeyboardKey, Modifiers, NamedKey, Size};
 use incular_runtime::{Runtime, TextShortcutPlatform};
 use incular_text::{TextAffinity, TextEditingController, TextSelection, TextStyle};
 use incular_widgets::EditableText;
 
+const WITHOUT_GOOD: &str = "Now is the time for\nall people\nto come to the aid\nof their country.";
 const TEXT: &str = "Now is the time for\nall good people\nto come to the aid\nof their country.";
 
 const NON_IOS: &[TextShortcutPlatform] = &[
@@ -34,8 +35,39 @@ enum EditorMode {
     ReadOnly,
 }
 
-fn character_deletion(
-    (named_key, code): (NamedKey, Code),
+#[derive(Clone, Copy, Debug)]
+enum DeleteKey {
+    Backspace,
+    Delete,
+    WordBackspace,
+    WordDelete,
+}
+
+impl DeleteKey {
+    fn events(self, platform: TextShortcutPlatform) -> [InputEvent; 2] {
+        let backward = matches!(self, Self::Backspace | Self::WordBackspace);
+        let (key, code) = if backward {
+            (NamedKey::Backspace, Code::Backspace)
+        } else {
+            (NamedKey::Delete, Code::Delete)
+        };
+        let key = KeyboardKey::Named(key);
+        let mut down = KeyboardEvent::key_down(key.clone(), code);
+        let mut up = KeyboardEvent::key_up(key, code);
+        if matches!(self, Self::WordBackspace | Self::WordDelete) {
+            let mods = match platform {
+                TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs => Modifiers::ALT,
+                _ => Modifiers::CONTROL,
+            };
+            down.modifiers = mods;
+            up.modifiers = mods;
+        }
+        [InputEvent::Key(down), InputEvent::Key(up)]
+    }
+}
+
+fn check_deletion(
+    key: DeleteKey,
     platforms: &[TextShortcutPlatform],
     initial_text: &str,
     selection: TextSelection,
@@ -59,9 +91,9 @@ fn character_deletion(
         runtime.run_frame(bounds).unwrap();
         let was_focused = runtime.focused_element();
         assert!(was_focused.is_some(), "{platform:?}");
-        let key = KeyboardKey::Named(named_key);
-        let _ = runtime.handle_input(InputEvent::Key(KeyboardEvent::key_down(key.clone(), code)));
-        let _ = runtime.handle_input(InputEvent::Key(KeyboardEvent::key_up(key, code)));
+        for event in key.events(platform) {
+            let _ = runtime.handle_input(event);
+        }
         runtime.run_frame(bounds).unwrap();
         assert_eq!(runtime.focused_element(), was_focused);
         assert_eq!(controller.text(), expected.text, "{platform:?}");
@@ -80,8 +112,8 @@ fn character_deletion(
 
 #[test]
 fn backspace_joins_with_the_previous_line() {
-    character_deletion(
-        (NamedKey::Backspace, Code::Backspace),
+    check_deletion(
+        DeleteKey::Backspace,
         NON_IOS,
         TEXT,
         TextSelection::collapsed(20),
@@ -97,8 +129,8 @@ fn backspace_joins_with_the_previous_line() {
 
 #[test]
 fn read_only_backspace_does_not_change_text_or_selection_affinity() {
-    character_deletion(
-        (NamedKey::Backspace, Code::Backspace),
+    check_deletion(
+        DeleteKey::Backspace,
         ALL,
         TEXT,
         TextSelection::collapsed(20),
@@ -114,8 +146,8 @@ fn read_only_backspace_does_not_change_text_or_selection_affinity() {
 
 #[test]
 fn backspace_at_document_start_is_a_no_op() {
-    character_deletion(
-        (NamedKey::Backspace, Code::Backspace),
+    check_deletion(
+        DeleteKey::Backspace,
         ALL,
         TEXT,
         TextSelection::collapsed(0),
@@ -131,8 +163,8 @@ fn backspace_at_document_start_is_a_no_op() {
 
 #[test]
 fn backspace_at_document_end_deletes_just_the_last_character() {
-    character_deletion(
-        (NamedKey::Backspace, Code::Backspace),
+    check_deletion(
+        DeleteKey::Backspace,
         NON_IOS,
         TEXT,
         TextSelection::collapsed(72),
@@ -154,8 +186,8 @@ fn backspace_at_a_cluster_boundary_removes_the_entire_preceding_emoji() {
     // Flutter records a UTF-16 selection at code-unit offset 8.
     // Incular's equivalent is the UTF-8 byte boundary after the first emoji.
     assert_eq!(FAMILY.encode_utf16().count(), 8);
-    character_deletion(
-        (NamedKey::Backspace, Code::Backspace),
+    check_deletion(
+        DeleteKey::Backspace,
         NON_IOS,
         INPUT,
         TextSelection::collapsed(FAMILY.len()),
@@ -171,8 +203,8 @@ fn backspace_at_a_cluster_boundary_removes_the_entire_preceding_emoji() {
 
 #[test]
 fn forward_delete_removes_the_first_character_of_the_current_line() {
-    character_deletion(
-        (NamedKey::Delete, Code::Delete),
+    check_deletion(
+        DeleteKey::Delete,
         NON_IOS,
         TEXT,
         TextSelection::collapsed(20),
@@ -188,8 +220,8 @@ fn forward_delete_removes_the_first_character_of_the_current_line() {
 
 #[test]
 fn read_only_forward_delete_does_not_change_text_or_selection_affinity() {
-    character_deletion(
-        (NamedKey::Delete, Code::Delete),
+    check_deletion(
+        DeleteKey::Delete,
         NON_IOS,
         TEXT,
         TextSelection::collapsed(20),
@@ -205,8 +237,8 @@ fn read_only_forward_delete_does_not_change_text_or_selection_affinity() {
 
 #[test]
 fn forward_delete_at_document_start_removes_the_first_character() {
-    character_deletion(
-        (NamedKey::Delete, Code::Delete),
+    check_deletion(
+        DeleteKey::Delete,
         NON_IOS,
         TEXT,
         TextSelection::collapsed(0),
@@ -222,8 +254,8 @@ fn forward_delete_at_document_start_removes_the_first_character() {
 
 #[test]
 fn forward_delete_at_document_end_preserves_affinity() {
-    character_deletion(
-        (NamedKey::Delete, Code::Delete),
+    check_deletion(
+        DeleteKey::Delete,
         ALL,
         TEXT,
         TextSelection::collapsed(72),
@@ -243,8 +275,8 @@ fn forward_delete_at_a_cluster_boundary_removes_the_entire_following_emoji() {
     const INPUT: &str = "👨‍👩‍👦👨‍👩‍👦👨‍👩‍👦";
     const RESULT: &str = "👨‍👩‍👦👨‍👩‍👦";
     assert_eq!(FAMILY.encode_utf16().count(), 8);
-    character_deletion(
-        (NamedKey::Delete, Code::Delete),
+    check_deletion(
+        DeleteKey::Delete,
         NON_IOS,
         INPUT,
         TextSelection::collapsed(FAMILY.len()),
@@ -261,8 +293,8 @@ fn forward_delete_at_a_cluster_boundary_removes_the_entire_following_emoji() {
 #[test]
 fn forward_delete_removes_an_exactly_selected_emoji_cluster() {
     const FAMILY: &str = "👨‍👩‍👦";
-    character_deletion(
-        (NamedKey::Delete, Code::Delete),
+    check_deletion(
+        DeleteKey::Delete,
         NON_IOS,
         "👨‍👩‍👦👨‍👩‍👦👨‍👩‍👦",
         TextSelection::new(FAMILY.len(), 2 * FAMILY.len()),
@@ -280,8 +312,8 @@ fn forward_delete_removes_an_exactly_selected_emoji_cluster() {
 fn deletion_expands_partial_graphemes_independent_of_selection_direction() {
     // Between e and its acute mark, and between o and its diaeresis.
     for selection in [TextSelection::new(2, 5), TextSelection::new(5, 2)] {
-        character_deletion(
-            (NamedKey::Delete, Code::Delete),
+        check_deletion(
+            DeleteKey::Delete,
             NON_IOS,
             "CéöD",
             selection,
@@ -298,11 +330,8 @@ fn deletion_expands_partial_graphemes_independent_of_selection_direction() {
 
 #[test]
 fn character_deletion_from_inside_a_grapheme_removes_the_whole_grapheme() {
-    for key in [
-        (NamedKey::Delete, Code::Delete),
-        (NamedKey::Backspace, Code::Backspace),
-    ] {
-        character_deletion(
+    for key in [DeleteKey::Delete, DeleteKey::Backspace] {
+        check_deletion(
             key,
             NON_IOS,
             "CéD",
@@ -320,8 +349,8 @@ fn character_deletion_from_inside_a_grapheme_removes_the_whole_grapheme() {
 
 #[test]
 fn obscured_delete_does_not_expand_past_selected_code_points() {
-    character_deletion(
-        (NamedKey::Delete, Code::Delete),
+    check_deletion(
+        DeleteKey::Delete,
         NON_IOS,
         "CéD",
         TextSelection::new(2, 4),
@@ -333,4 +362,157 @@ fn obscured_delete_does_not_expand_past_selected_code_points() {
             affinity: TextAffinity::Downstream,
         },
     );
+}
+
+#[test]
+fn word_backward_deletion_matches_flutter_at_words_and_document_edges() {
+    for (
+        platforms,
+        caret,
+        original_affinity,
+        mode,
+        expected_text,
+        expected_caret,
+        expected_affinity,
+    ) in [
+        (
+            NON_IOS,
+            29,
+            TextAffinity::Upstream,
+            EditorMode::Editable,
+            WITHOUT_GOOD,
+            24,
+            TextAffinity::Downstream,
+        ),
+        (
+            ALL,
+            29,
+            TextAffinity::Upstream,
+            EditorMode::ReadOnly,
+            TEXT,
+            29,
+            TextAffinity::Upstream,
+        ),
+        (
+            ALL,
+            0,
+            TextAffinity::Downstream,
+            EditorMode::Editable,
+            TEXT,
+            0,
+            TextAffinity::Downstream,
+        ),
+        (
+            NON_IOS,
+            72,
+            TextAffinity::Upstream,
+            EditorMode::Editable,
+            "Now is the time for\nall good people\nto come to the aid\nof their ",
+            64,
+            TextAffinity::Downstream,
+        ),
+    ] {
+        check_deletion(
+            DeleteKey::WordBackspace,
+            platforms,
+            TEXT,
+            TextSelection::collapsed(caret),
+            original_affinity,
+            mode,
+            Expected {
+                text: expected_text,
+                caret: expected_caret,
+                affinity: expected_affinity,
+            },
+        );
+    }
+}
+
+#[test]
+fn word_forward_deletion_matches_flutter_at_words_and_document_edges() {
+    for (
+        platforms,
+        caret,
+        original_affinity,
+        mode,
+        expected_text,
+        expected_caret,
+        expected_affinity,
+    ) in [
+        (
+            NON_IOS,
+            23,
+            TextAffinity::Upstream,
+            EditorMode::Editable,
+            WITHOUT_GOOD,
+            23,
+            TextAffinity::Downstream,
+        ),
+        (
+            ALL,
+            23,
+            TextAffinity::Upstream,
+            EditorMode::ReadOnly,
+            TEXT,
+            23,
+            TextAffinity::Upstream,
+        ),
+        (
+            NON_IOS,
+            0,
+            TextAffinity::Downstream,
+            EditorMode::Editable,
+            " is the time for\nall good people\nto come to the aid\nof their country.",
+            0,
+            TextAffinity::Downstream,
+        ),
+        (
+            ALL,
+            72,
+            TextAffinity::Upstream,
+            EditorMode::Editable,
+            TEXT,
+            72,
+            TextAffinity::Upstream,
+        ),
+    ] {
+        check_deletion(
+            DeleteKey::WordDelete,
+            platforms,
+            TEXT,
+            TextSelection::collapsed(caret),
+            original_affinity,
+            mode,
+            Expected {
+                text: expected_text,
+                caret: expected_caret,
+                affinity: expected_affinity,
+            },
+        );
+    }
+}
+
+#[test]
+fn word_deletion_stops_at_the_next_emoji_cluster_boundary() {
+    const FAMILY: &str = "👨‍👩‍👦";
+    const INPUT: &str = "👨‍👩‍👦👨‍👩‍👦👨‍👩‍👦";
+    const RESULT: &str = "👨‍👩‍👦👨‍👩‍👦";
+    for (key, caret_after) in [
+        (DeleteKey::WordBackspace, 0),
+        (DeleteKey::WordDelete, FAMILY.len()),
+    ] {
+        check_deletion(
+            key,
+            NON_IOS,
+            INPUT,
+            TextSelection::collapsed(FAMILY.len()),
+            TextAffinity::Upstream,
+            EditorMode::Editable,
+            Expected {
+                text: RESULT,
+                caret: caret_after,
+                affinity: TextAffinity::Downstream,
+            },
+        );
+    }
 }

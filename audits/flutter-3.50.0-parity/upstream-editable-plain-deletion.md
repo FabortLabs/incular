@@ -36,3 +36,15 @@ every touched grapheme without leaving an orphaned combining mark.
 Obscured fields still delete by code point. These authored probes do
 not receive credit for the upstream cases that use an interior
 UTF-16 surrogate offset.
+
+## Word-modified Backspace and Delete
+
+Ten pinned registrations ran across all 54 platform expansions.
+Mounted native editors use Alt on the Apple policy and Control on
+the common policy. Both directions delete the same middle word
+without removing unrelated text; the end-of-document Backspace
+also includes terminal punctuation. At a whole-family emoji
+boundary the command removes only the neighboring cluster.
+Read-only editors and commands with nothing to delete preserve
+both their caret and its affinity. The interior-surrogate cases
+remain unpaired.

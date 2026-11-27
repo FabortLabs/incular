@@ -3754,3 +3754,13 @@ packages/flutter/test/widgets/editable_text_shortcuts_test.dart	278	delete at st
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	296	delete at end	paired-match	upstream-editable-plain-deletion.md
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	335	delete at cluster boundary	paired-match	upstream-editable-plain-deletion.md
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	367	at the boundaries of a cluster	paired-match	upstream-editable-plain-deletion.md
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	414	WordModifier-backspace	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	436	readonly	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	454	at start	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	472	at end	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	508	at cluster boundary	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	533	WordModifier-delete	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	555	readonly	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	573	at start	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	591	at end	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	623	at cluster boundary	paired-match	upstream-editable-plain-deletion.md#word-modified-backspace-and-delete
