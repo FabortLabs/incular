@@ -233,3 +233,15 @@ right fourth leaf and left first leaf, both scopes remember their last
 child. A focus request on the right scope restores the fourth leaf.
 The active leaf, parent, and scope flip together; only the leaf has
 primary focus, and both remembered children remain unchanged.
+
+## Swapping external scope nodes
+
+Pinned `widgets/focus_scope_test.dart:875` pairs. Two mounted branches
+hold different supplied FocusScopeNodes and globally keyed children.
+Requesting child A through its scope, then setting that scope first,
+gives A primary focus and changes its actual mounted label. Swapping
+only the two scope nodes leaves A's element, node and visible focused
+label intact. Child B remains unfocused. The new scope is the one
+reported by mounted lookup and now holds focus-within. The precise
+reference and 40 focused Rust focus regressions passed; no production
+focus behavior needed changing for this case.

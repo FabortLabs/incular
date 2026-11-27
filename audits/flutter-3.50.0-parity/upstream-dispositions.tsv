@@ -3638,3 +3638,4 @@ packages/flutter/test/widgets/dismissible_test.dart	1037	DismissDirection.none d
 packages/flutter/test/widgets/dismissible_test.dart	1053	DismissDirection.none does not prevent scrolling	paired-match	upstream-dismissible-direction-and-confirmation.md#disabled-rows-do-not-capture-scroll-drags
 packages/flutter/test/widgets/dismissible_test.dart	1127	Change direction does not lose child state	paired-match	upstream-dismissible-direction-and-confirmation.md#disabled-rows-do-not-capture-scroll-drags
 packages/flutter/test/widgets/dismissible_test.dart	976	Dismissible.behavior should behave correctly during hit testing	paired-match	upstream-dismissible-direction-and-confirmation.md#opaque-gesture-surfaces-stop-raw-sibling-hits
+packages/flutter/test/widgets/focus_scope_test.dart	875	Moving FocusScopeNodes retains focus	paired-match	upstream-mounted-focus-scope-nodes.md#swapping-external-scope-nodes

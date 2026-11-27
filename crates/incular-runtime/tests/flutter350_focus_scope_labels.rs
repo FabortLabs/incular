@@ -203,3 +203,44 @@ fn deleting_a_focused_child_does_not_focus_the_unfocused_sibling() {
     assert!(!a.has_focus() && !b.has_focus());
     labels(&runtime, &["b"]);
 }
+
+#[test]
+fn swapping_two_external_scope_nodes_keeps_primary_focus_and_status_on_the_child() {
+    let nodes = [FocusNode::new(), FocusNode::new()];
+    let scopes = [FocusScopeNode::new(), FocusScopeNode::new()];
+    let root_scope = FocusScopeNode::new();
+    let keys = [GlobalKey::new(), GlobalKey::new()];
+    let swap = Signal::new(false);
+    let mut runtime = Application::new({
+        let (nodes, scopes, root_scope, swap) =
+            (nodes.clone(), scopes.clone(), root_scope.clone(), swap.clone());
+        move |_| {
+            let reversed = usize::from(swap.get());
+            let branch = |slot: usize, name: &str| {
+                let label = status(&nodes[slot], name, false, keys[slot]);
+                FocusScope::new(Column::new([label])).node(scopes[slot ^ reversed].clone())
+            };
+            Directionality::new(TextDirection::Ltr,
+                FocusScope::new(Column::new([branch(0, "a"), branch(1, "b")]))
+                    .node(root_scope.clone())
+            ).into()
+        }
+    }).unwrap().into_runtime();
+    settle(&mut runtime);
+    request_from_scope(&runtime, keys[0], &nodes[0]);
+    assert!(root_scope.set_first_focus(&scopes[0]));
+    settle(&mut runtime);
+    assert!(nodes[0].has_primary_focus() && !nodes[1].has_focus());
+    labels(&runtime, &["A FOCUSED", "b"]);
+    let original = runtime.tree().element_with_key(&keys[0].into()).unwrap();
+    assert!(scopes[0].has_focus() && !scopes[1].has_focus());
+
+    swap.set(true);
+    settle(&mut runtime);
+    assert!(nodes[0].has_primary_focus() && !nodes[1].has_focus());
+    assert!(scopes[1].has_focus() && !scopes[0].has_focus());
+    let retained = runtime.tree().element_with_key(&keys[0].into()).unwrap();
+    assert_eq!(original, retained);
+    assert_eq!(FocusScope::maybe_of(runtime.tree(), retained).as_ref(), Some(&scopes[1]));
+    labels(&runtime, &["A FOCUSED", "b"]);
+}
