@@ -2164,6 +2164,7 @@ version = "0.1.5"
 dependencies = [
  "bitflags 2.13.1",
  "futures-core",
+ "indexmap",
  "keyboard-types 0.8.3",
  "kurbo",
  "palette",

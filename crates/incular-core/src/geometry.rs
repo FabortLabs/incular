@@ -160,6 +160,19 @@ impl Color {
         }
     }
 
+    /// Decodes a packed alpha/red/green/blue value in that byte order.
+    #[must_use]
+    pub const fn from_argb32(value: u32) -> Self {
+        let [alpha, red, green, blue] = value.to_be_bytes();
+        Self::rgba(red, green, blue, alpha)
+    }
+
+    /// Packs this color into alpha/red/green/blue bytes.
+    #[must_use]
+    pub const fn to_argb32(self) -> u32 {
+        u32::from_be_bytes([self.alpha, self.red, self.green, self.blue])
+    }
+
     /// Converts the compact encoded sRGBA8 value to straight, linear-sRGB
     /// components. Palette owns the CPU transfer function; WGSL retains its
     /// equivalent explicit shader-side math at the GPU boundary.

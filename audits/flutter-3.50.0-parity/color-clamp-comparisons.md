@@ -175,3 +175,18 @@ remain partial for the default f32 models. Callers that need the
 pinned double-input rounding can use `Color::from_ahsv` or
 `Color::from_ahsl` without changing renderer or color storage.
 All 30 selected native checks passed.
+
+## Generic swatch lookup and interpolation
+
+Exact pinned `painting/colors_test.dart:678,699,724` passed. Native
+`flutter350_color_swatch` matches primary ARGB, named lookups, ordered
+keys, equal hashes and the same-object interpolation shortcut. The
+Rust shortcut returns a borrow with no allocation.
+
+The original midpoint matcher accepts neighboring bytes. A separate
+pinned fixture confirms the actual rounded midpoint is 128 in both
+the primary and its shade. It also verifies that left-hand keys stay
+in order, right-only keys are not added when a left swatch exists,
+missing shades fade RGB-preservingly, and the pinned NaN clamp selects
+the upper byte. The native counterparts and 25 adjacent tests pass.
+This is a generic painting value, not a Material color palette.

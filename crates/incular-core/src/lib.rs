@@ -5,6 +5,7 @@ mod arena;
 mod bit_field;
 mod caching_iterable;
 mod change_notifier;
+mod color_swatch;
 pub mod collections;
 pub mod debug_double;
 pub mod debug_instrumentation;
@@ -42,6 +43,7 @@ pub use arena::{Arena, ArenaId};
 pub use bit_field::{BitField, K_MAX_UNSIGNED_SMI};
 pub use caching_iterable::{CachingCursor, CachingIndexError, CachingIterable};
 pub use change_notifier::{ChangeNotifier, ChangeNotifierSubscription};
+pub use color_swatch::ColorSwatch;
 pub use debug_double::{debug_double_precision, debug_format_double, set_debug_double_precision};
 pub use debug_instrumentation::{
     debug_instrument_action, debug_instrumentation_enabled, set_debug_instrumentation_enabled,

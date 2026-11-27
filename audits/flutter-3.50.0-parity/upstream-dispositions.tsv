@@ -2850,3 +2850,6 @@ packages/flutter/test/painting/colors_test.dart	69	HSVColor saturation sweep tes
 packages/flutter/test/painting/colors_test.dart	97	HSVColor value sweep test	partial-match	color-clamp-comparisons.md#single-channel-sweep-precision
 packages/flutter/test/painting/colors_test.dart	316	HSLColor saturation sweep test	partial-match	color-clamp-comparisons.md#single-channel-sweep-precision
 packages/flutter/test/painting/colors_test.dart	344	HSLColor lightness sweep test	paired-match	color-clamp-comparisons.md#single-channel-sweep-precision
+packages/flutter/test/painting/colors_test.dart	678	ColorSwatch test	paired-match	color-clamp-comparisons.md#generic-swatch-lookup-and-interpolation
+packages/flutter/test/painting/colors_test.dart	699	ColorSwatch.lerp	paired-match	color-clamp-comparisons.md#generic-swatch-lookup-and-interpolation
+packages/flutter/test/painting/colors_test.dart	724	ColorSwatch.lerp identical a,b	paired-match	color-clamp-comparisons.md#generic-swatch-lookup-and-interpolation
