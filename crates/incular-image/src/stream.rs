@@ -57,6 +57,13 @@ pub enum ImageLoadState {
 }
 
 type FrameMap = Box<dyn FnOnce(ImageHandle) -> Result<ImageHandle, ImageError>>;
+type UnhandledErrorReporter = Rc<dyn Fn(ImageError)>;
+
+#[derive(Default)]
+struct UnhandledImageErrors {
+    suppressed: Cell<bool>,
+    reporter: RefCell<Option<UnhandledErrorReporter>>,
+}
 
 struct StreamCell {
     state: RefCell<ImageLoadState>,
@@ -64,6 +71,7 @@ struct StreamCell {
     frame_changes: OnceCell<DependencySource>,
     pending_frames: OnceCell<PendingFrameListeners>,
     chunks: OnceCell<ChunkListeners>,
+    unhandled_errors: OnceCell<UnhandledImageErrors>,
     completed: Cell<bool>,
     /// The stream this one follows after [`ImageStreamCompleter::follow`].
     source: RefCell<Option<ImageStream>>,
@@ -111,6 +119,7 @@ impl ImageStream {
                 frame_changes: OnceCell::new(),
                 pending_frames: OnceCell::new(),
                 chunks: OnceCell::new(),
+                unhandled_errors: OnceCell::new(),
                 completed: Cell::new(completed),
                 source: RefCell::new(None),
                 map: RefCell::new(None),
@@ -275,13 +284,30 @@ impl ImageStream {
         &self,
         listener: impl FnOnce(Result<ImageHandle, ImageError>, bool) + 'static,
     ) -> ImageFrameSubscription {
+        self.listen_frame_with_error_handler(false, listener)
+    }
+
+    pub(crate) fn listen_frame_with_error_handler(
+        &self,
+        handles_error: bool,
+        listener: impl FnOnce(Result<ImageHandle, ImageError>, bool) + 'static,
+    ) -> ImageFrameSubscription {
         let binding = Rc::new(ImageFrameBinding {
             stream: RefCell::new(Some(self.clone())),
             callback: RefCell::new(Some(Box::new(listener))),
             registration: RefCell::new(None),
+            handles_error,
         });
         binding.refresh(true);
         ImageFrameSubscription { binding }
+    }
+
+    pub(crate) fn suppress_unhandled_errors(&self) {
+        self.leaf()
+            .unhandled_errors
+            .get_or_init(UnhandledImageErrors::default)
+            .suppressed
+            .set(true);
     }
 
     /// Receives new progress reports, without replaying the latest snapshot.
@@ -402,6 +428,16 @@ impl ImageStream {
             ImageLoadState::Loading(event) => *event,
             _ => None,
         };
+        let unhandled = match &state {
+            ImageLoadState::Failed(error) => self
+                .cell
+                .unhandled_errors
+                .get()
+                .filter(|policy| !policy.suppressed.get())
+                .and_then(|policy| policy.reporter.borrow().clone())
+                .map(|report| (report, error.clone())),
+            _ => None,
+        };
         let completes = !matches!(state, ImageLoadState::Loading(_));
         *self.cell.state.borrow_mut() = state;
         self.cell.completed.set(completes);
@@ -417,7 +453,12 @@ impl ImageStream {
         if completes && let Some(changes) = self.cell.frame_changes.get() {
             changes.notify();
         }
+        let unhandled =
+            unhandled.filter(|_| !listeners.iter().any(|binding| binding.handles_error));
         deliver_frames(listeners);
+        if let Some((report, error)) = unhandled {
+            report(error);
+        }
         true
     }
 }
@@ -541,6 +582,7 @@ struct ImageFrameBinding {
     stream: RefCell<Option<ImageStream>>,
     callback: RefCell<Option<ImageFrameCallback>>,
     registration: RefCell<Option<FrameRegistration>>,
+    handles_error: bool,
 }
 
 impl ImageFrameBinding {
@@ -675,6 +717,19 @@ impl ImageStreamCompleter {
         self.stream.clone()
     }
 
+    /// Sets the report destination for errors this completer encounters
+    /// without an active grouped error callback. This is independent of
+    /// the stream's typed failed state and does not redirect other streams.
+    pub fn set_unhandled_error_reporter(&self, report: impl Fn(ImageError) + 'static) {
+        let policy = self
+            .stream
+            .cell
+            .unhandled_errors
+            .get_or_init(UnhandledImageErrors::default);
+        let previous = policy.reporter.replace(Some(Rc::new(report)));
+        drop(previous);
+    }
+
     /// Flutter `reportImageChunkEvent`.
     pub fn report_chunk(&self, event: ImageChunkEvent) -> bool {
         self.stream.set(ImageLoadState::Loading(Some(event)))
@@ -703,6 +758,14 @@ impl ImageStreamCompleter {
             || source.reaches(stream)
         {
             return false;
+        }
+        if stream
+            .cell
+            .unhandled_errors
+            .get()
+            .is_some_and(|policy| policy.suppressed.get())
+        {
+            source.suppress_unhandled_errors();
         }
         let mut listeners = stream.cell.take_frame_listeners();
         *stream.cell.source.borrow_mut() = Some(source.clone());

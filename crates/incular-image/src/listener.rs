@@ -23,6 +23,7 @@ pub struct ImageStreamListener {
     on_image: ImageListener,
     on_chunk: Option<ImageChunkListener>,
     on_error: Option<ImageErrorListener>,
+    report_errors: bool,
 }
 
 impl ImageStreamListener {
@@ -32,6 +33,7 @@ impl ImageStreamListener {
             on_image,
             on_chunk: None,
             on_error: None,
+            report_errors: true,
         }
     }
 
@@ -46,6 +48,16 @@ impl ImageStreamListener {
         self.on_error = Some(handler);
         self
     }
+
+    /// Whether unhandled failures may be reported after this listener
+    /// is removed. Registering a listener with this disabled suppresses
+    /// the completer's unhandled-error report permanently, without
+    /// suppressing delivery to active error callbacks.
+    #[must_use]
+    pub const fn report_errors(mut self, report: bool) -> Self {
+        self.report_errors = report;
+        self
+    }
 }
 
 fn address<T: ?Sized>(callback: &Rc<T>) -> *const () {
@@ -57,6 +69,7 @@ impl PartialEq for ImageStreamListener {
         Rc::ptr_eq(&self.on_image, &other.on_image)
             && self.on_chunk.as_ref().map(address) == other.on_chunk.as_ref().map(address)
             && self.on_error.as_ref().map(address) == other.on_error.as_ref().map(address)
+            && self.report_errors == other.report_errors
     }
 }
 
@@ -67,6 +80,7 @@ impl Hash for ImageStreamListener {
         address(&self.on_image).hash(state);
         self.on_chunk.as_ref().map(address).hash(state);
         self.on_error.as_ref().map(address).hash(state);
+        self.report_errors.hash(state);
     }
 }
 
@@ -76,6 +90,7 @@ impl fmt::Debug for ImageStreamListener {
             .debug_struct("ImageStreamListener")
             .field("has_chunk_handler", &self.on_chunk.is_some())
             .field("has_error_handler", &self.on_error.is_some())
+            .field("report_errors", &self.report_errors)
             .finish_non_exhaustive()
     }
 }
@@ -96,24 +111,32 @@ impl ImageStream {
             on_image,
             on_chunk,
             on_error,
+            report_errors,
         } = listener;
+        if !report_errors {
+            self.suppress_unhandled_errors();
+        }
+        let handles_error = on_error.is_some();
         let chunks = on_chunk.map(|handle| self.listen_chunks(move |event| handle(event)));
         let source = self.clone();
-        let frame = self.listen_frame(move |result, synchronous| match result {
-            Ok(image) => {
-                let scale = image.scale();
-                let mut info = ImageInfo::new(image).with_scale(scale);
-                if let Some(label) = source.debug_label() {
-                    info = info.with_debug_label(label);
+        let frame =
+            self.listen_frame_with_error_handler(handles_error, move |result, synchronous| {
+                match result {
+                    Ok(image) => {
+                        let scale = image.scale();
+                        let mut info = ImageInfo::new(image).with_scale(scale);
+                        if let Some(label) = source.debug_label() {
+                            info = info.with_debug_label(label);
+                        }
+                        on_image(info, synchronous);
+                    }
+                    Err(error) => {
+                        if let Some(handle) = on_error {
+                            handle(error);
+                        }
+                    }
                 }
-                on_image(info, synchronous);
-            }
-            Err(error) => {
-                if let Some(handle) = on_error {
-                    handle(error);
-                }
-            }
-        });
+            });
         ImageStreamSubscription {
             _frame: frame,
             _chunks: chunks,
@@ -129,6 +152,7 @@ impl ImagePlayback {
             on_image,
             on_chunk,
             on_error,
+            ..
         } = listener;
         self.listen_with_chunks(
             move |result, synchronous| match result {

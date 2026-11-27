@@ -3809,3 +3809,5 @@ packages/flutter/test/rendering/wrap_test.dart	183	Wrap respects clipBehavior	pa
 packages/flutter/test/painting/image_stream_test.dart	1078	ImageStreamCompleterHandle dispatches memory events	paired-match	upstream-image-playback.md#keep-alive-handle-memory-events
 packages/flutter/test/rendering/wrap_test.dart	64	Compute intrinsic height test for width-in-height-out children	paired-match	upstream-render-wrap-dry-intrinsics.md#width-dependent-and-quarter-turned-text
 packages/flutter/test/rendering/wrap_test.dart	86	Compute intrinsic width test for height-in-width-out children	paired-match	upstream-render-wrap-dry-intrinsics.md#width-dependent-and-quarter-turned-text
+packages/flutter/test/painting/image_stream_test.dart	1184	errors are not reported after removal when reportErrors is false	paired-match	upstream-image-error-reporting.md
+packages/flutter/test/painting/image_stream_test.dart	1211	errors are reported after listener removal by default	paired-match	upstream-image-error-reporting.md
