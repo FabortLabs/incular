@@ -321,15 +321,14 @@ impl WidgetTree {
                 let row_width = children_width + spacing * (count - 1.0);
                 let max_width = constraints.max_width();
                 let rtl = text_direction == TextDirection::Rtl;
-                let mut baseline: Option<f32> = None;
+                let mut baseline = incular_layout::BaselineOffset::NO_BASELINE;
                 let mut placement = |child: &RenderObjectId, position: Offset| {
-                    if let Some(value) = self
+                    let child_baseline = self
                         .render_live(child, "overflow bar child remains live")
-                        .baseline
-                    {
-                        let value = value + position.y;
-                        baseline = Some(baseline.map_or(value, |other| other.min(value)));
-                    }
+                        .baseline;
+                    baseline = baseline.min_of(
+                        incular_layout::BaselineOffset::new(child_baseline) + position.y,
+                    );
                     position
                 };
                 let (size, offsets) = if row_width > max_width {
@@ -428,7 +427,7 @@ impl WidgetTree {
                     (size, offsets)
                 };
                 self.render_live_mut(id, "overflow bar remains live")
-                    .baseline = baseline;
+                    .baseline = baseline.offset();
                 (size, offsets)
             }
             RenderKind::Wrap { wrap, .. } => {
@@ -669,7 +668,7 @@ impl WidgetTree {
 
                 let mut offsets = ChildOffsets::default();
                 let mut has_visual_overflow = false;
-                let mut baseline: Option<f32> = None;
+                let mut baseline = incular_layout::BaselineOffset::NO_BASELINE;
                 for child in children {
                     let position = self.stack_positioned(*child, constraints)?;
                     if let Some(pos) = position {
@@ -702,11 +701,10 @@ impl WidgetTree {
                     );
                     let (_, offset) =
                         incular_layout::stack_child_geometry(final_size, &stack, size, position);
-                    if (!indexed || active_child == Some(*child))
-                        && let Some(local) = child_node.baseline
-                    {
-                        let candidate = local + offset.y;
-                        baseline = Some(baseline.map_or(candidate, |old| old.min(candidate)));
+                    if !indexed || active_child == Some(*child) {
+                        baseline = baseline.min_of(
+                            incular_layout::BaselineOffset::new(child_node.baseline) + offset.y,
+                        );
                     }
                     if matches!(position, incular_layout::StackPosition::Positioned(_)) {
                         has_visual_overflow |= offset.x < 0.0
@@ -717,7 +715,7 @@ impl WidgetTree {
                     offsets.push(offset);
                 }
                 self.render_live_mut(id, "retained render must remain live")
-                    .baseline = baseline;
+                    .baseline = baseline.offset();
                 self.set_layout_overflow(id, has_visual_overflow);
                 (final_size, offsets)
             }

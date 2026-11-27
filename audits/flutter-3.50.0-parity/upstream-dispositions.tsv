@@ -2971,3 +2971,6 @@ packages/flutter/test/rendering/layers_test.dart	463	mutating ClipRSuperellipseL
 packages/flutter/test/rendering/layers_test.dart	485	mutating OpacityLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md#effect-mutations
 packages/flutter/test/rendering/layers_test.dart	495	mutating ColorFilterLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md#effect-mutations
 packages/flutter/test/rendering/layers_test.dart	504	mutating ShaderMaskLayer fields triggers needsAddToScene	paired-match	upstream-retained-layer-mutations.md#effect-mutations
+packages/flutter/test/rendering/box_test.dart	801	clipBehavior is respected	paired-match	upstream-box-clip-and-baseline-offset.md
+packages/flutter/test/rendering/box_test.dart	1359	minOf	paired-match	upstream-box-clip-and-baseline-offset.md
+packages/flutter/test/rendering/box_test.dart	1369	+	paired-match	upstream-box-clip-and-baseline-offset.md

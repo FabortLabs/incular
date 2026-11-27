@@ -24,7 +24,7 @@ pub use descriptors::{
     StackFit, Table, TableCellVerticalAlignment, TableColumnWidth, UnconstrainedBox, Visibility,
     Wrap,
 };
-pub use geometry::{ChildLayout, LayoutResult};
+pub use geometry::{BaselineOffset, ChildLayout, LayoutResult};
 pub use incular_config::{
     Alignment, AlignmentDirectional, Axis, AxisDirection, ConstraintError, Constraints,
     CrossAxisAlignment, EdgeInsets, FlexFit, MainAxisAlignment, MainAxisSize, TextDirection,

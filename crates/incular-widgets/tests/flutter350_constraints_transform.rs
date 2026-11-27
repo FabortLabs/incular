@@ -269,3 +269,86 @@ fn logical_constraint_alignment_tracks_ambient_direction_and_explicit_override()
         );
     }
 }
+
+#[test]
+fn both_axis_overflow_reports_only_when_the_requested_clip_is_none() {
+    let viewport = Size::new(100., 100.);
+    let rect = Rect::from_origin_size(Offset::ZERO, viewport);
+    for (setting, expected) in [
+        (None, None),
+        (Some(Clip::None), None),
+        (Some(Clip::HardEdge), Some(ClipCoverage::HardEdge)),
+        (Some(Clip::AntiAlias), Some(ClipCoverage::AntiAlias)),
+        (
+            Some(Clip::AntiAliasWithSaveLayer),
+            Some(ClipCoverage::AntiAliasWithSaveLayer),
+        ),
+    ] {
+        let make = |size, clip| -> Widget {
+            let proxy = TransformBox::new(
+                TransformBox::unconstrained,
+                Widget::box_(size, Color::WHITE),
+            )
+            .text_direction(TextDirection::Ltr);
+            match clip {
+                Some(clip) => proxy.clip_behavior(clip).into(),
+                None => proxy.into(),
+            }
+        };
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(make(Size::new(200., 200.), setting)).unwrap();
+        let view = Constraints::loose(viewport);
+        tree.layout(view).unwrap();
+        assert_eq!(size(&tree, root), viewport);
+        let child = tree.children(root).unwrap()[0];
+        assert_eq!(
+            tree.element_bounds(child),
+            Some(Rect::from_origin_size(
+                Offset::new(-50., -50.),
+                Size::new(200., 200.)
+            ))
+        );
+        assert_eq!(
+            tree.diagnostics().unclipped_constraint_overflows,
+            u64::from(expected.is_none() && cfg!(debug_assertions))
+        );
+
+        let clip = |display: &DisplayList| {
+            display.commands().iter().find_map(|op| match *op {
+                PaintCommand::PushClip { rect } => Some((rect, ClipCoverage::HardEdge)),
+                PaintCommand::PushClipRRect {
+                    rrect,
+                    coverage,
+                    isolation,
+                } => {
+                    assert_eq!(
+                        isolation.is_some(),
+                        coverage == ClipCoverage::AntiAliasWithSaveLayer
+                    );
+                    Some((rrect.rect, coverage))
+                }
+                _ => None,
+            })
+        };
+        let display = tree.paint();
+        assert_eq!(clip(&display), expected.map(|coverage| (rect, coverage)));
+        assert!(display.commands().iter().any(|op| matches!(
+            op,
+            PaintCommand::Rect {
+                color: Color::WHITE,
+                ..
+            }
+        )));
+
+        let render = tree.render_id(root);
+        tree.update(root, make(Size::new(80., 80.), setting))
+            .unwrap();
+        tree.layout(view).unwrap();
+        assert_eq!(tree.render_id(root), render);
+        assert_eq!(
+            clip(&tree.paint()),
+            None,
+            "a fitting child needs no retained clip"
+        );
+    }
+}

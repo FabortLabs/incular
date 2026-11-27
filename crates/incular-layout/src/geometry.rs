@@ -79,3 +79,40 @@ impl LayoutResult {
         self.children.iter().map(|child| child.rect())
     }
 }
+
+/// A box's baseline position measured from its top, when it has one.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BaselineOffset(Option<f32>);
+
+impl BaselineOffset {
+    /// A child with no baseline does not contribute to minimum-baseline layout.
+    pub const NO_BASELINE: Self = Self(None);
+
+    #[must_use]
+    pub const fn new(offset: Option<f32>) -> Self {
+        Self(offset)
+    }
+
+    #[must_use]
+    pub const fn offset(self) -> Option<f32> {
+        self.0
+    }
+
+    /// Returns the smaller specified offset, ignoring a missing operand.
+    #[must_use]
+    pub fn min_of(self, other: Self) -> Self {
+        match (self.0, other.0) {
+            (Some(left), Some(right)) if left >= right => other,
+            (Some(_), _) => self,
+            (None, _) => other,
+        }
+    }
+}
+
+impl core::ops::Add<f32> for BaselineOffset {
+    type Output = Self;
+
+    fn add(self, offset: f32) -> Self {
+        Self(self.0.map(|position| position + offset))
+    }
+}
