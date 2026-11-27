@@ -3180,6 +3180,15 @@ impl WidgetTree {
                     reason: format!("index {index} is outside the range of {} children; pass None to hide all children", children.len()),
                 });
             }
+            if let WidgetKind::TextField(field) = current.kind()
+                && field.obscure_text
+                && field.multiline
+            {
+                return Err(TreeError::InvalidWidgetConfiguration {
+                    widget: "EditableText",
+                    reason: "obscured text must be a single line; set max_lines(Some(1))".into(),
+                });
+            }
             self.check_keys_borrowed(owner, current.children_refs())?;
             // A leaf has no later validation work to wait for. Complete it
             // here instead of pushing and dispatching a Finish entry; fresh

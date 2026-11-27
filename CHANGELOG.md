@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Changed
 
+- A raw obscured editor must be single-line. Mounting or updating an
+  obscured multiline field now returns a configuration error.
+
 - Direct widget updates now return a configuration error instead of panicking
   when the new widget type differs. Update the retained parent to replace a
   child with a different type.

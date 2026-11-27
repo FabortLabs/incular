@@ -684,3 +684,79 @@ fn the_bare_editor_is_its_lines_tall_and_content_padding_adds() {
     layout_loose(&mut tree);
     assert_eq!(field_size(&tree, id).height, 3. * line + 16.);
 }
+
+#[test]
+fn an_obscured_editor_accepts_one_line_but_rejects_multiline_before_mount_or_update() {
+    let controller = TextEditingController::with_text("secret");
+    let make = |lines: Option<usize>, obscured| {
+        Widget::from(
+            EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .max_lines(lines)
+                .obscure_text(obscured),
+        )
+    };
+    let mut tree = WidgetTree::new();
+    let field = tree.mount(make(Some(1), true)).unwrap();
+    for lines in [Some(2), None] {
+        let bad = make(lines, true);
+        let mut fresh = WidgetTree::new();
+        for error in [
+            fresh.mount(bad.clone()).unwrap_err(),
+            tree.update(field, bad).unwrap_err(),
+        ] {
+            let TreeError::InvalidWidgetConfiguration { widget, reason } = error else {
+                panic!("unexpected error {error:?}");
+            };
+            assert_eq!(widget, "EditableText");
+            assert!(reason.contains("single line"));
+        }
+        assert!(fresh.root().is_none());
+        assert_eq!(tree.root(), Some(field));
+        assert_eq!(tree.text_controller(field), Some(controller.clone()));
+    }
+    tree.update(field, make(Some(2), false)).unwrap();
+    assert!(tree.is_multiline_text_field(field));
+}
+
+#[test]
+fn a_raw_editor_at_zero_area_keeps_selection_updates_safe() {
+    let controller = TextEditingController::with_text("X");
+    let (mut tree, field) = mount_field(controller.clone(), |field| field);
+    let zero = Constraints::tight(Size::ZERO);
+    tree.layout(zero).unwrap();
+    assert_eq!(field_size(&tree, field), Size::ZERO);
+    let _ = tree.paint();
+    controller.set_selection(TextSelection::collapsed(0));
+    tree.layout(zero).unwrap();
+    let _ = tree.paint();
+    assert_eq!(field_size(&tree, field), Size::ZERO);
+    assert_eq!(
+        controller.selection_if_set(),
+        Some(TextSelection::collapsed(0))
+    );
+}
+
+#[test]
+fn the_local_caret_remains_finite_under_a_singular_affine_transform() {
+    use incular_text::TextAffinity;
+    use incular_widgets::{GlobalKey, Transform};
+
+    let controller = TextEditingController::new();
+    let key = GlobalKey::new();
+    let field = Widget::from(
+        EditableText::new(controller).text_direction(incular_widgets::TextDirection::Ltr),
+    )
+    .with_key(key);
+    let root = Transform::scale(0., field);
+    let mut tree = WidgetTree::new();
+    tree.mount(root.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let id = tree.element_with_key(&key.into()).unwrap();
+    let caret = tree
+        .editable_local_caret_rect(id, 0, TextAffinity::Downstream)
+        .unwrap();
+    assert!(caret.origin.x.is_finite() && caret.origin.y.is_finite());
+    assert!(caret.size.width.is_finite() && caret.size.height.is_finite());
+}
