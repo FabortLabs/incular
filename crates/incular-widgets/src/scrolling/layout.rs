@@ -3741,6 +3741,16 @@ fn variable_slot_for_child(
             return slot_in_sliver(&mut **wrapper.inner.borrow_mut(), child);
         }
         if let Some(wrapper) = sliver.as_any_mut()
+            .and_then(|any| any.downcast_mut::<super::sliver_layer::OpacityRenderSliver>())
+        {
+            return slot_in_sliver(&mut **wrapper.inner_cell().borrow_mut(), child);
+        }
+        if let Some(wrapper) = sliver.as_any_mut()
+            .and_then(|any| any.downcast_mut::<AnimatedOpacityRenderSliver>())
+        {
+            return slot_in_sliver(&mut **wrapper.inner_cell().borrow_mut(), child);
+        }
+        if let Some(wrapper) = sliver.as_any_mut()
             .and_then(|any| any.downcast_mut::<WidgetWrapRenderSliver>())
         {
             return slot_in_sliver(&mut **wrapper.inner.borrow_mut(), child);

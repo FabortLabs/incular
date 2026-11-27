@@ -80,79 +80,10 @@ impl Sliver for SliverFadeTransition {
                     }),
                 })
             }
-            FadeSource::Animation(animation) => Box::new(AnimatedFadeRenderSliver {
-                inner: RefCell::new(inner),
-                value: animation.value().clamp(0., 1.),
-                animation: animation.clone(),
-            }),
+            FadeSource::Animation(animation) => Box::new(
+                super::sliver_layer::OpacityRenderSliver::animated(inner, animation.clone()),
+            ),
         }
-    }
-}
-
-/// The render side of a [`SliverFadeTransition`] driven by an animation.
-/// It samples the animation on every tick and lays its children out at the
-/// current opacity, as [`AnimatedOpacityRenderSliver`] does for its target.
-struct AnimatedFadeRenderSliver {
-    inner: RefCell<Box<dyn RenderSliver>>,
-    animation: DoubleAnimation,
-    /// The value laid out last, so a tick reports only real changes.
-    value: f32,
-}
-
-impl RenderSliver for AnimatedFadeRenderSliver {
-    fn reveal_child(
-        &mut self,
-        child: SliverChildId,
-        rect: Rect,
-        options: &ShowOnScreen,
-    ) -> Option<Rect> {
-        self.inner.get_mut().reveal_child(child, rect, options)
-    }
-
-    fn scroll_layout_dependency(&self) -> SliverScrollDependency {
-        self.inner.borrow().scroll_layout_dependency()
-    }
-
-    fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
-        let mut layout = self.inner.borrow_mut().perform_layout(constraints);
-        let opacity = self.animation.value().clamp(0., 1.);
-        for child in &mut layout.children {
-            child.widget = crate::Opacity::new(opacity, child.widget.clone()).into();
-        }
-        layout
-    }
-
-    fn invalidate_child_measurement(&mut self, child: SliverChildId) {
-        self.inner.borrow_mut().invalidate_child_measurement(child);
-    }
-
-    fn set_child_extent(&mut self, child: SliverChildId, extent: f32) -> bool {
-        self.inner.borrow_mut().set_child_extent(child, extent)
-    }
-
-    fn revision(&self) -> u64 {
-        self.inner.borrow().revision()
-    }
-
-    fn tick(&mut self, now: Instant) -> bool {
-        let inner = self.inner.borrow_mut().tick(now);
-        // Ticking with the frame time is idempotent, so a controller that
-        // another ticker already advanced this frame reports no change here.
-        for controller in self.animation.controllers() {
-            controller.tick(now);
-        }
-        let value = self.animation.value().clamp(0., 1.);
-        let changed = value != self.value;
-        self.value = value;
-        inner || changed
-    }
-
-    fn is_animating(&self) -> bool {
-        self.animation.is_animating() || self.inner.borrow().is_animating()
-    }
-
-    fn set_reduced_motion(&mut self, reduced: bool) {
-        self.inner.borrow_mut().set_reduced_motion(reduced);
     }
 }
 
@@ -207,6 +138,7 @@ impl Sliver for SliverAnimatedOpacity {
         Box::new(AnimatedOpacityRenderSliver {
             inner: RefCell::new(self.sliver.create_render_sliver(controller, axis, reverse)),
             target: self.opacity,
+            placement: super::sliver_layer::SliverOpacityPlacement::new(self.opacity, false),
             curve: self.curve.clone(),
             on_end: self.on_end.clone(),
             controller: AnimationController::new(self.duration),
@@ -224,6 +156,7 @@ impl Sliver for SliverAnimatedOpacity {
 pub(super) struct AnimatedOpacityRenderSliver {
     inner: RefCell<Box<dyn RenderSliver>>,
     target: f32,
+    placement: super::sliver_layer::SliverOpacityPlacement,
     curve: Curve,
     on_end: Option<Rc<dyn Fn()>>,
     controller: AnimationController,
@@ -239,6 +172,7 @@ impl AnimatedOpacityRenderSliver {
     /// Takes over the retained animation, then restarts it from the
     /// current opacity when the target moved.
     pub(super) fn adopt(&mut self, retained: &Self) {
+        self.placement.retain_key(retained.placement);
         let duration = self.controller.duration();
         self.controller = retained.controller.clone();
         self.controller.set_duration(duration);
@@ -275,10 +209,9 @@ impl RenderSliver for AnimatedOpacityRenderSliver {
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let mut layout = self.inner.borrow_mut().perform_layout(constraints);
-        let opacity = self.opacity();
-        for child in &mut layout.children {
-            child.widget = crate::Opacity::new(opacity, child.widget.clone()).into();
-        }
+        self.placement
+            .with_opacity(self.opacity())
+            .apply(&mut layout);
         layout
     }
 
@@ -297,6 +230,7 @@ impl RenderSliver for AnimatedOpacityRenderSliver {
     fn tick(&mut self, now: Instant) -> bool {
         let inner = self.inner.borrow_mut().tick(now);
         let was_completed = self.controller.status() == AnimationStatus::Completed;
+        let previous = self.placement.with_opacity(self.opacity());
         let changed = self.controller.tick(now);
         if changed
             && !was_completed
@@ -305,7 +239,7 @@ impl RenderSliver for AnimatedOpacityRenderSliver {
         {
             on_end();
         }
-        inner || changed
+        inner || previous.alpha != self.placement.with_opacity(self.opacity()).alpha
     }
 
     fn is_animating(&self) -> bool {

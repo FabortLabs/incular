@@ -30,3 +30,12 @@ passed, including the overlap, nested order, and reveal at viewport
 sizes 10 and 100. This fixes static sliver opacity; the animated
 siblings' multi-row scope remains open. The authored result adds
 no original registration credit.
+
+The Flutter `SliverFadeTransition` animation and
+`SliverAnimatedOpacity` implicit tween now also submit a shared
+scope instead of attenuating each row. The pinned raster probe
+runs both control paths and gets alpha 128 in each overlap.
+The native animation test changes half opacity to three quarters
+under the same scope and source generation. The public
+Incular-specific direct opacity controller keeps its existing
+per-row update path. No extra original registration is credited.

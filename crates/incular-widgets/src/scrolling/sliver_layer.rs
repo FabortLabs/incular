@@ -6,6 +6,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use incular_animation::DoubleAnimation;
 use incular_core::{Offset, Rect};
 use incular_rendering::flutter_layer_opacity;
 
@@ -27,6 +28,37 @@ pub(crate) struct SliverOpacityPlacement {
     key: u64,
     pub(crate) alpha: f32,
     always_include_semantics: bool,
+}
+
+impl SliverOpacityPlacement {
+    pub(super) fn new(opacity: f32, always_include_semantics: bool) -> Self {
+        static KEYS: AtomicU64 = AtomicU64::new(1);
+        Self {
+            key: KEYS.fetch_add(1, Ordering::Relaxed),
+            alpha: flutter_layer_opacity(opacity),
+            always_include_semantics,
+        }
+    }
+
+    pub(super) fn with_opacity(self, opacity: f32) -> Self {
+        Self {
+            alpha: flutter_layer_opacity(opacity),
+            ..self
+        }
+    }
+
+    pub(super) fn retain_key(&mut self, previous: Self) {
+        self.key = previous.key;
+    }
+
+    pub(super) fn apply(self, layout: &mut SliverLayout) {
+        for child in &mut layout.children {
+            child.widget = child
+                .widget
+                .clone()
+                .with_sliver_layer(SliverLayerPlacement::Opacity(self));
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -90,6 +122,7 @@ impl SliverLayerPlacement {
 pub(super) struct OpacityRenderSliver {
     inner: RefCell<Box<dyn RenderSliver>>,
     placement: SliverOpacityPlacement,
+    animation: Option<DoubleAnimation>,
 }
 
 impl OpacityRenderSliver {
@@ -98,27 +131,27 @@ impl OpacityRenderSliver {
         opacity: f32,
         always_include_semantics: bool,
     ) -> Self {
-        static KEYS: AtomicU64 = AtomicU64::new(1);
         Self {
             inner: RefCell::new(inner),
-            placement: SliverOpacityPlacement {
-                key: KEYS.fetch_add(1, Ordering::Relaxed),
-                alpha: flutter_layer_opacity(opacity),
-                always_include_semantics,
-            },
+            placement: SliverOpacityPlacement::new(opacity, always_include_semantics),
+            animation: None,
         }
+    }
+
+    pub(super) fn animated(inner: Box<dyn RenderSliver>, animation: DoubleAnimation) -> Self {
+        let mut sliver = Self::new(inner, animation.value(), false);
+        sliver.animation = Some(animation);
+        sliver
     }
 }
 
 impl RenderSliver for OpacityRenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let mut layout = self.inner.get_mut().perform_layout(constraints);
-        for child in &mut layout.children {
-            child.widget = child
-                .widget
-                .clone()
-                .with_sliver_layer(SliverLayerPlacement::Opacity(self.placement));
+        if let Some(animation) = &self.animation {
+            self.placement = self.placement.with_opacity(animation.value());
         }
+        self.placement.apply(&mut layout);
         layout
     }
 
@@ -184,11 +217,25 @@ impl RenderSliver for OpacityRenderSliver {
     }
 
     fn tick(&mut self, now: incular_core::time::Instant) -> bool {
-        self.inner.get_mut().tick(now)
+        let inner = self.inner.get_mut().tick(now);
+        let Some(animation) = &self.animation else {
+            return inner;
+        };
+        for controller in animation.controllers() {
+            controller.tick(now);
+        }
+        let next = self.placement.with_opacity(animation.value());
+        let changed = next.alpha != self.placement.alpha;
+        self.placement = next;
+        inner || changed
     }
 
     fn is_animating(&self) -> bool {
         self.inner.borrow().is_animating()
+            || self
+                .animation
+                .as_ref()
+                .is_some_and(DoubleAnimation::is_animating)
     }
 
     fn set_reduced_motion(&mut self, reduced: bool) {
@@ -202,7 +249,7 @@ impl RenderSliver for OpacityRenderSliver {
 
 impl SingleInnerSliver for OpacityRenderSliver {
     fn adopt_outer_state(&mut self, old: &mut Self) {
-        self.placement.key = old.placement.key;
+        self.placement.retain_key(old.placement);
     }
 
     fn inner_cell(&mut self) -> &RefCell<Box<dyn RenderSliver>> {

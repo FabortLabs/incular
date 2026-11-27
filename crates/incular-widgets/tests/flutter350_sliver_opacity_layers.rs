@@ -123,9 +123,8 @@ fn animated_sliver_opacity_layer_survives_a_dirty_child_repaint() {
     });
 }
 
-#[test]
-fn overlapping_sliver_rows_share_one_half_opacity_isolation() {
-    let rows = incular_widgets::SliverFixedExtentList::new(2, 40., |index| {
+fn overlap_rows() -> incular_widgets::SliverFixedExtentList {
+    incular_widgets::SliverFixedExtentList::new(2, 40., |index| {
         if index == 0 {
             incular_widgets::Transform::translation(
                 incular_core::Offset::new(0., 20.),
@@ -135,9 +134,14 @@ fn overlapping_sliver_rows_share_one_half_opacity_isolation() {
         } else {
             Widget::box_(Size::new(100., 40.), Color::BLACK)
         }
-    });
+    })
+}
+
+#[test]
+fn overlapping_sliver_rows_share_one_half_opacity_isolation() {
     let mut tree = WidgetTree::new();
-    tree.mount(scene(SliverOpacity::new(0.5, rows))).unwrap();
+    tree.mount(scene(SliverOpacity::new(0.5, overlap_rows())))
+        .unwrap();
     tree.layout(Constraints::tight(Size::new(100., 100.)))
         .unwrap();
     tree.update_compositor(Instant::now()).unwrap();
@@ -294,4 +298,59 @@ fn nested_clip_and_opacity_preserve_outer_to_inner_effect_order() {
             }
         );
     }
+}
+
+fn draw_overlap(tree: &mut WidgetTree, at: Instant) -> DisplayList {
+    tree.tick_animations(at);
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .unwrap();
+    tree.update_compositor(at).unwrap();
+    tree.paint()
+}
+
+#[test]
+fn animated_sliver_rows_remain_in_the_same_isolation_as_alpha_changes() {
+    let controller = AnimationController::new(Duration::from_secs(1));
+    controller.set_value(0.5);
+    let mut tree = WidgetTree::new();
+    tree.mount(scene(SliverFadeTransition::from_animation(
+        controller.clone(),
+        overlap_rows(),
+    )))
+    .unwrap();
+    let at = Instant::now();
+    let first = opacity(&draw_overlap(&mut tree, at));
+    assert_eq!(first.1, 128. / 255.);
+    controller.set_value(0.75);
+    let _ = draw_overlap(&mut tree, at + Duration::from_millis(16));
+    let later = opacity(&draw_overlap(&mut tree, at + Duration::from_millis(32)));
+    assert_eq!(later.1, 191. / 255.);
+    assert_eq!(later.0, first.0);
+    assert_eq!(later.2, first.2);
+}
+
+#[test]
+fn implicit_sliver_opacity_isolates_all_rows_together() {
+    let mut tree = WidgetTree::new();
+    tree.mount(scene(incular_widgets::SliverAnimatedOpacity::new(
+        0.5,
+        Duration::from_secs(1),
+        overlap_rows(),
+    )))
+    .unwrap();
+    let list = draw_overlap(&mut tree, Instant::now());
+    assert_eq!(opacity(&list).1, 128. / 255.);
+    assert_eq!(
+        list.commands()
+            .iter()
+            .filter(|op| matches!(
+                op,
+                PaintCommand::Rect {
+                    color: Color::WHITE | Color::BLACK,
+                    ..
+                }
+            ))
+            .count(),
+        2
+    );
 }
