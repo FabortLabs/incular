@@ -13,6 +13,7 @@ pub mod matrix4;
 pub mod debug_print;
 pub mod debug_timeline;
 pub mod diagnostic_property;
+pub mod diagnostic_tree;
 mod context;
 mod fast_hash;
 mod float_color;
@@ -57,6 +58,9 @@ pub use diagnostic_property::{
     DiagnosticCallback, DiagnosticEnum, DiagnosticFailure, DiagnosticLevel, DiagnosticValue,
     DiagnosticsProperty, DiagnosticsTreeStyle, InvalidEnumDescription, describe_enum,
     describe_legacy_enum,
+};
+pub use diagnostic_tree::{
+    DiagnosticsNode, DiagnosticsSerializationDelegate, DiagnosticsSerializationOptions,
 };
 pub use debug_timeline::{AggregatedTimedBlock, AggregatedTimings, DebugTimeline, DebugTimelineError, TimedBlock};
 pub use context::{BuildContext, ConsumerId, ContextGuard, DependencySnapshot};

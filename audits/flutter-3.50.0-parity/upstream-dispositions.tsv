@@ -3228,3 +3228,15 @@ packages/flutter/test/services/text_input_test.dart	2161	finishAutofillContext r
 packages/flutter/test/services/text_input_test.dart	1106	TextInputClient scribbleInteractionBegan and scribbleInteractionFinished	paired-match	upstream-scribble-elements.md
 packages/flutter/test/services/text_input_test.dart	1141	TextInputClient focusElement	paired-match	upstream-scribble-elements.md
 packages/flutter/test/services/text_input_test.dart	1173	TextInputClient requestElementsInRect	paired-match	upstream-scribble-elements.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	80	default	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	115	subtreeDepth 1	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	126	subtreeDepth 5	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	137	includeProperties	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	145	includeProperties with subtreedepth 1	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	157	additionalNodeProperties	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	175	filterProperties - sublist	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	192	filterProperties - replace	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	211	filterChildren - sublist	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	224	filterChildren - replace	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	238	nodeTruncator	paired-match	upstream-diagnostic-tree-json.md
+packages/flutter/test/foundation/diagnostics_json_test.dart	257	delegateForAddingNodes	paired-match	upstream-diagnostic-tree-json.md
