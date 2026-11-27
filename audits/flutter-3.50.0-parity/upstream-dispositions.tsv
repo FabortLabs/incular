@@ -2916,3 +2916,5 @@ packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	262	RenderSliver
 packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	295	RenderSliver.getMaxPaintRect infinite maxPaintExtent	paired-match	upstream-sliver-max-paint-rect.md
 packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	328	RenderSliver.getMaxPaintRect with crossAxisExtent set (e.g. SliverCrossAxisGroup)	paired-match	upstream-sliver-max-paint-rect.md
 packages/flutter/test/rendering/sliver_max_paint_rect_test.dart	358	RenderSliver.getMaxPaintRect maxPaintExtent > remainingPaintExtent	paired-match	upstream-sliver-max-paint-rect.md
+packages/flutter/test/rendering/box_constraints_test.dart	11	BoxConstraints toString	paired-match	upstream-box-constraint-diagnostics.md
+packages/flutter/test/rendering/box_constraints_test.dart	89	BoxConstraints.lerp identical a,b	paired-match	upstream-box-constraint-diagnostics.md

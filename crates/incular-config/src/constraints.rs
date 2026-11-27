@@ -2,6 +2,8 @@
 
 use incular_core::{Lerp, Size};
 use std::{
+    borrow::Cow,
+    fmt,
     hash::{Hash, Hasher},
     ops::{Div, Mul, Rem},
 };
@@ -52,6 +54,61 @@ impl Default for ViewConstraints {
     }
 }
 
+impl fmt::Display for ViewConstraints {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {
+            min_width,
+            max_width,
+            min_height,
+            max_height,
+        } = *self;
+        let normalized = min_width >= 0.
+            && max_width >= min_width
+            && min_height >= 0.
+            && max_height >= min_height;
+        let annotation = if normalized { "" } else { "; NOT NORMALIZED" };
+        if min_width == f32::INFINITY && min_height == f32::INFINITY {
+            return write!(formatter, "BoxConstraints(biggest{annotation})");
+        }
+        if *self == Self::default() {
+            return write!(formatter, "BoxConstraints(unconstrained)");
+        }
+        fn number(value: f32, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if value == f32::INFINITY {
+                f.write_str("Infinity")
+            } else if value == f32::NEG_INFINITY {
+                f.write_str("-Infinity")
+            } else {
+                // Dart's fixed one-decimal diagnostics round midpoint
+                // bounds away from zero, unlike Rust's ties-to-even format.
+                let rounded = (f64::from(value) * 10.).round() / 10.;
+                write!(f, "{rounded:.1}")
+            }
+        }
+        fn dimension(min: f32, max: f32, axis: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if min == max {
+                write!(f, "{axis}=")?;
+                number(min, f)
+            } else {
+                number(min, f)?;
+                write!(f, "<={axis}<=")?;
+                number(max, f)
+            }
+        }
+        formatter.write_str("BoxConstraints(")?;
+        dimension(min_width, max_width, "w", formatter)?;
+        formatter.write_str(", ")?;
+        dimension(min_height, max_height, "h", formatter)?;
+        write!(formatter, "{annotation})")
+    }
+}
+
+impl fmt::Display for Constraints {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&ViewConstraints::from(*self), formatter)
+    }
+}
+
 impl Div<f32> for ViewConstraints {
     type Output = Self;
 
@@ -80,7 +137,12 @@ pub struct Constraints {
 impl Hash for Constraints {
     fn hash<H: Hasher>(&self, state: &mut H) {
         super::hash_layout_floats(
-            [self.min_width, self.max_width, self.min_height, self.max_height],
+            [
+                self.min_width,
+                self.max_width,
+                self.min_height,
+                self.max_height,
+            ],
             state,
         );
     }
@@ -461,6 +523,22 @@ impl Constraints {
             (Some(begin), None) => Some(begin.scale_for_lerp(1. - t)),
             (Some(begin), Some(end)) => Some(begin.lerp(&end, t)),
         }
+    }
+
+    /// Preserves the exact borrowed endpoint when both arguments refer
+    /// to the same constraints, matching Flutter's identical fast path.
+    #[must_use]
+    pub fn lerp_ref<'a>(
+        begin: Option<&'a Self>,
+        end: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        if let (Some(a), Some(b)) = (begin, end)
+            && std::ptr::eq(a, b)
+        {
+            return Some(Cow::Borrowed(a));
+        }
+        Self::lerp_optional(begin.copied(), end.copied(), t).map(Cow::Owned)
     }
 
     fn scale_for_lerp(self, factor: f32) -> Self {
