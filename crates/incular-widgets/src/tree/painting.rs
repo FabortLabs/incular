@@ -262,7 +262,7 @@ fn paragraph_pointer_annotation(
 
     // Paragraph hit-testing uses glyph bounds, not the whole line box.
     // In particular, inter-line spacing should not trigger the cursor.
-    let (top, bottom) = layout.font_runs.iter().find(|run| run.range.contains(&byte)).map_or(
+    let (top, bottom) = layout.font_run_at(byte).map_or(
         (line.top, line.top + line.height),
         |run| {
             let top = line.baseline - run.caret_ascent;

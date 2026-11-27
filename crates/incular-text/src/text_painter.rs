@@ -152,12 +152,91 @@ pub struct TextPainterBox {
     pub direction: TextDirection,
 }
 
-#[derive(Clone, Copy)]
-struct RunMetrics {
-    start: usize,
-    end: usize,
-    height: f32,
-    ascent: f32,
+impl TextLayout {
+    /// Tight visual boxes for complete clusters in the UTF-8 range. Boxes
+    /// use each run's natural height and this layout's own coordinate space.
+    #[must_use]
+    pub fn tight_selection_boxes(&self, range: TextRange) -> Vec<TextPainterBox> {
+        let end = range.end.min(self.retained_source_end());
+        if range.start >= end {
+            return Vec::new();
+        }
+        let range = TextRange::new(range.start, end);
+        let mut result: Vec<TextPainterBox> = Vec::new();
+        let lines = &self.lines;
+        let first = lines.partition_point(|line| line.end <= range.start);
+        for line in lines[first..]
+            .iter()
+            .take_while(|line| line.start < range.end)
+        {
+            let first_box = result.len();
+            for span in line.clusters.iter() {
+                let source = span.range();
+                if source.start < range.start || source.end > range.end || span.left >= span.right {
+                    continue;
+                }
+                let left = span.left;
+                let right = span.right;
+                let (top, height) = self
+                    .font_run_at(source.start)
+                    .map_or((line.top, line.height), |run| {
+                        (line.baseline - run.caret_ascent, run.caret_height)
+                    });
+                let direction = if span.rtl {
+                    TextDirection::Rtl
+                } else {
+                    TextDirection::Ltr
+                };
+                if result.len() > first_box
+                    && let Some(previous) = result.last_mut()
+                    && previous.direction == direction
+                    && previous.rect.origin.x + previous.rect.size.width == left
+                    && previous.rect.origin.y == top
+                    && previous.rect.size.height == height
+                {
+                    previous.rect.size.width = right - previous.rect.origin.x;
+                } else {
+                    result.push(TextPainterBox {
+                        rect: Rect::from_origin_size(
+                            Offset::new(left, top),
+                            Size::new(right - left, height),
+                        ),
+                        direction,
+                    });
+                }
+            }
+        }
+        result
+    }
+
+    /// Closest insertion point and affinity in this layout's coordinates.
+    #[must_use]
+    pub fn closest_text_position(&self, point: Offset) -> TextPainterPosition {
+        let lines = &self.lines;
+        let index = lines
+            .partition_point(|line| line.top <= point.y)
+            .saturating_sub(1);
+        let x = point.x;
+        let stops = self.line_caret_positions(index);
+        let right = stops.partition_point(|stop| stop.x < x);
+        let left = right.checked_sub(1).and_then(|index| stops.get(index));
+        let right = stops.get(right);
+        let closest = match (left, right) {
+            (Some(left), Some(right)) if x - left.x <= right.x - x => Some(left),
+            (_, Some(right)) => Some(right),
+            (left, None) => left,
+        };
+        closest.map_or(
+            TextPainterPosition {
+                offset: lines.get(index).map_or(0, |line| line.start),
+                affinity: TextAffinity::Downstream,
+            },
+            |stop| TextPainterPosition {
+                offset: stop.offset,
+                affinity: stop.affinity,
+            },
+        )
+    }
 }
 
 struct MeasuredText {
@@ -171,33 +250,8 @@ struct MeasuredText {
     preferred_line_height: f32,
     preferred_baseline: f32,
     strut: Option<TextStrut>,
-    runs: OnceLock<Vec<RunMetrics>>,
     paint_offset: Offset,
     lines: OnceLock<Arc<[TextPainterLine]>>,
-}
-
-impl MeasuredText {
-    fn run_at(&self, byte: usize) -> Option<&RunMetrics> {
-        let runs = self.runs.get_or_init(|| {
-            let mut runs: Vec<_> = self
-                .shaped
-                .font_runs
-                .iter()
-                .map(|run| RunMetrics {
-                    start: run.range.start,
-                    end: run.range.end,
-                    height: run.caret_height,
-                    ascent: run.caret_ascent,
-                })
-                .collect();
-            runs.sort_unstable_by_key(|run| run.start);
-            runs
-        });
-        runs.partition_point(|run| run.start <= byte)
-            .checked_sub(1)
-            .and_then(|index| runs.get(index))
-            .filter(|run| byte < run.end)
-    }
 }
 
 /// Measures and positions a text span without building widgets or owning
@@ -588,7 +642,6 @@ impl TextPainter {
             preferred_line_height,
             preferred_baseline,
             strut,
-            runs: OnceLock::new(),
             paint_offset: Offset::new(
                 if fraction == 0. { 0. } else { fraction * (measured_width - shaping_width) },
                 0.,
@@ -743,62 +796,17 @@ impl TextPainter {
         }))
     }
 
-    /// Tight visual boxes for glyph clusters entirely contained in a UTF-8
-    /// range. Their vertical bounds follow the font's natural box, not the
-    /// line's configured height or strut.
+    /// Tight selection boxes in painter coordinates.
     pub fn tight_boxes_for_selection(
         &self,
         range: TextRange,
     ) -> Result<Vec<TextPainterBox>, TextPainterError> {
         let measured = self.measured()?;
-        if !range.is_valid() || range.is_collapsed() {
-            return Ok(Vec::new());
+        let mut boxes = measured.shaped.tight_selection_boxes(range);
+        for selection in &mut boxes {
+            selection.rect.origin = selection.rect.origin + measured.paint_offset;
         }
-        let mut result: Vec<TextPainterBox> = Vec::new();
-        let lines = &measured.shaped.lines;
-        let first = lines.partition_point(|line| line.end <= range.start);
-        for line in lines[first..]
-            .iter()
-            .take_while(|line| line.start < range.end)
-        {
-            let first_box = result.len();
-            for span in line.clusters.iter() {
-                let source = span.range();
-                if source.start < range.start || source.end > range.end || span.left >= span.right {
-                    continue;
-                }
-                let left = span.left + measured.paint_offset.x;
-                let right = span.right + measured.paint_offset.x;
-                let (top, height) = measured
-                    .run_at(source.start)
-                    .map_or((line.top, line.height), |run| {
-                        (line.baseline - run.ascent, run.height)
-                    });
-                let direction = if span.rtl {
-                    TextDirection::Rtl
-                } else {
-                    TextDirection::Ltr
-                };
-                if result.len() > first_box
-                    && let Some(previous) = result.last_mut()
-                    && previous.direction == direction
-                    && previous.rect.origin.x + previous.rect.size.width == left
-                    && previous.rect.origin.y == top
-                    && previous.rect.size.height == height
-                {
-                    previous.rect.size.width = right - previous.rect.origin.x;
-                } else {
-                    result.push(TextPainterBox {
-                        rect: Rect::from_origin_size(
-                            Offset::new(left, top),
-                            Size::new(right - left, height),
-                        ),
-                        direction,
-                    });
-                }
-            }
-        }
-        Ok(result)
+        Ok(boxes)
     }
 
     /// Locates a caret at a UTF-8 byte position. Affinity chooses the
@@ -973,8 +981,9 @@ impl TextPainter {
             return Ok(line.height);
         }
         Ok(measured
-            .run_at(anchor)
-            .map_or(measured.preferred_line_height, |run| run.height))
+            .shaped
+            .font_run_at(anchor)
+            .map_or(measured.preferred_line_height, |run| run.caret_height))
     }
 
     /// Asks for the same caret using a Flutter/IME UTF-16 code-unit offset.
@@ -1020,30 +1029,7 @@ impl TextPainter {
                 TextPainterPositionError::NeverLaidOut
             });
         };
-        let lines = &measured.shaped.lines;
-        let index = lines
-            .partition_point(|line| line.top <= point.y)
-            .saturating_sub(1);
-        let x = point.x - measured.paint_offset.x;
-        let stops = measured.shaped.line_caret_positions(index);
-        let right = stops.partition_point(|stop| stop.x < x);
-        let left = right.checked_sub(1).and_then(|index| stops.get(index));
-        let right = stops.get(right);
-        let closest = match (left, right) {
-            (Some(left), Some(right)) if x - left.x <= right.x - x => Some(left),
-            (_, Some(right)) => Some(right),
-            (left, None) => left,
-        };
-        Ok(closest.map_or(
-            TextPainterPosition {
-                offset: lines.get(index).map_or(0, |line| line.start),
-                affinity: TextAffinity::Downstream,
-            },
-            |stop| TextPainterPosition {
-                offset: stop.offset,
-                affinity: stop.affinity,
-            },
-        ))
+        Ok(measured.shaped.closest_text_position(point - measured.paint_offset))
     }
 
     /// Looks up the word segment containing the given UTF-8 byte position.

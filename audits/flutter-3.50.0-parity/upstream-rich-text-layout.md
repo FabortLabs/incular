@@ -101,3 +101,29 @@ running layout. Only the foreground map changes; the classifier does
 not reuse layout for changed source, shape or background attributes.
 Both focused cases and 17 neighboring rich layout and text paint
 cases passed.
+
+## Retained paragraph positions and tight selection boxes
+
+Three exact pinned `rendering/paragraph_test.dart` registrations paired:
+:129, :146 and :165. Native pointer mapping uses actual laid-out line
+tops and shaped caret stops. Tight boxes are queried from the retained
+glyph layout, with each selected run's natural baseline-aligned box.
+The mixed-size original yields four boxes, including 60..120 by
+3.75..8.75 for the smaller run. The standalone TextPainter and retained
+widgets now share the same geometry and indexed font-run lookup.
+
+The pinned `rich_paragraph_variable_line_hit_test.dart` control uses
+10-, 30- and 10-pixel lines. Native selection at (25,25) previously
+landed on byte 11 of the last line; it now lands on byte 3 of the middle
+line, as Flutter does. The public read-only selection path also stores
+the corrected caret. This authored control does not add original
+registration credit.
+
+The fixture uses the exact embedded FlutterTest face and an isolated
+font collection, like the pinned engine's `RegisterTestFonts` (which
+disables system fallback). Its missing ASCII apostrophe must not pick
+a larger host glyph and shift the second line baseline. Normal
+application font discovery is unchanged. Four focused and fourteen
+adjacent retained-widget cases passed, along with the standalone
+painter, bidi and selection-span suites. Non-tight height/width styles
+and caret metrics are separate cases.

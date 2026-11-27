@@ -263,6 +263,7 @@ pub struct TextLayout {
     pub lines: Arc<[TextLine]>,
     pub metrics: TextMetrics,
     pub font_runs: Arc<[FontRunDebug]>,
+    font_run_index: OnceLock<FontRunIndex>,
     retained_source_end: usize,
     /// Caret stops of every line, usually derived on first use. Layouts
     /// containing join controls retain the complete shaping boundaries
@@ -284,6 +285,12 @@ pub struct TextLayout {
     /// `getBoxesForPlaceholders`), in paragraph coordinates. Empty without
     /// placeholders.
     pub placeholders: Arc<[TextPlaceholderBox]>,
+}
+
+#[derive(Clone, Debug)]
+struct FontRunIndex {
+    source: Arc<[FontRunDebug]>,
+    indexes: Arc<[usize]>,
 }
 
 /// The background of a shaped run. Plain backgrounds take their color from
@@ -394,6 +401,32 @@ impl TextLayout {
         if layout.color_runs != colors {
             Arc::make_mut(layout).color_runs = colors;
         }
+    }
+
+    /// Finds the shaped font covering this UTF-8 byte. Its natural
+    /// dimensions do not include extra line spacing or a strut.
+    #[must_use]
+    pub fn font_run_at(&self, byte: usize) -> Option<&FontRunDebug> {
+        if self.font_runs.len() <= 1 {
+            return self.font_runs.first().filter(|run| run.range.contains(&byte));
+        }
+        let indexed = self.font_run_index.get_or_init(|| {
+            let mut indexes: Vec<_> = (0..self.font_runs.len()).collect();
+            indexes.sort_unstable_by_key(|&index| self.font_runs[index].range.start);
+            FontRunIndex {
+                source: self.font_runs.clone(),
+                indexes: indexes.into(),
+            }
+        });
+        // Public debug records may be replaced by consumers. Stay correct
+        // even if they substitute a different array after the first lookup.
+        if !Arc::ptr_eq(&indexed.source, &self.font_runs) {
+            return self.font_runs.iter().find(|run| run.range.contains(&byte));
+        }
+        let runs = &indexed.indexes;
+        let index = runs.partition_point(|&index| self.font_runs[index].range.start <= byte);
+        let run = &self.font_runs[*runs.get(index.checked_sub(1)?)?];
+        run.range.contains(&byte).then_some(run)
     }
 
     /// Last retained source byte, exclusive. A synthesized ellipsis does
@@ -810,11 +843,26 @@ impl Default for TextEngine {
 impl TextEngine {
     #[must_use]
     pub fn new() -> Self {
+        Self::with_system_fonts(true)
+    }
+
+    /// Creates an engine whose fallback may be limited to registered fonts.
+    /// Headless tests and embedded hosts can opt out of platform discovery
+    /// without changing the application's default font policy.
+    #[must_use]
+    pub fn with_system_fonts(system_fonts: bool) -> Self {
+        use parley::fontique::{Collection, CollectionOptions};
         static IDS: incular_core::IdGenerator = incular_core::IdGenerator::new();
         Self {
             instance_id: IDS.next(),
             font_handles: HashMap::new(),
-            font_context: FontContext::new(),
+            font_context: FontContext {
+                collection: Collection::new(CollectionOptions {
+                    system_fonts,
+                    ..Default::default()
+                }),
+                source_cache: Default::default(),
+            },
             layout_context: LayoutContext::new(),
             generation: 1,
             application_fonts: 0,
@@ -1480,6 +1528,7 @@ impl TextEngine {
                 line_height,
             },
             font_runs: font_runs.clone(),
+            font_run_index: OnceLock::new(),
             retained_source_end: text.len(),
             caret_positions: document_carets
                 .map(|carets| OnceLock::from(Arc::from(carets)))
@@ -2236,6 +2285,7 @@ impl TextEngine {
                 line_height,
             },
             font_runs: font_runs.into(),
+            font_run_index: OnceLock::new(),
             retained_source_end: text.len(),
             caret_positions: OnceLock::new(),
             line_carets: OnceLock::new(),

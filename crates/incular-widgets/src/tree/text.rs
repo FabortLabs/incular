@@ -1002,6 +1002,22 @@ impl WidgetTree {
         }
     }
 
+    /// Tight local selection boxes from the paragraph's retained layout.
+    /// The UTF-8 range covers literal text, excluding synthetic ellipsis.
+    #[must_use]
+    pub fn paragraph_selection_boxes(
+        &self,
+        id: ElementId,
+        range: TextRange,
+    ) -> Option<Vec<incular_text::TextPainterBox>> {
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let RenderKind::Text { .. } = node.object.kind() else {
+            return None;
+        };
+        Some(node.text_layout()?.tight_selection_boxes(range))
+    }
+
     /// The byte offset under a view point in a selectable label.
     #[must_use]
     pub fn selectable_text_position_at(&self, id: ElementId, point: Offset) -> Option<usize> {
@@ -1021,16 +1037,13 @@ impl WidgetTree {
         let layout = self
             .renders
             .get(render.0)
-            .and_then(RenderNode::text_layout_cloned)?;
+            .and_then(RenderNode::text_layout)?;
         let local = self
             .render_world_transform(render)
             .inverse_transform_point(point)
             .unwrap_or(point);
-        let line_index = (local.y / layout.metrics().line_height).floor().max(0.) as usize;
-        let line_index = line_index.min(layout.line_count().saturating_sub(1));
-        layout
-            .get_line(line_index)
-            .map(|_| caret_for_line_position(&layout, line_index, local.x))
+        let position = layout.closest_text_position(local);
+        Some((position.offset, position.affinity))
     }
 
     /// The context menu state of a field built with a context menu builder.
@@ -1153,30 +1166,11 @@ impl WidgetTree {
         let Some(area) = self.selection_area_ancestor(id) else {
             return false;
         };
-        let Some(render) = self.render_id(id) else {
+        // Use shaped line positions and caret stops. A single nominal
+        // line height cannot locate a hit between differently sized runs.
+        let Some((byte, affinity)) = self.selectable_text_affinity_position_at(id, point) else {
             return false;
         };
-        let Some(layout) = self
-            .renders
-            .get(render.0)
-            .and_then(RenderNode::text_layout_cloned)
-        else {
-            return false;
-        };
-        let local = self
-            .render_world_transform(render)
-            .inverse_transform_point(point)
-            .unwrap_or(point);
-        // Shaped stops resolve both edges: the walk below used raw
-        // glyph order and an unshifted width cutoff, which mis-mapped
-        // aligned, RTL, and mixed-direction clicks.
-        let line_index = (local.y / layout.metrics().line_height).floor().max(0.) as usize;
-        let line_index = line_index.min(layout.line_count().saturating_sub(1));
-        let (byte, affinity) = layout
-            .get_line(line_index)
-            .map_or((0, incular_text::TextAffinity::Downstream), |_| {
-                caret_for_line_position(&layout, line_index, local.x)
-            });
         let point = StaticSelectionPoint {
             element: id,
             byte,
@@ -1231,27 +1225,9 @@ impl WidgetTree {
         let Some(text) = self.selectable_text_value(id) else {
             return false;
         };
-        let Some(render) = self.render_id(id) else {
+        let Some((byte, _)) = self.selectable_text_affinity_position_at(id, point) else {
             return false;
         };
-        let Some(layout) = self
-            .renders
-            .get(render.0)
-            .and_then(RenderNode::text_layout_cloned)
-        else {
-            return false;
-        };
-        let local = self
-            .render_world_transform(render)
-            .inverse_transform_point(point)
-            .unwrap_or(point);
-        let line_index = (local.y / layout.metrics().line_height).floor().max(0.) as usize;
-        let line_index = line_index.min(layout.line_count().saturating_sub(1));
-        let (byte, _) = layout
-            .get_line(line_index)
-            .map_or((0, incular_text::TextAffinity::Downstream), |_| {
-                caret_for_line_position(&layout, line_index, local.x)
-            });
         let entries = self.selectable_texts_in_area(area);
         let (Some(anchor_index), Some(target_index)) = (
             entries.iter().position(|entry| *entry == anchor),

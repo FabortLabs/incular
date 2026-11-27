@@ -18,6 +18,13 @@ impl Default for WidgetTree {
 impl WidgetTree {
     #[must_use]
     pub fn new() -> Self {
+        Self::with_text_engine(TextEngine::new())
+    }
+
+    /// Builds an empty retained tree with a caller-supplied text engine.
+    /// The default constructor continues to discover system fonts.
+    #[must_use]
+    pub fn with_text_engine(text_engine: TextEngine) -> Self {
         let dependency_root = DependencyContext::new();
         let environment = RuntimeEnvironment::default();
         super::context::install_runtime_environment(&dependency_root, &environment);
@@ -37,7 +44,7 @@ impl WidgetTree {
             departures: super::departing::Departures::default(),
             view_transitions: Vec::new(),
             default_spell_check_provider: None,
-            text_engine: TextEngine::new(),
+            text_engine,
             compositor: LayerTree::new(),
             compositor_initialized: false,
             custom_painter_repaints: None,
