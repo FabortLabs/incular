@@ -107,8 +107,9 @@ pub struct RawPointerEvent {
     /// Flutter `localDelta`: [`Self::delta`] in the receiving widget's
     /// coordinates.
     pub local_delta: Offset,
-    /// Flutter `down`: whether the pointer is in contact (a press, or a move
-    /// with buttons held). False for hovers, releases and cancellations.
+    /// Flutter `down`: whether the pointer is in contact. A physical
+    /// packet can explicitly distinguish contact motion from hover even with
+    /// no buttons; the coarse constructor infers motion from the mask.
     pub down: bool,
     /// Flutter `synthesized`: the platform did not report this event; the
     /// framework derived it from others.

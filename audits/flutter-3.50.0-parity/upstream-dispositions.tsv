@@ -3502,3 +3502,12 @@ packages/flutter/test/gestures/tap_test.dart	1069	A second tap after rejection i
 packages/flutter/test/gestures/tap_test.dart	895	A primary tap recognizer does not form competition with a secondary tap recognizer	paired-match	upstream-competing-tap-lifecycle.md#primary-tap-contenders-with-different-button-masks
 packages/flutter/test/gestures/tap_test.dart	911	A primary tap recognizer does not form competition with a tertiary tap recognizer	paired-match	upstream-competing-tap-lifecycle.md#primary-tap-contenders-with-different-button-masks
 packages/flutter/test/gestures/tap_test.dart	927	A primary tap recognizer forms competition with another primary tap recognizer	paired-match	upstream-competing-tap-lifecycle.md#primary-tap-contenders-with-different-button-masks
+packages/flutter/test/gestures/gesture_binding_test.dart	278	Can expand add and hover pointers	paired-match	upstream-pointer-packet-converter.md
+packages/flutter/test/gestures/gesture_binding_test.dart	302	Can handle malformed scrolling event.	paired-match	upstream-pointer-packet-converter.md
+packages/flutter/test/gestures/gesture_binding_test.dart	379	Can expand pointer scroll events	paired-match	upstream-pointer-packet-converter.md
+packages/flutter/test/gestures/gesture_binding_test.dart	397	Should synthesize kPrimaryButton for touch when no button is set	paired-match	upstream-pointer-packet-converter.md
+packages/flutter/test/gestures/gesture_binding_test.dart	443	Should not synthesize kPrimaryButton for touch when a button is set	paired-match	upstream-pointer-packet-converter.md
+packages/flutter/test/gestures/gesture_binding_test.dart	491	Should synthesize kPrimaryButton for stylus when no button is set	paired-match	upstream-pointer-packet-converter.md
+packages/flutter/test/gestures/gesture_binding_test.dart	552	Should synthesize kPrimaryButton for unknown devices when no button is set	paired-match	upstream-pointer-packet-converter.md
+packages/flutter/test/gestures/gesture_binding_test.dart	609	Should not synthesize kPrimaryButton for mouse	paired-match	upstream-pointer-packet-converter.md
+packages/flutter/test/gestures/gesture_binding_test.dart	721	PointerEventConverter processes view IDs	paired-match	upstream-pointer-packet-converter.md
