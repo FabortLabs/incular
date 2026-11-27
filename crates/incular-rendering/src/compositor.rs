@@ -739,7 +739,7 @@ impl LayerTree {
     /// Creates a rounded-rectangle clip stage in local space; the world
     /// shape resolves at flatten time like [`Self::create_clip_rect`].
     pub fn create_clip_rrect(&mut self, rrect: RRect) -> LayerId {
-        self.create_clip_rrect_with_coverage(rrect, ClipCoverage::HardEdge)
+        self.create_clip_rrect_with_coverage(rrect, ClipCoverage::AntiAlias)
     }
     pub fn create_clip_rrect_with_coverage(
         &mut self,
@@ -764,7 +764,7 @@ impl LayerTree {
     /// Creates a path clip stage in local space; the world shape resolves
     /// at flatten time like [`Self::create_clip_rect`].
     pub fn create_clip_path(&mut self, path: Arc<Path>, fill_rule: FillRule) -> LayerId {
-        self.create_clip_path_with_coverage(path, fill_rule, ClipCoverage::HardEdge)
+        self.create_clip_path_with_coverage(path, fill_rule, ClipCoverage::AntiAlias)
     }
     /// Creates a path clip and records the requested edge coverage.
     pub fn create_clip_path_with_coverage(
@@ -779,6 +779,24 @@ impl LayerTree {
             coverage,
         })
     }
+    /// Creates a rounded superellipse clip using Flutter's default
+    /// antialiased edge. The native renderer expresses its contour as a path.
+    pub fn create_clip_rsuperellipse(&mut self, rect: Rect, radii: crate::CornerRadii) -> LayerId {
+        self.create_clip_rsuperellipse_with_coverage(rect, radii, ClipCoverage::AntiAlias)
+    }
+
+    /// Creates a rounded superellipse clip with explicit edge coverage.
+    pub fn create_clip_rsuperellipse_with_coverage(
+        &mut self,
+        rect: Rect,
+        radii: crate::CornerRadii,
+        coverage: ClipCoverage,
+    ) -> LayerId {
+        let mut builder = Path::builder();
+        builder.rounded_superellipse(rect, radii);
+        self.create_clip_path_with_coverage(Arc::new(builder.build()), FillRule::NonZero, coverage)
+    }
+
     /// Creates an isolated compositor group. Alpha is normalized at the
     /// renderer-neutral boundary so every backend observes identical values.
     pub fn create_opacity(&mut self, alpha: f32) -> LayerId {
@@ -3174,7 +3192,22 @@ impl LayerTree {
                 self.subtree_generation(id)
             ),
         };
-        let _ = writeln!(out, "{indent}{id:?} parent={parent:?} {kind}");
+        let coverage = match &layer.kind {
+            LayerKind::ClipRect { coverage, .. }
+            | LayerKind::ClipRRect { coverage, .. }
+            | LayerKind::ClipOval { coverage, .. }
+            | LayerKind::ClipPath { coverage, .. } => Some(*coverage),
+            _ => None,
+        };
+        if let Some(coverage) = coverage {
+            let behavior = incular_core::DiagnosticsProperty::new(
+                "clipBehavior",
+                Some(coverage.flutter_name().to_owned()),
+            );
+            let _ = writeln!(out, "{indent}{id:?} parent={parent:?} {kind} {behavior}");
+        } else {
+            let _ = writeln!(out, "{indent}{id:?} parent={parent:?} {kind}");
+        }
         let (next_translation, next_clip) = match &layer.kind {
             LayerKind::Picture { .. } => (world_transform, clip),
             LayerKind::Transform {

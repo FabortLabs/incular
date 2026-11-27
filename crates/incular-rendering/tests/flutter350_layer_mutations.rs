@@ -117,7 +117,7 @@ fn rounded_clip_geometry_and_coverage_each_reissue_the_scene() {
     let rounded = RRect::uniform(unit(), 0.);
     let changed = scene.mutate(|tree, stage| tree.update_clip_rrect(stage, rounded));
     assert!(changed.commands().iter().any(|op| matches!(op,
-        PaintCommand::PushClipRRect { rrect, coverage: ClipCoverage::HardEdge, isolation: None }
+        PaintCommand::PushClipRRect { rrect, coverage: ClipCoverage::AntiAlias, isolation: None }
             if *rrect == rounded
     )));
     let isolated = scene.mutate(|tree, stage| {
@@ -145,7 +145,7 @@ fn path_clip_geometry_and_coverage_each_reissue_the_scene() {
     let changed =
         scene.mutate(|tree, stage| tree.update_clip_path(stage, rect.clone(), FillRule::NonZero));
     assert!(changed.commands().iter().any(|op| matches!(op,
-        PaintCommand::PushClipPath { path, fill_rule: FillRule::NonZero, coverage: ClipCoverage::HardEdge }
+        PaintCommand::PushClipPath { path, fill_rule: FillRule::NonZero, coverage: ClipCoverage::AntiAlias }
             if path.bounds() == Some(unit()) && Arc::ptr_eq(path, &rect)
     )));
     let isolated = scene.mutate(|tree, stage| {
@@ -284,7 +284,7 @@ fn superellipse_clip_shape_and_coverage_each_reissue_the_scene() {
     let changed = scene
         .mutate(|tree, stage| tree.update_clip_path(stage, unit_shape.clone(), FillRule::NonZero));
     assert!(changed.commands().iter().any(|op| matches!(op,
-        PaintCommand::PushClipPath { path, fill_rule: FillRule::NonZero, coverage: ClipCoverage::HardEdge }
+        PaintCommand::PushClipPath { path, fill_rule: FillRule::NonZero, coverage: ClipCoverage::AntiAlias }
             if path.bounds() == Some(unit()) && path.id() == unit_shape.id()
     )));
     let changed = scene.mutate(|tree, stage| {

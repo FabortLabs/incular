@@ -2997,3 +2997,7 @@ packages/flutter/test/foundation/diagnostics_test.dart	930	describeEnum test	pai
 packages/flutter/test/foundation/diagnostics_test.dart	1203	enum property test	paired-match	upstream-diagnostic-scalar-properties.md#enum-members-and-object-separators
 packages/flutter/test/foundation/diagnostics_test.dart	1244	int property test	paired-match	upstream-diagnostic-scalar-properties.md#enum-members-and-object-separators
 packages/flutter/test/foundation/diagnostics_test.dart	1291	object property test	paired-match	upstream-diagnostic-scalar-properties.md#enum-members-and-object-separators
+packages/flutter/test/rendering/layers_test.dart	342	ClipRectLayer prints clipBehavior in debug info	paired-match	upstream-layer-clip-diagnostics.md
+packages/flutter/test/rendering/layers_test.dart	350	ClipRRectLayer prints clipBehavior in debug info	paired-match	upstream-layer-clip-diagnostics.md
+packages/flutter/test/rendering/layers_test.dart	358	ClipRSuperellipseLayer prints clipBehavior in debug info	paired-match	upstream-layer-clip-diagnostics.md
+packages/flutter/test/rendering/layers_test.dart	366	ClipPathLayer prints clipBehavior in debug info	paired-match	upstream-layer-clip-diagnostics.md

@@ -43,6 +43,18 @@ pub enum ClipCoverage {
     AntiAliasWithSaveLayer,
 }
 
+impl ClipCoverage {
+    /// The diagnostic spelling of the corresponding Flutter Clip value.
+    #[must_use]
+    pub const fn flutter_name(self) -> &'static str {
+        match self {
+            Self::HardEdge => "Clip.hardEdge",
+            Self::AntiAlias => "Clip.antiAlias",
+            Self::AntiAliasWithSaveLayer => "Clip.antiAliasWithSaveLayer",
+        }
+    }
+}
+
 /// Retained offscreen identity for a composited rounded clip.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ClipIsolation {
