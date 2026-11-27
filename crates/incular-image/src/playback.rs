@@ -1,12 +1,9 @@
-use std::{
-    cell::RefCell,
-    collections::BTreeMap,
-    num::NonZeroUsize,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use incular_core::time::Instant;
+use std::{cell::RefCell, collections::BTreeMap, num::NonZeroUsize, rc::Rc, time::Duration};
 
 use crate::{ImageError, ImageInfo};
+
+mod scheduled;
 
 /// A decoded image and the requested time it should remain visible.
 pub struct DecodedImageFrame {

@@ -1,9 +1,10 @@
+use incular_core::time::Instant;
 use std::{
     cell::{Cell, RefCell},
     collections::VecDeque,
     num::NonZeroUsize,
     rc::Rc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use incular_image::{
@@ -236,4 +237,254 @@ fn a_static_decode_delivers_once_without_waiting_for_an_app_frame() {
     let _late_listener = stream.listen(recorder(&delivered)).unwrap();
     assert_frame(&delivered, 1, &expected, true);
     drop(first);
+}
+
+fn app_frame(at: Instant) {
+    incular_animation::scheduler::begin_frame(at);
+    incular_animation::scheduler::end_frame(at);
+}
+
+fn milliseconds(base: Instant, ms: u64) -> Instant {
+    base + Duration::from_millis(ms)
+}
+
+#[test]
+fn scheduled_animation_publishes_only_after_the_presented_frames_duration() {
+    use incular_animation::scheduler::{has_scheduled_frame, next_scheduled_frame_deadline};
+
+    let codec = Rc::new(Driver::default());
+    let delivered = Delivered::default();
+    let stream = ImagePlayback::scheduled();
+    let sub = stream.listen(recorder(&delivered)).unwrap();
+    codec.attach(&stream, 2, None);
+    let frame1 = image(20, 10);
+    let frame2 = image(200, 100);
+    let t0 = Instant::now();
+
+    codec.complete(&frame1, 200);
+    assert!(delivered.borrow().is_empty());
+    assert!(has_scheduled_frame());
+    app_frame(t0);
+    assert_eq!(delivered.borrow().len(), 1);
+    assert_frame(&delivered, 0, &frame1, false);
+    codec.complete(&frame2, 400);
+    app_frame(milliseconds(t0, 100));
+    assert_eq!(delivered.borrow().len(), 1);
+    assert!(!has_scheduled_frame());
+    assert_eq!(next_scheduled_frame_deadline(), Some(milliseconds(t0, 200)));
+    app_frame(milliseconds(t0, 199));
+    assert_eq!(delivered.borrow().len(), 1);
+    app_frame(milliseconds(t0, 200));
+    assert_eq!(delivered.borrow().len(), 2);
+    assert_frame(&delivered, 1, &frame2, false);
+    app_frame(milliseconds(t0, 600));
+    assert!(!codec.disposed.get());
+    drop(sub);
+    assert!(codec.disposed.get());
+}
+
+#[test]
+fn scheduled_animation_wraps_back_and_keeps_order_with_a_slow_host() {
+    let codec = Rc::new(Driver::default());
+    let delivered = Delivered::default();
+    let stream = ImagePlayback::scheduled();
+    let sub = stream.listen(recorder(&delivered)).unwrap();
+    codec.attach(&stream, 2, None);
+    let frame1 = image(20, 10);
+    let frame2 = image(200, 100);
+    let t0 = Instant::now();
+
+    codec.complete(&frame1, 200);
+    app_frame(t0);
+    codec.complete(&frame2, 400);
+    app_frame(milliseconds(t0, 200));
+    codec.complete(&frame1, 200);
+    app_frame(milliseconds(t0, 600));
+    assert_eq!(delivered.borrow().len(), 3);
+    assert_frame(&delivered, 0, &frame1, false);
+    assert_frame(&delivered, 1, &frame2, false);
+    assert_frame(&delivered, 2, &frame1, false);
+    app_frame(milliseconds(t0, 800));
+    assert!(!codec.disposed.get());
+    drop(sub);
+    assert!(codec.disposed.get());
+}
+
+#[test]
+fn scheduled_animation_removing_one_listener_does_not_cancel_the_other() {
+    use incular_animation::scheduler::next_scheduled_frame_deadline;
+
+    let codec = Rc::new(Driver::default());
+    let stream = ImagePlayback::scheduled();
+    let (a, b) = (Delivered::default(), Delivered::default());
+    let sub_a = stream.listen(recorder(&a)).unwrap();
+    let sub_b = stream.listen(recorder(&b)).unwrap();
+    codec.attach(&stream, 2, None);
+    let frame1 = image(20, 10);
+    let frame2 = image(200, 100);
+    let t0 = Instant::now();
+
+    codec.complete(&frame1, 200);
+    app_frame(t0);
+    assert_frame(&a, 0, &frame1, false);
+    assert_frame(&b, 0, &frame1, false);
+    codec.complete(&frame2, 400);
+    app_frame(t0);
+    drop(sub_a);
+    assert_eq!(next_scheduled_frame_deadline(), Some(milliseconds(t0, 200)));
+    app_frame(milliseconds(t0, 400));
+    assert_eq!(a.borrow().len(), 1);
+    assert_eq!(b.borrow().len(), 2);
+    assert_frame(&b, 1, &frame2, false);
+    assert!(!codec.disposed.get());
+    drop(sub_b);
+    assert!(codec.disposed.get());
+}
+
+#[test]
+fn scheduled_animation_drops_the_last_timer_with_the_last_listener() {
+    use incular_animation::scheduler::{has_scheduled_frame, next_scheduled_frame_deadline};
+
+    let codec = Rc::new(Driver::default());
+    let stream = ImagePlayback::scheduled();
+    let delivered = Delivered::default();
+    let sub = stream.listen(recorder(&delivered)).unwrap();
+    codec.attach(&stream, 2, None);
+    let t0 = Instant::now();
+    codec.complete(&image(20, 10), 200);
+    app_frame(t0);
+    codec.complete(&image(200, 100), 400);
+    app_frame(t0);
+    assert_eq!(next_scheduled_frame_deadline(), Some(milliseconds(t0, 200)));
+    assert!(!codec.disposed.get());
+    drop(sub);
+    assert!(codec.disposed.get());
+    assert_eq!(next_scheduled_frame_deadline(), None);
+    assert!(!has_scheduled_frame());
+    app_frame(milliseconds(t0, 400));
+    assert_eq!(delivered.borrow().len(), 1);
+}
+
+#[test]
+fn scheduled_animation_dilates_timer_delays() {
+    use incular_animation::scheduler::{next_scheduled_frame_deadline, set_time_dilation};
+
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            set_time_dilation(1.0);
+        }
+    }
+    let _reset = Reset;
+    let codec = Rc::new(Driver::default());
+    let stream = ImagePlayback::scheduled();
+    let delivered = Delivered::default();
+    let sub = stream.listen(recorder(&delivered)).unwrap();
+    codec.attach(&stream, 2, None);
+    let t0 = Instant::now();
+    let frame1 = image(20, 10);
+    let frame2 = image(200, 100);
+    codec.complete(&frame1, 200);
+    app_frame(t0);
+
+    set_time_dilation(2.0);
+    codec.complete(&frame2, 400);
+    app_frame(t0);
+    assert_eq!(next_scheduled_frame_deadline(), Some(milliseconds(t0, 400)));
+    app_frame(milliseconds(t0, 200));
+    assert_eq!(delivered.borrow().len(), 1);
+    assert_eq!(codec.asked.get(), 2);
+    app_frame(milliseconds(t0, 400));
+    assert_eq!(codec.asked.get(), 3);
+    assert_frame(&delivered, 1, &frame2, false);
+    assert!(!codec.disposed.get());
+    drop(sub);
+    assert!(codec.disposed.get());
+}
+
+#[test]
+fn scheduled_finite_animation_does_not_request_another_cycle() {
+    use incular_animation::scheduler::{has_scheduled_frame, next_scheduled_frame_deadline};
+
+    let codec = Rc::new(Driver::default());
+    let delivered = Delivered::default();
+    let stream = ImagePlayback::scheduled();
+    let _sub = stream.listen(recorder(&delivered)).unwrap();
+    codec.attach(&stream, 2, Some(0));
+    let frame1 = image(20, 10);
+    let frame2 = image(200, 100);
+    let t0 = Instant::now();
+
+    codec.complete(&frame1, 200);
+    app_frame(t0);
+    codec.complete(&frame2, 400);
+    assert!(!codec.disposed.get());
+    app_frame(milliseconds(t0, 200));
+    assert!(codec.disposed.get());
+    assert_eq!(codec.asked.get(), 2);
+    assert!(!has_scheduled_frame());
+    assert_eq!(next_scheduled_frame_deadline(), None);
+    app_frame(milliseconds(t0, 600));
+    assert_eq!(delivered.borrow().len(), 2);
+    assert_frame(&delivered, 0, &frame1, false);
+    assert_frame(&delivered, 1, &frame2, false);
+}
+
+#[test]
+fn scheduled_idle_keepalive_does_not_request_work_until_a_listener_returns() {
+    use incular_animation::scheduler::{has_scheduled_frame, next_scheduled_frame_deadline};
+
+    let codec = Rc::new(Driver::default());
+    let stream = ImagePlayback::scheduled();
+    let delivered = Delivered::default();
+    let listener = stream.listen(recorder(&delivered)).unwrap();
+    let keep_alive = stream.keep_alive().unwrap();
+    codec.attach(&stream, 2, None);
+    let frame1 = image(20, 10);
+    let frame2 = image(200, 100);
+    let t0 = Instant::now();
+
+    codec.complete(&frame1, 200);
+    app_frame(t0);
+    drop(listener);
+    codec.complete(&frame2, 400);
+    assert!(!has_scheduled_frame());
+    assert_eq!(next_scheduled_frame_deadline(), None);
+    app_frame(milliseconds(t0, 400));
+    assert_eq!(codec.asked.get(), 2);
+    let relisten = stream.listen(recorder(&delivered)).unwrap();
+    assert_eq!(codec.asked.get(), 3);
+    assert_frame(&delivered, 1, &frame1, true);
+    drop(keep_alive);
+    assert!(!codec.disposed.get());
+    drop(relisten);
+    assert!(codec.disposed.get());
+}
+
+#[test]
+fn scheduled_pending_callback_never_presents_a_discarded_frame() {
+    let codec = Rc::new(Driver::default());
+    let stream = ImagePlayback::scheduled();
+    let delivered = Delivered::default();
+    let listener = stream.listen(recorder(&delivered)).unwrap();
+    let keep_alive = stream.keep_alive().unwrap();
+    codec.attach(&stream, 2, None);
+    let frame1 = image(20, 10);
+    let frame2 = image(200, 100);
+    let t0 = Instant::now();
+
+    codec.complete(&frame1, 200);
+    assert_eq!(codec.asked.get(), 1);
+    drop(listener);
+    let relisten = stream.listen(recorder(&delivered)).unwrap();
+    assert_eq!(codec.asked.get(), 2);
+    app_frame(t0);
+    assert!(delivered.borrow().is_empty());
+    codec.complete(&frame2, 200);
+    app_frame(milliseconds(t0, 16));
+    assert_eq!(delivered.borrow().len(), 1);
+    assert_frame(&delivered, 0, &frame2, false);
+    drop(keep_alive);
+    drop(relisten);
+    assert!(codec.disposed.get());
 }

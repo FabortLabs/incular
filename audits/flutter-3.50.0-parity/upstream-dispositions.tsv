@@ -2872,6 +2872,11 @@ packages/flutter/test/painting/image_stream_test.dart	99	Decoding starts when a 
 packages/flutter/test/painting/image_stream_test.dart	124	Decoding starts when a codec is ready after a listener is added	paired-match	upstream-image-playback.md
 packages/flutter/test/painting/image_stream_test.dart	149	Decoding does not crash when disposed	paired-match	upstream-image-playback.md
 packages/flutter/test/painting/image_stream_test.dart	354	ImageStream emits frame (static image)	paired-match	upstream-image-playback.md
-packages/flutter/test/painting/image_stream_test.dart	488	animation doesn't repeat more than specified	partial-match	upstream-image-playback.md
-packages/flutter/test/painting/image_stream_test.dart	533	frames are only decoded when there are listeners	partial-match	upstream-image-playback.md
-packages/flutter/test/painting/image_stream_test.dart	579	re-adding a listener while a frame callback is pending does not crash	partial-match	upstream-image-playback.md
+packages/flutter/test/painting/image_stream_test.dart	488	animation doesn't repeat more than specified	paired-match	upstream-image-playback.md
+packages/flutter/test/painting/image_stream_test.dart	533	frames are only decoded when there are listeners	paired-match	upstream-image-playback.md
+packages/flutter/test/painting/image_stream_test.dart	579	re-adding a listener while a frame callback is pending does not crash	paired-match	upstream-image-playback.md
+packages/flutter/test/painting/image_stream_test.dart	387	ImageStream emits frames (animated images)	paired-match	upstream-image-playback.md
+packages/flutter/test/painting/image_stream_test.dart	440	animation wraps back	paired-match	upstream-image-playback.md
+packages/flutter/test/painting/image_stream_test.dart	638	multiple stream listeners	paired-match	upstream-image-playback.md
+packages/flutter/test/painting/image_stream_test.dart	690	timer is canceled when listeners are removed	paired-match	upstream-image-playback.md
+packages/flutter/test/painting/image_stream_test.dart	728	timeDilation affects animation frame timers	paired-match	upstream-image-playback.md
