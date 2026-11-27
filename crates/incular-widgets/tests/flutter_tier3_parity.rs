@@ -29,19 +29,27 @@ fn lexical_focus_orders_sort_by_string() {
         ordered(&nodes[2], FocusOrder::lexical("b")),
     ];
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            FocusScope::new(Row::new(children).text_direction(TextDirection::Ltr))
-                .ordered()
-                .into(),
-        )
-        .unwrap();
+    tree.mount(
+        FocusScope::new(Row::new(children).text_direction(TextDirection::Ltr))
+            .ordered()
+            .into(),
+    )
+    .unwrap();
     tree.layout(Constraints::tight(Size::new(30., 10.)))
         .unwrap();
-    let children = tree.children(root).unwrap().to_vec();
+    // The FocusScope has one direct child (the Row). Assert the
+    // resulting traversal by focus-node identity, not element depth.
+    let ordered_nodes = tree
+        .focusable_elements()
+        .into_iter()
+        .map(|element| {
+            tree.focus_node_at(element)
+                .expect("mounted traversal target")
+        })
+        .collect::<Vec<_>>();
     assert_eq!(
-        tree.focusable_elements(),
-        vec![children[1], children[2], children[0]]
+        ordered_nodes,
+        [nodes[1].clone(), nodes[2].clone(), nodes[0].clone()]
     );
 }
 
@@ -84,12 +92,12 @@ fn logical_key_set_matches_exact_modifiers() {
         KeyboardKey::Named(NamedKey::Control),
     ]);
     assert_eq!(same.activator(), copy.activator());
-    // Two non-modifier keys can never be one event.
-    let impossible = LogicalKeySet::new([
+    // A multi-key chord has no stateless SingleActivator approximation.
+    let chord = LogicalKeySet::new([
         KeyboardKey::Character("a".into()),
         KeyboardKey::Character("b".into()),
     ]);
-    assert!(impossible.activator().is_none());
+    assert!(chord.activator().is_none());
 }
 
 #[derive(Clone, Debug, PartialEq)]
