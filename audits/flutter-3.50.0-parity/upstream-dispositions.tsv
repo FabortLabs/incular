@@ -3338,3 +3338,5 @@ packages/flutter/test/widgets/focus_traversal_test.dart	3418	Group applies corre
 packages/flutter/test/widgets/focus_traversal_test.dart	513	Custom requestFocusCallback gets called on the next/previous focus.	paired-match	upstream-focus-request-callback.md
 packages/flutter/test/widgets/focus_traversal_test.dart	1140	Custom requestFocusCallback gets called on the next/previous focus.	paired-match	upstream-focus-request-callback.md
 packages/flutter/test/widgets/focus_traversal_test.dart	1618	Custom requestFocusCallback gets called on the next/previous focus.	paired-match	upstream-focus-request-callback.md
+packages/flutter/test/widgets/focus_traversal_test.dart	2405	Can find focus when policy data dirty	paired-match	upstream-focus-request-callback.md#scoped-arrow-traversal
+packages/flutter/test/widgets/focus_traversal_test.dart	3305	Custom requestFocusCallback gets called on focusInDirection up/down/left/right.	paired-match	upstream-focus-request-callback.md#scoped-arrow-traversal

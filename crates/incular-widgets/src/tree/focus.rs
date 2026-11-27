@@ -1538,6 +1538,40 @@ impl WidgetTree {
         focused: Option<ElementId>,
         code: incular_core::Code,
     ) -> DirectionalFocusResolution {
+        let scope = focused.and_then(|id| self.scope_of_focus_boundary(id));
+        self.resolve_directional_focus_in_scope(focused, code, scope)
+    }
+
+    /// Finds the policy origin and current child of a node-scoped direction request.
+    #[doc(hidden)]
+    pub fn node_directional_origin(
+        &self,
+        origin: &incular_gestures::FocusNode,
+        active: Option<ElementId>,
+    ) -> Option<(ElementId, Option<ElementId>, Option<incular_gestures::FocusScopeNode>)> {
+        let origin = self.mounted_focus_element(origin)?;
+        let scope = self.scope_of_focus_boundary(origin);
+        let anchor = if let Some(scope) = scope.as_ref() {
+            active.filter(|id| self.is_in_focus_scope(*id, scope)).or_else(|| {
+                let mut last = scope.scope_focus_node();
+                while let Some(child) = last.scope_owner().and_then(|scope| scope.focused_child()) {
+                    last = child;
+                }
+                self.mounted_focus_element(&last)
+            })
+        } else {
+            active
+        };
+        Some((origin, anchor, scope))
+    }
+
+    #[doc(hidden)]
+    pub fn resolve_directional_focus_in_scope(
+        &self,
+        focused: Option<ElementId>,
+        code: incular_core::Code,
+        current_scope: Option<incular_gestures::FocusScopeNode>,
+    ) -> DirectionalFocusResolution {
         use DirectionalFocusResolution::{LeaveView, Move, Unchanged};
         use incular_gestures::{TraversalDirection, TraversalEdgeBehavior};
         let Some(direction) = traversal_direction_for(code, false) else {
@@ -1547,7 +1581,6 @@ impl WidgetTree {
             TraversalDirection::Up | TraversalDirection::Down => Axis::Vertical,
             TraversalDirection::Left | TraversalDirection::Right => Axis::Horizontal,
         };
-        let current_scope = focused.and_then(|id| self.scope_of_focus_boundary(id));
         let current = focused
             .filter(|id| {
                 self.focus_boundary_at(*id)

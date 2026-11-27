@@ -4,9 +4,9 @@ use incular_config::Constraints;
 use incular_core::Size;
 use incular_runtime::Runtime;
 use incular_widgets::{
-    Column, DirectionalFocusIntent, Focus, FocusNode, FocusScope, FocusScopeNode,
-    FocusTraversalGroup, FocusTraversalPolicyKind, FocusTraversalRequest,
-    ScrollPositionAlignmentPolicy, SizedBox, TraversalDirection, Widget,
+    Column, Focus, FocusNode, FocusScope, FocusScopeNode, FocusTraversalGroup,
+    FocusTraversalPolicyKind, FocusTraversalRequest, ScrollPositionAlignmentPolicy, SizedBox,
+    TraversalDirection, Widget,
 };
 
 fn frame(runtime: &mut Runtime) {
@@ -71,10 +71,11 @@ fn explicit_order_focus_directions_call_the_custom_request() {
 #[test]
 fn spatial_traversal_calls_the_override_without_automatically_focusing() {
     let node = FocusNode::new();
+    let scope = FocusScopeNode::new();
     let requests = Rc::new(RefCell::new(Vec::<FocusTraversalRequest>::new()));
-    let scene = FocusTraversalGroup::new(FocusScope::new(
-        Focus::new(SizedBox::expand()).node(node.clone()),
-    ))
+    let scene = FocusTraversalGroup::new(
+        FocusScope::new(Focus::new(SizedBox::expand()).node(node.clone())).node(scope.clone()),
+    )
     .request_focus_callback({
         let requests = requests.clone();
         move |request| requests.borrow_mut().push(request)
@@ -99,7 +100,7 @@ fn spatial_traversal_calls_the_override_without_automatically_focusing() {
             ScrollPositionAlignmentPolicy::KeepVisibleAtEnd,
         ),
     ] {
-        assert!(runtime.invoke_directional_focus(DirectionalFocusIntent::new(direction)));
+        assert!(runtime.focus_in_direction_from(&scope.scope_focus_node(), direction));
         frame(&mut runtime);
         assert_eq!(
             requests.take(),
@@ -137,4 +138,35 @@ fn a_cross_group_traversal_uses_the_initiating_policy_and_can_request_focus_itse
     frame(&mut runtime);
     assert_eq!(log.take(), [second.clone()]);
     assert!(second.has_primary_focus());
+}
+
+#[test]
+fn scoped_directional_history_ignores_a_removed_stop_and_finds_the_live_predecessor() {
+    let [top, center, bottom] = std::array::from_fn(|_| FocusNode::new());
+    let scope = FocusScopeNode::new();
+    let scene = |show_center: bool| -> Widget {
+        let control = |node: &FocusNode| Focus::new(SizedBox::square(100.)).node(node.clone());
+        let rows = [Some(&top), show_center.then_some(&center), Some(&bottom)];
+        FocusTraversalGroup::new(
+            FocusScope::new(Column::new(rows.into_iter().flatten().map(control)))
+                .node(scope.clone()),
+        )
+        .into()
+    };
+    let mut runtime = Runtime::new(scene(true)).unwrap();
+    frame(&mut runtime);
+    let origin = scope.scope_focus_node();
+    top.request_focus();
+    assert!(runtime.focus_in_direction_from(&origin, TraversalDirection::Down));
+    assert!(runtime.focus_in_direction_from(&origin, TraversalDirection::Down));
+    frame(&mut runtime);
+    assert!(bottom.has_primary_focus());
+    let root = runtime.tree().root().unwrap();
+    runtime.tree_mut().update(root, scene(false)).unwrap();
+    frame(&mut runtime);
+    assert!(bottom.has_primary_focus());
+    assert!(runtime.focus_in_direction_from(&origin, TraversalDirection::Up));
+    frame(&mut runtime);
+    assert!(!center.has_focus());
+    assert!(top.has_primary_focus());
 }

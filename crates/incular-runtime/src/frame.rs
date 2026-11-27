@@ -3440,8 +3440,38 @@ impl Runtime {
         self.move_directional_focus(code)
     }
 
+    /// Searches from the current child of the given node's mounted scope.
+    /// A scope with no focused child starts at its directional edge.
+    pub fn focus_in_direction_from(
+        &mut self,
+        node: &incular_widgets::FocusNode,
+        direction: incular_widgets::TraversalDirection,
+    ) -> bool {
+        use incular_widgets::TraversalDirection;
+        let code = match direction {
+            TraversalDirection::Up => Code::ArrowUp,
+            TraversalDirection::Down => Code::ArrowDown,
+            TraversalDirection::Left => Code::ArrowLeft,
+            TraversalDirection::Right => Code::ArrowRight,
+        };
+        self.adopt_external_focus_change();
+        let Some((origin, anchor, scope)) = self.tree.node_directional_origin(node, self.focused) else {
+            return false;
+        };
+        self.move_directional_focus_with_origin(code, anchor, Some(origin), Some(scope))
+    }
+
     fn move_directional_focus(&mut self, direction: Code) -> bool {
-        let previous = self.focused;
+        self.move_directional_focus_with_origin(direction, self.focused, self.focused, None)
+    }
+
+    fn move_directional_focus_with_origin(
+        &mut self,
+        direction: Code,
+        previous: Option<ElementId>,
+        origin: Option<ElementId>,
+        scope: Option<Option<incular_widgets::FocusScopeNode>>,
+    ) -> bool {
         let toward_start = matches!(direction, Code::ArrowUp | Code::ArrowLeft);
         // Opposite input walks the actual visited stops; a new axis or
         // invalidated predecessor starts a fresh geometry search.
@@ -3456,12 +3486,16 @@ impl Runtime {
                 && self.tree.can_retrace_directional_focus(current, stop)
             {
                 self.directional_focus_history = history.filter(|run| !run.stops.is_empty());
-                let delegated = self.set_traversal_focus(stop, toward_start, true, previous);
+                let delegated = self.set_traversal_focus(stop, toward_start, true, origin);
                 return self.focused == Some(stop) || delegated;
             }
             history = None;
         }
-        let (next, forward) = match self.tree.resolve_directional_focus(previous, direction) {
+        let step = match scope {
+            Some(scope) => self.tree.resolve_directional_focus_in_scope(previous, direction, scope),
+            None => self.tree.resolve_directional_focus(previous, direction),
+        };
+        let (next, forward) = match step {
             DirectionalFocusResolution::Move { target, forward } => (target, forward),
             DirectionalFocusResolution::LeaveView => {
                 self.set_focus(None);
@@ -3485,7 +3519,7 @@ impl Runtime {
                 .push((stop, self.tree.focus_node_at(stop)));
             self.directional_focus_history = history;
         }
-        let delegated = self.set_traversal_focus(next, toward_start, true, previous);
+        let delegated = self.set_traversal_focus(next, toward_start, true, origin);
         self.focused == Some(next) || delegated
     }
 
