@@ -45,6 +45,7 @@ pub use paint::{
     Border, Decoration, FillRule, LineCap, LineJoin, Paint, PaintStyle, Shadow, Stroke,
 };
 pub use paths::{Path, PathBuilder, PathId};
+pub use rsuperellipse::rounded_superellipse_contains;
 
 // Double-precision geometry utilities; retained rendering still uses affine transforms.
 pub use incular_core::{CylindricalOrientation, Matrix4, Point64, Rect64};

@@ -230,6 +230,20 @@ impl Octant {
             circle_end,
         ]
     }
+
+    fn contains(&self, point: Point) -> bool {
+        if point.x < 0. || point.y < 0. || point.y < point.x {
+            return true;
+        }
+        if point.x <= self.circle_start.x {
+            let x = point.x / self.se_a;
+            let y = point.y / self.se_a;
+            return x.powf(self.se_n) + y.powf(self.se_n) <= 1.;
+        }
+        let delta = point.sub(self.circle_center);
+        let radius = self.circle_start.sub(self.circle_center);
+        delta.x * delta.x + delta.y * delta.y < radius.x * radius.x + radius.y * radius.y
+    }
 }
 
 fn rotate(p: Point, radians: f64) -> Point {
@@ -362,8 +376,8 @@ impl Quadrant {
     fn new(center: Point, corner: Point, radius: Point, sign: Point) -> Self {
         let corner_vector = corner.sub(center);
         let radius = Point::new(
-            radius.x.min(corner_vector.x.abs()),
-            radius.y.min(corner_vector.y.abs()),
+            radius.x.abs().min(corner_vector.x.abs()),
+            radius.y.abs().min(corner_vector.y.abs()),
         );
         let norm_radius = radius.x.min(radius.y);
         let scale = if norm_radius > 0. {
@@ -392,6 +406,27 @@ impl Quadrant {
 
     fn is_sharp_corner(&self) -> bool {
         self.top.se_n < 2.0 || self.right.se_n < 2.0
+    }
+
+    fn contains(&self, point: Point, reflect: bool) -> bool {
+        let delta = point.sub(self.offset);
+        let mut normalized =
+            Point::new(delta.x / self.signed_scale.x, delta.y / self.signed_scale.y);
+        if reflect {
+            normalized = Point::new(normalized.x.abs(), normalized.y.abs());
+        } else if normalized.x < 0. || normalized.y < 0. {
+            return true;
+        }
+
+        if self.is_sharp_corner() {
+            let x = self.right.offset.x + self.right.se_a - normalized.x;
+            let y = self.top.offset.y + self.top.se_a - normalized.y;
+            return (x > 0. || (x == 0. && self.signed_scale.x < 0.))
+                && (y > 0. || (y == 0. && self.signed_scale.y < 0.));
+        }
+        let right = normalized.sub(self.right.offset);
+        self.top.contains(normalized.sub(self.top.offset))
+            && self.right.contains(Point::new(right.y, right.x))
     }
 
     fn add_to_path(&self, path: &mut PathBuilder, reverse: bool) {
@@ -426,13 +461,86 @@ fn split(left: f64, right: f64, ratio_left: f64, ratio_right: f64) -> f64 {
     (left * ratio_right + right * ratio_left) / (ratio_left + ratio_right)
 }
 
+fn corner_quadrants(rect: Rect, [tl, tr, br, bl]: [Point; 4]) -> (Point, [Quadrant; 4]) {
+    let left = f64::from(rect.origin.x);
+    let top = f64::from(rect.origin.y);
+    let right = left + f64::from(rect.size.width);
+    let bottom = top + f64::from(rect.size.height);
+    let top_split = split(left, right, tl.x, tr.x);
+    let right_split = split(top, bottom, tr.y, br.y);
+    let bottom_split = split(left, right, bl.x, br.x);
+    let left_split = split(top, bottom, tl.y, bl.y);
+    (
+        Point::new(top_split, top),
+        [
+            Quadrant::new(
+                Point::new(top_split, right_split),
+                Point::new(right, top),
+                tr,
+                Point::new(1., -1.),
+            ),
+            Quadrant::new(
+                Point::new(bottom_split, right_split),
+                Point::new(right, bottom),
+                br,
+                Point::new(1., 1.),
+            ),
+            Quadrant::new(
+                Point::new(bottom_split, left_split),
+                Point::new(left, bottom),
+                bl,
+                Point::new(-1., 1.),
+            ),
+            Quadrant::new(
+                Point::new(top_split, left_split),
+                Point::new(left, top),
+                tl,
+                Point::new(-1., -1.),
+            ),
+        ],
+    )
+}
+
+/// Native Flutter's analytical rounded-superellipse containment. Radii are
+/// clockwise starting at top left. Hit testing uses the raw radii with
+/// per-quadrant limits; painting normalizes all four together. Oversized
+/// radii can therefore give different results from the painted path.
+#[must_use]
+pub fn rounded_superellipse_contains(rect: Rect, radii: [Size; 4], position: Offset) -> bool {
+    let left = f64::from(rect.origin.x);
+    let top = f64::from(rect.origin.y);
+    let right = left + f64::from(rect.size.width);
+    let bottom = top + f64::from(rect.size.height);
+    let point = Point::new(f64::from(position.x), f64::from(position.y));
+    if !(left <= point.x && point.x < right && top <= point.y && point.y < bottom) {
+        return false;
+    }
+    let radii = radii.map(|radii| Point::new(f64::from(radii.width), f64::from(radii.height)));
+    let radius = radii[0];
+    if radius.x > 0. && radius.y > 0. && radii.iter().all(|&other| other == radius) {
+        let center = Point::new((left + right) / 2., (top + bottom) / 2.);
+        return Quadrant::new(center, Point::new(right, top), radius, Point::new(1., -1.))
+            .contains(point, true);
+    }
+    let (_, corners) = corner_quadrants(rect, radii);
+    corners.iter().all(|corner| corner.contains(point, false))
+}
+
 /// Builds a circular-corner path through the same axis-aware implementation.
 pub(crate) fn rounded_superellipse(builder: &mut PathBuilder, rect: Rect, radii: CornerRadii) {
     rounded_superellipse_elliptical(
         builder,
         rect,
-        [radii.top_left, radii.top_right, radii.bottom_right, radii.bottom_left]
-            .map(|radius| Size { width: radius, height: radius }),
+        [
+            radii.top_left,
+            radii.top_right,
+            radii.bottom_right,
+            radii.bottom_left,
+        ]
+        .map(|radius| Size {
+            width: radius,
+            height: radius,
+        }),
     );
 }
 
@@ -445,7 +553,9 @@ pub(crate) fn rounded_superellipse_elliptical(
 ) {
     let [tl, tr, br, bl] = if rect.size.width <= 0.
         || rect.size.height <= 0.
-        || radii.iter().any(|r| !r.width.is_finite() || !r.height.is_finite())
+        || radii
+            .iter()
+            .any(|r| !r.width.is_finite() || !r.height.is_finite())
     {
         [Point::ZERO; 4]
     } else {
@@ -464,48 +574,21 @@ pub(crate) fn rounded_superellipse_elliptical(
         (width, bl.x + br.x),
         (height, tl.y + bl.y),
         (height, tr.y + br.y),
-    ].into_iter().fold(1.0_f64, |scale, (dimension, sum)| {
-        if sum > dimension { scale.min(dimension / sum) } else { scale }
+    ]
+    .into_iter()
+    .fold(1.0_f64, |scale, (dimension, sum)| {
+        if sum > dimension {
+            scale.min(dimension / sum)
+        } else {
+            scale
+        }
     });
-    let [tl, tr, br, bl] = [tl, tr, br, bl].map(|radius| radius.scale(scale));
-    let left = f64::from(rect.origin.x);
-    let top = f64::from(rect.origin.y);
-    let right = left + f64::from(rect.size.width);
-    let bottom = top + f64::from(rect.size.height);
-    let top_split = split(left, right, tl.x, tr.x);
-    let right_split = split(top, bottom, tr.y, br.y);
-    let bottom_split = split(left, right, bl.x, br.x);
-    let left_split = split(top, bottom, tl.y, bl.y);
-    let start = Point::new(top_split, top);
+    let radii = [tl, tr, br, bl].map(|radius| radius.scale(scale));
+    let (start, corners) = corner_quadrants(rect, radii);
     builder.move_to(start.offset());
-    Quadrant::new(
-        Point::new(top_split, right_split),
-        Point::new(right, top),
-        tr,
-        Point::new(1.0, -1.0),
-    )
-    .add_to_path(builder, false);
-    Quadrant::new(
-        Point::new(bottom_split, right_split),
-        Point::new(right, bottom),
-        br,
-        Point::new(1.0, 1.0),
-    )
-    .add_to_path(builder, true);
-    Quadrant::new(
-        Point::new(bottom_split, left_split),
-        Point::new(left, bottom),
-        bl,
-        Point::new(-1.0, 1.0),
-    )
-    .add_to_path(builder, false);
-    Quadrant::new(
-        Point::new(top_split, left_split),
-        Point::new(left, top),
-        tl,
-        Point::new(-1.0, -1.0),
-    )
-    .add_to_path(builder, true);
+    for (index, corner) in corners.iter().enumerate() {
+        corner.add_to_path(builder, index % 2 == 1);
+    }
     builder.line_to(start.offset());
     builder.close();
 }

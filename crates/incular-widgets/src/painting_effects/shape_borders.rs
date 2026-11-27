@@ -857,6 +857,19 @@ impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for RoundedSuperellipseBo
         self.path(rect, 0., direction)
     }
 
+    fn hit_test(&self, rect: Rect, position: Offset, direction: Option<TextDirection>) -> bool {
+        let radius = self
+            .border_radius
+            .into()
+            .resolve(direction.unwrap_or(TextDirection::Ltr));
+        if radius == BorderRadius::ZERO {
+            return contains_half_open(rect, position);
+        }
+        let radii = [radius.top_left, radius.top_right, radius.bottom_right, radius.bottom_left]
+            .map(|corner| Size { width: corner.x, height: corner.y });
+        incular_rendering::rounded_superellipse_contains(rect, radii, position)
+    }
+
     fn inner_path(&self, rect: Rect) -> Path {
         self.inner_path_with_direction(rect, None)
     }
