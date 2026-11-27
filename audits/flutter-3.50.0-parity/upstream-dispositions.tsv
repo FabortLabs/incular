@@ -2795,3 +2795,7 @@ packages/flutter/test/gestures/drag_test.dart	1367	Clamp max velocity	paired-mat
 packages/flutter/test/gestures/drag_test.dart	1456	Clamp max pan velocity in 2D, isotropically	paired-match	upstream-drag-velocity-clamping.md
 packages/flutter/test/gestures/drag_test.dart	1479	Clamp max vertical-drag velocity vertically	paired-match	upstream-drag-velocity-clamping.md
 packages/flutter/test/gestures/drag_test.dart	1499	Clamp max horizontal-drag velocity horizontally	paired-match	upstream-drag-velocity-clamping.md
+packages/flutter/test/gestures/drag_test.dart	1951	A primary pan recognizer does not form competition with a secondary tap recognizer	paired-match	upstream-competing-tap-lifecycle.md#button-specific-arena-competition
+packages/flutter/test/gestures/drag_test.dart	1965	A primary pan recognizer forms competition with a primary tap recognizer	paired-match	upstream-competing-tap-lifecycle.md#button-specific-arena-competition
+packages/flutter/test/gestures/drag_test.dart	1982	A secondary drag should not trigger primary	paired-match	upstream-competing-tap-lifecycle.md#button-specific-arena-competition
+packages/flutter/test/gestures/drag_test.dart	2018	A secondary drag should not trigger primary	paired-match	upstream-competing-tap-lifecycle.md#button-specific-arena-competition
