@@ -528,6 +528,8 @@ pub struct TextDiagnostics {
     pub paragraphs_carried: u64,
     /// Wrapping paragraphs re-broken at a new width without reshaping.
     pub shapes_reused: u64,
+    /// Candidate prefixes shaped to place an overflow ellipsis.
+    pub ellipsis_candidates_shaped: u64,
 }
 
 /// Identity of a retained layout. Lookups borrow the text, so a hit copies
@@ -1587,7 +1589,9 @@ impl TextEngine {
         match options.overflow {
             TextOverflow::Visible => layout,
             TextOverflow::Clip | TextOverflow::Fade => clipped_layout(layout, limit),
-            TextOverflow::Ellipsis => self.ellipsized_layout(text, style, options, limit, runs),
+            TextOverflow::Ellipsis => {
+                self.ellipsized_layout(text, style, options, limit, runs, &layout)
+            }
         }
     }
 
@@ -1598,6 +1602,7 @@ impl TextEngine {
         options: TextLayoutOptions,
         limit: usize,
         runs: &[StyledTextRun],
+        initial: &TextLayout,
     ) -> TextLayout {
         if limit == 0 {
             return clipped_layout(
@@ -1616,25 +1621,25 @@ impl TextEngine {
             );
         }
         let wrap_width = options.soft_wrap.then_some(options.max_width).flatten();
-        let initial = self.shape_raw(
-            text,
-            style,
-            wrap_width,
-            options.max_width,
-            options.align,
-            options.text_direction,
-            options.height_behavior,
-            options.strut,
-            runs,
-        );
-        let end = initial
-            .lines
-            .get(limit.saturating_sub(1))
-            .map_or(0, |line| line.caret_end.min(text.len()));
-        let mut end = grapheme_boundary_at_or_before(text, end);
-        let mut candidate = String::with_capacity(text.len() + '\u{2026}'.len_utf8());
+        let last_line = initial.lines.get(limit - 1);
+        let start = last_line.map_or(0, |line| line.start);
+        let mut end = last_line.map_or(start, |line| line.caret_end.min(text.len()));
+        if options.max_lines.is_none()
+            && let (Some(line), Some(width)) = (last_line, options.max_width)
+        {
+            // Start at the last whole shaped cluster that fits, not at the
+            // tail of an arbitrarily long unbroken source line. Flutter
+            // likewise chooses the measured prefix before placing the mark.
+            end = end.min(fitting_source_end(line, width));
+        }
+        let boundaries: Vec<_> = GraphemeClusterSegmenter::new()
+            .segment_str(text)
+            .take_while(|&boundary| boundary <= end)
+            .filter(|&boundary| boundary >= start)
+            .collect();
+        let mut candidate = String::with_capacity(end + '\u{2026}'.len_utf8());
 
-        loop {
+        for end in boundaries.into_iter().rev() {
             candidate.clear();
             candidate.push_str(&text[..end]);
             candidate.push('\u{2026}');
@@ -1642,6 +1647,7 @@ impl TextEngine {
             // with the selected/fallback font stack, never appended as a raw
             // renderer glyph or a byte-truncated source suffix.
             let clipped_runs = clip_runs(runs, end, candidate.len());
+            self.diagnostics.ellipsis_candidates_shaped += 1;
             let shaped = self.shape_raw(
                 &candidate,
                 style,
@@ -1666,15 +1672,25 @@ impl TextEngine {
                     ..shaped
                 };
             }
-            let previous = previous_grapheme_boundary(text, end);
-            if previous == end {
-                return TextLayout {
-                    overflowed: true,
-                    retained_source_end: end,
-                    ..shaped
-                };
-            }
-            end = previous;
+        }
+
+        // Even the mark is too wide. Leave the final line empty instead
+        // of forwarding an out-of-bounds glyph to painting and selection.
+        let clipped_runs = clip_runs(runs, start, start);
+        TextLayout {
+            overflowed: true,
+            retained_source_end: start,
+            ..self.shape_raw(
+                &text[..start],
+                style,
+                wrap_width,
+                options.max_width,
+                options.align,
+                options.text_direction,
+                options.height_behavior,
+                options.strut,
+                &clipped_runs,
+            )
         }
     }
 
@@ -2603,20 +2619,31 @@ fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {
     layout
 }
 
-fn grapheme_boundary_at_or_before(text: &str, offset: usize) -> usize {
-    GraphemeClusterSegmenter::new()
-        .segment_str(text)
-        .take_while(|boundary| *boundary <= offset)
-        .last()
-        .unwrap_or(0)
-}
-
-fn previous_grapheme_boundary(text: &str, offset: usize) -> usize {
-    GraphemeClusterSegmenter::new()
-        .segment_str(text)
-        .take_while(|boundary| *boundary < offset)
-        .last()
-        .unwrap_or(0)
+/// Upper bound for an ellipsis candidate before reserving its mark:
+/// accumulate the original shaped clusters in logical source order.
+fn fitting_source_end(line: &TextLine, max_width: f32) -> usize {
+    fn fit<'a>(
+        span_order: impl IntoIterator<Item = &'a TextClusterSpan>,
+        start: usize,
+        max_width: f32,
+    ) -> usize {
+        let mut width = 0.;
+        let mut end = start;
+        for span in span_order {
+            width += span.right - span.left;
+            if width > max_width {
+                break;
+            }
+            end = span.end as usize;
+        }
+        end
+    }
+    if line.clusters.windows(2).all(|pair| pair[0].start <= pair[1].start) {
+        return fit(line.clusters.iter(), line.start, max_width);
+    }
+    let mut logical = line.clusters.iter().collect::<Vec<_>>();
+    logical.sort_unstable_by_key(|cluster| cluster.start);
+    fit(logical, line.start, max_width)
 }
 
 fn push_family_name(out: &mut String, family: &FontFamily) {

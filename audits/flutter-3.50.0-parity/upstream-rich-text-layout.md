@@ -60,3 +60,13 @@ line is cut there, and ordinary word wrapping does not produce more
 lines while unlimited ellipsis is active. The native text regression
 checks the retained source bytes for all three. The earlier explicit
 one-line variant still passes.
+
+The authored reference also checks a three-pixel width, where the mark
+itself cannot fit and no glyph is drawn, and a 4,096-character line, which
+keeps only its first three glyphs at 45 pixels. The native stress
+regression shapes at most four candidate prefixes instead of repeatedly
+reshaping the entire hidden tail. It bounds the first candidate using
+the already-measured clusters, then verifies the shaped ellipsis fits.
+The same no-glyph check passes with or without an explicit one-line cap.
+The reference's cluster-first cutoff is described in the
+[pinned Flutter engine dependency](https://raw.githubusercontent.com/google/skia/0e5d8d1be81b22f5529a41cf4810dd89b63527ba/modules/skparagraph/src/TextLine.cpp).
