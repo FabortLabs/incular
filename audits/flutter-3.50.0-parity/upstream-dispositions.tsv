@@ -3517,3 +3517,7 @@ packages/flutter/test/gestures/gesture_binding_test.dart	201	Pointer hover event
 packages/flutter/test/gestures/gesture_binding_test.dart	237	Pointer cancel events	paired-match	upstream-pointer-packet-converter.md#delivery-through-a-retained-view
 packages/flutter/test/gestures/gesture_binding_test.dart	254	Can cancel pointers	paired-match	upstream-pointer-packet-converter.md#cancel-queued-from-an-input-callback
 packages/flutter/test/gestures/gesture_binding_test.dart	668	Pointer pan/zoom events	paired-match	upstream-pointer-packet-converter.md#raw-pan-and-zoom-listener-delivery
+packages/flutter/test/gestures/gesture_binding_test.dart	105	Platform view hit test should not accept gesture if no hit	paired-match	upstream-pointer-packet-converter.md#native-platform-view-hit-requests
+packages/flutter/test/gestures/gesture_binding_test.dart	120	Platform view hit test should not accept gesture if no platform view	paired-match	upstream-pointer-packet-converter.md#native-platform-view-hit-requests
+packages/flutter/test/gestures/gesture_binding_test.dart	133	Platform view hit test should accept gesture if a platform view is not the first hit in hitTest result path	paired-match	upstream-pointer-packet-converter.md#native-platform-view-hit-requests
+packages/flutter/test/gestures/gesture_binding_test.dart	149	Platform view hit test should accept gesture if a platform view is the first hit in hitTest result path	paired-match	upstream-pointer-packet-converter.md#native-platform-view-hit-requests

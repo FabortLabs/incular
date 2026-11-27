@@ -1953,6 +1953,13 @@ impl Runtime {
         self.dispatch_raw_pointer_immediately(event, false)
     }
 
+    /// Answers a native host's platform-view hit test in this view's
+    /// logical coordinates, without dispatching any gesture or signal.
+    #[must_use]
+    pub fn hit_test_contains_platform_view(&self, point: Offset) -> bool {
+        self.tree.hit_test_contains_platform_view(point)
+    }
+
     /// Global pointer routes for this retained view, shared with its mounted
     /// listeners and recognizers. Device add/remove traverse this table only.
     #[must_use]

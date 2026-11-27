@@ -74,3 +74,14 @@ local position, total pan, measured pan delta, scale, rotation,
 synthesized state and device/pointer identity. Eight delivery and
 12 adjacent scale/transform tests passed. The authored probe
 adds no original registration credit.
+
+## Native platform-view hit requests
+
+The pinned :105, :120, :133 and :149 registrations passed. The retained
+view now answers using its actual hit path, not just the frontmost
+target or the platform view's layout bounds. An empty path and an
+ordinary-only path both answer false. With two mounted targets, the
+platform surface answers true at either position in the path. An
+additional check keeps a transparent platform surface out of the
+answer. A query forwards no pointer command. Five focused and nine
+adjacent runtime tests passed.

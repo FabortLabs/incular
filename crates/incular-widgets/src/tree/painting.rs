@@ -506,6 +506,26 @@ impl WidgetTree {
         }
     }
 
+    /// Whether the view's pointer hit path contains a native platform
+    /// surface. A translucent target in front does not hide the answer.
+    #[must_use]
+    pub fn hit_test_contains_platform_view(&self, point: Offset) -> bool {
+        self.raw_hit_elements(point).into_iter().any(|id| {
+            let Some(element) = self.elements.get(id.0) else {
+                return false;
+            };
+            let WidgetKind::RawInput { kind, .. } = element.widget.kind() else {
+                return false;
+            };
+            matches!(
+                &**kind,
+                RawInputKind::MetaData { data, behavior }
+                    if *behavior != crate::gestures::HitTestBehavior::DeferToChild
+                        && data.is::<crate::platform_view::PlatformViewMarker>()
+            )
+        })
+    }
+
     /// Flutter's `RenderMetaData` lookup on a hit-test result: the data of
     /// every [`MetaData`](crate::MetaData) under `point`, deepest and
     /// frontmost first, in the same order pointer listeners receive events.
