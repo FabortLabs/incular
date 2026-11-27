@@ -24,3 +24,15 @@ The document-end regression reproduced on Android: a zero-length
 deletion reset upstream affinity even though the text had not changed.
 The runtime now deletes the range in one controller transaction,
 without first changing the selection, so an empty range is a no-op.
+
+An additional pinned registration ran across five platform variants
+and confirms that forward Delete removes exactly one fully selected
+family emoji. The paired authored probe
+`editable_partial_grapheme_deletion_test.dart` uses base letters and
+combining marks to put the selection endpoints inside graphemes
+without splitting UTF-16 surrogate pairs. Both directions of selection,
+as well as Backspace and Delete from inside a grapheme, now remove
+every touched grapheme without leaving an orphaned combining mark.
+Obscured fields still delete by code point. These authored probes do
+not receive credit for the upstream cases that use an interior
+UTF-16 surrogate offset.

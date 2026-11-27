@@ -84,6 +84,55 @@ fn code_point_after(text: &str, offset: usize) -> usize {
         .map_or(text.len(), |c| offset + c.len_utf8())
 }
 
+/// The editor deletes whole graphemes, except in obscured fields where the
+/// atomic unit is a Unicode scalar. A word or line command may supply a
+/// farther endpoint, but the near edge still covers the entire atomic unit.
+fn deletion_range(
+    text: &str,
+    selection: TextSelection,
+    obscured: bool,
+    forward: bool,
+    target: Option<usize>,
+) -> TextRange {
+    if !selection.is_collapsed() {
+        if obscured {
+            return selection.range();
+        }
+        let start = TextBoundaryKind::Character
+            .leading_at(text, selection.start() as isize)
+            .unwrap_or(text.len());
+        let end = TextBoundaryKind::Character
+            .trailing_at(text, selection.end() as isize - 1)
+            .unwrap_or(text.len());
+        return TextRange::new(start, end);
+    }
+
+    let caret = selection.extent;
+    let (leading, trailing) = if obscured {
+        if forward {
+            (caret, code_point_after(text, caret))
+        } else {
+            (code_point_before(text, caret), caret)
+        }
+    } else {
+        // A forward edit includes the unit at the caret; a backward edit
+        // includes the unit at the previous byte, if any. TextBoundaryKind
+        // maps an interior UTF-8 byte to its scalar before finding the unit.
+        let position = if forward {
+            caret as isize
+        } else {
+            caret as isize - 1
+        };
+        let (leading, trailing) = TextBoundaryKind::Character.at(text, position);
+        (leading.unwrap_or(0), trailing.unwrap_or(text.len()))
+    };
+    match target {
+        None => TextRange::new(leading, trailing),
+        Some(target) if forward => TextRange::new(leading, target).normalized(),
+        Some(target) => TextRange::new(target, trailing).normalized(),
+    }
+}
+
 impl Runtime {
     /// Explicitly selects all text in a mounted editable field, like
     /// EditableTextState.selectAll. This is distinct from enabling a
@@ -504,50 +553,38 @@ impl Runtime {
                 });
                 true
             }
-            DeleteCharacter { forward } => {
-                if !editable {
+            DeleteCharacter { forward }
+            | DeleteToNextWordBoundary { forward }
+            | DeleteToLineBreak { forward } => {
+                if !editable || controller.selection_if_set().is_none() {
                     return false;
                 }
                 self.count_delete(forward);
-                if selection.is_collapsed() {
-                    let target = by_character(selection.base, forward);
-                    self.delete_to(controller, target);
+                let target = if selection.is_collapsed() {
+                    match intent {
+                        DeleteToNextWordBoundary { .. } => {
+                            Some(word.move_beyond(text, selection.base, forward))
+                        }
+                        DeleteToLineBreak { .. } => Some(
+                            self.line_boundary(
+                                field,
+                                controller,
+                                selection.base,
+                                forward,
+                                false,
+                                obscured,
+                            )
+                            .0,
+                        ),
+                        _ => None,
+                    }
                 } else {
-                    controller.replace_selection("");
-                }
-                true
-            }
-            DeleteToNextWordBoundary { forward } => {
-                if !editable {
-                    return false;
-                }
-                self.count_delete(forward);
-                if selection.is_collapsed() {
-                    let target = word.move_beyond(text, selection.base, forward);
-                    self.delete_to(controller, target);
-                } else {
-                    controller.replace_selection("");
-                }
-                true
-            }
-            DeleteToLineBreak { forward } => {
-                if !editable {
-                    return false;
-                }
-                self.count_delete(forward);
-                if selection.is_collapsed() {
-                    let (target, _) = self.line_boundary(
-                        field,
-                        controller,
-                        selection.base,
-                        forward,
-                        false,
-                        obscured,
-                    );
-                    self.delete_to(controller, target);
-                } else {
-                    controller.replace_selection("");
-                }
+                    None
+                };
+                let range = deletion_range(text, selection, obscured, forward, target);
+                // One replacement leaves empty ranges alone and does not
+                // publish a temporary expanded selection to observers.
+                let _ = controller.replace_range_as_user_edit(range, "");
                 true
             }
             ExtendByCharacter { forward, collapse } => {
@@ -808,15 +845,6 @@ impl Runtime {
         } else {
             self.editing_diagnostics.backspace_commands += 1;
         }
-    }
-
-    /// Deletes between the collapsed caret and `target`.
-    fn delete_to(&self, controller: &TextEditingController, target: usize) {
-        let caret = controller.selection().extent;
-        let range = TextRange::new(caret.min(target), caret.max(target));
-        // Flutter applies one ReplaceTextIntent, without publishing a temporary
-        // selection. An empty range leaves affinity and composing unchanged.
-        let _ = controller.replace_range_as_user_edit(range, "");
     }
 
     /// `collapseAtReversal`: extends the selection to `target`, unless that

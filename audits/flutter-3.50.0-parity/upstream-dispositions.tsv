@@ -3753,3 +3753,4 @@ packages/flutter/test/widgets/editable_text_shortcuts_test.dart	260	delete reado
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	278	delete at start	paired-match	upstream-editable-plain-deletion.md
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	296	delete at end	paired-match	upstream-editable-plain-deletion.md
 packages/flutter/test/widgets/editable_text_shortcuts_test.dart	335	delete at cluster boundary	paired-match	upstream-editable-plain-deletion.md
+packages/flutter/test/widgets/editable_text_shortcuts_test.dart	367	at the boundaries of a cluster	paired-match	upstream-editable-plain-deletion.md
