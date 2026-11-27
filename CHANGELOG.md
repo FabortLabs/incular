@@ -432,6 +432,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `Transform::rotation` uses exact matrices at the standard quarter turns,
+  avoiding tiny offsets at edges and centered pivots.
+
 - `DecoratedBoxTransition` preserves foreground paint order for shapes and
   mixed decoration tweens without blocking child taps.
 

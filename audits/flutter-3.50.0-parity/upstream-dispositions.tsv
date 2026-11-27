@@ -2773,3 +2773,5 @@ packages/flutter/test/widgets/animated_opacity_repaint_test.dart	48	RenderAnimat
 packages/flutter/test/widgets/animated_opacity_repaint_test.dart	84	RenderAnimatedOpacityMixin allows opacity layer to be disposed when animating to 0 opacity	partial-match	upstream-opacity-repaint.md
 packages/flutter/test/widgets/opacity_repaint_test.dart	12	RenderOpacity avoids repainting and does not drop layer at fully opaque	paired-match	upstream-opacity-repaint.md
 packages/flutter/test/widgets/opacity_repaint_test.dart	44	RenderOpacity allows opacity layer to be dropped at 0 opacity	partial-match	upstream-opacity-repaint.md
+packages/flutter/test/widgets/transform_test.dart	264	applyPaintTransform of Transform in Padding	paired-match	upstream-transform-quarter-turns.md#paint-origin-through-padding
+packages/flutter/test/widgets/transform_test.dart	356	Transform.rotate creates nice rotation matrices for 0, 90, 180, 270 degrees	partial-match	upstream-transform-quarter-turns.md#exact-quarter-turn-coefficients

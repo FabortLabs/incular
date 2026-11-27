@@ -2098,9 +2098,25 @@ impl Transform {
         transform
     }
     /// Flutter's `Transform.rotate`: pivots about the center by default.
+    /// The canonical quarter turns have exact, integral matrix entries.
     #[must_use]
     pub fn rotation(radians: f32, child: impl Into<Widget>) -> Self {
-        let mut transform = Self::new(CoreTransform::rotation(radians), child);
+        use std::f32::consts::{FRAC_PI_2, PI};
+
+        // Flutter builds integral quarter-turn matrices instead of leaking
+        // trigonometric error into their pivot translations. Match the
+        // canonical angles before promoting the rounded f32 input to f64.
+        const THREE_QUARTERS: f32 = 3. * FRAC_PI_2;
+        let raw = if radians == FRAC_PI_2 || radians == -THREE_QUARTERS {
+            CoreTransform::from_coefficients([0., 1., -1., 0., 0., 0.])
+        } else if radians == -FRAC_PI_2 || radians == THREE_QUARTERS {
+            CoreTransform::from_coefficients([0., -1., 1., 0., 0., 0.])
+        } else if radians == PI || radians == -PI {
+            CoreTransform::scale(-1.)
+        } else {
+            CoreTransform::rotation(radians)
+        };
+        let mut transform = Self::new(raw, child);
         transform.centered = true;
         transform
     }

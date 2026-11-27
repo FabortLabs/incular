@@ -498,3 +498,114 @@ fn rotated_box_builder_matches_fluent_construction() {
         RotatedBox::new(3, child)
     );
 }
+
+#[test]
+fn quarter_turn_paint_matrices_are_exact_at_the_reference_viewport_size() {
+    use incular_widgets::RepaintBoundary;
+    use std::f32::consts::{FRAC_PI_2, PI};
+
+    let boundary = || RepaintBoundary::new(Widget::box_(Size::new(800., 600.), Color::WHITE));
+    let rotate = |angle| Widget::from(Transform::rotation(angle, boundary()));
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(rotate(FRAC_PI_2)).unwrap();
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    let repaint = |tree: &mut WidgetTree| {
+        tree.layout(constraints).unwrap();
+        tree.update_compositor(Instant::now()).unwrap();
+        tree.paint()
+    };
+    let painted_transform = |list: &DisplayList| {
+        let mut stack = vec![CoreTransform::IDENTITY];
+        let mut actual = Vec::new();
+        for op in list.commands() {
+            let current = *stack.last().unwrap();
+            match op {
+                PaintCommand::PushTransform { transform } => stack.push(current.then(*transform)),
+                PaintCommand::PopTransform => {
+                    stack.pop();
+                }
+                PaintCommand::Rect {
+                    color: Color::WHITE,
+                    ..
+                } => actual.push(current),
+                _ => {}
+            }
+        }
+        assert_eq!(stack.len(), 1);
+        actual
+    };
+    for (angle, expected) in [
+        (FRAC_PI_2, [0., 1., -1., 0., 700., -100.]),
+        (PI, [-1., 0., 0., -1., 800., 600.]),
+        (3. * FRAC_PI_2, [0., -1., 1., 0., 100., 700.]),
+        (-FRAC_PI_2, [0., -1., 1., 0., 100., 700.]),
+        (0., [1., 0., 0., 1., 0., 0.]),
+    ] {
+        tree.update(root, rotate(angle)).unwrap();
+        let list = repaint(&mut tree);
+        let transform = CoreTransform::from_coefficients(expected);
+        assert_eq!(
+            tree.content_transform(tree.render_id(root).unwrap()),
+            Some(transform)
+        );
+        assert_eq!(painted_transform(&list), [transform]);
+    }
+    let identity = repaint(&mut tree);
+    let mut plain = WidgetTree::new();
+    plain.mount(boundary().into()).unwrap();
+    let untransformed = repaint(&mut plain);
+    assert_eq!(
+        painted_transform(&identity),
+        painted_transform(&untransformed)
+    );
+
+    tree.update(root, rotate(FRAC_PI_2 + 0.0001)).unwrap();
+    let _ = repaint(&mut tree);
+    let off_axis = tree
+        .content_transform(tree.render_id(root).unwrap())
+        .unwrap();
+    assert_ne!(off_axis.to_kurbo().as_coeffs()[0], 0.);
+}
+#[test]
+fn a_scale_inside_padding_does_not_scale_its_outer_layout_offset() {
+    use incular_config::EdgeInsets;
+    use incular_widgets::{GlobalKey, Padding, Placeholder};
+
+    let key = GlobalKey::new();
+    let placeholder = Widget::from(Placeholder::new()).with_key(key);
+    let tree_widget = Padding::new(
+        EdgeInsets::only(30., 20., 50., 70.),
+        Transform::new(CoreTransform::scale(2.), placeholder),
+    );
+    let mut tree = WidgetTree::new();
+    tree.mount(tree_widget.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let target = tree.element_with_key(&key.into()).unwrap();
+    assert_eq!(
+        tree.element_bounds(target).unwrap().origin,
+        Offset::new(30., 20.)
+    );
+
+    let list = tree.paint();
+    let mut stack = vec![CoreTransform::IDENTITY];
+    let mut found = 0;
+    for command in list.commands() {
+        let world = *stack.last().unwrap();
+        match command {
+            PaintCommand::PushTransform { transform } => stack.push(world.then(*transform)),
+            PaintCommand::PopTransform => {
+                stack.pop();
+            }
+            PaintCommand::StrokePath { path, .. } => {
+                let local = path.tight_bounds().unwrap();
+                let world = world.transform_rect_bbox(local);
+                assert_eq!(world.origin, Offset::new(30., 20.));
+                assert_eq!(world.size, Size::new(1440., 1020.));
+                found += 1;
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(found, 1);
+}
