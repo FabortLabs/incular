@@ -129,3 +129,37 @@ impl From<PreviewZoomControls> for Widget {
         .into()
     }
 }
+
+/// A selected-file filter toggle. Without an Editor service it occupies no
+/// space; a failed preference write leaves the setting and previews intact.
+pub fn preview_file_filter_toggle<T: 'static, E: 'static>(
+    filter: incular_widgets::widget_previews::file_filter::PreviewFileFilter<T>,
+    persist: impl Fn(&'static str, bool) -> Result<(), E> + 'static,
+    on_error: impl Fn(E) + 'static,
+) -> Widget {
+    let persist = std::rc::Rc::new(persist);
+    let on_error = std::rc::Rc::new(on_error);
+    Builder::new(move |_| {
+        if !filter.toggle_visible() {
+            return SizedBox::shrink().into();
+        }
+        let enabled = filter.enabled();
+        let filter = filter.clone();
+        let persist = persist.clone();
+        let on_error = on_error.clone();
+        let toggle = Button::new("Filter by selected file")
+            .variant(if enabled {
+                ButtonVariant::Default
+            } else {
+                ButtonVariant::Ghost
+            })
+            .on_click(move || {
+                if let Err(error) = filter.toggle(|key, value| persist(key, value)) {
+                    on_error(error);
+                }
+            });
+        Widget::from(RawTooltip::new("Filter by selected file", toggle))
+            .with_key("preview.filter.selected-file")
+    })
+    .into()
+}
