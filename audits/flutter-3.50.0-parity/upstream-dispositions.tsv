@@ -3385,3 +3385,4 @@ packages/flutter/test/gestures/events_test.dart	116	PointerEnterEvent.fromMouseE
 packages/flutter/test/gestures/events_test.dart	143	PointerExitEvent.fromMouseEvent(hover)	partial-match	upstream-pointer-boundary-metadata.md
 packages/flutter/test/gestures/events_test.dart	170	PointerEnterEvent.fromMouseEvent(move)	partial-match	upstream-pointer-boundary-metadata.md
 packages/flutter/test/gestures/events_test.dart	197	PointerExitEvent.fromMouseEvent(move)	partial-match	upstream-pointer-boundary-metadata.md
+packages/flutter/test/gestures/events_test.dart	239	paintTransformToPointerEventTransform	paired-match	upstream-pointer-boundary-metadata.md#the-pointer-plane-of-a-paint-matrix

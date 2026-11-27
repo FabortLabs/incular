@@ -6,7 +6,8 @@ use std::{
 use incular_core::time::Instant;
 
 use incular_core::{
-    DragStartBehavior, KeyboardEvent, NormalizedPressure, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
+    DragStartBehavior, KeyboardEvent, Matrix4, NormalizedPressure, Offset, Point64,
+    PRIMARY_POINTER_BUTTON, PointerPhase,
     PointerSampleMetadata, SECONDARY_POINTER_BUTTON, TERTIARY_POINTER_BUTTON, TrackpadGesture,
     Transform,
 };
@@ -245,6 +246,45 @@ impl RawPointerEvent {
             (f64::from(end.x) - (a * start_x + c * start_y + tx)) as f32,
             (f64::from(end.y) - (b * start_x + d * start_y + ty)) as f32,
         )
+    }
+
+    /// Reduces a 4×4 paint matrix to its pointer-event plane. The z row
+    /// and column become the identity axis, while planar perspective in w
+    /// is preserved. Input coordinates and the original matrix are unchanged.
+    #[must_use]
+    pub const fn remove_perspective_transform(matrix: Matrix4) -> Matrix4 {
+        let mut entries = *matrix.columns();
+        entries[2] = 0.;
+        entries[6] = 0.;
+        entries[8] = 0.;
+        entries[9] = 0.;
+        entries[10] = 1.;
+        entries[11] = 0.;
+        entries[14] = 0.;
+        Matrix4::from_columns(entries)
+    }
+
+    /// Projects local position and delta through a pointer matrix.
+    /// A projective displacement is the difference of two mapped points,
+    /// not the transform of the delta as an independent vector.
+    #[must_use]
+    pub fn transformed_matrix4(mut self, transform: Option<Matrix4>) -> Self {
+        let Some(transform) = transform else {
+            return self;
+        };
+        if let Some(affine) = transform.affine_xy_plane() {
+            return self.transformed(Some(affine));
+        }
+        let x = f64::from(self.position.x);
+        let y = f64::from(self.position.y);
+        let start = transform.transform_point(Point64::new(
+            x - f64::from(self.delta.x),
+            y - f64::from(self.delta.y),
+        ));
+        let end = transform.transform_point(Point64::new(x, y));
+        self.local_position = Offset::new(end.x as f32, end.y as f32);
+        self.local_delta = Offset::new((end.x - start.x) as f32, (end.y - start.y) as f32);
+        self
     }
 
     /// Uses the original global values for the local fields as well.

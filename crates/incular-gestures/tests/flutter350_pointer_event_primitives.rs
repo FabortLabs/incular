@@ -158,3 +158,53 @@ fn pointer_delta_uses_a_supplied_end_point_and_ignores_translation() {
     assert_eq!(local.local_delta, raw.delta);
     assert_eq!(local.local_position, huge.transform_point(raw.position));
 }
+
+#[test]
+fn the_pointer_plane_clears_z_without_mutating_the_paint_matrix() {
+    // gestures/events_test.dart:239.
+    use incular_core::Matrix4;
+
+    let clean = RawPointerEvent::remove_perspective_transform;
+    assert_eq!(clean(Matrix4::IDENTITY), Matrix4::IDENTITY);
+    let paint = Matrix4::scale(3., 3., 3.);
+    assert_eq!(clean(paint), Matrix4::scale(3., 3., 1.));
+    assert_eq!(paint.columns()[10], 3.);
+}
+
+#[test]
+fn projective_pointer_delta_uses_both_positions_without_mutating_globals() {
+    use incular_core::{Matrix4, NormalizedPressure, PointerSampleMetadata};
+
+    let matrix = Matrix4::from_columns([
+        2., 0., 0., 0.01, 0., 3., 0., 0., 7., 8., 9., 10., 10., 20., 30., 1.,
+    ]);
+    let pointer = RawPointerEvent::remove_perspective_transform(matrix);
+    assert_eq!(
+        *pointer.columns(),
+        [2., 0., 0., 0.01, 0., 3., 0., 0., 0., 0., 1., 0., 10., 20., 0., 1.]
+    );
+    let mut original = RawPointerEvent::new(
+        34,
+        10,
+        Kind::Stylus,
+        1,
+        Offset::new(20., 30.),
+        PointerPhase::Move,
+        Instant::now(),
+    )
+    .with_sample(PointerSampleMetadata {
+        pressure: NormalizedPressure::new(0.4),
+        stylus: None,
+    });
+    original.delta = Offset::new(5., 5.);
+    assert_eq!(original.transformed_matrix4(None), original);
+    let actual = original.transformed_matrix4(Some(pointer));
+    assert_eq!(actual.in_global_coordinates(), original.in_global_coordinates());
+    let check = |actual: f32, expected: f32| {
+        assert!((actual - expected).abs() < 0.000_02, "{actual} != {expected}");
+    };
+    check(actual.local_position.x, 50. / 1.2);
+    check(actual.local_position.y, 110. / 1.2);
+    check(actual.local_delta.x, 50. / 1.2 - 40. / 1.15);
+    check(actual.local_delta.y, 110. / 1.2 - 95. / 1.15);
+}

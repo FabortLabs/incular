@@ -21,3 +21,21 @@ Both focused and sixteen neighboring native tests passed. The four
 original cases remain partial: portable samples do not model
 Flutter's obscured flag, pressure ranges, size, radii, or distance
 fields. The authored end-to-end case adds no original credit.
+
+## The pointer plane of a paint matrix
+
+The exact `gestures/events_test.dart:239` registration passed.
+The pointer transform preserves identity and replaces only the
+third row and column of a paint matrix with the identity z axis.
+A uniform 3× paint scale therefore becomes a 3× planar pointer
+scale without changing the input matrix.
+
+The authored `projective_pointer_local_delta_test.dart` additionally
+checks a nonconstant planar denominator. Pointer delta is the
+difference between the two projected positions, not a transformed
+vector at the origin. The API preserves the input sample, contact
+states, and global coordinates. Native results match the reference
+to float precision. Nine primitive, nine router and ten retained
+transform tests passed. Incular's retained widget transforms are
+still affine and reject true perspective; the raw pointer math
+alone does not add a projective paint path.
