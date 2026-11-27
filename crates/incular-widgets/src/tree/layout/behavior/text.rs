@@ -372,6 +372,7 @@ impl WidgetTree {
                     mask,
                     style,
                     spell_runs.as_ref(),
+                    !read_only && self.text_field_state_live(id).focused,
                 );
                 let line_height = metrics.line_height.max(1.0);
                 // editable.dart _preferredHeight: minLines ?? maxLines. The
@@ -498,25 +499,40 @@ impl WidgetTree {
     }
 }
 
-/// The runs of a text field's laid-out text that carry a decoration: the
-/// spell check runs when they styled the layout, else the field's own
-/// style over its whole text. A field showing its placeholder has none.
+/// Paint-only decoration runs. Spell-check styling takes precedence when
+/// it styled the display. Otherwise a focused, writable, visible editor
+/// uses Flutter's composing underline (not an additional border).
 fn text_field_decorations(
     controller: &TextEditingController,
     placeholder: &str,
     mask: Option<char>,
     style: &TextStyle,
     spell_runs: Option<&(String, Vec<incular_text::StyledTextRun>)>,
+    with_composing: bool,
 ) -> Arc<[incular_text::StyledTextRun]> {
+    use incular_text::{StyledTextRun, TextDecoration};
     let decorated = |text_style: &TextStyle| {
         text_style
             .decoration
             .is_some_and(|decoration| !decoration.is_empty())
     };
+    let composing = if with_composing && mask.is_none() {
+        let preedit = controller.preedit();
+        controller.with_value(|value| {
+            if let Some(preedit) = preedit.as_deref() {
+                let start = value.selection.range().start;
+                Some(start..start + preedit.len())
+            } else {
+                value.composing.map(|range| range.as_range())
+            }
+        })
+    } else {
+        None
+    };
+    if composing.is_none() && !decorated(style) && spell_runs.is_none() {
+        return Arc::from([]);
+    }
     with_text_field_display(controller, placeholder, mask, |display| {
-        if controller.with_value(|value| value.text.is_empty()) {
-            return Arc::from([]);
-        }
         if let Some((text, runs)) = spell_runs
             && text.as_str() == display
         {
@@ -526,14 +542,29 @@ fn text_field_decorations(
                 .cloned()
                 .collect();
         }
-        if !decorated(style) {
+        let run = |range: std::ops::Range<usize>, style: TextStyle| {
+            display.get(range.clone()).filter(|text| !text.is_empty()).map(|text| {
+                StyledTextRun { text: text.to_owned(), style, range }
+            })
+        };
+        if let Some(range) = composing.filter(|r| !r.is_empty() && display.get(r.clone()).is_some()) {
+            let mut decorations = Vec::with_capacity(if decorated(style) { 3 } else { 1 });
+            if decorated(style) {
+                decorations.extend(run(0..range.start, style.clone()));
+            }
+            decorations.extend(run(
+                range.clone(),
+                style.clone().decoration(TextDecoration::UNDERLINE),
+            ));
+            if decorated(style) {
+                decorations.extend(run(range.end..display.len(), style.clone()));
+            }
+            return decorations.into();
+        }
+        if !decorated(style) || controller.with_value(|value| value.text.is_empty()) {
             return Arc::from([]);
         }
-        Arc::from([incular_text::StyledTextRun {
-            text: display.to_owned(),
-            style: style.clone(),
-            range: 0..display.len(),
-        }])
+        run(0..display.len(), style.clone()).into_iter().collect()
     })
 }
 

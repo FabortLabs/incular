@@ -307,6 +307,7 @@ impl WidgetTree {
         let node = self.render_live_mut(render, "retained render must remain live");
         let mut repaint = false;
         let mut changed_editor_focus = false;
+        let mut editor_composition_changed = false;
         if let Some(button) = node.button_state_mut() {
             let changed = button.focused != focused;
             button.focused = focused;
@@ -343,11 +344,17 @@ impl WidgetTree {
             }
             repaint = true;
             changed_editor_focus = true;
-            if focused && let RenderKind::TextField(field) = node.object.kind() {
-                // EditableText._handleFocusChanged: gaining focus with an
-                // invalid selection collapses it at the end of the text.
-                field.controller.collapse_unset_selection();
-                field.controller.reset_caret(now);
+            if let RenderKind::TextField(field) = node.object.kind() {
+                editor_composition_changed = !field.read_only
+                    && !field.obscure_text
+                    && (field.controller.with_value(|value| value.composing.is_some())
+                        || field.controller.preedit().is_some());
+                if focused {
+                    // EditableText._handleFocusChanged: gaining focus with an
+                    // invalid selection collapses it at the end of the text.
+                    field.controller.collapse_unset_selection();
+                    field.controller.reset_caret(now);
+                }
             }
         }
         if node
@@ -362,7 +369,9 @@ impl WidgetTree {
         if changed_editor_focus {
             self.set_editor_sliver_keep_alive(id, focused);
         }
-        if repaint {
+        if editor_composition_changed {
+            self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true);
+        } else if repaint {
             self.mark_render_paint(render);
         }
         Ok(())
