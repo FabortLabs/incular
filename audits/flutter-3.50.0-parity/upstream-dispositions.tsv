@@ -2762,3 +2762,5 @@ packages/flutter/test/widgets/grid_paper_test.dart	18	GridPaper does not crash a
 packages/flutter/test/painting/border_radius_test.dart	348	BorderRadiusDirectional.resolve with null throws detailed error	paired-match	upstream-border-radius-direction.md
 packages/flutter/test/painting/border_radius_test.dart	363	resolve method throws detailed error when TextDirection is null	paired-match	upstream-border-radius-direction.md
 packages/flutter/test/painting/border_rtl_test.dart	977	BoxDecoration.border takes a BorderDirectional	paired-match	upstream-logical-box-border-decoration.md#public-padding-and-a-start-only-border
+packages/flutter/test/rendering/repaint_boundary_test.dart	13	nested repaint boundaries - smoke test	paired-match	upstream-repaint-boundary-updates.md
+packages/flutter/test/rendering/repaint_boundary_test.dart	32	Repaint boundary can get new parent after markNeedsCompositingBitsUpdate	partial-match	upstream-repaint-boundary-updates.md
