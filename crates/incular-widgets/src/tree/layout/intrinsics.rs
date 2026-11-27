@@ -8,6 +8,20 @@ enum IntrinsicKind {
     Max,
 }
 
+/// Paint and hit-test proxies have no intrinsic extent of their own. Keep
+/// this classification shared by the dry API and the layout-time probe.
+pub(super) fn forwards_intrinsic_child(kind: &RenderKind) -> bool {
+    matches!(
+        kind,
+        RenderKind::Colored { .. }
+            | RenderKind::Decorated { desired: None, .. }
+            | RenderKind::Opacity { .. }
+            | RenderKind::ClipRect { .. }
+            | RenderKind::Gesture
+            | RenderKind::RepaintBoundary
+    )
+}
+
 impl WidgetTree {
     /// Returns the retained box's minimum intrinsic width at the given height.
     ///
@@ -165,6 +179,7 @@ impl WidgetTree {
                 }
                 child_extent(height)
             }
+            kind if forwards_intrinsic_child(kind) => child_extent(cross),
             _ => None,
         }
     }

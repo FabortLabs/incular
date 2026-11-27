@@ -52,3 +52,20 @@ change the frame constraints. An unfactored Align provides the
 intermediate forwarding box. This checks dependency propagation
 and sizes, not Flutter's custom RenderBox subclass or the debug
 error for a negative intrinsic dimension.
+
+## Paint and hit-test proxy intrinsics
+
+Five authored Flutter controls cover ColoredBox, zero Opacity,
+ClipRect, IgnorePointer, and RepaintBoundary. All four queries
+report the child's natural minimum (55 × 110) and its separate
+preferred maximum (100 × 200). The ordinary box still measures
+55 × 110; IntrinsicWidth sizes it to 100 × 110, and IntrinsicHeight
+sizes it to 55 × 200.
+
+Before the fix, the native dry query returned no size even through
+a color, and a zero-opacity child reported only its ordinary 55 px
+width. Dry queries and layout now use the same list of forwarding
+proxies so a wrapper that only paints or handles input cannot
+substitute real layout for the child's intrinsic result. All 22
+selected native cases passed. These authored comparisons do not
+increase the pinned upstream registration count.

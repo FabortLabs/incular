@@ -1,4 +1,4 @@
-use super::super::*;
+use super::super::{intrinsics::forwards_intrinsic_child, *};
 use crate::tree::widget::aligned_child_offset;
 
 impl WidgetTree {
@@ -85,7 +85,7 @@ impl WidgetTree {
                 })?;
                 return Ok(intrinsic + main);
             }
-            RenderKind::Colored { .. } | RenderKind::Decorated { desired: None, .. } => {
+            kind if forwards_intrinsic_child(kind) => {
                 let Some(&grandchild) = node.children.first() else {
                     return Ok(0.0);
                 };
