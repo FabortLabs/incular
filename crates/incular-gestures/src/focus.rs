@@ -2207,6 +2207,48 @@ impl FocusScopeNode {
         self.scope_focus_node().descendants_are_traversable()
     }
 
+    /// Whether this scope is the most recently selected child of its
+    /// enclosing scope, even if the enclosing scope is currently inactive.
+    #[must_use]
+    pub fn is_first_focus(&self) -> bool {
+        let node = self.scope_focus_node();
+        node.host_enclosing_scope()
+            .and_then(|scope| scope.focused_child())
+            .as_ref()
+            == Some(&node)
+    }
+
+    /// Selects a mounted descendant scope as the active branch. If this
+    /// scope already holds focus, the selected scope restores its remembered
+    /// child or focuses its own anchor. If inactive, only history changes.
+    /// Returns false for unrelated, detached, or non-focusable active targets.
+    #[must_use]
+    pub fn set_first_focus(&self, scope: &Self) -> bool {
+        if self == scope || self.mounted_anchor().is_none() || scope.mounted_anchor().is_none() {
+            return false;
+        }
+
+        let mut path = Vec::<(Self, FocusNode)>::new();
+        let mut child = scope.scope_focus_node();
+        let mut contains_self = false;
+        while let Some(parent) = child.host_enclosing_scope() {
+            if path.iter().any(|(visited, _)| visited == &parent) {
+                return false;
+            }
+            contains_self |= &parent == self;
+            let anchor = parent.scope_focus_node();
+            path.push((parent, child));
+            child = anchor;
+        }
+        if !contains_self || (self.has_focus() && !scope.request_focus_in_scope()) {
+            return false;
+        }
+        for (parent, child) in path {
+            parent.record_host_focused_child(&child);
+        }
+        true
+    }
+
     /// Requests primary focus for the scope itself, without forwarding
     /// the request to a previously focused descendant.
     pub fn request_scope_focus(&self) {

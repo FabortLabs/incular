@@ -3449,3 +3449,4 @@ packages/flutter/test/painting/system_fonts_test.dart	66	RenderEditable relayout
 packages/flutter/test/painting/system_fonts_test.dart	73	Banner repaint upon system fonts changes	partial-match	upstream-system-font-notifications.md
 packages/flutter/test/painting/system_fonts_test.dart	215	System fonts update during non-idle scheduler phase does not assert	paired-match	upstream-system-font-notifications.md
 packages/flutter/test/widgets/focus_traversal_test.dart	4115	When there is no focused node, the focus can be set to the FocusScopeNode.	paired-match	upstream-directional-focus-edge-policies.md#first-directional-target-in-an-empty-scope
+packages/flutter/test/widgets/focus_scope_test.dart	265	Setting first focus requests focus for the scope properly.	paired-match	upstream-focus-scope-interaction.md#preferred-mounted-focus-scope

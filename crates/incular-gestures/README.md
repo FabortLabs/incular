@@ -62,3 +62,12 @@ Use `VelocityTracker::try_add_position` and `try_velocity_at` to estimate a
 single pointer's velocity independently from a recognizer. Checked samples
 must have nondecreasing timestamps; the platform fling estimators require
 at least one sample.
+
+## Mounted focus scopes
+
+Use `parent.set_first_focus(&child)` to select a descendant scope as
+the preferred branch. If the parent has focus, the selected scope
+restores its last eligible focused child, or takes primary focus itself
+when it has no history. If the parent is inactive, choosing its branch
+does not take focus away from another control. Read the saved selection
+with `child.is_first_focus()`.

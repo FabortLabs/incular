@@ -17,3 +17,18 @@ pinned Flutter checkout and were backed by live Incular tests:
 Native: `flutter350_focus_scope_labels` and
 `flutter_focus_policy_upstream_parity` in `incular-runtime` (14 tests
 total). No production changes were needed.
+
+## Preferred mounted focus scope
+
+Exact `widgets/focus_scope_test.dart:265` passed. Selecting a descendant
+of an active scope restores its remembered leaf, or gives primary focus
+to that scope itself when it has no focused-child history. Later
+requests restore the last selected leaf, not its original autofocus
+target. The native fixture checks the first-scope flags after each
+switch. A pinned authored and native control changes an inactive scope's
+preferred branch without interrupting focus elsewhere.
+
+The keyed and unkeyed removal cases are separately tracked; their
+surviving child currently loses focus in the native fixture. Requests
+between unrelated scopes and manual scopes without a mounted host are
+not reparented by this API.

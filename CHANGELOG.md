@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Mounted focus scopes can choose a preferred descendant scope without
+  discarding its focused child or stealing focus from another branch.
+
 - Standalone velocity trackers expose typed errors for out-of-order samples
   and empty platform fling histories.
 
