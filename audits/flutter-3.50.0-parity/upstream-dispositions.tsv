@@ -2673,3 +2673,15 @@ packages/flutter/test/services/system_context_menu_controller_test.dart	703	hand
 packages/flutter/test/services/system_context_menu_controller_test.dart	726	handleCustomContextMenuAction after hide clears callbacks	paired-match	upstream-system-context-menu.md#action-lifetime-and-late-platform-messages
 packages/flutter/test/services/system_context_menu_controller_test.dart	767	showing new menu invalidates old menu callbacks	paired-match	upstream-system-context-menu.md#action-lifetime-and-late-platform-messages
 packages/flutter/test/services/system_context_menu_controller_test.dart	459	showing a controller for an EditableText	paired-match	upstream-system-context-menu.md#mounted-editor-defaults-and-selection-rectangle
+packages/flutter/test/services/platform_channel_test.dart	49	can invoke method and get result	paired-match	upstream-json-method-channel.md#outbound-method-calls
+packages/flutter/test/services/platform_channel_test.dart	65	can invoke list method and get result	partial-match	upstream-json-method-channel.md#outbound-method-calls
+packages/flutter/test/services/platform_channel_test.dart	86	can invoke list method and get null result	paired-match	upstream-json-method-channel.md#outbound-method-calls
+packages/flutter/test/services/platform_channel_test.dart	101	can invoke map method and get result	partial-match	upstream-json-method-channel.md#outbound-method-calls
+packages/flutter/test/services/platform_channel_test.dart	124	can invoke map method and get null result	paired-match	upstream-json-method-channel.md#outbound-method-calls
+packages/flutter/test/services/platform_channel_test.dart	139	can invoke method and get error	paired-match	upstream-json-method-channel.md#outbound-method-calls
+packages/flutter/test/services/platform_channel_test.dart	165	can invoke unimplemented method	paired-match	upstream-json-method-channel.md#outbound-method-calls
+packages/flutter/test/services/platform_channel_test.dart	182	can invoke unimplemented method (optional)	paired-match	upstream-json-method-channel.md#outbound-method-calls
+packages/flutter/test/services/platform_channel_test.dart	221	can handle method call of unimplemented method	paired-match	upstream-json-method-channel.md#inbound-handler-replies
+packages/flutter/test/services/platform_channel_test.dart	237	can handle method call with successful result	paired-match	upstream-json-method-channel.md#inbound-handler-replies
+packages/flutter/test/services/platform_channel_test.dart	251	can handle method call with expressive error result	paired-match	upstream-json-method-channel.md#inbound-handler-replies
+packages/flutter/test/services/platform_channel_test.dart	274	can handle method call with other error result	paired-match	upstream-json-method-channel.md#inbound-handler-replies

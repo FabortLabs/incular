@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- JSON platform method channels support required or optional replies, typed
+  list and map results, and inbound success and error envelopes.
+
 - Platform services can manage system text-menu ownership, target geometry,
   and custom actions using Flutter-compatible channel messages. A focused
   editor can supply the default items and its logical selection rectangle.

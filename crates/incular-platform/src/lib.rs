@@ -99,7 +99,10 @@ pub use flutter_lifecycle::{
 pub use flutter_inbound_messenger::{
     FlutterBinaryPayload, FlutterBinaryReply, FlutterChannelMicrotask, FlutterInboundMessenger,
 };
-pub use flutter_platform_channel::{FlutterPlatformChannelError, FlutterPlatformMessenger};
+pub use flutter_platform_channel::{
+    FlutterJsonMethodChannel, FlutterJsonMethodReply, FlutterJsonMethodResult,
+    FlutterPlatformChannelError, FlutterPlatformMessenger,
+};
 pub use haptic_feedback::{HapticFeedback, HapticFeedbackError, HapticFeedbackType};
 pub use process_text::{
     DefaultProcessTextService, ProcessTextAction, ProcessTextError, ProcessTextService,
