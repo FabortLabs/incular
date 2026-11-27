@@ -16,3 +16,13 @@ ancestor viewport traversal. This respects implicit-scrolling
 physics and retains pinned-sliver and nested-reveal behavior.
 All 15 focused native cases passed. These checks cover the settled
 viewport position, not Flutter's reveal animation duration.
+
+## PageView and multiline input
+
+Three more pinned originals passed. Typing on the middle page leaves
+the page at index 1, with no active animation and no request for
+another immediate frame. In a tall 40-line editor, entering text
+at the off-screen end reveals its caret. Replacing that old caret
+with the selection 26→27 there scrolls to exactly 28 px, not back to
+the end or to a later line. The three focused native runtime tests
+use real input events and the retained layouts.

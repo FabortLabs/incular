@@ -3057,3 +3057,6 @@ packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	63	tapping 
 packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	103	tapping on a partly visible editable brings it fully on screen with scrollInsets	paired-match	upstream-editable-reveal.md
 packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	148	editable comes back on screen when entering text while it is off-screen	paired-match	upstream-editable-reveal.md
 packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	194	entering text does not scroll when scrollPhysics.allowImplicitScrolling = false	paired-match	upstream-editable-reveal.md
+packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	242	entering text does not scroll a surrounding PageView	paired-match	upstream-editable-reveal.md#pageview-and-multiline-input
+packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	282	focused multi-line editable scrolls caret back into view when typing	paired-match	upstream-editable-reveal.md#pageview-and-multiline-input
+packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	337	focused multi-line editable does not scroll to old position when non-collapsed selection set	paired-match	upstream-editable-reveal.md#pageview-and-multiline-input
