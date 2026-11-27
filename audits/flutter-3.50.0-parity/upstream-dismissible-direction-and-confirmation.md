@@ -46,3 +46,15 @@ decision does not spin frames, and completion wakes the next
 transition. The synchronous confirmation API remains available.
 
 The three selected Flutter references and 24 focused Rust tests passed.
+
+## Disabled rows do not capture scroll drags
+
+Pinned `:1037`, `:1053`, and `:1127` pair. With direction None, none
+of the four drag directions dismisses the item. The scrolling variant
+stays at zero for the two horizontal gestures and the downward drag,
+then moves exactly 100 pixels for the upward drag. The native baseline
+remained at zero because the disabled row still put a vertical
+recognizer in the gesture arena. The disabled shell now contributes
+no drag callbacks and defers hit testing to its child. Switching from
+horizontal to None keeps the same child element and render object.
+All three references and ten focused Rust runtime tests passed.

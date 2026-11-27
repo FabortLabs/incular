@@ -719,7 +719,12 @@ impl Dismissible {
         let revision = Rc::new(Cell::new(0_u64));
         let move_controller = AnimationController::new(value.movement_duration);
         let resize_controller = value.resize_duration.map(AnimationController::new);
-        let behavior = value.behavior;
+        let disabled = value.direction == DismissDirection::None;
+        let behavior = if disabled {
+            HitTestBehavior::DeferToChild
+        } else {
+            value.behavior
+        };
         let drag_start_behavior = value.drag_start_behavior;
         let x_axis = value.direction.is_x_axis();
         let state = Rc::new(DismissState {
@@ -791,30 +796,34 @@ impl Dismissible {
         if let Some(resize) = resize_controller {
             ticked = Widget::animation_ticker_with_revision(resize, false, revision, ticked);
         }
-        let start = {
-            let state = state.clone();
-            Rc::new(move |details| state.drag_start(details))
-        };
-        let update = {
-            let state = state.clone();
-            Rc::new(move |details| state.drag_update(details))
-        };
-        let end = {
-            let state = state.clone();
-            Rc::new(move |details| state.drag_end(details))
-        };
         let mut callbacks = GestureCallbacks {
             drag_start_behavior,
             ..GestureCallbacks::default()
         };
-        if x_axis {
-            callbacks.on_horizontal_drag_start = Some(start);
-            callbacks.on_horizontal_drag_update = Some(update);
-            callbacks.on_horizontal_drag_end = Some(end);
-        } else {
-            callbacks.on_vertical_drag_start = Some(start);
-            callbacks.on_vertical_drag_update = Some(update);
-            callbacks.on_vertical_drag_end = Some(end);
+        // A disabled row must not claim an ancestor scroll's drag. Keep
+        // the empty shell so changing direction does not remount its child.
+        if !disabled {
+            let start = {
+                let state = state.clone();
+                Rc::new(move |details| state.drag_start(details))
+            };
+            let update = {
+                let state = state.clone();
+                Rc::new(move |details| state.drag_update(details))
+            };
+            let end = {
+                let state = state.clone();
+                Rc::new(move |details| state.drag_end(details))
+            };
+            if x_axis {
+                callbacks.on_horizontal_drag_start = Some(start);
+                callbacks.on_horizontal_drag_update = Some(update);
+                callbacks.on_horizontal_drag_end = Some(end);
+            } else {
+                callbacks.on_vertical_drag_start = Some(start);
+                callbacks.on_vertical_drag_update = Some(update);
+                callbacks.on_vertical_drag_end = Some(end);
+            }
         }
         (
             state,

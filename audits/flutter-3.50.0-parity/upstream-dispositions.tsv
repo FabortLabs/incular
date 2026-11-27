@@ -3634,3 +3634,6 @@ packages/flutter/test/widgets/automatic_keep_alive_test.dart	478	AutomaticKeepAl
 packages/flutter/test/widgets/automatic_keep_alive_test.dart	515	AutomaticKeepAlive with keepAlive set to true before initState and widget goes out of scope	paired-match	upstream-automatic-keep-alive.md#default-listview-and-gridview-delegates
 packages/flutter/test/widgets/automatic_keep_alive_test.dart	570	Keep alive Listenable has its listener removed once called	paired-match	upstream-automatic-keep-alive.md#default-listview-and-gridview-delegates
 packages/flutter/test/widgets/automatic_keep_alive_test.dart	295	AutomaticKeepAlive double 2	paired-match	upstream-automatic-keep-alive.md#reparenting-an-active-client
+packages/flutter/test/widgets/dismissible_test.dart	1037	DismissDirection.none does not trigger dismiss	paired-match	upstream-dismissible-direction-and-confirmation.md#disabled-rows-do-not-capture-scroll-drags
+packages/flutter/test/widgets/dismissible_test.dart	1053	DismissDirection.none does not prevent scrolling	paired-match	upstream-dismissible-direction-and-confirmation.md#disabled-rows-do-not-capture-scroll-drags
+packages/flutter/test/widgets/dismissible_test.dart	1127	Change direction does not lose child state	paired-match	upstream-dismissible-direction-and-confirmation.md#disabled-rows-do-not-capture-scroll-drags
