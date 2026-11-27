@@ -423,6 +423,7 @@ impl<R: ArenaRecognizer> GestureRecognizer for ArenaGestureRecognizer<R> {
     fn dispatch(&mut self, action: GestureAction) {
         if let GestureAction::ArenaAccepted { pointer } = action
             && let Some(accepted) = self.pointers.get_mut(&pointer)
+            && !*accepted
         {
             *accepted = true;
             self.recognizer.accept_gesture(pointer);
@@ -436,6 +437,10 @@ impl<R: ArenaRecognizer> GestureRecognizer for ArenaGestureRecognizer<R> {
                 self.pointers.remove(&pointer);
             }
         }
+    }
+
+    fn can_win_uncontested(&self, pointer: u64) -> bool {
+        self.pointers.get(&pointer) == Some(&false)
     }
 
     fn cancel(&mut self) {

@@ -1272,6 +1272,20 @@ impl PointerGestureRecognizer {
                     }
                     self.tap_cancel(self.tap_withdrawal_reason(TapCancelReason::Forced));
                 }
+                if self.tap_rejected
+                    && !self.callbacks.has_double_tap_callbacks()
+                    && !self.has_long_press_callbacks()
+                    && !self.has_pan_callbacks()
+                    && !self.has_horizontal_drag_callbacks()
+                    && !self.has_vertical_drag_callbacks()
+                    && self.delayed_drag.is_none()
+                {
+                    // Flutter's pure TapGestureRecognizer leaves the arena
+                    // at its tap slop, not at the larger pan threshold.
+                    // No other configured gesture needs this contact.
+                    self.down = None;
+                    return GestureDecision::Reject;
+                }
                 if distance > DOUBLE_TAP_TOUCH_SLOP {
                     self.double_tap_moved = true;
                     self.cancel_double_tap();

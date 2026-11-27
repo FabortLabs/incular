@@ -24,6 +24,13 @@ pub trait GestureRecognizer: Any {
     /// Dispatches an action after arena arbitration accepts this recognizer.
     fn dispatch(&mut self, action: GestureAction);
 
+    /// Whether this recognizer should receive a Flutter-style default win
+    /// when it remains the only contender after routing the current sample.
+    #[doc(hidden)]
+    fn can_win_uncontested(&self, _pointer: u64) -> bool {
+        false
+    }
+
     /// Notifies the recognizer that its stream was cancelled or lost the
     /// arena. The default has no additional state to clear.
     fn cancel(&mut self) {}

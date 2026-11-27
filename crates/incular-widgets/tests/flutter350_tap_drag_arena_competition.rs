@@ -63,71 +63,79 @@ fn competitor(trace: &Trace, other: Other) -> PointerGestureRecognizer {
     PointerGestureRecognizer::new(callbacks)
 }
 
-fn raced(
+fn competition_detector(
+    trace: &Trace,
     horizontal: bool,
     eager: bool,
-    other: Other,
+    other: Option<Other>,
+    combined_first: bool,
+) -> RawGestureDetector {
+    let combined = trace.clone();
+    let other_trace = trace.clone();
+    let combined_factory = GestureRecognizerFactoryWithHandlers::new(
+        move || {
+            let recognizer = if horizontal {
+                TapAndDragGestureRecognizer::horizontal_drag()
+            } else {
+                TapAndDragGestureRecognizer::pan()
+            };
+            let record = |label: &'static str| {
+                let trace = combined.clone();
+                move |count| trace.borrow_mut().push(format!("{label}#{count}"))
+            };
+            let down = record("down");
+            let up = record("up");
+            let start = record(if horizontal {
+                "horizontaldragstart"
+            } else {
+                "panstart"
+            });
+            let update = record(if horizontal {
+                "horizontaldragupdate"
+            } else {
+                "panupdate"
+            });
+            let end = record(if horizontal {
+                "horizontaldragend"
+            } else {
+                "panend"
+            });
+            let cancel = combined.clone();
+            ArenaGestureRecognizer::new(
+                recognizer
+                    .drag_start_behavior(DragStartBehavior::Down)
+                    .eager_victory_on_drag(eager)
+                    .max_consecutive_tap(3)
+                    .on_tap_down(move |details| down(details.consecutive_tap_count))
+                    .on_tap_up(move |details| up(details.consecutive_tap_count))
+                    .on_drag_start(move |details| start(details.consecutive_tap_count))
+                    .on_drag_update(move |details| update(details.consecutive_tap_count))
+                    .on_drag_end(move |details| end(details.consecutive_tap_count))
+                    .on_cancel(move || cancel.borrow_mut().push("cancel".into())),
+            )
+        },
+        |_| {},
+    );
+    let widget = RawGestureDetector::new(Widget::box_(Size::new(200., 200.), Color::WHITE));
+    let Some(other) = other else {
+        return widget.gesture(combined_factory);
+    };
+    let other_factory =
+        GestureRecognizerFactoryWithHandlers::new(move || competitor(&other_trace, other), |_| {});
+    if combined_first {
+        widget.gesture(combined_factory).gesture(other_factory)
+    } else {
+        widget.gesture(other_factory).gesture(combined_factory)
+    }
+}
+
+fn route(
+    tree: &mut WidgetTree,
+    base: Instant,
     pointer: u64,
     device: PointerDeviceKind,
     moves: &[(f32, f32)],
-) -> Vec<String> {
-    let trace = Trace::default();
-    let combined = trace.clone();
-    let other_trace = trace.clone();
-    let widget = RawGestureDetector::new(Widget::box_(Size::new(200., 200.), Color::WHITE))
-        .gesture(GestureRecognizerFactoryWithHandlers::new(
-            move || {
-                let recognizer = if horizontal {
-                    TapAndDragGestureRecognizer::horizontal_drag()
-                } else {
-                    TapAndDragGestureRecognizer::pan()
-                };
-                let record = |label: &'static str| {
-                    let trace = combined.clone();
-                    move |count| trace.borrow_mut().push(format!("{label}#{count}"))
-                };
-                let down = record("down");
-                let up = record("up");
-                let start = record(if horizontal {
-                    "horizontaldragstart"
-                } else {
-                    "panstart"
-                });
-                let update = record(if horizontal {
-                    "horizontaldragupdate"
-                } else {
-                    "panupdate"
-                });
-                let end = record(if horizontal {
-                    "horizontaldragend"
-                } else {
-                    "panend"
-                });
-                let cancel = combined.clone();
-                ArenaGestureRecognizer::new(
-                    recognizer
-                        .drag_start_behavior(DragStartBehavior::Down)
-                        .eager_victory_on_drag(eager)
-                        .max_consecutive_tap(3)
-                        .on_tap_down(move |details| down(details.consecutive_tap_count))
-                        .on_tap_up(move |details| up(details.consecutive_tap_count))
-                        .on_drag_start(move |details| start(details.consecutive_tap_count))
-                        .on_drag_update(move |details| update(details.consecutive_tap_count))
-                        .on_drag_end(move |details| end(details.consecutive_tap_count))
-                        .on_cancel(move || cancel.borrow_mut().push("cancel".into())),
-                )
-            },
-            |_| {},
-        ))
-        .gesture(GestureRecognizerFactoryWithHandlers::new(
-            move || competitor(&other_trace, other),
-            |_| {},
-        ));
-    let mut tree = WidgetTree::new();
-    tree.mount(widget.into()).unwrap();
-    tree.layout(Constraints::tight(Size::new(200., 200.)))
-        .unwrap();
-    let base = Instant::now();
+) {
     let mut send = |ms, phase, (x, y)| {
         tree.dispatch_raw_pointer(RawPointerEvent::new(
             pointer,
@@ -148,6 +156,23 @@ fn raced(
         PointerPhase::Up,
         moves.last().copied().unwrap_or((11., 9.)),
     );
+}
+
+fn raced(
+    horizontal: bool,
+    eager: bool,
+    other: Other,
+    pointer: u64,
+    device: PointerDeviceKind,
+    moves: &[(f32, f32)],
+) -> Vec<String> {
+    let trace = Trace::default();
+    let widget = competition_detector(&trace, horizontal, eager, Some(other), true);
+    let mut tree = WidgetTree::new();
+    tree.mount(widget.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(200., 200.)))
+        .unwrap();
+    route(&mut tree, Instant::now(), pointer, device, moves);
     trace.take()
 }
 
@@ -366,4 +391,94 @@ fn replacing_a_factory_of_the_same_concrete_type_mounts_only_the_replacement() {
         }
         assert_eq!(&*trace.borrow(), &["replacement"], "bulk={bulk}");
     }
+}
+
+#[test]
+fn a_sole_horizontal_member_can_drag_diagonally_after_the_press_default_win() {
+    // Pinned :487: across the pan distance but below horizontal drag slop.
+    let trace = Trace::default();
+    let widget = competition_detector(&trace, true, true, None, true);
+    let mut tree = WidgetTree::new();
+    tree.mount(widget.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(200., 200.)))
+        .unwrap();
+    route(
+        &mut tree,
+        Instant::now(),
+        5,
+        PointerDeviceKind::Touch,
+        &[(25., 45.)],
+    );
+    assert_eq!(
+        trace.take(),
+        [
+            "down#1",
+            "horizontaldragstart#1",
+            "horizontaldragupdate#1",
+            "horizontaldragend#1"
+        ]
+    );
+}
+
+#[test]
+fn tap_rejection_defaults_the_remaining_pan_and_the_next_tap_uses_its_new_order() {
+    // Pinned :865; both recognizers are retained when their order reverses.
+    let trace = Trace::default();
+    let make = |first| competition_detector(&trace, false, true, Some(Other::Tap), first);
+    let viewport = Constraints::tight(Size::new(200., 200.));
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(make(true).into()).unwrap();
+    tree.layout(viewport).unwrap();
+    let stamp = Instant::now();
+    route(&mut tree, stamp, 5, PointerDeviceKind::Touch, &[(25., 25.)]);
+    assert_eq!(trace.take(), ["down#1", "panstart#1", "panend#1"]);
+    tree.update(root, make(false).into()).unwrap();
+    tree.layout(viewport).unwrap();
+    route(
+        &mut tree,
+        stamp + Duration::from_millis(1000),
+        1,
+        PointerDeviceKind::Touch,
+        &[],
+    );
+    assert_eq!(trace.take(), ["tapdown", "tapup"]);
+}
+
+#[test]
+fn the_raw_default_does_not_win_before_an_ordinary_vertical_drag_joins() {
+    use incular_widgets::GestureDetector;
+
+    let trace = Trace::default();
+    let raw = competition_detector(&trace, true, true, None, true);
+    let start = trace.clone();
+    let end = trace.clone();
+    let root = GestureDetector::new(raw)
+        .on_vertical_drag_start(move |_| start.borrow_mut().push("ordinary start".into()))
+        .on_vertical_drag_end(move |_| end.borrow_mut().push("ordinary end".into()));
+    let mut tree = WidgetTree::new();
+    tree.mount(root.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(200., 200.)))
+        .unwrap();
+    let now = Instant::now();
+    for (ms, phase, y) in [
+        (0, PointerPhase::Down, 10.),
+        (10, PointerPhase::Move, 45.),
+        (20, PointerPhase::Move, 100.),
+        (40, PointerPhase::Up, 100.),
+    ] {
+        let event = RawPointerEvent::new(
+            1,
+            0,
+            PointerDeviceKind::Touch,
+            u32::from(phase != PointerPhase::Up),
+            Offset::new(10., y),
+            phase,
+            now + Duration::from_millis(ms),
+        );
+        let hit = tree.pointer_hit_test(event.position);
+        tree.dispatch_raw_pointer_with_hit(0, event, &hit);
+        tree.dispatch_pointer_gesture_raw_with_hit(0, event, &hit);
+        tree.settle_uncontested_raw_arena(0, event);
+    }
+    assert_eq!(trace.take(), ["ordinary start", "ordinary end"]);
 }

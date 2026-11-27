@@ -117,25 +117,27 @@ impl GestureArena {
     /// Notifies the sole remaining pending member when the host closes a
     /// pointer arena. A decided or still-contested arena emits no default win.
     pub fn close_sole_member(&mut self, key: GestureArenaKey) -> Vec<GestureArenaEntry> {
-        let Some(entries) = self.streams.get(&key) else {
+        let Some(member) = self.sole_pending_member(key) else {
             return Vec::new();
         };
+        self.accept(key, member)
+    }
+
+    /// The default winner, if no member has won and exactly one is pending.
+    #[must_use]
+    pub fn sole_pending_member(&self, key: GestureArenaKey) -> Option<GestureArenaMember> {
+        let entries = self.streams.get(&key)?;
         if entries
             .iter()
             .any(|entry| entry.disposition == GestureDisposition::Accepted)
         {
-            return Vec::new();
+            return None;
         }
         let mut pending = entries
             .iter()
             .filter(|entry| entry.disposition == GestureDisposition::Pending);
-        let Some(member) = pending.next().map(|entry| entry.member) else {
-            return Vec::new();
-        };
-        if pending.next().is_some() {
-            return Vec::new();
-        }
-        self.accept(key, member)
+        let winner = pending.next()?.member;
+        pending.next().is_none().then_some(winner)
     }
 
     pub fn accept(

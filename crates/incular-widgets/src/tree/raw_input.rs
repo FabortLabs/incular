@@ -94,7 +94,9 @@ impl WidgetTree {
         } else {
             self.pointer_hit_test(event.position)
         };
-        self.dispatch_raw_pointer_with_hit(window, event, &hit)
+        let target = self.dispatch_raw_pointer_with_hit(window, event, &hit);
+        self.settle_uncontested_raw_arena(window, event);
+        target
     }
 
     /// [`Self::dispatch_raw_pointer_in_window`] over a hit test the caller
@@ -174,6 +176,36 @@ impl WidgetTree {
             return None;
         }
         self.dispatch_raw_gesture_stream(key, event, hit.raw())
+    }
+
+    /// Called after the sample has reached both raw and ordinary routes.
+    /// Flutter defers default acceptance until the rest of the dispatch
+    /// has run; in particular, another contender may still join on down.
+    #[doc(hidden)]
+    pub fn settle_uncontested_raw_arena(&mut self, window: u64, event: RawPointerEvent) {
+        if !matches!(event.phase, PointerPhase::Down | PointerPhase::Move) {
+            return;
+        }
+        let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
+        let Some(raw) = self.input.raw_gesture_streams.get(&key) else {
+            return;
+        };
+        let Some(winner) = self.input.gesture_arena.sole_pending_member(key) else {
+            return;
+        };
+        let Some(member) = raw.members.iter().find(|member| member.member == winner) else {
+            return;
+        };
+        let eligible = self.input.raw_recognizers.get(&member.element)
+            .and_then(|recognizers| recognizers.get(&member.type_id))
+            .is_some_and(|recognizer| recognizer.can_win_uncontested(event.pointer));
+        if eligible {
+            let entries = self.input.gesture_arena.accept(key, winner);
+            self.apply_arena_entries(key, entries);
+            self.dispatch_raw_gesture_action(
+                key, winner, GestureAction::ArenaAccepted { pointer: event.pointer },
+            );
+        }
     }
 
     /// Whether the normalized event belongs to a captured contact, even if

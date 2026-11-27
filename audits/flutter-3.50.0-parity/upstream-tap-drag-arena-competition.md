@@ -38,3 +38,22 @@ key order. Previously the old factory remained active and raw routing
 could visit it twice. The paired control delivers only the replacement
 tap. Eleven focused and four adjacent native tests passed. The
 authored factory control is not another original registration.
+
+## Default wins after the sample is routed
+
+The pinned :487 and :865 cases passed. Native :487 now lets the
+only raw horizontal recognizer accept the press before a move that
+exceeds overall pan distance but not the horizontal threshold. In
+:865, a pure tap now leaves at its **tap** slop instead of staying
+pending up to the wider pan slop. The remaining combined recognizer
+wins before release and produces down, start and end. Reordering
+the same mounted factories after a virtual one-second delay gives
+the second tap to the first ordinary tap recognizer, without stale
+state.
+
+Default raw awards run after all routes have seen the current
+sample, consistent with Flutter's deferred sole-member resolution.
+A mounted ordinary vertical drag can still join before the raw
+default is assigned and wins the mixed-route test. Explicit raw
+resolutions still take effect immediately within their route.
+Fourteen competition and four adjacent raw-widget tests passed.

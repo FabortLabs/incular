@@ -2400,11 +2400,14 @@ impl Runtime {
             || !hover_capable
             || other_button_event
             || self.tree.has_active_pointer_gesture(gesture_window, device, pointer);
-        if ordinary_gesture_allowed
-            && let Some(element) =
-                self.tree
-                    .dispatch_pointer_gesture_raw_with_hit(gesture_window, raw_event, &hit)
-        {
+        let ordinary_target = if ordinary_gesture_allowed {
+            self.tree
+                .dispatch_pointer_gesture_raw_with_hit(gesture_window, raw_event, &hit)
+        } else {
+            None
+        };
+        self.tree.settle_uncontested_raw_arena(gesture_window, raw_event);
+        if let Some(element) = ordinary_target {
             self.frame_requested = true;
             if active_primary && phase != PointerPhase::Down {
                 self.cancel_pending_mobile_text_touch();
