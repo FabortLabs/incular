@@ -116,7 +116,7 @@ pub(super) fn annotated_focus_node(kind: &WidgetKind) -> Option<&incular_gesture
     }
 }
 
-fn focus_boundary_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
+pub(super) fn focus_boundary_node(kind: &WidgetKind) -> Option<&incular_gestures::FocusNode> {
     match kind {
         WidgetKind::Gesture { callbacks, .. } if callbacks.annotates_focus => {
             callbacks.focus_node.as_ref()

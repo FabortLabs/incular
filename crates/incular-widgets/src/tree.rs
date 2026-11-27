@@ -159,6 +159,8 @@ use widget::{
 pub use invariants::{InvariantCategory, InvariantViolation};
 pub use flex_overflow::{ConstraintOverflowDiagnostic, FlexOverflowDiagnostic};
 #[cfg(debug_assertions)]
+mod debug_focus_boxes;
+#[cfg(debug_assertions)]
 mod debug_overflow_indicator;
 pub use painting::PointerHitTest;
 pub use rendering::{image_fit_rects, image_repeat_destinations, render_kind};
@@ -1546,6 +1548,8 @@ pub struct WidgetTree {
     diagnostics: Diagnostics,
     #[cfg(debug_assertions)]
     flex_overflow_diagnostics: Option<Box<flex_overflow::FlexOverflowDiagnostics>>,
+    #[cfg(debug_assertions)]
+    debug_focus_boxes: Option<Box<debug_focus_boxes::DebugFocusBoxes>>,
     unmounted: Vec<ElementId>,
     autofill_registry: Option<Box<autofill::AutofillRegistry>>,
     autofill_context_completions: Vec<incular_platform::autofill::AutofillContextAction>,

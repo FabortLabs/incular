@@ -727,6 +727,12 @@ impl Runtime {
         }
     }
 
+    /// Draws Flutter-style diagnostic focus outlines in debug builds.
+    /// Release builds always leave the scene unchanged.
+    pub fn set_debug_paint_focus_boxes(&mut self, enabled: bool) {
+        self.frame_requested |= self.tree.set_debug_paint_focus_boxes(enabled);
+    }
+
     fn semantics_activation(&mut self) -> &Rc<crate::semantics_activation::SemanticsActivation> {
         self.semantics_activation.get_or_insert_with(|| {
             Rc::new(crate::semantics_activation::SemanticsActivation::new(

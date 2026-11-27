@@ -322,7 +322,7 @@ pub(crate) struct RenderLayers {
     pub(crate) picture: Option<LayerId>,
     pub(crate) foreground_picture: Option<LayerId>,
     #[cfg(debug_assertions)]
-    debug_overflow_picture: Option<LayerId>,
+    debug_foreground_picture: Option<LayerId>,
     pub(crate) attachment: LayerAttachment,
     /// Retained even through Clip::None so clipping-only updates do not
     /// need to remeasure the positioned children.
@@ -589,7 +589,7 @@ impl RenderLayers {
             picture,
             foreground_picture,
             #[cfg(debug_assertions)]
-            debug_overflow_picture: None,
+            debug_foreground_picture: None,
             attachment,
             layout_overflow: Cell::new(false),
             clip_geometry: caches_clip_geometry.then(|| Rc::new(RefCell::new(None))),
@@ -731,7 +731,7 @@ impl RenderLayers {
 
     fn remove_owned_except_root(&mut self, compositor: &mut LayerTree) {
         #[cfg(debug_assertions)]
-        if let Some(picture) = self.debug_overflow_picture.take() {
+        if let Some(picture) = self.debug_foreground_picture.take() {
             compositor.remove(picture);
         }
         if let Some(picture) = self.picture.take() {
@@ -1040,7 +1040,7 @@ impl RenderLayers {
                 layers.extend(self.picture);
                 layers.append(&mut child_layers);
                 layers.extend(self.foreground_picture);
-                layers.extend(self.debug_overflow_picture());
+                layers.extend(self.debug_foreground_picture());
                 compositor.set_children(self.root, layers);
             }
             LayerAttachment::Clip { content, .. }
@@ -1062,10 +1062,10 @@ impl RenderLayers {
         }
     }
 
-    fn debug_overflow_picture(&self) -> Option<LayerId> {
+    fn debug_foreground_picture(&self) -> Option<LayerId> {
         #[cfg(debug_assertions)]
         {
-            self.debug_overflow_picture
+            self.debug_foreground_picture
         }
         #[cfg(not(debug_assertions))]
         {
@@ -1073,29 +1073,34 @@ impl RenderLayers {
         }
     }
 
-    /// A diagnostic overlay is allocated only on overflow, above both child
-    /// and clip stages. The return value requests direct-child resync.
     #[cfg(debug_assertions)]
-    pub(crate) fn update_debug_overflow_picture(
+    pub(crate) fn has_debug_foreground_picture(&self) -> bool {
+        self.debug_foreground_picture.is_some()
+    }
+
+    /// Lazily retains a diagnostic picture above the child. Returns
+    /// whether the direct child's layer attachment must be synchronized.
+    #[cfg(debug_assertions)]
+    pub(crate) fn update_debug_foreground_picture(
         &mut self,
         compositor: &mut LayerTree,
         picture: &DisplayList,
         bounds: Rect,
     ) -> bool {
-        match (picture.commands().is_empty(), self.debug_overflow_picture) {
+        match (picture.commands().is_empty(), self.debug_foreground_picture) {
             (true, None) => return false,
             (false, Some(id)) => {
                 compositor.update_picture_if_changed(id, picture, bounds);
                 return false;
             }
             (true, Some(id)) => {
-                self.debug_overflow_picture = None;
+                self.debug_foreground_picture = None;
                 compositor.remove(id);
             }
             (false, None) => {
                 let id = compositor.create_picture(DisplayList::new(), bounds);
                 compositor.update_picture_if_changed(id, picture, bounds);
-                self.debug_overflow_picture = Some(id);
+                self.debug_foreground_picture = Some(id);
             }
         }
         if let LayerAttachment::Clip { clip, content, overflow_active, .. } = &self.attachment {
@@ -1104,7 +1109,7 @@ impl RenderLayers {
                 self.root,
                 std::iter::once(stage)
                     .chain(self.picture)
-                    .chain(self.debug_overflow_picture)
+                    .chain(self.debug_foreground_picture)
                     .collect(),
             );
             false
@@ -1425,7 +1430,7 @@ impl RenderLayers {
                 self.root,
                 std::iter::once(stage)
                     .chain(self.picture)
-                    .chain(self.debug_overflow_picture())
+                    .chain(self.debug_foreground_picture())
                     .collect(),
             );
             overflow_active.set(Some(enabled));

@@ -284,12 +284,29 @@ impl WidgetTree {
         Ok(list)
     }
 
+    /// Toggles Flutter-style focus outlines in debug builds. Disabled by
+    /// default; this never affects layout, focus or accessibility.
+    pub fn set_debug_paint_focus_boxes(&mut self, enabled: bool) -> bool {
+        #[cfg(debug_assertions)]
+        {
+            if self.debug_focus_boxes.as_ref().is_some_and(|state| state.enabled) != enabled {
+                self.debug_focus_boxes.get_or_insert_with(Box::default).enabled = enabled;
+                return true;
+            }
+        }
+        #[cfg(not(debug_assertions))]
+        let _ = enabled;
+        false
+    }
+
     #[must_use]
     pub fn paint(&mut self) -> DisplayList {
         let _phase_guard = self.guard_phase_root(FramePhase::Paint);
         self.flush_sliver_reclips();
         self.flush_custom_painter_repaints();
         self.flush_proxy_repaints();
+        #[cfg(debug_assertions)]
+        self.sync_debug_focus_boxes();
         if let Some(root) = self.root.and_then(|id| self.render_id(id)) {
             self.paint_render(root);
         }
@@ -1000,18 +1017,41 @@ impl WidgetTree {
                 .update_picture_if_changed(layer, &picture, foreground_bounds);
         }
         #[cfg(debug_assertions)]
-        if matches!(kind.as_ref(), RenderKind::Flex { .. } | RenderKind::Unconstrained { .. }) {
-            picture.clear();
-            self.paint_debug_overflow_indicator(id, &kind, size, &mut picture);
-            let bounds = painted_bounds(picture.commands(), size);
-            let node = self.renders.get_mut(id.0).expect("render remains live while painting");
-            let resync = node.object.layers.update_debug_overflow_picture(
-                &mut self.compositor,
-                &picture,
-                bounds,
+        {
+            let focus_color = self.debug_focus_color(id);
+            let overflow = matches!(
+                kind.as_ref(),
+                RenderKind::Flex { .. } | RenderKind::Unconstrained { .. }
             );
-            if resync && let Some(element) = self.element_for_render(id) {
-                self.sync_render_children(element);
+            let existing = self
+                .render_live(id, "retained render must remain live")
+                .object
+                .layers
+                .has_debug_foreground_picture();
+            if overflow || focus_color.is_some() || existing {
+                picture.clear();
+                if overflow {
+                    self.paint_debug_overflow_indicator(id, &kind, size, &mut picture);
+                }
+                if let Some(color) = focus_color
+                    && size.width > 0.0
+                    && size.height > 0.0
+                {
+                    picture.push(PaintCommand::Border {
+                        rrect: RRect::uniform(Rect::from_origin_size(Offset::ZERO, size), 0.),
+                        border: Border::new(3.0, color),
+                    });
+                }
+                let bounds = painted_bounds(picture.commands(), size);
+                let node = self.renders.get_mut(id.0).expect("render remains live while painting");
+                let resync = node.object.layers.update_debug_foreground_picture(
+                    &mut self.compositor,
+                    &picture,
+                    bounds,
+                );
+                if resync && let Some(element) = self.element_for_render(id) {
+                    self.sync_render_children(element);
+                }
             }
         }
         self.paint_scratch = picture;

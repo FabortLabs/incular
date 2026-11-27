@@ -37,6 +37,8 @@ impl WidgetTree {
             diagnostics: Diagnostics::default(),
             #[cfg(debug_assertions)]
             flex_overflow_diagnostics: None,
+            #[cfg(debug_assertions)]
+            debug_focus_boxes: None,
             unmounted: Vec::new(),
             autofill_registry: None,
             autofill_context_completions: Vec::new(),
