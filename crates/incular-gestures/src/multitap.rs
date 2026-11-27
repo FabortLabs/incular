@@ -23,8 +23,8 @@ struct TapGesture {
     kind: PointerDeviceKind,
     tracking: bool,
     won_arena: bool,
-    /// The long-tap timer's deadline.
-    long_tap: Option<Instant>,
+    /// The deadline and registration order for a long-tap timer.
+    long_tap: Option<(Instant, u64)>,
     last: (Offset, Offset),
     last_position_final: Option<(Offset, Offset)>,
 }
@@ -46,6 +46,7 @@ pub struct MultiTapGestureRecognizer {
     on_tap_cancel: Option<MultiTapCallback>,
     on_long_tap_down: Option<MultiTapDownCallback>,
     gestures: BTreeMap<u64, TapGesture>,
+    next_timer_order: u64,
     link: ArenaLink,
 }
 
@@ -68,6 +69,7 @@ impl MultiTapGestureRecognizer {
             on_tap_cancel: None,
             on_long_tap_down: None,
             gestures: BTreeMap::new(),
+            next_timer_order: 0,
             link: ArenaLink::default(),
         }
     }
@@ -131,8 +133,11 @@ impl MultiTapGestureRecognizer {
             return;
         }
         self.link.add(event.pointer);
-        let long_tap =
-            (self.long_tap_delay > Duration::ZERO).then(|| event.time + self.long_tap_delay);
+        let long_tap = (self.long_tap_delay > Duration::ZERO).then(|| {
+            let order = self.next_timer_order;
+            self.next_timer_order = order.checked_add(1).expect("long tap timer order exhausted");
+            (event.time + self.long_tap_delay, order)
+        });
         self.gestures.insert(
             event.pointer,
             TapGesture {
@@ -211,12 +216,16 @@ impl MultiTapGestureRecognizer {
 
     /// Fires the long-tap timers due by `now`.
     pub fn poll(&mut self, now: Instant) {
-        // The user callback cannot reach the recognizer, so the map is
-        // walked in place.
-        for (pointer, gesture) in self.gestures.iter_mut() {
-            if !gesture.long_tap.is_some_and(|deadline| deadline <= now) {
-                continue;
-            }
+        // Dart's timers run by deadline, using registration order for ties.
+        // Pointer IDs do not determine which held contact fires first.
+        let mut due: Vec<_> = self.gestures.iter().filter_map(|(&pointer, gesture)| {
+            let (deadline, order) = gesture.long_tap?;
+            (deadline <= now).then_some((deadline, order, pointer))
+        }).collect();
+        due.sort_unstable();
+
+        for (_, _, pointer) in due {
+            let gesture = self.gestures.get_mut(&pointer).expect("due long tap is tracked");
             gesture.long_tap = None;
             let details = TapDownDetails {
                 global_position: gesture.last.0,
@@ -224,7 +233,7 @@ impl MultiTapGestureRecognizer {
                 kind: gesture.kind,
             };
             if let Some(callback) = &self.on_long_tap_down {
-                callback(*pointer, details);
+                callback(pointer, details);
             }
         }
     }
@@ -234,7 +243,7 @@ impl MultiTapGestureRecognizer {
     pub fn next_deadline(&self) -> Option<Instant> {
         self.gestures
             .values()
-            .filter_map(|gesture| gesture.long_tap)
+            .filter_map(|gesture| gesture.long_tap.map(|(deadline, _)| deadline))
             .min()
     }
 

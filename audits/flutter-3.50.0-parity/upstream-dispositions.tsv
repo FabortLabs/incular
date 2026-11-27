@@ -2709,3 +2709,5 @@ packages/flutter/test/painting/alignment_test.dart	376	AlignmentDirectional.reso
 packages/flutter/test/gestures/hit_test_test.dart	9	wrapped HitTestResult gets HitTestEntry added to wrapping HitTestResult	paired-match	upstream-shared-hit-test-result.md
 packages/flutter/test/gestures/hit_test_test.dart	35	HitTestResult should correctly push and pop transforms	paired-match	upstream-shared-hit-test-result.md
 packages/flutter/test/gestures/hit_test_test.dart	76	HitTestResult should correctly push and pop offsets	paired-match	upstream-shared-hit-test-result.md
+packages/flutter/test/gestures/multitap_test.dart	13	Should recognize pan	paired-match	upstream-multitap-timers.md
+packages/flutter/test/gestures/multitap_test.dart	78	Can filter based on device kind	paired-match	upstream-multitap-timers.md

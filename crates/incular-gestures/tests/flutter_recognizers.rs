@@ -687,3 +687,79 @@ fn tap_and_pan_reports_tap_down_at_the_press_deadline() {
         ]
     );
 }
+
+fn pinned_multitap_replay(filter_touch: bool) {
+    use PointerPhase::{Down, Move, Up};
+    use incular_gestures::constants::{LONG_PRESS_TIMEOUT, PRESS_TIMEOUT};
+
+    let log = log();
+    let mut tap = multi_tap(&log).long_tap_delay(LONG_PRESS_TIMEOUT);
+    if filter_touch {
+        tap = tap.supported_devices([PointerDeviceKind::Touch]);
+    }
+    let base = Instant::now();
+    let other = if filter_touch { 7 } else { 6 };
+
+    tap.handle_raw(touch(base, 0, 5, Down, 10., 10.));
+    assert_eq!(log.take(), ["down 5 (10, 10)"]);
+
+    if filter_touch {
+        tap.handle_raw(event(base, 1, 6, PointerDeviceKind::Mouse, Down, 20., 20.));
+        assert!(log.borrow().is_empty());
+    }
+    tap.handle_raw(touch(base, 2, other, Down, 15., 15.));
+    assert_eq!(log.take(), [format!("down {other} (15, 15)")]);
+
+    tap.handle_raw(touch(base, 3, 5, Move, 11., 12.));
+    if filter_touch {
+        for (ms, (x, y)) in [(4, (21., 18.)), (5, (50., 40.))] {
+            tap.handle_raw(event(base, ms, 6, PointerDeviceKind::Mouse, Move, x, y));
+        }
+    }
+    tap.handle_raw(touch(base, 6, other, Move, 14., 13.));
+    assert!(log.borrow().is_empty());
+
+    tap.handle_raw(touch(base, 7, 5, Up, 11., 12.));
+    assert_eq!(log.take(), ["up 5 (11, 12)", "tap 5"]);
+    if filter_touch {
+        tap.handle_raw(event(base, 8, 6, PointerDeviceKind::Mouse, Up, 50., 40.));
+        assert!(log.borrow().is_empty());
+    }
+    let deadline = base + Duration::from_millis(2) + LONG_PRESS_TIMEOUT;
+    tap.poll(deadline - Duration::from_millis(1));
+    assert!(log.borrow().is_empty());
+    tap.poll(deadline + PRESS_TIMEOUT);
+    assert_eq!(log.take(), [format!("long {other} (14, 13)")]);
+
+    let after = (deadline + PRESS_TIMEOUT).saturating_duration_since(base).as_millis() as u64;
+    tap.handle_raw(touch(base, after + 1, other, Move, 40., 30.));
+    assert_eq!(log.take(), [format!("cancel {other}")]);
+    tap.handle_raw(touch(base, after + 2, other, Up, 40., 30.));
+    assert!(log.borrow().is_empty());
+    assert_eq!(tap.next_deadline(), None);
+}
+
+#[test]
+fn pinned_multitap_can_finish_one_pointer_while_the_other_holds_then_cancels() {
+    pinned_multitap_replay(false);
+}
+
+#[test]
+fn pinned_multitap_touch_filter_ignores_all_interleaved_mouse_phases() {
+    pinned_multitap_replay(true);
+}
+
+#[test]
+fn simultaneous_long_taps_are_delivered_by_deadline_and_then_registration_order() {
+    let log = log();
+    let mut tap = multi_tap(&log).long_tap_delay(Duration::from_millis(500));
+    let base = Instant::now();
+    for (ms, id) in [(0, 40), (0, 7), (16, 2)] {
+        tap.handle_raw(touch(base, ms, id, PointerPhase::Down, id as f32, 0.));
+    }
+    assert_eq!(log.take(), ["down 40 (40, 0)", "down 7 (7, 0)", "down 2 (2, 0)"]);
+    tap.poll(base + Duration::from_millis(520));
+    assert_eq!(log.take(), ["long 40 (40, 0)", "long 7 (7, 0)", "long 2 (2, 0)"]);
+    tap.poll(base + Duration::from_millis(800));
+    assert!(log.borrow().is_empty());
+}

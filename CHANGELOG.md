@@ -407,6 +407,8 @@ a version and date when publishing.
 
 ### Fixed
 
+- Due long-tap callbacks run by deadline and then contact registration order.
+
 - Star borders morph from and to circle borders instead of switching abruptly.
   Stadium and rounded rectangle transitions use the staged circle path.
 
