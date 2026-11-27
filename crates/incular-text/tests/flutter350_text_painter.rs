@@ -1795,3 +1795,41 @@ fn invalid_utf16_replaces_the_entire_run_and_reports_once_without_failing_layout
     assert_eq!(painter.width(), Ok(20.));
     assert_eq!(painter.shaped_layout().unwrap().glyph_count(), 1);
 }
+
+#[test]
+#[ignore = "Parley wraps non-ASCII Unicode breakable space separators instead of hanging them"]
+fn text_caret_preserves_unicode_trailing_space_policies_at_tight_width() {
+    let Some((mut engine, style)) = centered_width_ahem() else {
+        return;
+    };
+    let style = style.font_size(14.);
+    let segmenter = icu_segmenter::GraphemeClusterSegmenter::new();
+    for source in ["A", "A\u{1f600}"] {
+        assert_ltr_prefix_carets(&mut engine, &style, source, segmenter.segment_str(source));
+    }
+    for trailing in [
+        '\u{0020}', '\u{3000}', '\u{1680}', '\u{2000}', '\u{2001}', '\u{2002}', '\u{2003}',
+        '\u{2004}', '\u{2005}', '\u{2006}', '\u{2008}', '\u{2009}', '\u{200a}', '\u{205f}',
+    ] {
+        let source = format!("A{trailing}");
+        assert_ltr_prefix_carets(&mut engine, &style, &source, segmenter.segment_str(&source));
+        let mut painter = painter(
+            TextSpan::new(source).style(style.clone()),
+            TextDirection::Ltr,
+        );
+        painter
+            .layout_with_engine(&mut engine, 0., f32::INFINITY)
+            .unwrap();
+        use incular_text::TextAffinity::Downstream;
+        for (unit, expected) in [(0, 0.), (1, 14.), (2, painter.width().unwrap())] {
+            assert_eq!(
+                painter.caret_offset_utf16(unit, Downstream, 0.).unwrap().x,
+                expected
+            );
+        }
+        painter.layout_with_engine(&mut engine, 0., 14.).unwrap();
+        let lines = painter.line_metrics().unwrap();
+        assert_eq!(lines.len(), 1, "trailing {trailing:?}");
+        assert_eq!(lines[0].width, 14., "trailing {trailing:?}");
+    }
+}

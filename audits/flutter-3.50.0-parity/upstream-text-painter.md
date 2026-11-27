@@ -314,3 +314,19 @@ python3 audits/flutter-3.50.0-parity/extract-flutter-test-font.py \
 INCULAR_FLUTTER_REPLACEMENT_FONT_PATH="$PWD/.tmp/FlutterTest-replacement.ttf" \
   cargo test --locked --offline -j1 -p incular-text --test flutter350_text_painter invalid_utf16 -- --test-threads=1
 ```
+
+## Open: non-ASCII hanging separators
+
+The original caret/Unicode whitespace registration passes in Flutter
+but remains open in Incular. At 14 px, Parley wraps U+1680 to a second
+line instead of keeping the space in the first line's trailing
+geometry. The pinned probe additionally distinguishes paragraph end,
+hard newline and soft wrap for U+1680, U+2000 and U+2009. The exact
+native regression is retained as an ignored test, with zero parity
+credit until the line count and visible advance pass. To reproduce:
+
+```sh
+INCULAR_FLUTTER_AHEM_PATH="$PWD/.tmp/flutter/packages/flutter_tools/static/Ahem.ttf" \
+  cargo test --locked --offline -j1 -p incular-text --test flutter350_text_painter \
+  text_caret_preserves_unicode_trailing_space_policies_at_tight_width -- --ignored --test-threads=1
+```
