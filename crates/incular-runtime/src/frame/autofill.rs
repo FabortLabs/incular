@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 
 use incular_platform::{
-    FlutterTextInputConfiguration, TextInputState,
+    FlutterTextInputConfiguration, FlutterTextInputControlUpdate, FlutterTextInputControls,
+    FlutterTextInputControlsError, TextInputState,
     autofill::{
         AutofillConfiguration, AutofillEditingValue, AutofillFieldConfiguration,
         AutofillMessageError, AutofillSelectionAffinity, FlutterAutofillScope,
@@ -26,6 +27,42 @@ impl Runtime {
             return None;
         }
         Some((focused, self.tree.autofill_scope(focused)?))
+    }
+
+    /// Publishes the active laid-out editor to an opt-in Flutter host.
+    ///
+    /// The host must attach the runtime's client ID with
+    /// `FlutterTextInputControls::attach_existing`. Sampling after each frame
+    /// emits only changed state and geometry. Unlike the native IME caret
+    /// snapshot, this wire state preserves an unset selection as (-1, -1).
+    pub fn publish_flutter_text_input_snapshot(
+        &self,
+        controls: &mut FlutterTextInputControls,
+    ) -> Result<bool, FlutterTextInputControlsError> {
+        let Some(connection) = self.text_input_client.filter(|connection| {
+            self.focused == Some(connection.target) && controls.is_attached(connection.client)
+        }) else {
+            return Ok(false);
+        };
+        let field = connection.target;
+        let Some((size, transform)) = self.tree.flutter_editable_size_and_transform(field) else {
+            return Ok(false);
+        };
+        let Some(controller) = self.tree.text_controller(field) else {
+            return Ok(false);
+        };
+        let editing =
+            controller.with_value(|value| editor_wire(&controller, &value.text, value.composing));
+        let editing_changed = controls.publish_editing_state(connection.client, editing)?;
+        let [a, b, c, d, x, y] = transform.coefficients();
+        let geometry_changed = controls.update(
+            connection.client,
+            FlutterTextInputControlUpdate::EditableSizeAndTransform {
+                size,
+                transform: [a, b, 0., 0., c, d, 0., 0., 0., 0., 1., 0., x, y, 0., 1.],
+            },
+        )?;
+        Ok(editing_changed || geometry_changed)
     }
 
     /// Encodes the focused editor's Flutter `TextInput.setClient` message.
@@ -174,7 +211,7 @@ impl Runtime {
                 autofill: AutofillConfiguration::disabled(),
             });
         };
-        let editor = editor_wire(controller, &snapshot.text, snapshot.composing);
+        let editor = editor_wire(&controller, &snapshot.text, snapshot.composing);
         Some(AutofillFieldConfiguration {
             input,
             autofill: AutofillConfiguration::new(
@@ -233,7 +270,7 @@ fn prepare_edit(wire: AutofillEditingValue) -> Result<EditableAutofillValue, Aut
 }
 
 fn editor_wire(
-    controller: TextEditingController,
+    controller: &TextEditingController,
     text: &str,
     composing: Option<TextRange>,
 ) -> AutofillEditingValue {

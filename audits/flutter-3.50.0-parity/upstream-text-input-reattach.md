@@ -225,7 +225,25 @@ Pinned :10368 also passes. The native same-renderer test observes one
 native edit update per replacement, no new client or duplicate follow-up,
 and passes the full `new text` and `new new text` past a six-character
 user-edit formatter. The controller's logical selection stays unset.
-This remains partial because the generic native command exposes a
-usable caret offset, not Flutter's signed -1 editing-state wire fields.
-Pinned :4643 ran, but its exact replacement size/transform wire payload
-has not been compared. All six focused native controller tests passed.
+The generic native command exposes a usable caret offset. The signed
+wire behavior and size/transform are covered by the later section below.
+All six focused native controller tests passed.
+
+
+## Flutter wire snapshots from the mounted editor
+
+Pinned :4643 and :10368 now pair. The opt-in Flutter host binds the
+runtime's active client ID and publishes the laid-out editor directly
+through the existing text input controls. A replaced controller sends
+`Wobble` with signed selection/composing bounds of -1, downstream
+affinity and an unset direction flag. The measured 800×14 editor's
+column-major matrix translates it to (0, 293). Moving the same editor
+to the top sends geometry alone. No unchanged snapshot is resent.
+
+Each :10368 swap sends exactly one complete wire value without applying
+the six-character formatter to programmatic content; no reattachment or
+follow-up is fabricated. The native IME's usable caret offset remains
+unchanged as a separate contract. Controls refuse stale attachment IDs
+and remember incoming platform values to avoid echoing identical state
+back to the host. All 37 focused native controls, wire error, runtime
+input and mounted autofill checks passed.

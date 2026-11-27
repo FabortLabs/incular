@@ -2118,6 +2118,24 @@ impl WidgetTree {
             .then_some((u64::from(id.0.generation()) << 32) | u64::from(id.0.index()))
     }
 
+    /// Local size and world transform of the laid-out editable. The
+    /// native IME caret rectangle is a separate piece of geometry.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn flutter_editable_size_and_transform(
+        &self,
+        id: ElementId,
+    ) -> Option<(Size, CoreTransform)> {
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        if !matches!(node.object.kind(), RenderKind::TextField(_))
+            || node.dirty.contains(DirtyFlags::LAYOUT)
+        {
+            return None;
+        }
+        Some((node.size, self.render_world_transform(render)))
+    }
+
     /// Captures the current text-input client state after layout. The runtime
     /// turns this into a platform command; native window handles never enter
     /// the retained tree.

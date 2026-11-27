@@ -165,6 +165,7 @@ struct Attachment {
     id: TextInputClientId,
     client: Box<dyn Fn(FlutterTextInputClientEvent)>,
     geometry: GeometryCache,
+    editing: Option<AutofillEditingValue>,
 }
 
 #[derive(Default)]
@@ -243,14 +244,31 @@ impl FlutterTextInputControls {
         client: impl Fn(FlutterTextInputClientEvent) + 'static,
     ) -> TextInputClientId {
         let id = TextInputClientId::new(self.next_client);
-        self.next_client = self
-            .next_client
-            .checked_add(1)
-            .expect("text input client IDs exhausted");
+        let bound = self.attach_existing(id, configuration, client);
+        assert!(bound, "text input client IDs exhausted");
+        id
+    }
+
+    /// Attaches the client ID already assigned by the mounted editor's
+    /// runtime. An older or already issued ID cannot replace the connection.
+    pub fn attach_existing(
+        &mut self,
+        id: TextInputClientId,
+        configuration: FlutterTextInputConfiguration,
+        client: impl Fn(FlutterTextInputClientEvent) + 'static,
+    ) -> bool {
+        if id.get() < self.next_client {
+            return false;
+        }
+        let Some(next) = id.get().checked_add(1) else {
+            return false;
+        };
+        self.next_client = next;
         self.attached = Some(Attachment {
             id,
             client: Box::new(client),
             geometry: GeometryCache::default(),
+            editing: None,
         });
         let arguments = json!([id.get(), self.platform_configuration(&configuration)]);
         self.forward(
@@ -260,7 +278,7 @@ impl FlutterTextInputControls {
             },
             ("TextInput.setClient", arguments),
         );
-        id
+        true
     }
 
     pub fn close(&mut self, id: TextInputClientId) -> bool {
@@ -301,13 +319,33 @@ impl FlutterTextInputControls {
             return Ok(false);
         }
         let (method, arguments) = self.encode(&update)?;
-        self.attached
-            .as_mut()
-            .expect("validated attachment")
-            .geometry
-            .record(&update);
+        let attachment = self.attached.as_mut().expect("validated attachment");
+        attachment.geometry.record(&update);
+        if let FlutterTextInputControlUpdate::EditingState(value) = &update {
+            attachment.editing = Some(value.clone());
+        }
         self.forward(update, (method, arguments));
         Ok(true)
+    }
+
+    /// Publishes a mounted editor snapshot only when the value changed.
+    /// Use [Self::update] to deliberately resend an editing state.
+    pub fn publish_editing_state(
+        &mut self,
+        id: TextInputClientId,
+        value: AutofillEditingValue,
+    ) -> Result<bool, FlutterTextInputControlsError> {
+        let Some(attachment) = self
+            .attached
+            .as_ref()
+            .filter(|attachment| attachment.id == id)
+        else {
+            return Ok(false);
+        };
+        if attachment.editing.as_ref() == Some(&value) {
+            return Ok(false);
+        }
+        self.update(id, FlutterTextInputControlUpdate::EditingState(value))
     }
 
     /// A host edit reaches the client and custom control; it is not echoed
@@ -320,7 +358,7 @@ impl FlutterTextInputControls {
         if call.method != "TextInputClient.updateEditingState" {
             return Ok(None);
         }
-        let Some(attachment) = &self.attached else {
+        let Some(attachment) = &mut self.attached else {
             return Ok(Some(false));
         };
         use FlutterTextInputControlsError::InvalidEditingMessage;
@@ -335,6 +373,7 @@ impl FlutterTextInputControls {
             return Ok(Some(false));
         }
         let value = AutofillEditingValue::from_json(args.get(1).ok_or(InvalidEditingMessage)?)?;
+        attachment.editing = Some(value.clone());
         if let FlutterTextInputControl::Custom(control) = &self.current {
             control(&FlutterTextInputControlUpdate::EditingState(value.clone()));
         }

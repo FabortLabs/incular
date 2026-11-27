@@ -199,8 +199,11 @@ fn reparenting_a_focused_read_only_editor_can_attach_the_new_writable_input() {
 
 #[test]
 fn replacement_controller_text_reaches_the_attached_input_once_without_truncation() {
-    use incular_platform::TextInputCommand;
+    use incular_platform::{
+        FlutterTextInputConfiguration, FlutterTextInputControls, TextInputCommand,
+    };
     use incular_widgets::LengthLimitingTextInputFormatter;
+    use serde_json::json;
 
     let first = TextEditingController::new();
     let node = FocusNode::new();
@@ -229,6 +232,15 @@ fn replacement_controller_text_reaches_the_attached_input_once_without_truncatio
         })
         .unwrap();
 
+    let mut controls = FlutterTextInputControls::new(false);
+    assert!(controls.attach_existing(attached, FlutterTextInputConfiguration::default(), |_| {}));
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    let _ = controls.take_platform_calls();
+
     for expected in ["new text", "new new text"] {
         let replacement = TextEditingController::with_text(expected);
         runtime.schedule_update(field, build(&replacement)).unwrap();
@@ -249,7 +261,163 @@ fn replacement_controller_text_reaches_the_attached_input_once_without_truncatio
             })
             .collect();
         assert_eq!(written, [(attached, expected.to_owned())]);
+        assert!(
+            runtime
+                .publish_flutter_text_input_snapshot(&mut controls)
+                .unwrap()
+        );
+        let wire = controls.take_platform_calls();
+        let mut values = wire
+            .iter()
+            .filter(|call| call.method == "TextInput.setEditingState");
+        assert_eq!(
+            values.next().unwrap().arguments,
+            json!({
+                "text": expected,
+                "selectionBase": -1,
+                "selectionExtent": -1,
+                "selectionAffinity": "TextAffinity.downstream",
+                "selectionIsDirectional": false,
+                "composingBase": -1,
+                "composingExtent": -1,
+            })
+        );
+        assert!(values.next().is_none());
         frame(&mut runtime);
         assert!(runtime.take_text_input_commands().is_empty());
+        assert!(
+            !runtime
+                .publish_flutter_text_input_snapshot(&mut controls)
+                .unwrap()
+        );
+        assert!(controls.take_platform_calls().is_empty());
     }
+}
+
+#[test]
+fn changing_a_mounted_controller_publishes_an_unset_wire_selection_and_editable_transform() {
+    use incular_config::Alignment;
+    use incular_platform::{
+        FlutterTextInputConfiguration, FlutterTextInputControls, FlutterTextInputWireCall,
+        TextInputCommand,
+    };
+    use incular_text::{TextStyle, register_application_font_as};
+    use incular_widgets::Align;
+    use serde_json::json;
+
+    let Some(path) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    const FONT: &str = "Pinned Flutter editing geometry";
+    register_application_font_as(FONT, std::fs::read(path).unwrap());
+
+    let first = TextEditingController::with_text("Wibble");
+    let second = TextEditingController::with_text("Wobble");
+    let focus = FocusNode::new();
+    let build = |controller: &TextEditingController, alignment| {
+        Widget::from(Align::new(
+            alignment,
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .focus_node(focus.clone())
+                .style(
+                    TextStyle::new()
+                        .font_family(FONT)
+                        .font_size(14.)
+                        .line_height_multiplier(1.),
+                ),
+        ))
+    };
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(build(&first, Alignment::CENTER)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    runtime.run_frame(constraints).unwrap();
+    focus.request_focus();
+    runtime.run_frame(constraints).unwrap();
+    let client = runtime
+        .take_text_input_commands()
+        .into_iter()
+        .find_map(|command| match command {
+            TextInputCommand::SetClient { configuration, .. } => Some(configuration.client),
+            _ => None,
+        })
+        .unwrap();
+
+    let mut controls = FlutterTextInputControls::new(false);
+    assert!(
+        !runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    assert!(controls.attach_existing(client, FlutterTextInputConfiguration::default(), |_| {}));
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    let mut wire = controls.take_platform_calls();
+    let root = runtime.tree().root().unwrap();
+    let editor = runtime.focused_element().unwrap();
+    runtime
+        .schedule_update(root, build(&second, Alignment::CENTER))
+        .unwrap();
+    runtime.run_frame(constraints).unwrap();
+    assert_eq!(runtime.focused_element(), Some(editor));
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    wire.extend(controls.take_platform_calls());
+    let last = |name| {
+        wire.iter()
+            .rev()
+            .find(|call| call.method == name)
+            .expect(name)
+    };
+    assert_eq!(
+        last("TextInput.setEditingState").arguments,
+        json!({
+            "text": "Wobble",
+            "selectionBase": -1,
+            "selectionExtent": -1,
+            "selectionAffinity": "TextAffinity.downstream",
+            "selectionIsDirectional": false,
+            "composingBase": -1,
+            "composingExtent": -1,
+        })
+    );
+    let geometry: &FlutterTextInputWireCall = last("TextInput.setEditableSizeAndTransform");
+    assert_eq!(
+        geometry.arguments,
+        json!({
+            "width": 800.0,
+            "height": 14.0,
+            "transform": [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 293., 0., 1.],
+        })
+    );
+    assert!(
+        !runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    assert!(controls.take_platform_calls().is_empty());
+
+    runtime
+        .schedule_update(root, build(&second, Alignment::TOP_LEFT))
+        .unwrap();
+    runtime.run_frame(constraints).unwrap();
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    let geometry_only = controls.take_platform_calls();
+    assert_eq!(geometry_only.len(), 1);
+    assert_eq!(
+        geometry_only[0].method,
+        "TextInput.setEditableSizeAndTransform"
+    );
+    assert_eq!(geometry_only[0].arguments["transform"][13], json!(0.0));
+    assert_eq!(runtime.focused_element(), Some(editor));
 }

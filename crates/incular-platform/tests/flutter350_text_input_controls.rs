@@ -278,3 +278,49 @@ fn repeated_geometry_does_not_send_or_notify_but_a_new_client_gets_its_own_snaps
     assert!(controls.update(second, Update::CaretRect(rect)).unwrap());
     assert_eq!(controls.take_platform_calls().len(), 2);
 }
+
+#[test]
+fn an_externally_bound_client_publishes_only_changes_and_does_not_echo_host_edits() {
+    let mut controls = Controls::new(false);
+    let client = TextInputClientId::new(7);
+    assert!(controls.attach_existing(client, Configuration::default(), |_| {}));
+    let initial = controls.take_platform_calls();
+    assert_eq!(initial[0].arguments[0], 7);
+    assert!(!controls.attach_existing(client, Configuration::default(), |_| {}));
+    assert!(controls.is_attached(client));
+
+    let value = AutofillEditingValue::default();
+    assert!(
+        controls
+            .publish_editing_state(client, value.clone())
+            .unwrap()
+    );
+    assert!(
+        !controls
+            .publish_editing_state(client, value.clone())
+            .unwrap()
+    );
+    assert_eq!(
+        controls.take_platform_calls(),
+        [wire("TextInput.setEditingState", value.to_json().unwrap())]
+    );
+
+    let remote = AutofillEditingValue {
+        text: "platform".into(),
+        ..value
+    };
+    let message = json!({
+        "method": "TextInputClient.updateEditingState",
+        "args": [client.get(), remote.to_json().unwrap()],
+    });
+    assert_eq!(
+        controls
+            .handle_platform_edit(message.to_string().as_bytes())
+            .unwrap(),
+        Some(true)
+    );
+    assert!(!controls.publish_editing_state(client, remote).unwrap());
+    assert!(controls.take_platform_calls().is_empty());
+    assert!(controls.close(client));
+    assert_eq!(attach(&mut controls), TextInputClientId::new(8));
+}
