@@ -4,7 +4,7 @@ All eight originals in widgets/custom_paint_test.dart passed against pinned Flut
 
 - :43: real callbacks run in exactly background, child, foreground order.
 - :124: six retained updates measure respectively 0×0, 800×600, 20×20, 800×100, 800×600, 0×0. The optional child overrides the preferred size and a preferred width of 2000 clamps to the available width.
-- :198 and :206 are partial matches. The public IntrinsicWidth/IntrinsicHeight parents observe [20,30] for a finite preferred size and [0,0] for the fill-to-constraints analog to Size.infinite. The Rust fixtures don't invoke all four raw RenderCustomPaint min/max intrinsic methods separately.
+- :198 and :206 match both IntrinsicWidth/IntrinsicHeight layout and, after the follow-up below, all four direct intrinsic queries.
 - :214 matches the zero-area geometry and completes painting. This covers zero constraints, not a native window resize.
 - :58, :166 and :193 remain reference-only. Incular painters return an independent display list, not Flutter's shared Canvas, and no equivalent public isComplex/willChange setter is present on this widget. Renderer performance or cache correspondence is not claimed.
 
@@ -121,3 +121,13 @@ portable nodes. Declaring accessibility focus does not move keyboard
 focus. This comparison targets the portable semantics graph; desktop
 AccessKit exposes one checked/toggled property rather than two.
 All 15 focused native painter semantics tests passed.
+
+
+## Direct intrinsics of childless painters
+
+The two pinned childless originals now pair. All four dry queries
+at an unbounded cross extent return 20 × 30 for a finite preferred
+size and 0 × 0 for fill-to-constraints, Incular's counterpart to
+Flutter's infinite preferred size. The native queries run before
+layout and do not invoke the painter. The mounted intrinsic parent
+checks still pass; this does not change children or paint order.

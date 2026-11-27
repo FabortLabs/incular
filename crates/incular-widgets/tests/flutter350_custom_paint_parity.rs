@@ -112,3 +112,39 @@ fn default_custom_paint_lays_out_and_paints_at_zero_area() {
     let _ = tree.paint();
     assert_eq!(size(&tree), Size::ZERO);
 }
+
+#[test]
+fn childless_custom_paint_exposes_all_four_intrinsics_without_painting() {
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    for (painter, expected) in [
+        (
+            CustomPaint::from_painter(Size::new(20., 30.), Trace("finite", calls.clone())),
+            Size::new(20., 30.),
+        ),
+        (
+            CustomPaint::from_painter_filling(Trace("fill", calls.clone())),
+            Size::ZERO,
+        ),
+    ] {
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(painter.into()).unwrap();
+        let render = tree.render_id(root).unwrap();
+        assert_eq!(
+            tree.min_intrinsic_width(render, f32::INFINITY),
+            Some(expected.width)
+        );
+        assert_eq!(
+            tree.max_intrinsic_width(render, f32::INFINITY),
+            Some(expected.width)
+        );
+        assert_eq!(
+            tree.min_intrinsic_height(render, f32::INFINITY),
+            Some(expected.height)
+        );
+        assert_eq!(
+            tree.max_intrinsic_height(render, f32::INFINITY),
+            Some(expected.height)
+        );
+    }
+    assert!(calls.borrow().is_empty());
+}

@@ -67,6 +67,14 @@ impl WidgetTree {
             RenderKind::Box { desired, .. } | RenderKind::Shape { desired, .. } => {
                 Some(axis.main_extent(*desired))
             }
+            RenderKind::CustomPaint { desired, .. } => {
+                // Fill-to-constraints is an unbounded preferred size, not
+                // an intrinsic width or height.
+                Some(desired.map_or(0., |size| {
+                    let extent = axis.main_extent(size);
+                    if extent.is_finite() { extent } else { 0. }
+                }))
+            }
             RenderKind::Align {
                 width_factor,
                 height_factor,

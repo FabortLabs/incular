@@ -564,8 +564,8 @@ packages/flutter/test/widgets/custom_paint_test.dart	58	Throws FlutterError on c
 packages/flutter/test/widgets/custom_paint_test.dart	124	CustomPaint sizing	paired-match	upstream-custom-paint.md
 packages/flutter/test/widgets/custom_paint_test.dart	166	Raster cache hints	reference-ran-incular-open	upstream-custom-paint.md
 packages/flutter/test/widgets/custom_paint_test.dart	193	Raster cache hints cannot be set with null painters	reference-ran-incular-open	upstream-custom-paint.md
-packages/flutter/test/widgets/custom_paint_test.dart	198	RenderCustomPaint consults preferred size for intrinsics when it has no child	partial-match	upstream-custom-paint.md
-packages/flutter/test/widgets/custom_paint_test.dart	206	RenderCustomPaint does not return infinity for its intrinsics	partial-match	upstream-custom-paint.md
+packages/flutter/test/widgets/custom_paint_test.dart	198	RenderCustomPaint consults preferred size for intrinsics when it has no child	paired-match	upstream-custom-paint.md#direct-intrinsics-of-childless-painters
+packages/flutter/test/widgets/custom_paint_test.dart	206	RenderCustomPaint does not return infinity for its intrinsics	paired-match	upstream-custom-paint.md#direct-intrinsics-of-childless-painters
 packages/flutter/test/widgets/custom_paint_test.dart	214	CustomPaint does not crash at zero area	partial-match	upstream-custom-paint.md
 packages/flutter/test/widgets/align_test.dart	9	Align smoke test	partial-match	upstream-align-sized-box.md
 packages/flutter/test/widgets/align_test.dart	24	Align control test (LTR)	partial-match	upstream-align-sized-box.md
