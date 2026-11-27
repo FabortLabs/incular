@@ -60,3 +60,19 @@ trigger it. :101 is partial because the portable event path does not
 carry Flutter's GameButtonA or replicate its simulator transports.
 No full application key table or platform gamepad support is
 claimed. Three focused and 17 adjacent Rust tests passed.
+
+## Named-route fallback delivery
+
+The authored `widgets_app_unknown_route_delivery_test.dart` probe
+matches mounted behavior: the generator declines an unlisted route
+once, the unknown-route callback supplies its page once, and Back
+restores home without repeating either callback. The native baseline
+accepted the push but never displayed the fallback. Resolved
+generated widgets now belong to the admitted stack entry.
+
+Two additional native controls verify that refusing an unlisted
+route leaves the current page intact, and that a deep-link
+notification can read the newly committed route without borrowing
+the stack while notifying observers. The three focused native
+controls and 36 app-shell checks passed. This does not claim parity
+for Flutter's diagnostic wording or add original registrations.

@@ -100,10 +100,25 @@ impl fmt::Debug for WidgetsAppController {
         let state = self.inner.borrow();
         formatter
             .debug_struct("WidgetsAppController")
-            .field("current_route", &state.stack.last())
+            .field("current_route", &state.stack.last().map(|entry| &entry.information))
             .field("stack_depth", &state.stack.len())
             .field("route_count", &state.routes.len())
             .finish()
+    }
+}
+
+#[derive(Clone)]
+struct AppRouteEntry {
+    information: RouteInformation,
+    generated: Option<Widget>,
+}
+
+impl AppRouteEntry {
+    fn named(information: RouteInformation) -> Self {
+        Self {
+            information,
+            generated: None,
+        }
     }
 }
 
@@ -117,7 +132,7 @@ struct WidgetsAppState {
     generate_route: Option<GenerateRoute>,
     unknown_route: Option<UnknownRoute>,
     initial_route: Option<String>,
-    stack: Vec<RouteInformation>,
+    stack: Vec<AppRouteEntry>,
     initialized: bool,
     revision: Rc<Cell<u64>>,
     listeners: Vec<Weak<dyn Fn(NavigationNotification)>>,
@@ -272,7 +287,7 @@ impl WidgetsAppController {
             .borrow()
             .stack
             .last()
-            .cloned()
+            .map(|entry| entry.information.clone())
             .unwrap_or_default()
     }
 
@@ -280,7 +295,12 @@ impl WidgetsAppController {
     #[must_use]
     pub fn route_stack(&self) -> Vec<RouteInformation> {
         Self::ensure_initialized(&self.inner);
-        self.inner.borrow().stack.clone()
+        self.inner
+            .borrow()
+            .stack
+            .iter()
+            .map(|entry| entry.information.clone())
+            .collect()
     }
 
     /// Returns whether a system back request can pop this app controller.
@@ -326,8 +346,14 @@ impl WidgetsAppController {
     #[must_use]
     pub fn build_current_widget(&self) -> Widget {
         Self::ensure_initialized(&self.inner);
-        let information = self.current_route();
-        self.build_route(&information)
+        let entry = self.inner.borrow().stack.last().cloned();
+        if let Some(entry) = entry {
+            entry
+                .generated
+                .unwrap_or_else(|| self.build_route(&entry.information))
+        } else {
+            self.build_route(&RouteInformation::default())
+        }
     }
 
     /// Builds a retained route widget whose local revision changes only when
@@ -343,7 +369,7 @@ impl WidgetsAppController {
                 can_pop: retained.can_pop(),
                 revision: retained.inner.borrow().revision.get(),
             };
-            let child = retained.build_route(&data.current_route);
+            let child = retained.build_current_widget();
             crate::Semantics::new(Widget::environment_scope(data, child))
                 .explicit_child_nodes(true)
                 .scopes_route(true)
@@ -366,12 +392,13 @@ impl WidgetsAppController {
 
     fn widget_for(&self, information: &RouteInformation) -> Option<Widget> {
         let path = route_path(information.location());
-        let (home, route, generator) = {
+        let (home, route, generator, unknown) = {
             let state = self.inner.borrow();
             (
                 state.home.clone(),
                 state.routes.get(&path).cloned(),
                 state.generate_route.clone(),
+                state.unknown_route.clone(),
             )
         };
         if path == "/"
@@ -382,23 +409,36 @@ impl WidgetsAppController {
         if let Some(route) = route {
             return Some(route());
         }
-        generator.and_then(|generator| generator(information))
+        generator
+            .and_then(|generator| generator(information))
+            .or_else(|| unknown.map(|unknown| unknown(information)))
     }
 
-    /// Checks existence without building table routes or home.
-    fn route_exists(inner: &Rc<RefCell<WidgetsAppState>>, information: &RouteInformation) -> bool {
+    /// Resolves a route once at admission. Named table builders remain
+    /// lazy, while callback-generated content belongs to its stack entry.
+    fn resolve_entry(
+        inner: &Rc<RefCell<WidgetsAppState>>,
+        information: RouteInformation,
+        use_unknown: bool,
+    ) -> Option<AppRouteEntry> {
         let path = route_path(information.location());
-        let (has_home, has_route, generator) = {
+        let (generator, unknown) = {
             let state = inner.borrow();
+            if (path == "/" && state.home.is_some()) || state.routes.contains_key(&path) {
+                return Some(AppRouteEntry::named(information));
+            }
             (
-                state.home.is_some(),
-                state.routes.contains_key(&path),
                 state.generate_route.clone(),
+                use_unknown.then(|| state.unknown_route.clone()).flatten(),
             )
         };
-        (path == "/" && has_home)
-            || has_route
-            || generator.is_some_and(|generator| generator(information).is_some())
+        let widget = generator
+            .and_then(|generator| generator(&information))
+            .or_else(|| unknown.map(|unknown| unknown(&information)))?;
+        Some(AppRouteEntry {
+            information,
+            generated: Some(widget),
+        })
     }
 
     fn ensure_initialized(inner: &Rc<RefCell<WidgetsAppState>>) {
@@ -420,6 +460,7 @@ impl WidgetsAppController {
             let restored = array
                 .iter()
                 .filter_map(|value| RouteInformation::from_json(value).ok())
+                .map(AppRouteEntry::named)
                 .collect::<Vec<_>>();
             if !restored.is_empty() {
                 let mut state = inner.borrow_mut();
@@ -445,26 +486,21 @@ impl WidgetsAppController {
     fn initial_stack(
         inner: &Rc<RefCell<WidgetsAppState>>,
         target: RouteInformation,
-    ) -> Vec<RouteInformation> {
+    ) -> Vec<AppRouteEntry> {
         let path = route_path(target.location());
+        let mut stack = vec![AppRouteEntry::named(RouteInformation::new("/"))];
         if path == "/" {
-            return vec![RouteInformation::new("/")];
+            return stack;
         }
-        let prefixes = route_prefixes(&path);
-        if !Self::route_exists(inner, &target) {
-            return vec![RouteInformation::new("/")];
-        }
-        let mut stack = vec![RouteInformation::new("/")];
-        for prefix in prefixes {
-            let candidate = if prefix == path {
-                target.clone()
-            } else {
-                RouteInformation::new(prefix)
-            };
-            if Self::route_exists(inner, &candidate) {
-                stack.push(candidate);
+        let Some(end) = Self::resolve_entry(inner, target, false) else {
+            return stack;
+        };
+        for prefix in route_prefixes(&path).into_iter().filter(|prefix| *prefix != path) {
+            if let Some(entry) = Self::resolve_entry(inner, RouteInformation::new(prefix), false) {
+                stack.push(entry);
             }
         }
+        stack.push(end);
         stack
     }
 
@@ -480,18 +516,12 @@ impl WidgetsAppController {
         information: RouteInformation,
         platform: bool,
     ) -> Result<(), RouterError> {
-        if !Self::route_exists(inner, &information) {
-            let has_unknown = inner.borrow().unknown_route.is_some();
-            if !has_unknown {
-                return Err(RouterError::Delegate(format!(
-                    "no route found for {}",
-                    information.location()
-                )));
-            }
-        }
+        let entry = Self::resolve_entry(inner, information.clone(), true).ok_or_else(|| {
+            RouterError::Delegate(format!("no route found for {}", information.location()))
+        })?;
         {
             let mut state = inner.borrow_mut();
-            state.stack.push(information.clone());
+            state.stack.push(entry);
             state.bump_revision();
         }
         if platform {
@@ -517,19 +547,15 @@ impl WidgetsAppController {
         information: RouteInformation,
         platform: bool,
     ) -> Result<(), RouterError> {
-        if !Self::route_exists(inner, &information) && inner.borrow().unknown_route.is_none() {
-            return Err(RouterError::Delegate(format!(
-                "no route found for {}",
-                information.location()
-            )));
-        }
+        let entry = Self::resolve_entry(inner, information.clone(), true).ok_or_else(|| {
+            RouterError::Delegate(format!("no route found for {}", information.location()))
+        })?;
         {
             let mut state = inner.borrow_mut();
-            if state.stack.is_empty() {
-                state.stack.push(information.clone());
+            if let Some(last) = state.stack.last_mut() {
+                *last = entry;
             } else {
-                let last = state.stack.len() - 1;
-                state.stack[last] = information.clone();
+                state.stack.push(entry);
             }
             state.bump_revision();
         }
@@ -572,11 +598,13 @@ impl WidgetsAppController {
                 );
         }
         Self::persist(inner);
-        Self::notify(
-            inner,
-            inner.borrow().stack.last().cloned().unwrap_or_default(),
-            NavigationNotificationKind::RouteInformationChanged,
-        );
+        let current = inner
+            .borrow()
+            .stack
+            .last()
+            .map(|entry| entry.information.clone())
+            .unwrap_or_default();
+        Self::notify(inner, current, NavigationNotificationKind::RouteInformationChanged);
         Ok(())
     }
 
@@ -588,7 +616,11 @@ impl WidgetsAppController {
             }
             state.stack.pop();
             state.bump_revision();
-            state.stack.last().cloned().unwrap_or_default()
+            state
+                .stack
+                .last()
+                .map(|entry| entry.information.clone())
+                .unwrap_or_default()
         };
         let _ = inner
             .borrow()
@@ -610,7 +642,7 @@ impl WidgetsAppController {
         let value = state
             .stack
             .iter()
-            .map(RouteInformation::to_json)
+            .map(|entry| entry.information.to_json())
             .collect::<Vec<_>>();
         // Release the borrow first: `set_json` can re-enter the controller.
         drop(state);
