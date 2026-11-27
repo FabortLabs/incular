@@ -343,7 +343,7 @@ packages/flutter/test/widgets/modal_barrier_test.dart	665	pops the Navigator whe
 packages/flutter/test/widgets/modal_barrier_test.dart	696	pops the Navigator when dismissed by non-primary tap	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md#modal-barrier-contact-and-release
 packages/flutter/test/widgets/keyboard_listener_test.dart	10	Can dispose without keyboard	paired-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
 packages/flutter/test/widgets/keyboard_listener_test.dart	42	Web key event	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
-packages/flutter/test/widgets/keyboard_listener_test.dart	66	Defunct listeners do not receive events	partial-match	upstream-tooltip-escape-modal-keys-and-path-bounds.md
+packages/flutter/test/widgets/keyboard_listener_test.dart	66	Defunct listeners do not receive events	paired-match	upstream-fuchsia-raw-keyboard.md
 packages/flutter/test/widgets/custom_single_child_layout_test.dart	100	Control test for CustomSingleChildLayout	paired-match	upstream-custom-layout-and-asset-invalidation.md
 packages/flutter/test/widgets/custom_single_child_layout_test.dart	121	Test SingleChildDelegate shouldRelayout method	paired-match	upstream-custom-layout-and-asset-invalidation.md#current-replacement-delegate-direction
 packages/flutter/test/widgets/custom_single_child_layout_test.dart	144	Delegate can change size	paired-match	upstream-custom-layout-and-asset-invalidation.md
@@ -3553,4 +3553,6 @@ packages/flutter/test/widgets/directionality_test.dart	29	Directionality default
 packages/flutter/test/widgets/directionality_test.dart	43	Directionality.maybeOf	paired-match	upstream-directionality-lookup.md
 packages/flutter/test/widgets/directionality_test.dart	59	Directionality.of	paired-match	upstream-directionality-lookup.md
 packages/flutter/test/widgets/raw_keyboard_listener_test.dart	10	Can dispose without keyboard	paired-match	upstream-raw-keyboard-listener-lifetimes.md
-packages/flutter/test/widgets/raw_keyboard_listener_test.dart	73	Defunct listeners do not receive events	partial-match	upstream-raw-keyboard-listener-lifetimes.md
+packages/flutter/test/widgets/raw_keyboard_listener_test.dart	73	Defunct listeners do not receive events	paired-match	upstream-fuchsia-raw-keyboard.md
+packages/flutter/test/widgets/keyboard_listener_test.dart	18	Fuchsia key event	paired-match	upstream-fuchsia-raw-keyboard.md
+packages/flutter/test/widgets/raw_keyboard_listener_test.dart	18	Fuchsia key event	paired-match	upstream-fuchsia-raw-keyboard.md

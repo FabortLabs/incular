@@ -294,3 +294,143 @@ fn raw_listener_only_observes_real_or_mirrored_raw_messages_until_unmounted() {
     send_meta_left(&mut runtime);
     assert!(log.borrow().is_empty());
 }
+
+fn send_fuchsia_left_meta(runtime: &mut Runtime) {
+    use incular_runtime::KeyMessage;
+    use incular_widgets::FuchsiaRawKeyData;
+    for (state, modifiers) in [
+        (KeyState::Down, FuchsiaRawKeyData::LEFT_META),
+        (KeyState::Up, 0),
+    ] {
+        let message = FuchsiaRawKeyData {
+            hid_usage: 0x700e3,
+            code_point: 0,
+            modifiers,
+        };
+        assert!(!runtime.dispatch_key_message(KeyMessage::Raw(message.into_event(state, false))));
+    }
+    frame(runtime);
+}
+
+#[test]
+fn fuchsia_hid_meta_left_reaches_a_typed_listener_with_sided_identity() {
+    let (mut runtime, _, events) = focused_listener();
+    send_fuchsia_left_meta(&mut runtime);
+    let events = events.borrow();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].state, KeyState::Down);
+    assert_eq!(events[0].code, Code::MetaLeft);
+    assert_eq!(events[0].key, KeyboardKey::Named(NamedKey::Meta));
+    assert_eq!(events[0].location, Location::Left);
+    assert!(events[0].modifiers.meta());
+    assert_eq!(events[1].state, KeyState::Up);
+}
+
+#[test]
+fn a_defunct_typed_listener_receives_no_fuchsia_events() {
+    let (mut runtime, node, events) = focused_listener();
+    send_fuchsia_left_meta(&mut runtime);
+    assert_eq!(events.take().len(), 2);
+    update(&mut runtime, SizedBox::shrink());
+    assert!(!node.has_focus());
+    send_fuchsia_left_meta(&mut runtime);
+    assert!(events.borrow().is_empty());
+}
+
+fn fuchsia_raw_listener() -> (
+    Runtime,
+    FocusNode,
+    Rc<RefCell<Vec<incular_widgets::RawKeyEvent>>>,
+) {
+    use incular_widgets::RawKeyboardListener;
+    let node = FocusNode::new();
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let listener = RawKeyboardListener::new(SizedBox::shrink())
+        .focus_node(node.clone())
+        .on_raw_key({
+            let events = events.clone();
+            move |event| events.borrow_mut().push(event)
+        });
+    let mut runtime = Runtime::new(shell(listener)).unwrap();
+    frame(&mut runtime);
+    node.request_focus();
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    (runtime, node, events)
+}
+
+#[test]
+fn a_raw_listener_receives_the_original_fuchsia_data_and_its_typed_identity() {
+    use incular_widgets::{
+        FuchsiaRawKeyData, RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide,
+    };
+    let (mut runtime, _, events) = fuchsia_raw_listener();
+    send_fuchsia_left_meta(&mut runtime);
+    let events = events.borrow();
+    assert_eq!(events.len(), 2);
+    assert!(events[0].is_key_down());
+    let Some(RawKeyPlatformData::Fuchsia(data)) = events[0].data() else {
+        panic!("the source metadata must survive retained delivery");
+    };
+    assert_eq!(
+        (data.hid_usage, data.code_point, data.modifiers),
+        (0x700e3, 0, FuchsiaRawKeyData::LEFT_META)
+    );
+    assert!(data.is_modifier_pressed(RawKeyboardModifier::Meta, RawKeyboardSide::Left));
+    assert!(!data.is_modifier_pressed(RawKeyboardModifier::Meta, RawKeyboardSide::Right));
+    assert_eq!(data.flutter_physical_key_id(), 0x0007_00e3);
+    assert_eq!(
+        data.flutter_logical_key(),
+        incular_core::LogicalKeyboardKey::META_LEFT
+    );
+    assert_eq!(events[0].physical_key(), Code::MetaLeft);
+    assert_eq!(events[0].logical_key(), &KeyboardKey::Named(NamedKey::Meta));
+    assert!(!events[1].is_key_down());
+}
+
+#[test]
+fn a_removed_raw_listener_cannot_receive_a_future_fuchsia_message() {
+    let (mut runtime, node, events) = fuchsia_raw_listener();
+    send_fuchsia_left_meta(&mut runtime);
+    assert_eq!(events.take().len(), 2);
+    update(&mut runtime, SizedBox::shrink());
+    assert!(!node.has_focus());
+    send_fuchsia_left_meta(&mut runtime);
+    assert!(events.borrow().is_empty());
+}
+
+#[test]
+fn fuchsia_raw_conversion_keeps_printable_labels_and_unknown_numeric_identity() {
+    use incular_core::LogicalKeyboardKey;
+    use incular_widgets::{
+        FuchsiaRawKeyData, RawKeyboardModifier as Modifier, RawKeyboardSide as Side,
+    };
+    let data = FuchsiaRawKeyData {
+        hid_usage: 0x0007_0004,
+        code_point: 'A' as u32,
+        modifiers: FuchsiaRawKeyData::LEFT_SHIFT | FuchsiaRawKeyData::RIGHT_SHIFT,
+    };
+    let event = data.into_event(KeyState::Down, false);
+    assert_eq!(data.flutter_logical_key().key_id(), u64::from(b'A'));
+    assert_eq!(data.key_label(), Some('A'));
+    assert_eq!(event.physical_key(), Code::KeyA);
+    assert_eq!(event.logical_key(), &KeyboardKey::Character("A".to_owned()));
+    assert!(data.is_modifier_pressed(Modifier::Shift, Side::All));
+    assert!(!data.is_modifier_pressed(Modifier::NumLock, Side::Any));
+    let unknown = FuchsiaRawKeyData {
+        hid_usage: 0xffff_ff00,
+        ..FuchsiaRawKeyData::default()
+    };
+    assert_eq!(
+        unknown.flutter_physical_key_id(),
+        LogicalKeyboardKey::FUCHSIA_PLANE + 0xffff_ff00
+    );
+    assert_eq!(
+        unknown.flutter_logical_key().key_id(),
+        LogicalKeyboardKey::FUCHSIA_PLANE | 0xffff_ff00
+    );
+    assert_eq!(
+        unknown.into_event(KeyState::Down, false).physical_key(),
+        Code::Unidentified
+    );
+}

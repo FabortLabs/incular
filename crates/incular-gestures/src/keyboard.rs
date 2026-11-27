@@ -24,36 +24,52 @@ pub enum KeyEventResult {
 /// Input handler for a mounted, typed focus node.
 pub type FocusKeyEventHandler = Rc<dyn Fn(&crate::FocusNode, KeyboardEvent) -> KeyEventResult>;
 
-/// The portable fields of Flutter's deprecated `RawKeyEvent`. Incular
-/// does not manufacture OS-specific key-table data from a normalized event.
+/// A legacy raw key with explicitly supplied source data, when available.
+/// Portable hardware ingress never invents OS-specific metadata.
 #[derive(Clone, Debug)]
-pub struct RawKeyEvent(KeyboardEvent);
+pub struct RawKeyEvent {
+    portable: KeyboardEvent,
+    data: Option<crate::RawKeyPlatformData>,
+}
 
 impl RawKeyEvent {
     #[must_use]
+    pub(crate) const fn with_platform_data(
+        portable: KeyboardEvent,
+        data: crate::RawKeyPlatformData,
+    ) -> Self {
+        Self { portable, data: Some(data) }
+    }
+
+    #[must_use]
+    pub const fn data(&self) -> Option<crate::RawKeyPlatformData> {
+        self.data
+    }
+
+    #[must_use]
     pub const fn portable(&self) -> &KeyboardEvent {
-        &self.0
+        &self.portable
     }
 
     #[must_use]
     pub const fn logical_key(&self) -> &KeyboardKey {
-        &self.0.key
+        &self.portable.key
     }
 
     #[must_use]
     pub const fn physical_key(&self) -> Code {
-        self.0.code
+        self.portable.code
     }
 
     #[must_use]
     pub fn is_key_down(&self) -> bool {
-        self.0.state.is_down()
+        self.portable.state.is_down()
     }
 }
 
 impl From<KeyboardEvent> for RawKeyEvent {
-    fn from(event: KeyboardEvent) -> Self {
-        Self(event)
+    fn from(portable: KeyboardEvent) -> Self {
+        Self { portable, data: None }
     }
 }
 
