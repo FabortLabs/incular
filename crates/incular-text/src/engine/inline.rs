@@ -74,11 +74,30 @@ pub struct TextStrut {
     /// Distance from the baseline to the line bottom.
     pub descent: f32,
     pub force: bool,
+    /// Corrected font ascent and descent before distributing extra leading.
+    pub(crate) box_ascent: f32,
+    pub(crate) box_descent: f32,
+    pub(crate) raw_ascent: f32,
 }
 
 impl TextStrut {
-    pub(super) fn key(self) -> (u32, u32, bool) {
-        (self.ascent.to_bits(), self.descent.to_bits(), self.force)
+    /// Creates a strut with the supplied metrics and no extra leading.
+    #[must_use]
+    pub const fn from_metrics(ascent: f32, descent: f32, force: bool) -> Self {
+        Self { ascent, descent, force, box_ascent: ascent, box_descent: descent, raw_ascent: ascent }
+    }
+
+    pub(super) fn key(self) -> ([u32; 5], bool) {
+        (
+            [
+                self.ascent.to_bits(),
+                self.descent.to_bits(),
+                self.box_ascent.to_bits(),
+                self.box_descent.to_bits(),
+                self.raw_ascent.to_bits(),
+            ],
+            self.force,
+        )
     }
 }
 

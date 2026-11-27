@@ -99,6 +99,14 @@ pub enum BoxHeightStyle {
     Tight,
     /// All boxes on the same visual line use the line bounds.
     Max,
+    /// Splits leading between the adjacent line boxes.
+    IncludeLineSpacingMiddle,
+    /// Puts the extra leading above the following line.
+    IncludeLineSpacingTop,
+    /// Puts the extra leading below the preceding line.
+    IncludeLineSpacingBottom,
+    /// Uses the paragraph strut, or each run's own style when it is unset.
+    Strut,
 }
 
 /// Horizontal extent of selection boxes.
@@ -216,11 +224,13 @@ impl TextLayout {
         for (index, line) in lines.iter().enumerate().skip(first).take_while(|(_, line)| {
             line.start < range.end
         }) {
+            let line_bounds = self.selection_line_bounds(index, height_style);
+            let run_heights = self.selection_run_heights.as_deref().unwrap_or(&[]);
             let first_box = result.len();
             let count = placeholders.partition_point(|child| child.line == index);
             let (children, tail) = placeholders.split_at(count);
             placeholders = tail;
-            let mut previous_run = None;
+            let mut previous_run = (None, None);
             let mut previous_was_inline = false;
             for span in line.clusters.iter() {
                 let source = span.range();
@@ -245,12 +255,34 @@ impl TextLayout {
                         (line.baseline - run.caret_ascent, run.caret_height)
                     })
                 };
-                let (top, height) = match height_style {
-                    BoxHeightStyle::Tight => (tight_top, tight_height),
-                    BoxHeightStyle::Max => (line.top, line.height),
-                };
+                let height_recipe = run_heights
+                    .get(run_heights.partition_point(|height| height.range.end <= source.start))
+                    .filter(|height| height.range.contains(&source.start));
+                let (top, height) = line_bounds.unwrap_or_else(|| {
+                    if height_style == BoxHeightStyle::Strut
+                        && inline.is_none()
+                        && let Some(recipe) = height_recipe
+                        && let Some(run) = run
+                    {
+                        let ascent = match recipe.leading {
+                            crate::TextLeadingDistribution::Even => {
+                                run.caret_ascent + (recipe.height - run.caret_height) / 2.
+                            }
+                            crate::TextLeadingDistribution::Proportional => {
+                                if run.caret_height == 0. { 0. }
+                                else { run.caret_ascent / run.caret_height * recipe.height }
+                            }
+                        };
+                        (line.baseline - ascent, recipe.height)
+                    } else {
+                        (tight_top, tight_height)
+                    }
+                });
                 let direction = if span.rtl { TextDirection::Rtl } else { TextDirection::Ltr };
-                let run_key = run.map(|run| (run.font, run.caret_ascent, run.caret_height));
+                let run_key = (
+                    run.map(|run| (run.font, run.caret_ascent, run.caret_height)),
+                    height_recipe.map(|height| (height.height, height.leading)),
+                );
                 if result.len() > first_box
                     && inline.is_none()
                     && !previous_was_inline
@@ -301,6 +333,47 @@ impl TextLayout {
             }
         }
         result
+    }
+
+    fn selection_line_bounds(&self, index: usize, style: BoxHeightStyle) -> Option<(f32, f32)> {
+        let line = &self.lines[index];
+        if style == BoxHeightStyle::Tight {
+            return None;
+        }
+        if style == BoxHeightStyle::Strut {
+            return self.selection_strut.map(|strut| {
+                (line.baseline - strut.box_ascent, strut.box_ascent + strut.box_descent)
+            });
+        }
+        // The selection starts at the rounded line's metric delta, which
+        // can be a fraction of a point away from its layout origin.
+        let mut top = line.top + (line.height - (line.ascent + line.descent));
+        let mut bottom = line.top + line.height;
+        if style == BoxHeightStyle::Max {
+            return Some((top, bottom - top));
+        }
+        let spacing = match self.selection_strut {
+            Some(strut) if strut.force => strut.box_ascent - strut.raw_ascent,
+            Some(strut) => line.ascent - line.unscaled_ascent.max(strut.raw_ascent),
+            None => line.ascent - line.unscaled_ascent,
+        };
+        let first = index == 0;
+        let last = index + 1 == self.lines.len();
+        match style {
+            BoxHeightStyle::IncludeLineSpacingTop => {
+                if first { top += spacing; }
+            }
+            BoxHeightStyle::IncludeLineSpacingMiddle => {
+                top += spacing * if first { 1. } else { 0.5 };
+                if !last { bottom += spacing * 0.5; }
+            }
+            BoxHeightStyle::IncludeLineSpacingBottom => {
+                top += spacing;
+                if !last { bottom += spacing; }
+            }
+            _ => unreachable!("height style was handled above"),
+        }
+        Some((top, bottom - top))
     }
 
     /// Closest insertion point and affinity in this layout's coordinates.

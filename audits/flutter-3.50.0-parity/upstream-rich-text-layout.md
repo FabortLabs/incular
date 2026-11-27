@@ -216,3 +216,24 @@ The behavior checks use the
 Four focused native targets passed 75 tests; the existing
 Unicode-space case stayed ignored. The explicit spacing and strut
 height styles are separate from these three registrations.
+
+### Selection height styles with leading and strut
+
+The authored `paragraph_selection_height_styles_test.dart` pairs
+all six height choices across three lines with an explicit text
+height, a forced strut, and a non-forced strut. Leading can be
+distributed above, below, or between adjacent selections, with no
+extra region outside the first and last line. A 34-pixel strut line
+with four pixels of added leading has a 30-pixel strut selection box.
+The forced and non-forced cases have the same line height but
+different spacing-aware boundaries, matching the pinned
+[line metrics](https://raw.githubusercontent.com/google/skia/0e5d8d1be81b22f5529a41cf4810dd89b63527ba/modules/skparagraph/src/Run.h#L435-L478).
+
+When the strut option is requested without an explicit strut, each
+run's corrected font height is used, not the natural tight box or
+the whole line. A mixed 20-, 30-, and 4-pixel case verifies the three
+distinct bounds. Native retained shaping keeps just those additional
+metrics that cannot be recovered from its rounded line boxes.
+Two authored Flutter cases and 73 focused native cases passed; the
+existing Unicode-space ignore remains. No original registration count
+was added here.

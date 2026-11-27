@@ -1900,3 +1900,77 @@ fn fixed_width_realignment_matches_fresh_geometry_without_changing_the_source_la
         assert!(original.lines.iter().map(|line| line.offset).eq(original_offsets));
     }
 }
+
+#[test]
+fn selection_height_policies_keep_line_leading_distinct_from_strut_ink() {
+    use incular_text::{BoxHeightStyle as H, BoxWidthStyle as W, StrutStyle};
+
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::with_system_fonts(false);
+    assert!(engine.register_font_bytes_as("FlutterTest", std::fs::read(path).unwrap()));
+    let style = TextStyle::new().font_family("FlutterTest").font_size(10.);
+    for (force, line_height, spacing, strut_box) in [
+        (None, 20., 7.5, [0., 20.]),
+        (Some(true), 34., 7.5, [2., 32.]),
+        (Some(false), 34., 9.5, [2., 32.]),
+    ] {
+        let style = if force.is_none() { style.clone().height(Some(2.)) } else { style.clone() };
+        let mut p = painter(TextSpan::new("ab\ncd\nef").style(style), TextDirection::Ltr);
+        if let Some(force) = force {
+            p.set_strut_style(Some(
+                StrutStyle::new().font_family("FlutterTest").font_size(20.)
+                    .height(1.5).leading(0.2).force_strut_height(force),
+            ));
+        }
+        p.layout_with_engine(&mut engine, 0., 40.).unwrap();
+        for (line, start) in [(0, 0), (1, 3), (2, 6)] {
+            let origin = line as f32 * line_height;
+            for (height, [top, bottom]) in [
+                (H::Max, [0., line_height]),
+                (H::IncludeLineSpacingTop, [if line == 0 { spacing } else { 0. }, line_height]),
+                (H::IncludeLineSpacingMiddle, [
+                    if line == 0 { spacing } else { spacing * 0.5 },
+                    if line == 2 { line_height } else { line_height + spacing * 0.5 },
+                ]),
+                (H::IncludeLineSpacingBottom, [
+                    spacing,
+                    if line == 2 { line_height } else { line_height + spacing },
+                ]),
+                (H::Strut, strut_box),
+            ] {
+                let boxes = p.boxes_for_selection(TextRange::new(start, start + 2), height, W::Tight)
+                    .unwrap();
+                assert_eq!(boxes.len(), 1);
+                let box_ = boxes[0].rect;
+                assert_eq!(box_.origin.y, origin + top, "{force:?}, {line}, {height:?}");
+                assert_eq!(box_.origin.y + box_.size.height, origin + bottom, "{force:?}, {line}, {height:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn strut_height_style_without_a_strut_uses_each_runs_line_height() {
+    use incular_text::{BoxHeightStyle, BoxWidthStyle};
+
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::with_system_fonts(false);
+    assert!(engine.register_font_bytes_as("FlutterTest", std::fs::read(path).unwrap()));
+    let span = TextSpan::new("a")
+        .style(TextStyle::new().font_family("FlutterTest").font_size(10.).height(Some(2.)))
+        .child(TextSpan::new("b").style(TextStyle::new().font_size(20.).height(Some(1.5))))
+        .child(TextSpan::new("c").style(TextStyle::new().font_size(8.).height(Some(0.5))));
+    let mut p = painter(span, TextDirection::Ltr);
+    p.layout_with_engine(&mut engine, 0., 80.).unwrap();
+    let boxes = p.boxes_for_selection(
+        TextRange::new(0, 3), BoxHeightStyle::Strut, BoxWidthStyle::Tight,
+    ).unwrap();
+    let heights: Vec<_> = boxes.iter().map(|b| {
+        (b.rect.origin.y, b.rect.origin.y + b.rect.size.height)
+    }).collect();
+    assert_eq!(heights, [(7.5, 27.5), (0., 30.), (19.5, 23.5)]);
+}

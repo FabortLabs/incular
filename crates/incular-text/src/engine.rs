@@ -285,6 +285,42 @@ pub struct TextLayout {
     /// `getBoxesForPlaceholders`), in paragraph coordinates. Empty without
     /// placeholders.
     pub placeholders: Arc<[TextPlaceholderBox]>,
+    pub(crate) selection_strut: Option<TextStrut>,
+    pub(crate) selection_run_heights: Option<Arc<[SelectionRunHeight]>>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct SelectionRunHeight {
+    pub(crate) range: Range<usize>,
+    pub(crate) height: f32,
+    pub(crate) leading: TextLeadingDistribution,
+}
+
+fn selection_run_heights(
+    text: &str,
+    style: &TextStyle,
+    runs: &[StyledTextRun],
+    behavior: TextHeightBehavior,
+) -> Option<Arc<[SelectionRunHeight]>> {
+    let run_height = |range, style: &TextStyle| {
+        let height = match style.line_height? {
+            LineHeight::Normal => return None,
+            LineHeight::Multiplier(value) => style.size * value,
+            LineHeight::Absolute(value) => value,
+        };
+        Some(SelectionRunHeight {
+            range,
+            height,
+            leading: style.leading_distribution.unwrap_or(behavior.leading_distribution),
+        })
+    };
+    if runs.is_empty() {
+        run_height(0..text.len(), style).map(|height| Arc::from([height]))
+    } else {
+        let mut heights = runs.iter().filter_map(|run| run_height(run.range.clone(), &run.style));
+        let first = heights.next()?;
+        Some(std::iter::once(first).chain(heights).collect())
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -679,7 +715,7 @@ struct LayoutKey<'a> {
     overflow: TextOverflow,
     height_behavior: TextHeightBehavior,
     leading_distribution: Option<TextLeadingDistribution>,
-    strut: Option<(u32, u32, bool)>,
+    strut: Option<([u32; 5], bool)>,
     generation: u64,
 }
 
@@ -1305,6 +1341,7 @@ impl TextEngine {
         }
         self.sync_application_fonts();
         let (ascent, descent, font_leading) = self.measure_strut_font_metrics(&style);
+        let raw_ascent = ascent;
         let (ascent, descent) = match strut.height {
             Some(height) if ascent + descent > 0. => {
                 let total = height * style.size;
@@ -1330,6 +1367,9 @@ impl TextEngine {
             ascent: ascent + half_leading,
             descent: descent + half_leading,
             force: strut.force_strut_height.unwrap_or(false),
+            box_ascent: ascent,
+            box_descent: descent,
+            raw_ascent,
         }
     }
 
@@ -1693,6 +1733,8 @@ impl TextEngine {
             color_runs: Arc::new([]),
             backgrounds: (!backgrounds.is_empty()).then(|| backgrounds.into()),
             placeholders: Arc::new([]),
+            selection_strut: options.strut,
+            selection_run_heights: selection_run_heights(text, style, &[], options.height_behavior),
         };
         // Same horizontal-overflow policy as `shape_and_wrap` for unwrapped
         // text; the router only sends clipping overflows here.
@@ -2057,6 +2099,8 @@ impl TextEngine {
         }
 
         let mut translated = self.translate_layout(&layout, text);
+        translated.selection_strut = strut;
+        translated.selection_run_heights = selection_run_heights(text, style, runs, height_behavior);
         translated.color_runs = color_runs(runs);
         let mut boxes = line_boxes(&layout);
         if matches!(
@@ -2448,6 +2492,8 @@ impl TextEngine {
             color_runs: Arc::new([]),
             backgrounds: None,
             placeholders: placeholders.into(),
+            selection_strut: None,
+            selection_run_heights: None,
         };
         if has_join_controls(text) {
             // Carets keep Parley's complete grapheme boundaries. Selection
