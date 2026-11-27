@@ -97,9 +97,48 @@ pub struct BundleImageCache(Arc<Mutex<State>>);
 struct State {
     limits: ImageCacheLimits,
     pending: HashMap<BundleDecodeKey, Pending>,
+    blocking: HashMap<BundleDecodeKey, BlockingReads>,
     ready: LruCache<BundleDecodeKey, ImageHandle>,
     bytes: usize,
-    generation: u64,
+}
+
+struct BlockingReads {
+    ticket: Arc<()>,
+    active: usize,
+}
+
+struct BlockingRead<'a> {
+    state: &'a Mutex<State>,
+    key: &'a BundleDecodeKey,
+    ticket: Option<Arc<()>>,
+}
+
+impl BlockingRead<'_> {
+    fn finish(&mut self, state: &mut State) -> bool {
+        let Some(ticket) = self.ticket.take() else {
+            return false;
+        };
+        let Entry::Occupied(mut entry) = state.blocking.entry(self.key.clone()) else {
+            return false;
+        };
+        if !Arc::ptr_eq(&entry.get().ticket, &ticket) {
+            return false;
+        }
+        entry.get_mut().active -= 1;
+        if entry.get().active == 0 {
+            entry.remove();
+        }
+        true
+    }
+}
+
+impl Drop for BlockingRead<'_> {
+    fn drop(&mut self) {
+        if self.ticket.is_some() {
+            let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+            self.finish(&mut state);
+        }
+    }
 }
 
 impl State {
@@ -150,9 +189,9 @@ impl BundleImageCache {
         Self(Arc::new(Mutex::new(State {
             limits,
             pending: HashMap::new(),
+            blocking: HashMap::new(),
             ready: LruCache::unbounded(),
             bytes: 0,
-            generation: 0,
         })))
     }
 
@@ -173,10 +212,12 @@ impl BundleImageCache {
             let mut removed = Vec::new();
             state.evict_excess(&mut removed);
             let detached = if limits.max_entries == 0 || limits.max_bytes == 0 {
-                state.generation = state.generation.wrapping_add(1);
-                std::mem::take(&mut state.pending)
+                (
+                    std::mem::take(&mut state.pending),
+                    std::mem::take(&mut state.blocking),
+                )
             } else {
-                HashMap::new()
+                Default::default()
             };
             (removed, detached)
         };
@@ -194,11 +235,13 @@ impl BundleImageCache {
     /// an existing key does not add another job.
     #[must_use]
     pub fn pending_image_count(&self) -> usize {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .pending
-            .len()
+        let state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        state.pending.len()
+            + state
+                .blocking
+                .keys()
+                .filter(|key| !state.pending.contains_key(*key))
+                .count()
     }
 
     /// Whether a key is pending or has a retained decoded image.
@@ -206,38 +249,40 @@ impl BundleImageCache {
     pub fn contains_key(&self, key: &AssetBundleImageKey) -> bool {
         let state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         let key = BundleDecodeKey::plain(key.clone());
-        state.ready.contains(&key) || state.pending.contains_key(&key)
+        state.ready.contains(&key)
+            || state.pending.contains_key(&key)
+            || state.blocking.contains_key(&key)
     }
 
     /// Detaches an individual pending decode and/or releases its retained
     /// image. Existing waiters still receive the original outcome.
     pub fn evict(&self, key: &AssetBundleImageKey) -> bool {
         let key = BundleDecodeKey::plain(key.clone());
-        let (removed, detached) = {
+        let (removed, detached, blocking) = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             let removed = state.ready.pop_entry(&key);
             let detached = state.pending.remove_entry(&key);
-            state.generation = state.generation.wrapping_add(1);
+            let blocking = state.blocking.remove_entry(&key);
             if let Some((_, image)) = &removed {
                 state.bytes -= image.size_bytes();
             }
-            (removed, detached)
+            (removed, detached, blocking)
         };
-        removed.is_some() || detached.is_some()
+        removed.is_some() || detached.is_some() || blocking.is_some()
     }
 
     /// Detaches every pending decode and releases all retained images.
     pub fn clear(&self) {
-        let (removed, detached) = {
+        let detached = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-            state.generation = state.generation.wrapping_add(1);
             state.bytes = 0;
             (
                 std::mem::replace(&mut state.ready, LruCache::unbounded()),
                 std::mem::take(&mut state.pending),
+                std::mem::take(&mut state.blocking),
             )
         };
-        drop((removed, detached));
+        drop(detached);
     }
 
     /// Loads the key synchronously when the bundle can block.
@@ -251,7 +296,7 @@ impl BundleImageCache {
         resize: Option<ImageResizeOptions>,
     ) -> Result<ImageHandle, ImageError> {
         let key = BundleDecodeKey { asset, resize };
-        let generation = {
+        let ticket = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             if let Some(image) = state.ready.get(&key) {
                 return Ok(image.clone());
@@ -263,14 +308,27 @@ impl BundleImageCache {
                 drop(state);
                 return key.read_uncached();
             }
-            state.generation
+            let reads = state
+                .blocking
+                .entry(key.clone())
+                .or_insert_with(|| BlockingReads {
+                    ticket: Arc::new(()),
+                    active: 0,
+                });
+            reads.active += 1;
+            reads.ticket.clone()
+        };
+        let mut read = BlockingRead {
+            state: &self.0,
+            key: &key,
+            ticket: Some(ticket),
         };
         let image = key.read_uncached()?;
         let mut removed = Vec::new();
         let image = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-            if state.generation == generation {
-                state.admit(key, &image, &mut removed)
+            if read.finish(&mut state) {
+                state.admit(key.clone(), &image, &mut removed)
             } else {
                 image
             }

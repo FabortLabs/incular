@@ -50,3 +50,20 @@ invoking the external loader, like its asynchronous path. A new resolve
 after re-enabling the cache can still populate it. The regression failed
 before the fix; all nine focused native bundle-cache tests now pass. This
 authored comparison does not increase the upstream registration count.
+
+## Per-key isolation during in-flight reads
+
+Two authored Flutter probes verify that evicting a different or absent
+key leaves an active decode cached when it completes, while evicting
+the active key allows a replacement and does not let the old decode
+replace it. These use Flutter's callback completer. The corresponding
+native race was in the blocking loader: unrelated eviction invalidated
+all in-flight blocking admissions, so the next lookup decoded again.
+
+Incular now tracks blocking reads by exact decode key. Active reads
+remain visible to pending queries, and eviction, clear, or a zero limit
+detaches the corresponding reads without revoking their callers'
+results. Native tests check original identity, decode counts, same-key
+replacement after all three invalidation methods, and failed-read
+cleanup. Twelve bundle-cache and 18 image-cache policy tests passed.
+These authored checks do not increase the original registration count.

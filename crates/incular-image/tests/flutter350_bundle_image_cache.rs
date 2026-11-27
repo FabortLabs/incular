@@ -280,7 +280,6 @@ fn same_names_from_distinct_bundles_or_scales_do_not_share_and_failures_retry() 
     assert_eq!(one.0.load(Ordering::Relaxed), 4);
 }
 
-
 #[test]
 fn a_failed_asset_provider_resolution_is_removed_from_the_pending_cache() {
     clear_shared_bundle_image_cache();
@@ -349,7 +348,10 @@ fn a_blocking_decode_started_with_retention_off_does_not_enter_a_reenabled_cache
         let key = AssetBundleImageKey::new(ImageAssetBundle::new(source.clone()), "asset", 1.);
         let first = cache.load(&key).unwrap();
         assert_eq!(first.decoded().pixels().len(), BYTES);
-        assert!(!cache.contains_key(&key), "limits at request start: {limits:?}");
+        assert!(
+            !cache.contains_key(&key),
+            "limits at request start: {limits:?}"
+        );
         assert_eq!(cache.retained(), (0, 0));
         assert_eq!(cache.pending_image_count(), 0);
 
@@ -359,4 +361,120 @@ fn a_blocking_decode_started_with_retention_off_does_not_enter_a_reenabled_cache
         assert_eq!(cache.load(&key).unwrap().id(), second.id());
         assert_eq!(source.reads.load(Ordering::Relaxed), 2);
     }
+}
+
+struct BlockingFirstRead {
+    started: mpsc::Sender<()>,
+    release: Mutex<mpsc::Receiver<()>>,
+    loads: AtomicUsize,
+}
+impl AssetBundle for BlockingFirstRead {
+    fn load(&self, asset: &str) -> Result<Arc<[u8]>, AssetError> {
+        if asset == "1" && self.loads.fetch_add(1, Ordering::Relaxed) == 0 {
+            self.started.send(()).unwrap();
+            self.release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(3))
+                .unwrap();
+        }
+        Ok(Arc::from(IMAGE))
+    }
+}
+
+fn pause_first_read() -> (Arc<BlockingFirstRead>, mpsc::Receiver<()>, mpsc::Sender<()>) {
+    let (started_tx, started_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let source = Arc::new(BlockingFirstRead {
+        started: started_tx,
+        release: Mutex::new(release_rx),
+        loads: AtomicUsize::new(0),
+    });
+    (source, started_rx, release_tx)
+}
+
+#[test]
+fn evicting_one_key_does_not_discard_an_unrelated_in_flight_blocking_read() {
+    let (source, started_rx, release_tx) = pause_first_read();
+    let bundle = ImageAssetBundle::new(source.clone());
+    let cache = BundleImageCache::default();
+    let first = key(&bundle, 1);
+    let second = key(&bundle, 2);
+    let second_id = cache.load(&second).unwrap().id();
+    let worker = {
+        let (cache, first) = (cache.clone(), first.clone());
+        std::thread::spawn(move || cache.load(&first).unwrap())
+    };
+    started_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+    let evicted = cache.evict(&second);
+    let missing = cache.evict(&key(&bundle, 3));
+    release_tx.send(()).unwrap();
+    let completed = worker.join().unwrap();
+
+    assert!(evicted);
+    assert!(!missing);
+    assert_eq!(cache.load(&first).unwrap().id(), completed.id());
+    assert_eq!(source.loads.load(Ordering::Relaxed), 1);
+    assert_ne!(cache.load(&second).unwrap().id(), second_id);
+}
+
+#[test]
+fn detaching_blocking_reads_never_replaces_a_new_generation() {
+    for mode in 0..3 {
+        let (source, started_rx, release_tx) = pause_first_read();
+        let bundle = ImageAssetBundle::new(source.clone());
+        let cache = BundleImageCache::default();
+        let asset = key(&bundle, 1);
+        let worker = {
+            let (cache, asset) = (cache.clone(), asset.clone());
+            std::thread::spawn(move || cache.load(&asset).unwrap())
+        };
+        started_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+        let pending_before = cache.pending_image_count();
+        let visible_before = cache.contains_key(&asset);
+        let evicted = match mode {
+            0 => cache.evict(&asset),
+            1 => {
+                cache.clear();
+                true
+            }
+            2 => {
+                let limits = cache.limits();
+                cache.set_limits(ImageCacheLimits::new(0, BYTES));
+                cache.set_limits(limits);
+                true
+            }
+            _ => unreachable!(),
+        };
+        let pending_after = cache.pending_image_count();
+        let visible_after = cache.contains_key(&asset);
+        let replacement = cache.load(&asset).unwrap();
+        release_tx.send(()).unwrap();
+        let detached = worker.join().unwrap();
+
+        assert_eq!(pending_before, 1, "mode {mode}");
+        assert!(visible_before, "mode {mode}");
+        assert!(evicted, "mode {mode}");
+        assert_eq!(pending_after, 0, "mode {mode}");
+        assert!(!visible_after, "mode {mode}");
+        assert_ne!(detached.id(), replacement.id(), "mode {mode}");
+        assert_eq!(cache.load(&asset).unwrap().id(), replacement.id());
+        assert_eq!(cache.retained(), (1, BYTES));
+        assert_eq!(cache.pending_image_count(), 0);
+        assert_eq!(source.loads.load(Ordering::Relaxed), 2);
+    }
+}
+
+#[test]
+fn a_failed_blocking_read_drops_its_pending_ticket() {
+    let bundle = ImageAssetBundle::new(Arc::new(Counting::default()));
+    let cache = BundleImageCache::default();
+    let key = AssetBundleImageKey::new(bundle, "missing", 1.0);
+    assert!(matches!(
+        cache.load(&key),
+        Err(ImageError::Asset(AssetError::NotFound(_)))
+    ));
+    assert_eq!(cache.pending_image_count(), 0);
+    assert!(!cache.contains_key(&key));
+    assert!(!cache.evict(&key));
 }
