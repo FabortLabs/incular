@@ -39,7 +39,7 @@ pub use flutter_text_input_config::FlutterTextInputConfiguration;
 pub use flutter_text_input_controls::{
     FlutterSelectionRect, FlutterTextInputClientEvent, FlutterTextInputControlUpdate,
     FlutterTextInputControl, FlutterTextInputControls, FlutterTextInputControlsError,
-    FlutterTextInputWireCall,
+    FlutterTextInputWireCall, FlutterTextInputWireError,
 };
 pub use flutter_text_input_style::{
     FlutterTextInputAlignment, FlutterTextInputStyle, FlutterTextInputStyleSendError,

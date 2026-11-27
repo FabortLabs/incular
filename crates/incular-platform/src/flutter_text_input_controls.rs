@@ -99,6 +99,50 @@ impl FlutterTextInputWireCall {
             .await?;
         Ok(())
     }
+
+    /// Reports an outbound failure once with the Flutter operation context.
+    /// The original platform exception remains the error's typed source.
+    pub async fn send_reporting<M: FlutterPlatformMessenger>(
+        &self,
+        messenger: &mut M,
+        report: impl FnOnce(FlutterTextInputWireError<M::Error>),
+    ) {
+        if let Err(error) = self.send(messenger).await {
+            report(FlutterTextInputWireError {
+                context: self.error_context(),
+                error,
+            });
+        }
+    }
+
+    fn error_context(&self) -> &'static str {
+        match self.method {
+            "TextInput.setClient" => "while attaching the text input client",
+            "TextInput.clearClient" => "while detaching the text input client",
+            "TextInput.updateConfig" => "while updating text input configuration",
+            "TextInput.setEditingState" => "while setting text input editing state",
+            "TextInput.show" => "while showing the text input client",
+            "TextInput.hide" => "while hiding the text input client",
+            "TextInput.setEditableSizeAndTransform" => {
+                "while setting text input size and transform"
+            }
+            "TextInput.setMarkedTextRect" => "while setting text input composing rect",
+            "TextInput.setCaretRect" => "while setting text input caret rect",
+            "TextInput.setSelectionRects" => "while setting text input selection rects",
+            "TextInput.setStyle" => "while updating text input style",
+            "TextInput.requestAutofill" => "while requesting autofill",
+            "TextInput.finishAutofillContext" => "while finishing autofill context",
+            _ => "while sending a text input request",
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("{context}: {error}")]
+pub struct FlutterTextInputWireError<E> {
+    pub context: &'static str,
+    #[source]
+    pub error: FlutterPlatformChannelError<E>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -296,6 +340,14 @@ impl FlutterTextInputControls {
         }
         (attachment.client)(FlutterTextInputClientEvent::EditingValue(value));
         Ok(Some(true))
+    }
+
+    /// Finishes autofill even when the last field is already detached.
+    pub fn finish_autofill_context(&mut self, should_save: bool) {
+        self.forward(
+            FlutterTextInputControlUpdate::FinishAutofillContext { should_save },
+            ("TextInput.finishAutofillContext", json!(should_save)),
+        );
     }
 
     pub fn take_platform_calls(&mut self) -> Vec<FlutterTextInputWireCall> {
