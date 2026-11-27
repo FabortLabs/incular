@@ -3704,3 +3704,7 @@ packages/flutter/test/widgets/editable_text_test.dart	4729	EditableText identifi
 packages/flutter/test/widgets/editable_text_test.dart	4779	EditableText sets multi-line flag in semantics	paired-match	upstream-raw-editor-semantics.md
 packages/flutter/test/widgets/editable_text_test.dart	4844	EditableText includes text as value in semantics	paired-match	upstream-raw-editor-semantics.md
 packages/flutter/test/widgets/editable_text_test.dart	4643	Changing controller updates EditableText	paired-match	upstream-text-input-reattach.md#flutter-wire-snapshots-from-the-mounted-editor
+packages/flutter/test/widgets/editable_text_test.dart	10290	input from text input plugin	paired-match	upstream-text-input-reattach.md#controller-listeners-publish-only-the-final-edit
+packages/flutter/test/widgets/editable_text_test.dart	10322	input from text selection menu	paired-match	upstream-text-input-reattach.md#controller-listeners-publish-only-the-final-edit
+packages/flutter/test/widgets/editable_text_test.dart	10349	input from controller	paired-match	upstream-text-input-reattach.md#controller-listeners-publish-only-the-final-edit
+packages/flutter/test/widgets/editable_text_test.dart	11115	controller listener changes value	partial-match	upstream-text-input-reattach.md#controller-listeners-publish-only-the-final-edit

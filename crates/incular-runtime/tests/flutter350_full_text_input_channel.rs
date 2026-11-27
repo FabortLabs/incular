@@ -455,3 +455,169 @@ fn a_platform_text_edit_notifies_selection_before_on_changed() {
             ))
     );
 }
+
+#[derive(Clone, Copy)]
+enum EditOrigin {
+    Host,
+    UserReplace,
+    Controller,
+}
+
+fn callback_edits_publish_one_final_value(origin: EditOrigin) {
+    use incular_platform::{FlutterTextInputConfiguration, FlutterTextInputControls};
+    use incular_text::{SelectionChangedCause, TextEditingValue};
+    use incular_widgets::LengthLimitingTextInputFormatter;
+    use std::{cell::Cell, rc::Rc};
+
+    let controller = TextEditingController::with_text("initial");
+    let focus = FocusNode::new();
+    let listener = controller.clone();
+    let _listener = controller.observe(move |value| {
+        if !value.text.ends_with("listener") {
+            listener.set_value(TextEditingValue::new(format!("{} listener", value.text)));
+        }
+    });
+    let on_changed_calls = Rc::new(Cell::new(0));
+    let changed = on_changed_calls.clone();
+    let editable = field(&controller, &focus, true)
+        .max_lines(Some(2))
+        .input_formatter(LengthLimitingTextInputFormatter::new(6))
+        .on_changed({
+            let controller = controller.clone();
+            move |_| {
+                changed.set(changed.get() + 1);
+                controller.set_value(TextEditingValue::new(format!(
+                    "{} onChanged",
+                    controller.text()
+                )));
+            }
+        });
+    let mut runtime = Runtime::new(editable.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    frame(&mut runtime);
+    let client = attached(&mut runtime);
+    let target = runtime.focused_element().unwrap();
+    let mut controls = FlutterTextInputControls::new(false);
+    assert!(controls.attach_existing(client, FlutterTextInputConfiguration::default(), |_| {}));
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    let _ = controls.take_platform_calls();
+
+    let incoming = "remoteremoteremote";
+    let wire_value = |text: &str| {
+        json!({
+            "text": text,
+            "selectionBase": text.len(), "selectionExtent": text.len(),
+            "selectionAffinity": "TextAffinity.downstream",
+            "selectionIsDirectional": false,
+            "composingBase": -1, "composingExtent": -1,
+        })
+    };
+    let send_host = |runtime: &mut Runtime, controls: &mut FlutterTextInputControls, text| {
+        let data = update(json!(client.get()), wire_value(text));
+        assert_eq!(controls.handle_platform_edit(&data).unwrap(), Some(true));
+        assert_eq!(
+            runtime
+                .handle_flutter_text_input_editing_call(&data)
+                .unwrap(),
+            Some(true)
+        );
+    };
+    match origin {
+        EditOrigin::Host => send_host(&mut runtime, &mut controls, incoming),
+        EditOrigin::UserReplace => {
+            let range = TextRange::new(0, controller.text().len());
+            assert!(runtime.replace_text(target, range, incoming, SelectionChangedCause::Keyboard));
+        }
+        EditOrigin::Controller => controller.set_text(incoming),
+    }
+    let expected = match origin {
+        EditOrigin::Controller => "remoteremoteremote listener",
+        _ => "remote listener onChanged listener",
+    };
+    assert_eq!(controller.text(), expected);
+    assert_eq!(
+        on_changed_calls.get(),
+        usize::from(!matches!(origin, EditOrigin::Controller))
+    );
+    assert_eq!(
+        controller.selection(),
+        TextSelection::collapsed(expected.len())
+    );
+    frame(&mut runtime);
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    let calls = controls.take_platform_calls();
+    let states: Vec<_> = calls
+        .iter()
+        .filter(|call| call.method == "TextInput.setEditingState")
+        .map(|call| &call.arguments)
+        .collect();
+    assert_eq!(states, [&wire_value(expected)]);
+
+    if matches!(origin, EditOrigin::Host) {
+        send_host(&mut runtime, &mut controls, expected);
+        frame(&mut runtime);
+        assert_eq!(controller.text(), expected);
+        assert_eq!(on_changed_calls.get(), 1);
+    }
+    assert!(
+        !runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    assert!(controls.take_platform_calls().is_empty());
+}
+
+#[test]
+fn host_input_sends_only_the_final_formatted_and_listened_value_without_echo() {
+    callback_edits_publish_one_final_value(EditOrigin::Host);
+}
+
+#[test]
+fn user_replace_sends_only_the_final_formatted_and_listened_value() {
+    callback_edits_publish_one_final_value(EditOrigin::UserReplace);
+}
+
+#[test]
+fn programmatic_text_only_invokes_the_controller_listener_before_publication() {
+    callback_edits_publish_one_final_value(EditOrigin::Controller);
+}
+
+#[test]
+fn a_controllers_reentrant_numeric_listener_can_repair_a_host_edit_and_its_caret() {
+    use incular_text::TextEditingValue;
+
+    let controller = TextEditingController::new();
+    let listener = controller.clone();
+    let _listener = controller.observe(move |value| {
+        if value.text.parse::<f64>().unwrap_or(0.) > 5.5555 {
+            listener.set_value(TextEditingValue::new("5.5555"));
+        }
+    });
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(field(&controller, &focus, true).into()).unwrap();
+    frame(&mut runtime);
+    let client = attached(&mut runtime);
+    for (text, offset) in [("1", 1), ("12", 2)] {
+        let data = update(
+            json!(client.get()),
+            json!({"text":text, "selectionBase": offset, "selectionExtent": offset}),
+        );
+        assert_eq!(
+            runtime
+                .handle_flutter_text_input_editing_call(&data)
+                .unwrap(),
+            Some(true)
+        );
+        frame(&mut runtime);
+    }
+    assert_eq!(controller.text(), "5.5555");
+    assert_eq!(controller.selection(), TextSelection::collapsed(6));
+}

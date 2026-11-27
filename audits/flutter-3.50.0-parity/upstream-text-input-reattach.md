@@ -247,3 +247,21 @@ unchanged as a separate contract. Controls refuse stale attachment IDs
 and remember incoming platform values to avoid echoing identical state
 back to the host. All 37 focused native controls, wire error, runtime
 input and mounted autofill checks passed.
+
+## Controller listeners publish only the final edit
+
+Pinned :10290, :10322 and :10349 pair. Through the mounted Flutter
+bridge, a native full-value edit and a direct user replacement both
+apply the six-character formatter, the controller listener, the
+application's change callback and then the listener again. Only the
+final `remote listener onChanged listener` value with its collapsed
+caret gets an editing-state message. Receiving that value back does
+not produce a second message. A programmatic text change bypasses the
+formatter and change callback and sends one full value ending in
+`listener`. The native assertions compare the complete wire value.
+
+Pinned :11115 ran. An actual native input edit with a mounted client
+also reaches a reentrant numeric controller listener and ends at
+`5.5555` with caret 6. This remains partial because the original
+invokes the widget delegate without acquiring focus, not through an
+attached client. All 11 focused full-value input checks passed.
