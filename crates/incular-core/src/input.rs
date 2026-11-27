@@ -1,6 +1,8 @@
 //! Platform-neutral input values.
 
 use crate::{Offset, Size};
+mod flutter_keyboard;
+pub use flutter_keyboard::{LogicalKeyboardKey, PhysicalKeyboardKey};
 
 /// Whether a logical key label is exactly one C0 or C1 control character,
 /// matching Flutter's `LogicalKeyboardKey.isControlCharacter`.

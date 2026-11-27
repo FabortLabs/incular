@@ -3168,3 +3168,13 @@ packages/flutter/test/painting/text_painter_rtl_test.dart	729	TextPainter - empt
 packages/flutter/test/painting/decoration_test.dart	170	BoxDecorationImageListenerSync	paired-match	upstream-async-decoration-image.md#image-clipping-after-async-completion
 packages/flutter/test/painting/decoration_test.dart	189	BoxDecorationImageListenerAsync	paired-match	upstream-async-decoration-image.md#image-clipping-after-async-completion
 packages/flutter/test/painting/decoration_test.dart	212	BoxDecorationImageListener does not change when image is clone	paired-match	upstream-async-decoration-image.md#decoded-image-clone-suppression
+packages/flutter/test/services/keyboard_key_test.dart	10	Various classes of keys can be looked up by code.	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
+packages/flutter/test/services/keyboard_key_test.dart	18	Values are equal	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
+packages/flutter/test/services/keyboard_key_test.dart	26	debugNames	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
+packages/flutter/test/services/keyboard_key_test.dart	33	Various classes of keys can be looked up by code	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
+packages/flutter/test/services/keyboard_key_test.dart	64	Control characters are not using incorrect values	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
+packages/flutter/test/services/keyboard_key_test.dart	76	Basic synonyms can be looked up.	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
+packages/flutter/test/services/keyboard_key_test.dart	86	Synonyms get collapsed properly.	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
+packages/flutter/test/services/keyboard_key_test.dart	135	Values are equal	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
+packages/flutter/test/services/keyboard_key_test.dart	140	keyLabel	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids
+packages/flutter/test/services/keyboard_key_test.dart	153	debugName	paired-match	upstream-keyboard-services.md#stable-physical-and-logical-key-ids

@@ -68,3 +68,24 @@ and restoring the default reinstates it. The separate authored control
 checks that lifecycle; the Rust control also checks typed-only, raw-only,
 and mirrored portable messages. This does not claim parity for GTK, the
 native Flutter transit queue, synthesized repeats, or abort-on-panic builds.
+
+## Stable physical and logical key IDs
+
+The remaining ten `services/keyboard_key_test.dart` registrations
+pair. Physical keys round-trip USB HID usages; logical keys resolve
+numeric Flutter IDs separately. Unprintable controls retain their
+original code points in their plane. Printable Unicode labels use
+uppercase, named nonprintable keys use the catalog, and unknown
+non-Unicode IDs yield an empty label. Debug names prefer the pinned
+descriptions and use the original eight- or eleven-digit hexadecimal
+fallback; they are unavailable when assertions are disabled.
+
+Left/right Shift, Control, Alt and Meta collapse to abstract
+synonyms, and expansion recovers both concrete keys. Empty sets and
+normal keys behave unchanged. The pinned catalog supplies 713
+physical/logical constants; the checked-in generator reproduces the
+exact sorted lookup tables from the pinned checkout. An accompanying
+Flutter license is included with the crate. The ten pinned originals
+and twelve focused native key-ID and control-label tests passed.
+These interoperability values do not replace Incular's existing
+keyboard event vocabulary or claim every platform's raw event map.
