@@ -3340,3 +3340,7 @@ packages/flutter/test/widgets/focus_traversal_test.dart	1140	Custom requestFocus
 packages/flutter/test/widgets/focus_traversal_test.dart	1618	Custom requestFocusCallback gets called on the next/previous focus.	paired-match	upstream-focus-request-callback.md
 packages/flutter/test/widgets/focus_traversal_test.dart	2405	Can find focus when policy data dirty	paired-match	upstream-focus-request-callback.md#scoped-arrow-traversal
 packages/flutter/test/widgets/focus_traversal_test.dart	3305	Custom requestFocusCallback gets called on focusInDirection up/down/left/right.	paired-match	upstream-focus-request-callback.md#scoped-arrow-traversal
+packages/flutter/test/widgets/focus_traversal_test.dart	2463	Focus traversal actions are invoked when shortcuts are used.	paired-match	upstream-focus-key-scroll.md
+packages/flutter/test/widgets/focus_traversal_test.dart	2553	Focus traversal actions works when current focus skip traversal	paired-match	upstream-focus-key-scroll.md
+packages/flutter/test/widgets/focus_traversal_test.dart	2609	Focus traversal inside a vertical scrollable scrolls to stay visible.	paired-match	upstream-focus-key-scroll.md
+packages/flutter/test/widgets/focus_traversal_test.dart	2733	Focus traversal inside a horizontal scrollable scrolls to stay visible.	paired-match	upstream-focus-key-scroll.md

@@ -169,16 +169,18 @@ pub(super) fn instantiate_owned_focus_node(widget: &mut Widget, previous: Option
     let previous = previous
         .filter(|old| old.semantic_properties().owns_focus_group == is_group)
         .and_then(|previous| match previous.kind() {
-        WidgetKind::Gesture { callbacks: old, .. }
-            if old.owned_focus_permission.is_some()
-                && old.owns_focus_scope == callbacks.owns_focus_scope =>
-        {
-            Some(old)
-        }
-        _ => None,
-    });
+            WidgetKind::Gesture { callbacks: old, .. }
+                if old.owned_focus_permission.is_some()
+                    && old.owns_focus_scope == callbacks.owns_focus_scope =>
+            {
+                Some(old)
+            }
+            _ => None,
+        });
     if callbacks.owns_focus_scope {
-        let scope = previous.and_then(|old| old.focus_scope.clone()).unwrap_or_default();
+        let scope = previous
+            .and_then(|old| old.focus_scope.clone())
+            .unwrap_or_default();
         scope.set_can_request_focus(can_request);
         callbacks.focus_node = Some(scope.scope_focus_node());
         callbacks.focus_scope = Some(scope);
@@ -258,7 +260,10 @@ impl WidgetTree {
     ) -> Option<incular_gestures::FocusScopeNode> {
         let mut current = Some(id);
         while let Some(id) = current {
-            if let Some(scope) = self.focus_boundary_at(id).and_then(|node| node.scope_owner()) {
+            if let Some(scope) = self
+                .focus_boundary_at(id)
+                .and_then(|node| node.scope_owner())
+            {
                 return Some(scope);
             }
             current = self.mounted_focus_parent(id);
@@ -287,7 +292,9 @@ impl WidgetTree {
             if let Some(properties) = callbacks.focus_node_widget_properties {
                 properties.apply(node);
             }
-            if callbacks.focus_key_handler_owner == incular_gestures::FocusKeyHandlerOwner::FocusWidget {
+            if callbacks.focus_key_handler_owner
+                == incular_gestures::FocusKeyHandlerOwner::FocusWidget
+            {
                 node.install_mounted_key_handlers(
                     callbacks.on_focus_key_event.as_ref(),
                     callbacks.on_focus_raw_key.as_ref(),
@@ -367,8 +374,14 @@ impl WidgetTree {
     }
 
     pub(super) fn refresh_focus_geometry(&mut self, force: bool) {
-        if self.hosted_focus_nodes.as_ref().is_none_or(BTreeMap::is_empty)
-            && self.standalone_focus_geometry.as_ref().is_none_or(BTreeSet::is_empty)
+        if self
+            .hosted_focus_nodes
+            .as_ref()
+            .is_none_or(BTreeMap::is_empty)
+            && self
+                .standalone_focus_geometry
+                .as_ref()
+                .is_none_or(BTreeSet::is_empty)
         {
             return;
         }
@@ -378,7 +391,10 @@ impl WidgetTree {
         }
         self.focus_geometry_stamp = Some(stamp);
         self.refresh_follower_links_for_geometry();
-        let nodes = self.hosted_focus_nodes.iter().flat_map(|nodes| nodes.keys())
+        let nodes = self
+            .hosted_focus_nodes
+            .iter()
+            .flat_map(|nodes| nodes.keys())
             .chain(self.standalone_focus_geometry.iter().flatten());
         for &id in nodes {
             let Some(element) = self.elements.get(id.0) else {
@@ -400,7 +416,10 @@ impl WidgetTree {
     }
 
     fn mounted_focus_parent(&self, element: ElementId) -> Option<ElementId> {
-        self.resolved_focus_parents.get(&element).copied().or_else(|| self.parent(element))
+        self.resolved_focus_parents
+            .get(&element)
+            .copied()
+            .or_else(|| self.parent(element))
     }
 
     pub(crate) fn custom_focus_policy_of(
@@ -429,7 +448,9 @@ impl WidgetTree {
     ) -> bool {
         let mut current = Some(origin.unwrap_or(target));
         while let Some(id) = current {
-            let Some(entry) = self.elements.get(id.0) else { return false; };
+            let Some(entry) = self.elements.get(id.0) else {
+                return false;
+            };
             let properties = entry.widget.semantic_properties();
             if properties.owns_focus_group {
                 let Some(callback) = &properties.custom_focus_request else {
@@ -464,9 +485,10 @@ impl WidgetTree {
             return;
         };
         for (&id, parent) in &self.requested_focus_parents {
-            let Some(parent) = hosted.iter().find_map(|(&candidate, binding)| {
-                (binding.node() == parent).then_some(candidate)
-            }) else {
+            let Some(parent) = hosted
+                .iter()
+                .find_map(|(&candidate, binding)| (binding.node() == parent).then_some(candidate))
+            else {
                 continue;
             };
             let mut implicit = self.parent(id);
@@ -701,7 +723,8 @@ impl WidgetTree {
             let Some(entry) = self.elements.get(id.0) else {
                 return false;
             };
-            if external_node(entry.widget.kind()).is_some_and(|node| !node.descendants_are_focusable())
+            if external_node(entry.widget.kind())
+                .is_some_and(|node| !node.descendants_are_focusable())
             {
                 return false;
             }
@@ -818,9 +841,10 @@ impl WidgetTree {
     }
 
     fn mounted_focus_element(&self, node: &incular_gestures::FocusNode) -> Option<ElementId> {
-        self.hosted_focus_nodes.as_ref()?.iter().find_map(|(&id, binding)| {
-            (binding.node() == node).then_some(id)
-        })
+        self.hosted_focus_nodes
+            .as_ref()?
+            .iter()
+            .find_map(|(&id, binding)| (binding.node() == node).then_some(id))
     }
 
     /// Resolves a traversal invoked from a mounted node's scope, using its
@@ -832,7 +856,8 @@ impl WidgetTree {
         active: Option<ElementId>,
         reverse: bool,
     ) -> SequentialFocusResolution {
-        self.resolve_node_sequential_focus_with_origin(origin, active, reverse).1
+        self.resolve_node_sequential_focus_with_origin(origin, active, reverse)
+            .1
     }
 
     /// Resolves traversal together with the mounted policy origin.
@@ -848,7 +873,9 @@ impl WidgetTree {
         };
         let scope = self.scope_of_focus_boundary(origin);
         let anchor = if let Some(scope) = &scope {
-            scope.focused_child().and_then(|node| self.mounted_focus_element(&node))
+            scope
+                .focused_child()
+                .and_then(|node| self.mounted_focus_element(&node))
         } else {
             // The implicit root has no stored ScopeNode. Its current child is
             // the outermost explicit scope (or the focused unscoped leaf).
@@ -862,7 +889,10 @@ impl WidgetTree {
                 self.mounted_focus_element(&outer.scope_focus_node())
             })
         };
-        (Some(origin), self.resolve_sequential_focus_in_scope(anchor, scope, reverse))
+        (
+            Some(origin),
+            self.resolve_sequential_focus_in_scope(anchor, scope, reverse),
+        )
     }
 
     fn resolve_sequential_focus_in_scope(
@@ -926,7 +956,9 @@ impl WidgetTree {
                 .and_then(|id| self.focus_boundary_at(id))
                 .and_then(incular_gestures::FocusNode::scope_owner);
             let anchor = if let Some(departing) = &departing_scope {
-                local.iter().rposition(|id| self.is_in_focus_scope(*id, departing))
+                local
+                    .iter()
+                    .rposition(|id| self.is_in_focus_scope(*id, departing))
             } else if let Some(anchor_scope) = &anchor_scope {
                 // Enter an explicitly focused scope at its first stop. When
                 // that scope is the remembered child of the requested scope,
@@ -1074,7 +1106,10 @@ impl WidgetTree {
         while let Some(id) = current {
             let entry = self.elements.get(id.0)?;
             if let WidgetKind::Gesture { callbacks, .. } = entry.widget.kind()
-                && let Some(action) = callbacks.action_scope.as_ref().and_then(|s| s.action(intent))
+                && let Some(action) = callbacks
+                    .action_scope
+                    .as_ref()
+                    .and_then(|s| s.action(intent))
             {
                 return Some(action);
             }
@@ -1089,9 +1124,10 @@ impl WidgetTree {
         element: ElementId,
         intent: &incular_gestures::Intent<C>,
     ) -> Result<incular_gestures::Action<C>, crate::ActionLookupError> {
-        self.maybe_find_action_at(element, intent).ok_or(crate::ActionLookupError {
-            command_type: std::any::type_name::<C>(),
-        })
+        self.maybe_find_action_at(element, intent)
+            .ok_or(crate::ActionLookupError {
+                command_type: std::any::type_name::<C>(),
+            })
     }
 
     /// Captures a currently enabled action as a callback, using the caller's
@@ -1104,7 +1140,10 @@ impl WidgetTree {
     ) -> Option<Rc<dyn Fn()>> {
         let action = self.maybe_find_action_at(element, intent)?;
         let origin = self.element_address(element)?;
-        let source = self.element_live(element, "handler caller is mounted").build_context.clone();
+        let source = self
+            .element_live(element, "handler caller is mounted")
+            .build_context
+            .clone();
         let context = incular_gestures::ActionContext::new(&origin, &source);
         if !action.is_action_enabled_in_context(intent, Some(&context)) {
             return None;
@@ -1113,8 +1152,12 @@ impl WidgetTree {
         let dispatcher = self.action_dispatcher_at(element);
         Some(Rc::new(move || {
             let context = incular_gestures::ActionContext::new(&origin, &source);
-            let _ = incular_gestures::ActionDispatcher::new()
-                .invoke_action_with_context(&action, &intent, dispatcher.clone(), Some(&context));
+            let _ = incular_gestures::ActionDispatcher::new().invoke_action_with_context(
+                &action,
+                &intent,
+                dispatcher.clone(),
+                Some(&context),
+            );
         }))
     }
 
@@ -1128,7 +1171,8 @@ impl WidgetTree {
         while let Some(id) = current {
             let entry = self.elements.get(id.0)?;
             if let WidgetKind::Gesture { callbacks, .. } = entry.widget.kind()
-                && let Some(dispatcher) = callbacks.action_scope.as_ref().and_then(|s| s.dispatcher())
+                && let Some(dispatcher) =
+                    callbacks.action_scope.as_ref().and_then(|s| s.dispatcher())
             {
                 return Some(dispatcher);
             }
@@ -1146,7 +1190,8 @@ impl WidgetTree {
         element: ElementId,
         intent: &incular_gestures::Intent<C>,
     ) -> Option<incular_gestures::ActionResult> {
-        self.invoke_action_output_at(element, intent).map(|output| output.result())
+        self.invoke_action_output_at(element, intent)
+            .map(|output| output.result())
     }
 
     /// Invokes an inherited action and returns any value produced by it.
@@ -1166,14 +1211,15 @@ impl WidgetTree {
         while let Some(id) = current {
             let entry = self.elements.get(id.0)?;
             if let WidgetKind::Gesture { callbacks, .. } = entry.widget.kind()
-                && let Some(result) = callbacks
-                    .action_scope
-                    .as_ref()
-                    .and_then(|scope| {
-                        // Dispatch starts at the action's owner, not at the
-                        // invoking descendant's closer unrelated dispatcher.
-                        scope.invoke_in_context(&intent, || self.action_dispatcher_at(id), Some(&context))
-                    })
+                && let Some(result) = callbacks.action_scope.as_ref().and_then(|scope| {
+                    // Dispatch starts at the action's owner, not at the
+                    // invoking descendant's closer unrelated dispatcher.
+                    scope.invoke_in_context(
+                        &intent,
+                        || self.action_dispatcher_at(id),
+                        Some(&context),
+                    )
+                })
             {
                 return Some(result);
             }
@@ -1181,7 +1227,11 @@ impl WidgetTree {
                 && entry
                     .environment_override
                     .as_ref()
-                    .and_then(|scope| scope.value.downcast_ref::<crate::raw_menu_anchor::AnchorScope>())
+                    .and_then(|scope| {
+                        scope
+                            .value
+                            .downcast_ref::<crate::raw_menu_anchor::AnchorScope>()
+                    })
                     .is_some_and(crate::raw_menu_anchor::AnchorScope::dismiss_if_open)
             {
                 return Some(incular_gestures::ActionResult::Handled.into());
@@ -1201,7 +1251,9 @@ impl WidgetTree {
         let Some(origin) = self.element_address(focused) else {
             return KeyEventResult::Ignored;
         };
-        let source = &self.element_live(focused, "shortcut caller is mounted").build_context;
+        let source = &self
+            .element_live(focused, "shortcut caller is mounted")
+            .build_context;
         let context = incular_gestures::ActionContext::new(&origin, source);
         let mut current = Some(focused);
         while let Some(id) = current {
@@ -1212,7 +1264,11 @@ impl WidgetTree {
                 && let Some(result) = callbacks.action_scope.as_ref().and_then(|scope| {
                     // Unlike direct Actions.invoke, Shortcuts gets the
                     // dispatcher from the original focused context.
-                    scope.invoke_shortcut_in_context(intent, || self.action_dispatcher_at(focused), Some(&context))
+                    scope.invoke_shortcut_in_context(
+                        intent,
+                        || self.action_dispatcher_at(focused),
+                        Some(&context),
+                    )
                 })
             {
                 return result;
@@ -1232,7 +1288,10 @@ impl WidgetTree {
         lock_modes: incular_core::Modifiers,
     ) -> KeyEventResult {
         self.route_keyboard_with_raw_payload(
-            focused, event, lock_modes, incular_gestures::RawKeyDelivery::Mirror,
+            focused,
+            event,
+            lock_modes,
+            incular_gestures::RawKeyDelivery::Mirror,
         )
     }
 
@@ -1261,7 +1320,12 @@ impl WidgetTree {
     ) -> (KeyEventResult, Option<crate::DirectionalFocusIntent>) {
         let mut intent = None;
         let result = self.dispatch_keyboard_where(
-            focused, event, lock_modes, raw_delivery, |_| true, Some(&mut intent),
+            focused,
+            event,
+            lock_modes,
+            raw_delivery,
+            |_| true,
+            Some(&mut intent),
         );
         (result, intent)
     }
@@ -1299,7 +1363,10 @@ impl WidgetTree {
             {
                 if callbacks.on_shortcut.is_none()
                     && callbacks.on_shortcut_with_lock_modes.is_none()
-                    && let Some(matched) = callbacks.shortcut_scope.as_ref().and_then(|s| s.find(event.clone()))
+                    && let Some(matched) = callbacks
+                        .shortcut_scope
+                        .as_ref()
+                        .and_then(|s| s.find(event.clone()))
                 {
                     use incular_gestures::ShortcutMatch;
                     let result = match matched {
@@ -1307,22 +1374,30 @@ impl WidgetTree {
                             callback();
                             KeyEventResult::Handled
                         }
-                        ShortcutMatch::Intent(intent) => focused.map_or(KeyEventResult::Ignored, |focused| {
-                            self.dispatch_shortcut_action(focused, &intent)
-                        }),
+                        ShortcutMatch::Intent(intent) => focused
+                            .map_or(KeyEventResult::Ignored, |focused| {
+                                self.dispatch_shortcut_action(focused, &intent)
+                            }),
                     };
                     if result != KeyEventResult::Ignored {
                         return result;
                     }
                 }
-                let result = callbacks.route_keyboard_with_raw_payload(event.clone(), lock_modes, raw_delivery);
+                let result = callbacks.route_keyboard_with_raw_payload(
+                    event.clone(),
+                    lock_modes,
+                    raw_delivery,
+                );
                 if result != KeyEventResult::Ignored {
                     return result;
                 }
                 if let Some(slot) = directional_intent.as_deref_mut()
-                    && let Some(incular_gestures::ShortcutMatch::Intent(matched)) =
-                        callbacks.shortcut_scope.as_ref().and_then(|scope| scope.find(event.clone()))
-                    && let Some(intent) = matched.downcast_command::<crate::DirectionalFocusIntent>()
+                    && let Some(incular_gestures::ShortcutMatch::Intent(matched)) = callbacks
+                        .shortcut_scope
+                        .as_ref()
+                        .and_then(|scope| scope.find(event.clone()))
+                    && let Some(intent) =
+                        matched.downcast_command::<crate::DirectionalFocusIntent>()
                 {
                     *slot = Some(*intent);
                     return KeyEventResult::Handled;
@@ -1333,7 +1408,9 @@ impl WidgetTree {
                     .environment_override
                     .as_ref()
                     .and_then(|scope| {
-                        scope.value.downcast_ref::<crate::raw_menu_anchor::AnchorScope>()
+                        scope
+                            .value
+                            .downcast_ref::<crate::raw_menu_anchor::AnchorScope>()
                     })
                     .is_some_and(crate::raw_menu_anchor::AnchorScope::dismiss_if_open)
             {
@@ -1548,17 +1625,25 @@ impl WidgetTree {
         &self,
         origin: &incular_gestures::FocusNode,
         active: Option<ElementId>,
-    ) -> Option<(ElementId, Option<ElementId>, Option<incular_gestures::FocusScopeNode>)> {
+    ) -> Option<(
+        ElementId,
+        Option<ElementId>,
+        Option<incular_gestures::FocusScopeNode>,
+    )> {
         let origin = self.mounted_focus_element(origin)?;
         let scope = self.scope_of_focus_boundary(origin);
         let anchor = if let Some(scope) = scope.as_ref() {
-            active.filter(|id| self.is_in_focus_scope(*id, scope)).or_else(|| {
-                let mut last = scope.scope_focus_node();
-                while let Some(child) = last.scope_owner().and_then(|scope| scope.focused_child()) {
-                    last = child;
-                }
-                self.mounted_focus_element(&last)
-            })
+            active
+                .filter(|id| self.is_in_focus_scope(*id, scope))
+                .or_else(|| {
+                    let mut last = scope.scope_focus_node();
+                    while let Some(child) =
+                        last.scope_owner().and_then(|scope| scope.focused_child())
+                    {
+                        last = child;
+                    }
+                    self.mounted_focus_element(&last)
+                })
         } else {
             active
         };
@@ -1674,8 +1759,14 @@ impl WidgetTree {
     pub fn can_retrace_directional_focus(&self, current: ElementId, previous: ElementId) -> bool {
         self.can_request_focus(previous)
             && self.scope_of_focus_boundary(current) == self.scope_of_focus_boundary(previous)
-            && self.scrollable_viewport_chain(current).first().map(|entry| entry.0)
-                == self.scrollable_viewport_chain(previous).first().map(|entry| entry.0)
+            && self
+                .scrollable_viewport_chain(current)
+                .first()
+                .map(|entry| entry.0)
+                == self
+                    .scrollable_viewport_chain(previous)
+                    .first()
+                    .map(|entry| entry.0)
     }
 
     /// Flutter `ScrollAction` for `ScrollIntent`: scrolls the nearest scroll
@@ -1708,21 +1799,35 @@ impl WidgetTree {
         } else {
             crate::ScrollIncrementType::Line
         });
-        self.invoke_action_at(focused, &incular_gestures::Intent::<crate::ScrollIntent>::from(command))
-            == Some(incular_gestures::ActionResult::Handled)
+        self.invoke_action_at(
+            focused,
+            &incular_gestures::Intent::<crate::ScrollIntent>::from(command),
+        ) == Some(incular_gestures::ActionResult::Handled)
     }
 
     fn apply_scroll_intent(&self, origin: ElementId, intent: crate::ScrollIntent) -> bool {
         use incular_config::AxisDirection;
-        let target = self.scrollable_viewport_chain(origin).into_iter().next().or_else(|| {
-            let primary = self.elements.get(origin.0)?.build_context.read::<ScrollController>()?;
-            self.scroll_attachments.iter().find_map(|(element, leases)| {
-                if !leases.iter().any(|lease| lease.controller() == &primary) {
-                    return None;
-                }
-                self.scrollable_viewport_chain(*element).into_iter().find(|(_, controller, ..)| controller == &primary)
-            })
-        });
+        let target = self
+            .scrollable_viewport_chain(origin)
+            .into_iter()
+            .next()
+            .or_else(|| {
+                let primary = self
+                    .elements
+                    .get(origin.0)?
+                    .build_context
+                    .read::<ScrollController>()?;
+                self.scroll_attachments
+                    .iter()
+                    .find_map(|(element, leases)| {
+                        if !leases.iter().any(|lease| lease.controller() == &primary) {
+                            return None;
+                        }
+                        self.scrollable_viewport_chain(*element)
+                            .into_iter()
+                            .find(|(_, controller, ..)| controller == &primary)
+                    })
+            });
         let Some((viewport, controller, axis, reverse, physics)) = target else {
             return false;
         };
@@ -1745,12 +1850,17 @@ impl WidgetTree {
         }
         let calculator = self.elements.get(viewport.0).and_then(|entry| {
             let direct = match entry.widget.kind() {
-                WidgetKind::Scroll { increment_calculator, .. } => increment_calculator.as_ref(),
+                WidgetKind::Scroll {
+                    increment_calculator,
+                    ..
+                } => increment_calculator.as_ref(),
                 WidgetKind::SliverViewport { config } => config.increment_calculator.as_ref(),
                 _ => None,
             };
             direct.cloned().or_else(|| {
-                let scope = entry.build_context.read::<crate::scrolling::ScopedScrollIncrement>()?;
+                let scope = entry
+                    .build_context
+                    .read::<crate::scrolling::ScopedScrollIncrement>()?;
                 (scope.controller == controller).then_some(scope.calculator)
             })
         });
@@ -1777,7 +1887,11 @@ impl WidgetTree {
         if !increment.is_finite() || increment == 0.0 {
             return true;
         }
-        let signed = if intent.direction == axis_direction { increment } else { -increment };
+        let signed = if intent.direction == axis_direction {
+            increment
+        } else {
+            -increment
+        };
         let target = (controller.offset() + signed)
             .clamp(controller.min_offset(), controller.max_offset().max(0.0));
         if target != controller.offset() {
@@ -1844,7 +1958,9 @@ impl WidgetTree {
             let entry = self.elements.get(id.0)?;
             excluded |= entry.widget.semantic_properties().exclude_focus;
             if id != focused
-                && let Some(scope) = hosted.get(&id).and_then(|binding| binding.node().scope_owner())
+                && let Some(scope) = hosted
+                    .get(&id)
+                    .and_then(|binding| binding.node().scope_owner())
                 && self.can_request_focus(id)
             {
                 destination = Some((id, scope));
@@ -1947,9 +2063,11 @@ impl WidgetTree {
                     return None;
                 }
                 hosted.iter().find_map(|(&id, binding)| {
-                    (id != owner && binding.node() == node
-                        && self.is_focus_descendant_or_self(id, owner) && self.can_request_focus(id))
-                        .then_some((id, node.scope_owner()))
+                    (id != owner
+                        && binding.node() == node
+                        && self.is_focus_descendant_or_self(id, owner)
+                        && self.can_request_focus(id))
+                    .then_some((id, node.scope_owner()))
                 })
             });
             match next {
@@ -2031,28 +2149,39 @@ impl WidgetTree {
     /// receive focus.
     #[must_use]
     pub fn autofocus_element(&self) -> Option<ElementId> {
-        let focusable = self.focusable_elements();
-        if let Some(listener) = focusable.iter().find(|id| {
-            self.elements
-                .get(id.0)
-                .is_some_and(|element| match element.widget.kind() {
-                    WidgetKind::Gesture { callbacks, .. } => callbacks.autofocus,
-                    WidgetKind::TextField(spec) => spec.autofocus,
-                    _ => false,
-                })
-        }) {
-            return Some(*listener);
+        // Autofocus is a direct request, not a Tab traversal. Walk declarations
+        // in mounting order, including nodes excluded from traversal.
+        let mut pending: Vec<_> = self.root.into_iter().collect();
+        let mut autofocusing_scopes = Vec::new();
+        while let Some(id) = pending.pop() {
+            let Some(element) = self.elements.get(id.0) else {
+                continue;
+            };
+            let requested = match element.widget.kind() {
+                WidgetKind::Gesture { callbacks, .. } => callbacks.autofocus,
+                WidgetKind::TextField(spec) => spec.autofocus,
+                _ => false,
+            };
+            if requested && self.can_request_focus(id) {
+                return Some(id);
+            }
+            if element.widget.semantic_properties().focus_scope_autofocus {
+                autofocusing_scopes.push(id);
+            }
+            pending.extend(element.children.iter().rev().copied());
         }
-        self.elements
-            .iter()
-            .filter(|(_, element)| element.widget.semantic_properties().focus_scope_autofocus)
-            .map(|(raw, _)| ElementId(raw))
-            .find_map(|scope| {
-                focusable
-                    .iter()
-                    .copied()
-                    .find(|candidate| self.is_focus_descendant_or_self(*candidate, scope))
-            })
+        if autofocusing_scopes.is_empty() {
+            return None;
+        }
+        // Scope-level autofocus without a designated node is an Incular
+        // convenience: choose the first available traversal stop.
+        let focusable = self.focusable_elements();
+        autofocusing_scopes.into_iter().find_map(|scope| {
+            focusable
+                .iter()
+                .copied()
+                .find(|candidate| self.is_focus_descendant_or_self(*candidate, scope))
+        })
     }
 
     pub(super) fn note_mounted_autofocus(&mut self, id: ElementId, widget: &Widget) {
@@ -2097,7 +2226,10 @@ impl WidgetTree {
     pub fn take_scope_autofocus(
         &self,
         before_build: bool,
-    ) -> Vec<(incular_gestures::FocusScopeNode, incular_gestures::FocusNode)> {
+    ) -> Vec<(
+        incular_gestures::FocusScopeNode,
+        incular_gestures::FocusNode,
+    )> {
         let Some(hosted) = self.hosted_focus_nodes.as_ref() else {
             return Vec::new();
         };
@@ -2143,7 +2275,10 @@ impl WidgetTree {
     #[doc(hidden)]
     pub fn finish_hosted_scope_autofocus(
         &self,
-        pending: Vec<(incular_gestures::FocusScopeNode, incular_gestures::FocusNode)>,
+        pending: Vec<(
+            incular_gestures::FocusScopeNode,
+            incular_gestures::FocusNode,
+        )>,
     ) -> Option<ElementId> {
         let hosted = self.hosted_focus_nodes.as_ref()?;
         let find = |node: &incular_gestures::FocusNode| {
@@ -2160,7 +2295,9 @@ impl WidgetTree {
                 continue;
             }
             let Some(target) = find(&node).filter(|&id| {
-                id != owner && self.is_focus_descendant_or_self(id, owner) && self.can_request_focus(id)
+                id != owner
+                    && self.is_focus_descendant_or_self(id, owner)
+                    && self.can_request_focus(id)
             }) else {
                 continue;
             };
@@ -2269,7 +2406,11 @@ impl WidgetTree {
         out.push(FocusTraversalMember::Group(FocusTraversalGroupMembers {
             owner: Some(id),
             policy,
-            order: element.widget.semantic_properties().focus_traversal_order.clone(),
+            order: element
+                .widget
+                .semantic_properties()
+                .focus_traversal_order
+                .clone(),
             members,
         }));
     }
@@ -2313,9 +2454,8 @@ impl WidgetTree {
             // not a traversal stop (Flutter traverses to the area, not to
             // each registered paragraph).
             let node = external_node(element.widget.kind());
-            let traversal_candidate =
-                !scan.excluded_traversal
-                    && node.is_none_or(|node| node.scope_owner().is_none() && !node.skip_traversal());
+            let traversal_candidate = !scan.excluded_traversal
+                && node.is_none_or(|node| node.scope_owner().is_none() && !node.skip_traversal());
             if !scan.excluded_focus
                 && (traversal_candidate || scan.anchor == Some(id))
                 && !matches!(element.widget.kind(), WidgetKind::Text { .. })
