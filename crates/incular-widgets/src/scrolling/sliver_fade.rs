@@ -220,7 +220,20 @@ impl AnimatedOpacityRenderSliver {
                 end: self.target,
             };
             self.controller.set_value(0.);
+            let previous_status = self.controller.status();
             self.controller.forward_on_next_tick();
+            // A zero-duration run completes synchronously, so there will
+            // not be a later tick to deliver its onEnd.
+            self.notify_completion_after(previous_status);
+        }
+    }
+
+    fn notify_completion_after(&self, previous_status: AnimationStatus) {
+        if previous_status != AnimationStatus::Completed
+            && self.controller.status() == AnimationStatus::Completed
+            && let Some(on_end) = &self.on_end
+        {
+            on_end();
         }
     }
 
@@ -265,16 +278,10 @@ impl RenderSliver for AnimatedOpacityRenderSliver {
 
     fn tick(&mut self, now: Instant) -> bool {
         let inner = self.inner.borrow_mut().tick(now);
-        let was_completed = self.controller.status() == AnimationStatus::Completed;
+        let previous_status = self.controller.status();
         let previous = self.placement.with_opacity(self.opacity());
-        let changed = self.controller.tick(now);
-        if changed
-            && !was_completed
-            && self.controller.status() == AnimationStatus::Completed
-            && let Some(on_end) = &self.on_end
-        {
-            on_end();
-        }
+        self.controller.tick(now);
+        self.notify_completion_after(previous_status);
         inner || previous.alpha != self.placement.with_opacity(self.opacity()).alpha
     }
 

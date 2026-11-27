@@ -90,6 +90,19 @@ impl Harness {
         found
     }
 
+    /// Slivers apply opacity to a shared paint scope, not a box render node.
+    fn sliver_opacities(&mut self) -> Vec<f32> {
+        self.tree
+            .paint()
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::PushOpacity { alpha, .. } => Some(*alpha),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Painted rectangles in root coordinates.
     fn rects(&mut self) -> Vec<Rect> {
         painted_rects(&self.tree.paint())
@@ -552,9 +565,9 @@ fn sliver_opacity_keeps_animating_across_rebuilds() {
     let mut harness = Harness::new(view(1.));
     harness.update(view(0.), 1_000);
     harness.frame(1_100);
-    assert_eq!(harness.opacities(), [0.5]);
+    assert_eq!(harness.sliver_opacities(), [128. / 255.]);
     harness.frame(1_200);
-    assert_eq!(harness.opacities(), [0.]);
+    assert_eq!(harness.sliver_opacities(), [0.]);
 }
 
 /// `didUpdateWidget` installs a new curve on the current controller without
@@ -614,9 +627,9 @@ fn sliver_fade_transition_follows_an_animation_value() {
     let mut harness = Harness::new(view(&controller));
     controller.forward(harness.base + Duration::from_millis(1_000));
     harness.frame(1_100);
-    assert_eq!(harness.opacities(), [0.5]);
+    assert_eq!(harness.sliver_opacities(), [128. / 255.]);
     harness.frame(1_200);
-    assert_eq!(harness.opacities(), [1.]);
+    assert_eq!(harness.sliver_opacities(), [1.]);
 }
 
 /// implicit-003: a directional alignment resolves with the ambient text
@@ -764,4 +777,56 @@ fn animated_padding_clamps_overshooting_components_before_resolving_them() {
     let right = 200. - child.origin.x - child.size.width;
     assert!((child.origin.x - 16.25).abs() < 0.001, "{child:?}");
     assert!((right - 3.25).abs() < 0.001, "{child:?}");
+}
+
+#[test]
+fn zero_duration_box_and_sliver_opacity_report_the_latest_completion_once() {
+    for sliver in [false, true] {
+        let callbacks = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let widget = |target: f32, label: &'static str| -> Widget {
+            let callbacks = callbacks.clone();
+            let end = move || callbacks.borrow_mut().push(label);
+            if sliver {
+                let child: Box<dyn Sliver> = Box::new(
+                    SliverAnimatedOpacity::new(
+                        target,
+                        Duration::ZERO,
+                        SliverToBoxAdapter::new(square()),
+                    )
+                    .on_end(end),
+                );
+                CustomScrollView::new([child]).into()
+            } else {
+                AnimatedOpacity::new(target, Duration::ZERO, square())
+                    .on_end(end)
+                    .into()
+            }
+        };
+        let alpha = |harness: &mut Harness| {
+            if sliver {
+                harness.sliver_opacities()
+            } else {
+                harness.opacities()
+            }
+        };
+
+        let mut harness = Harness::new(widget(1., "initial"));
+        assert_eq!(alpha(&mut harness), [1.]);
+        assert!(callbacks.borrow().is_empty());
+        harness.update(widget(0., "zero"), 16);
+        assert_eq!(alpha(&mut harness), [0.]);
+        assert_eq!(callbacks.borrow().as_slice(), ["zero"], "sliver={sliver}");
+
+        harness.update(widget(0., "unchanged"), 32);
+        harness.frame(48);
+        assert_eq!(callbacks.borrow().as_slice(), ["zero"], "sliver={sliver}");
+        harness.update(widget(0.5, "latest"), 64);
+        assert_eq!(
+            alpha(&mut harness),
+            [if sliver { 128. / 255. } else { 0.5 }]
+        );
+        assert_eq!(callbacks.borrow().as_slice(), ["zero", "latest"]);
+        harness.frame(80);
+        assert_eq!(callbacks.borrow().as_slice(), ["zero", "latest"]);
+    }
 }
