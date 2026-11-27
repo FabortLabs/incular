@@ -1,6 +1,6 @@
 use incular_core::{Color, HslColor, HsvColor, Lerp};
 
-const SHORTEST: [(f32, f32, f32, f32); 13] = [
+const SHORTEST: [(f64, f64, f32, f64); 13] = [
     (300., 60., 0.25, 330.),
     (300., 60., 0.5, 0.),
     (300., 60., 0.75, 30.),
@@ -16,7 +16,7 @@ const SHORTEST: [(f32, f32, f32, f32); 13] = [
     (300., 60., -0.5, 240.),
 ];
 
-const ANTIPODAL: [(f32, f32, f32, f32); 4] = [
+const ANTIPODAL: [(f64, f64, f32, f64); 4] = [
     (0., 180., 0.5, 90.),
     (180., 0., 0.5, 90.),
     (60., 240., 0.75, 195.),

@@ -5,7 +5,7 @@ fn argb(bits: u32) -> Color {
     Color::rgba(r, g, b, a)
 }
 
-fn require_close(original: [f32; 4], decoded: [f32; 4]) {
+fn require_close(original: [f64; 4], decoded: [f64; 4]) {
     // The upstream matcher scales hue by 360 and takes the largest
     // component error, not a wrapped angular or Euclidean distance.
     for (a, b) in original.into_iter().zip(decoded) {
@@ -20,11 +20,11 @@ fn hsv_hue_sweep_matches_every_argb_pixel_and_its_reverse_conversion() {
         0xff3300ff, 0xffcc00ff, 0xffff0099, 0xffff0000,
     ];
     for (i, packed) in expected.into_iter().enumerate() {
-        let hue = 36. * i as f32;
+        let hue = 36. * i as f64;
         let model = HsvColor::new(hue, 1., 1., 1.);
         let encoded = model.to_color();
         assert_eq!(encoded, argb(packed), "{hue} degrees");
-        assert_eq!(Color::from_ahsv(1., f64::from(hue), 1., 1.), argb(packed));
+        assert_eq!(Color::from_ahsv(1., hue, 1., 1.), argb(packed));
         if hue != 360. {
             let decoded = HsvColor::from_color(encoded);
             require_close(
@@ -47,11 +47,11 @@ fn hsl_hue_sweep_matches_every_argb_pixel_and_its_reverse_conversion() {
         0xff5940bf, 0xffa640bf, 0xffbf408c, 0xffbf4040,
     ];
     for (i, packed) in expected.into_iter().enumerate() {
-        let hue = 36. * i as f32;
+        let hue = 36. * i as f64;
         let model = HslColor::new(hue, 0.5, 0.5, 1.);
         let encoded = model.to_color();
         assert_eq!(encoded, argb(packed), "{hue} degrees");
-        assert_eq!(Color::from_ahsl(1., f64::from(hue), 0.5, 0.5), argb(packed));
+        assert_eq!(Color::from_ahsl(1., hue, 0.5, 0.5), argb(packed));
         if hue != 360. {
             let decoded = HslColor::from_color(encoded);
             require_close(
@@ -89,7 +89,6 @@ fn white_black_and_gray_have_no_saturation_and_zero_hue() {
 
 #[test]
 fn precise_hsv_saturation_and_value_sweeps_match_the_pinned_bytes() {
-    let mut narrowed_rounding = Vec::new();
     let channels = [
         (
             false,
@@ -112,29 +111,21 @@ fn precise_hsv_saturation_and_value_sweeps_match_the_pinned_bytes() {
             let (s, v) = if varies_value { (1., t) } else { (t, 1.) };
             let encoded = Color::from_ahsv(1., 0., s, v);
             assert_eq!(encoded, argb(packed), "sample {sample} at {t}");
-            let narrowed = HsvColor::new(0., s as f32, v as f32, 1.).to_color();
-            if narrowed != encoded {
-                narrowed_rounding.push((varies_value, sample, narrowed, encoded));
-            }
+            assert_eq!(HsvColor::new(0., s, v, 1.).to_color(), encoded);
             if !varies_value || (0.01..=0.99).contains(&t) {
                 let back = HsvColor::from_color(encoded);
                 require_close(
-                    [0., s as f32, v as f32, 1.],
+                    [0., s, v, 1.],
                     [back.hue / 360., back.saturation, back.value, back.alpha],
                 );
             }
             t += 0.1;
         }
     }
-    assert_eq!(
-        narrowed_rounding,
-        [(true, 9, argb(0xffe60000), argb(0xffe50000))]
-    );
 }
 
 #[test]
 fn precise_hsl_saturation_and_lightness_sweeps_match_the_pinned_bytes() {
-    let mut narrowed_rounding = Vec::new();
     let channels = [
         (
             false,
@@ -157,22 +148,15 @@ fn precise_hsl_saturation_and_lightness_sweeps_match_the_pinned_bytes() {
             let (s, l) = if varies_lightness { (0.5, t) } else { (t, 0.5) };
             let encoded = Color::from_ahsl(1., 0., s, l);
             assert_eq!(encoded, argb(packed), "sample {sample} at {t}");
-            let narrowed = HslColor::new(0., s as f32, l as f32, 1.).to_color();
-            if narrowed != encoded {
-                narrowed_rounding.push((varies_lightness, sample, narrowed, encoded));
-            }
+            assert_eq!(HslColor::new(0., s, l, 1.).to_color(), encoded);
             if !varies_lightness || (0.01..=0.99).contains(&t) {
                 let back = HslColor::from_color(encoded);
                 require_close(
-                    [0., s as f32, l as f32, 1.],
+                    [0., s, l, 1.],
                     [back.hue / 360., back.saturation, back.lightness, back.alpha],
                 );
             }
             t += 0.1;
         }
     }
-    assert_eq!(
-        narrowed_rounding,
-        [(false, 8, argb(0xffe61919), argb(0xffe51a1a))]
-    );
 }

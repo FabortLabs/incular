@@ -8,7 +8,7 @@ fn digest(color: impl Hash) -> u64 {
     hasher.finish()
 }
 
-fn close(actual: f32, expected: f32) {
+fn close(actual: f64, expected: f64) {
     assert!((actual - expected).abs() < 0.0001, "{actual} != {expected}");
 }
 

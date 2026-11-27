@@ -5,7 +5,7 @@ use std::{
     ops::{Add, Sub},
 };
 
-use palette::{FromColor, Hsl, Hsv, LinSrgba, Srgba, WithAlpha};
+use palette::{FromColor, Hsl, Hsv, LinSrgba, Srgba};
 
 pub use kurbo::Affine;
 use kurbo::{Point, Vec2};
@@ -216,9 +216,8 @@ impl Color {
         )
     }
 
-    /// Encodes HSL directly to sRGBA8 without first narrowing its channels
-    /// to f32. Hue is in degrees; alpha, saturation and lightness are unit
-    /// components, with the same sanitization as the HSL model.
+    /// Encodes double-precision HSL directly to sRGBA8. Hue is in degrees;
+    /// alpha, saturation, and lightness use the HSL model's unit range.
     #[must_use]
     pub fn from_ahsl(alpha: f64, hue: f64, saturation: f64, lightness: f64) -> Self {
         let lightness = unit_f64(lightness);
@@ -226,9 +225,8 @@ impl Color {
         color_from_precise_hue(alpha, hue, chroma, lightness - chroma / 2.0)
     }
 
-    /// Encodes HSV directly to sRGBA8 without first narrowing its channels
-    /// to f32. Hue is in degrees; alpha, saturation and value are unit
-    /// components, with the same sanitization as the HSV model.
+    /// Encodes double-precision HSV directly to sRGBA8. Hue is in degrees;
+    /// alpha, saturation, and value use the HSV model's unit range.
     #[must_use]
     pub fn from_ahsv(alpha: f64, hue: f64, saturation: f64, value: f64) -> Self {
         let value = unit_f64(value);
@@ -253,69 +251,78 @@ impl Color {
 
 /// Hue, saturation, lightness, and opacity in an sRGB color space.
 ///
-/// Hue is normalized to `0.0..360.0`; saturation, lightness, and alpha are
+/// Hue accepts either endpoint of `0.0..=360.0`; saturation, lightness, and alpha are
 /// normalized to `0.0..=1.0`. Constructors accept non-finite values but
 /// sanitize them, keeping configuration values safe to use in rendering.
+/// Components retain double precision until packed into RGBA bytes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HslColor {
-    pub hue: f32,
-    pub saturation: f32,
-    pub lightness: f32,
-    pub alpha: f32,
+    pub hue: f64,
+    pub saturation: f64,
+    pub lightness: f64,
+    pub alpha: f64,
 }
 
 impl HslColor {
     #[must_use]
-    pub fn new(hue: f32, saturation: f32, lightness: f32, alpha: f32) -> Self {
+    pub fn new(
+        hue: impl Into<f64>,
+        saturation: impl Into<f64>,
+        lightness: impl Into<f64>,
+        alpha: impl Into<f64>,
+    ) -> Self {
         Self {
-            hue: normalize_hue(hue),
-            saturation: unit(saturation),
-            lightness: unit(lightness),
-            alpha: unit(alpha),
+            hue: normalize_hue(hue.into()),
+            saturation: unit_f64(saturation.into()),
+            lightness: unit_f64(lightness.into()),
+            alpha: unit_f64(alpha.into()),
         }
     }
 
     #[must_use]
-    pub fn with_hue(self, hue: f32) -> Self {
+    pub fn with_hue(self, hue: impl Into<f64>) -> Self {
         Self {
-            hue: normalize_hue(hue),
+            hue: normalize_hue(hue.into()),
             ..self
         }
     }
 
     #[must_use]
-    pub fn with_saturation(self, saturation: f32) -> Self {
+    pub fn with_saturation(self, saturation: impl Into<f64>) -> Self {
         Self {
-            saturation: unit(saturation),
+            saturation: unit_f64(saturation.into()),
             ..self
         }
     }
 
     #[must_use]
-    pub fn with_lightness(self, lightness: f32) -> Self {
+    pub fn with_lightness(self, lightness: impl Into<f64>) -> Self {
         Self {
-            lightness: unit(lightness),
+            lightness: unit_f64(lightness.into()),
             ..self
         }
     }
 
     #[must_use]
-    pub fn with_alpha(self, alpha: f32) -> Self {
+    pub fn with_alpha(self, alpha: impl Into<f64>) -> Self {
         Self {
-            alpha: unit(alpha),
+            alpha: unit_f64(alpha.into()),
             ..self
         }
     }
 
     /// Interpolates optional color models, scaling only alpha when one is
-    /// absent. Two references to the same model return a borrow.
+    /// absent. Two references to the same model return a borrow. Use a
+    /// double-precision factor to retain exact byte rounding after conversion.
     #[must_use]
     pub fn lerp_ref<'a>(
         a: Option<&'a Self>,
         b: Option<&'a Self>,
-        t: f32,
+        t: impl Into<f64>,
     ) -> Option<Cow<'a, Self>> {
-        lerp_optional_color(a, b, t, |color, factor| color.with_alpha(color.alpha * factor))
+        lerp_optional_color(a, b, t.into(), Self::lerp_components, |color, factor| {
+            color.with_alpha(color.alpha * factor)
+        })
     }
 
     #[must_use]
@@ -332,76 +339,90 @@ impl HslColor {
 
     #[must_use]
     pub fn to_color(self) -> Color {
-        let hsl = Hsl::new_srgb(
-            normalize_hue(self.hue),
-            unit(self.saturation),
-            unit(self.lightness),
-        );
-        color_from_palette(Srgba::from_color(hsl).with_alpha(unit(self.alpha)))
+        Color::from_ahsl(self.alpha, self.hue, self.saturation, self.lightness)
+    }
+
+    fn lerp_components(&self, other: &Self, t: f64) -> Self {
+        Self::new(
+            lerp_hue(self.hue, other.hue, t),
+            lerp_unit_channel(self.saturation, other.saturation, t),
+            lerp_unit_channel(self.lightness, other.lightness, t),
+            lerp_unit_channel(self.alpha, other.alpha, t),
+        )
     }
 }
 
 /// Hue, saturation, value, and opacity in an sRGB color space.
+///
+/// Components retain double precision until packed into RGBA bytes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HsvColor {
-    pub hue: f32,
-    pub saturation: f32,
-    pub value: f32,
-    pub alpha: f32,
+    pub hue: f64,
+    pub saturation: f64,
+    pub value: f64,
+    pub alpha: f64,
 }
 
 impl HsvColor {
     #[must_use]
-    pub fn new(hue: f32, saturation: f32, value: f32, alpha: f32) -> Self {
+    pub fn new(
+        hue: impl Into<f64>,
+        saturation: impl Into<f64>,
+        value: impl Into<f64>,
+        alpha: impl Into<f64>,
+    ) -> Self {
         Self {
-            hue: normalize_hue(hue),
-            saturation: unit(saturation),
-            value: unit(value),
-            alpha: unit(alpha),
+            hue: normalize_hue(hue.into()),
+            saturation: unit_f64(saturation.into()),
+            value: unit_f64(value.into()),
+            alpha: unit_f64(alpha.into()),
         }
     }
 
     #[must_use]
-    pub fn with_hue(self, hue: f32) -> Self {
+    pub fn with_hue(self, hue: impl Into<f64>) -> Self {
         Self {
-            hue: normalize_hue(hue),
+            hue: normalize_hue(hue.into()),
             ..self
         }
     }
 
     #[must_use]
-    pub fn with_saturation(self, saturation: f32) -> Self {
+    pub fn with_saturation(self, saturation: impl Into<f64>) -> Self {
         Self {
-            saturation: unit(saturation),
+            saturation: unit_f64(saturation.into()),
             ..self
         }
     }
 
     #[must_use]
-    pub fn with_value(self, value: f32) -> Self {
+    pub fn with_value(self, value: impl Into<f64>) -> Self {
         Self {
-            value: unit(value),
+            value: unit_f64(value.into()),
             ..self
         }
     }
 
     #[must_use]
-    pub fn with_alpha(self, alpha: f32) -> Self {
+    pub fn with_alpha(self, alpha: impl Into<f64>) -> Self {
         Self {
-            alpha: unit(alpha),
+            alpha: unit_f64(alpha.into()),
             ..self
         }
     }
 
     /// Interpolates optional color models, scaling only alpha when one is
-    /// absent. Two references to the same model return a borrow.
+    /// absent. Two references to the same model return a borrow. Use a
+    /// double-precision factor to retain exact byte rounding after conversion.
     #[must_use]
     pub fn lerp_ref<'a>(
         a: Option<&'a Self>,
         b: Option<&'a Self>,
-        t: f32,
+        t: impl Into<f64>,
     ) -> Option<Cow<'a, Self>> {
-        lerp_optional_color(a, b, t, |color, factor| color.with_alpha(color.alpha * factor))
+        lerp_optional_color(a, b, t.into(), Self::lerp_components, |color, factor| {
+            color.with_alpha(color.alpha * factor)
+        })
     }
 
     #[must_use]
@@ -418,25 +439,30 @@ impl HsvColor {
 
     #[must_use]
     pub fn to_color(self) -> Color {
-        let hsv = Hsv::new_srgb(
-            normalize_hue(self.hue),
-            unit(self.saturation),
-            unit(self.value),
-        );
-        color_from_palette(Srgba::from_color(hsv).with_alpha(unit(self.alpha)))
+        Color::from_ahsv(self.alpha, self.hue, self.saturation, self.value)
+    }
+
+    fn lerp_components(&self, other: &Self, t: f64) -> Self {
+        Self::new(
+            lerp_hue(self.hue, other.hue, t),
+            lerp_unit_channel(self.saturation, other.saturation, t),
+            lerp_unit_channel(self.value, other.value, t),
+            lerp_unit_channel(self.alpha, other.alpha, t),
+        )
     }
 }
 
-fn lerp_optional_color<'a, T: Copy + Lerp>(
+fn lerp_optional_color<'a, T: Copy>(
     a: Option<&'a T>,
     b: Option<&'a T>,
-    t: f32,
-    fade: impl FnOnce(T, f32) -> T,
+    t: f64,
+    lerp: impl FnOnce(&T, &T, f64) -> T,
+    fade: impl FnOnce(T, f64) -> T,
 ) -> Option<Cow<'a, T>> {
     match (a, b) {
         (None, None) => None,
         (Some(a), Some(b)) if std::ptr::eq(a, b) => Some(Cow::Borrowed(a)),
-        (Some(a), Some(b)) => Some(Cow::Owned(a.lerp(b, t))),
+        (Some(a), Some(b)) => Some(Cow::Owned(lerp(a, b, t))),
         (Some(a), None) => Some(Cow::Owned(fade(*a, 1.0 - t))),
         (None, Some(b)) => Some(Cow::Owned(fade(*b, t))),
     }
@@ -444,15 +470,18 @@ fn lerp_optional_color<'a, T: Copy + Lerp>(
 
 // PartialEq compares signed zeros as equal. The hash must do the same even
 // when a caller constructs a model directly with public float fields.
-fn hash_color_channels(channels: [f32; 4], state: &mut impl std::hash::Hasher) {
+fn hash_color_channels(channels: [f64; 4], state: &mut impl std::hash::Hasher) {
     for value in channels {
-        state.write_u32(if value == 0.0 { 0 } else { value.to_bits() });
+        state.write_u64(if value == 0.0 { 0 } else { value.to_bits() });
     }
 }
 
 impl std::hash::Hash for HslColor {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        hash_color_channels([self.hue, self.saturation, self.lightness, self.alpha], state);
+        hash_color_channels(
+            [self.hue, self.saturation, self.lightness, self.alpha],
+            state,
+        );
     }
 }
 
@@ -472,7 +501,7 @@ fn unit(value: f32) -> f32 {
 
 /// Constructors accept both 0 and 360 degrees. Interpolation normalizes
 /// the resulting hue independently, after choosing its short arc.
-fn normalize_hue(hue: f32) -> f32 {
+fn normalize_hue(hue: f64) -> f64 {
     if (0.0..=360.0).contains(&hue) {
         hue
     } else if hue.is_finite() {
@@ -491,13 +520,7 @@ fn unit_f64(value: f64) -> f64 {
 }
 
 fn color_from_precise_hue(alpha: f64, hue: f64, chroma: f64, base: f64) -> Color {
-    let hue = if (0.0..=360.0).contains(&hue) {
-        hue
-    } else if hue.is_finite() {
-        hue.rem_euclid(360.0)
-    } else {
-        0.0
-    };
+    let hue = normalize_hue(hue);
     let secondary = chroma * (1.0 - ((hue / 60.0).rem_euclid(2.0) - 1.0).abs());
     let (red, green, blue) = if hue < 60.0 {
         (chroma, secondary, 0.0)
@@ -521,22 +544,12 @@ fn color_from_precise_hue(alpha: f64, hue: f64, chroma: f64, base: f64) -> Color
     )
 }
 
-fn palette_color(color: Color) -> Srgba {
+fn palette_color(color: Color) -> Srgba<f64> {
     Srgba::new(
-        color.red as f32 / 255.0,
-        color.green as f32 / 255.0,
-        color.blue as f32 / 255.0,
-        color.alpha as f32 / 255.0,
-    )
-}
-
-fn color_from_palette(color: Srgba) -> Color {
-    let byte = |value: f32| (unit(value) * 255.0).round() as u8;
-    Color::rgba(
-        byte(color.color.red),
-        byte(color.color.green),
-        byte(color.color.blue),
-        byte(color.alpha),
+        f64::from(color.red) / 255.0,
+        f64::from(color.green) / 255.0,
+        f64::from(color.blue) / 255.0,
+        f64::from(color.alpha) / 255.0,
     )
 }
 
@@ -823,7 +836,11 @@ impl Lerp for Option<Size> {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         match (self, other) {
             (None, None) => None,
-            (begin, end) => Some(begin.unwrap_or(Size::ZERO).lerp(&end.unwrap_or(Size::ZERO), t)),
+            (begin, end) => Some(
+                begin
+                    .unwrap_or(Size::ZERO)
+                    .lerp(&end.unwrap_or(Size::ZERO), t),
+            ),
         }
     }
 }
@@ -969,9 +986,9 @@ impl Lerp for Color {
     }
 }
 
-fn lerp_hue(a: f32, b: f32, t: f32) -> f32 {
-    let a = f64::from(normalize_hue(a));
-    let mut delta = f64::from(normalize_hue(b)) - a;
+fn lerp_hue(a: f64, b: f64, t: f64) -> f64 {
+    let a = normalize_hue(a);
+    let mut delta = normalize_hue(b) - a;
     // Keep the raw direction at exactly half a turn. This makes the
     // two antipodal paths reversible at complementary factors.
     if delta > 180.0 {
@@ -979,45 +996,32 @@ fn lerp_hue(a: f32, b: f32, t: f32) -> f32 {
     } else if delta < -180.0 {
         delta += 360.0;
     }
-    let angle = a + delta * f64::from(t);
-    let folded = if (0.0..360.0).contains(&angle) {
-        angle
-    } else {
-        angle.rem_euclid(360.0)
-    } as f32;
+    let angle = a + delta * t;
+    if (0.0..360.0).contains(&angle) {
+        return angle;
+    }
+    let folded = angle.rem_euclid(360.0);
     if folded == 360.0 { 0.0 } else { folded }
 }
 
-fn lerp_unit_channel(a: f32, b: f32, t: f32) -> f32 {
-    let a = f64::from(a);
-    let b = f64::from(b);
-    // Clamp the result, not the factor. The wider intermediate keeps very
-    // large finite extrapolations from overflowing before they can clamp.
-    (a + (b - a) * f64::from(t)).clamp(0.0, 1.0) as f32
+fn lerp_unit_channel(a: f64, b: f64, t: f64) -> f64 {
+    if a == b {
+        return a;
+    }
+    // Preserve the operation order of Flutter's lerpDouble. Rewriting as
+    // a + (b - a) * t can change a later eight-bit rounding midpoint.
+    (a * (1.0 - t) + b * t).clamp(0.0, 1.0)
 }
 
 impl Lerp for HslColor {
-    /// Moves hue along the shortest arc and clamps each non-hue channel
-    /// after interpolation, including when `t` is outside the endpoints.
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        Self::new(
-            lerp_hue(self.hue, other.hue, t),
-            lerp_unit_channel(self.saturation, other.saturation, t),
-            lerp_unit_channel(self.lightness, other.lightness, t),
-            lerp_unit_channel(self.alpha, other.alpha, t),
-        )
+        self.lerp_components(other, f64::from(t))
     }
 }
 
 impl Lerp for HsvColor {
-    /// Moves hue along the shortest arc while letting `t` extrapolate.
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        Self::new(
-            lerp_hue(self.hue, other.hue, t),
-            lerp_unit_channel(self.saturation, other.saturation, t),
-            lerp_unit_channel(self.value, other.value, t),
-            lerp_unit_channel(self.alpha, other.alpha, t),
-        )
+        self.lerp_components(other, f64::from(t))
     }
 }
 

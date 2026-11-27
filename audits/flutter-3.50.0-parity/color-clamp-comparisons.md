@@ -162,19 +162,25 @@ A signed-zero control protects the Rust equality/hash contract.
 ## Single-channel sweep precision
 
 Pinned `painting/colors_test.dart:69,97,316,344` passed. All 44
-saturation, value, and lightness pixels match through the new explicit
-double-precision HSL and HSV encoders, and their inverse colors pass
-the original max-component tolerance. The renderer still receives
-the same compact sRGBA8 type.
+saturation, value, and lightness pixels now match through both the
+public HSL/HSV models and the direct encoders. Reverse conversions meet
+the original max-component tolerance. The two previous model divergences
+are resolved: HSV near 0.9 packs red as 229, and HSL saturation near
+0.8 packs RGB as (229, 26, 26). The renderer still receives compact
+sRGBA8.
 
-The existing f32 models also match every HSV saturation and HSL
-lightness sample. They differ by one byte at two boundary cases:
-HSV near 0.9 yields red 230 instead of 229, and HSL saturation near
-0.8 yields (230,25,25) instead of (229,26,26). Those two registrations
-remain partial for the default f32 models. Callers that need the
-pinned double-input rounding can use `Color::from_ahsv` or
-`Color::from_ahsl` without changing renderer or color storage.
-All 30 selected native checks passed.
+## Exact bytes during HSL and HSV interpolation
+
+Pinned `painting/colors_test.dart:135,209,235,419,493,519` passed.
+The native fixture reproduces all 92 ARGB samples, accumulating the
+factor in double precision in the same order, including negative and
+greater-than-one factors. Before the fix, the HSV hue, HSV value, and
+HSL saturation cases differed by one byte. The public model components
+are now `f64`; constructors and setters still accept typed `f32`
+values, and the shared animation `Lerp` trait keeps its `f32` factor.
+For a double-precision timeline, the model's `lerp_ref` accepts the
+factor directly, preserving the interpolation and final rounding.
+No GPU color representation or renderer changed.
 
 ## Generic swatch lookup and interpolation
 
