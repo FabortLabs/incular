@@ -86,3 +86,8 @@ Related: [`Brush`](/docs/api/painting/brush).
 Use `ColorSwatch` for a primary color and an insertion-ordered table of
 related shades. Interpolation keeps the source keys while a missing shade
 fades, without changing its RGB channels.
+
+`FloatColor` converts between sRGB, Display P3, and extended sRGB
+without rounding to bytes. Extended sRGB can retain negative
+channels and values above one. Call `to_srgba8` to convert and clip
+to the renderer's compact color format.

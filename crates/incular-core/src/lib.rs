@@ -14,6 +14,7 @@ pub mod debug_print;
 pub mod debug_timeline;
 mod context;
 mod fast_hash;
+mod float_color;
 mod geometry;
 mod hardware_keyboard;
 pub mod hot_reload;
@@ -51,6 +52,7 @@ pub use debug_instrumentation::{
 pub use debug_print::{DebugPrintBuffer, debug_print_synchronously, debug_word_wrap};
 pub use debug_timeline::{AggregatedTimedBlock, AggregatedTimings, DebugTimeline, DebugTimelineError, TimedBlock};
 pub use context::{BuildContext, ConsumerId, ContextGuard, DependencySnapshot};
+pub use float_color::{ColorSpace, FloatColor};
 pub use geometry::{
     ChangeImpact, Color, DirtyFlags, HslColor, HsvColor, Invalidation, Lerp, Offset, Rect, Size,
     Transform, finite_non_negative, finite_or_zero,
