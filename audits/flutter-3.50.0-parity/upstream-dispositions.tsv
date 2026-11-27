@@ -3661,3 +3661,7 @@ packages/flutter/test/widgets/text_test.dart	1816	Selectable Text forwards hyphe
 packages/flutter/test/rendering/paragraph_test.dart	210	getBoxesForSelection test with boxHeightStyle and boxWidthStyle set to max	paired-match	upstream-rich-text-layout.md#selection-box-height-width-and-inline-identity
 packages/flutter/test/rendering/paragraph_test.dart	621	inline widgets test	paired-match	upstream-rich-text-layout.md#selection-box-height-width-and-inline-identity
 packages/flutter/test/rendering/paragraph_test.dart	660	getBoxesForSelection with boxHeightStyle for inline widgets	paired-match	upstream-rich-text-layout.md#selection-box-height-width-and-inline-identity
+packages/flutter/test/gestures/recognizer_test.dart	60	cleans up state after winning arena	paired-match	upstream-primary-pointer-recognizer.md
+packages/flutter/test/gestures/recognizer_test.dart	93	cleans up state after losing arena	paired-match	upstream-primary-pointer-recognizer.md
+packages/flutter/test/gestures/recognizer_test.dart	133	works properly when recycled	paired-match	upstream-primary-pointer-recognizer.md
+packages/flutter/test/gestures/recognizer_test.dart	168	uses expected pre-accept slop tolerance	paired-match	upstream-primary-pointer-recognizer.md

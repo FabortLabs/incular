@@ -25,6 +25,7 @@ mod pointer;
 mod pointer_converter;
 mod pointer_resampler;
 mod pointer_router;
+mod primary_pointer;
 mod raw;
 mod raw_key_data;
 mod scale;
@@ -118,6 +119,10 @@ pub use incular_core::{PointerPanZoomEvent, PointerPanZoomPhase};
 pub use scale::{
     DEFAULT_TRACKPAD_SCROLL_TO_SCALE_FACTOR,
     ScaleEndDetails, ScaleGestureDetector, ScaleStartDetails, ScaleUpdateDetails,
+};
+pub use primary_pointer::{
+    GestureRecognizerState, GestureSlopTolerance, PrimaryPointerGestureHandler,
+    PrimaryPointerGestureOptions, PrimaryPointerGestureRecognizer,
 };
 pub use slop::{compute_hit_slop, compute_pan_slop, compute_scale_slop};
 pub use tap_and_drag::{
