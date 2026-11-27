@@ -2791,3 +2791,7 @@ packages/flutter/test/gestures/velocity_tracker_test.dart	96	FreeScrollStartVelo
 packages/flutter/test/gestures/velocity_tracker_test.dart	114	Estimate does not throw when there are more than 1 point	paired-match	upstream-checked-fling-velocity.md
 packages/flutter/test/gestures/tap_test.dart	483	No duplicate tap events	paired-match	upstream-competing-tap-lifecycle.md
 packages/flutter/test/gestures/tap_test.dart	598	PointerCancelEvent after exceeding deadline cancels tap	paired-match	upstream-competing-tap-lifecycle.md
+packages/flutter/test/gestures/drag_test.dart	1367	Clamp max velocity	paired-match	upstream-drag-velocity-clamping.md
+packages/flutter/test/gestures/drag_test.dart	1456	Clamp max pan velocity in 2D, isotropically	paired-match	upstream-drag-velocity-clamping.md
+packages/flutter/test/gestures/drag_test.dart	1479	Clamp max vertical-drag velocity vertically	paired-match	upstream-drag-velocity-clamping.md
+packages/flutter/test/gestures/drag_test.dart	1499	Clamp max horizontal-drag velocity horizontally	paired-match	upstream-drag-velocity-clamping.md
