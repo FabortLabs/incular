@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Added
 
+- FontLoader registers asynchronously supplied faces under one family in
+  declaration order, including for already mounted text.
+
 - Core exposes opt-in synchronous timeline capture, draining and named
   duration aggregation.
 

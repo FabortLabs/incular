@@ -66,3 +66,7 @@ For packaged fonts, use `FontFamily::packaged(package, name)` and register
 the bytes under that family’s `name()` via `register_application_font_as`.
 `TextStyle` can use the same package keys for the primary family and an
 ordered fallback list.
+
+Use `FontLoader` to register several asynchronously supplied faces under
+a shared family. Queue bytes or asset futures and await `load` once;
+registration uses their declaration order, not completion speed.

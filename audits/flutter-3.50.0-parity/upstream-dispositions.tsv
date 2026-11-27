@@ -2654,3 +2654,5 @@ packages/flutter/test/foundation/timeline_test.dart	95	FlutterTimeline.instanceS
 packages/flutter/test/foundation/timeline_test.dart	104	FlutterTimeline.now returns a value	paired-match	upstream-foundation-timeline.md
 packages/flutter/test/foundation/timeline_test.dart	109	Can collect more than one slice of data	paired-match	upstream-foundation-timeline.md
 packages/flutter/test/foundation/timeline_test.dart	125	Collects blocks in a correct order	paired-match	upstream-foundation-timeline.md
+packages/flutter/test/services/font_loader_test.dart	22	Font loader test	paired-match	upstream-font-loader.md
+packages/flutter/test/services/font_loader_test.dart	39	FontLoader loads fonts in order	paired-match	upstream-font-loader.md

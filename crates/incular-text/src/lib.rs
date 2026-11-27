@@ -7,6 +7,7 @@
 mod boundary;
 mod editing;
 mod flutter_editing_delta;
+mod font_loader;
 mod spans;
 mod style;
 mod text_painter;
@@ -24,6 +25,7 @@ pub use editing::{
     byte_offset_at_utf16_boundary,
 };
 pub use flutter_editing_delta::{FlutterTextDeltaError, FlutterTextEdit, FlutterTextEditingDelta};
+pub use font_loader::{FontLoader, FontLoaderError};
 pub use spans::{
     InlineSpan, RichText, StyledTextRun, Text, TextSpan, TextSpanVisitor, WidgetSpan,
     WidgetSpanAlignment,

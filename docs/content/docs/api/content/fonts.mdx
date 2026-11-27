@@ -97,3 +97,8 @@ For a bundled font with a package-specific name, use
 `incular::text::register_application_font_as(family.name(), bytes)` before
 selecting that family in a `TextStyle`. Existing text refreshes at the next
 layout if registration happens later.
+
+For several faces delivered asynchronously, use `FontLoader` from
+`incular::text`: queue the faces under the family name and await `load`.
+The current UI thread registers them in declaration order and updates
+existing text engines on their next layout.
