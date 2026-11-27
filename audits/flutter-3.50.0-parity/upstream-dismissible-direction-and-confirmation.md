@@ -58,3 +58,14 @@ recognizer in the gesture arena. The disabled shell now contributes
 no drag callbacks and defers hit testing to its child. Switching from
 horizontal to None keeps the same child element and render object.
 All three references and ten focused Rust runtime tests passed.
+
+## Opaque gesture surfaces stop raw sibling hits
+
+Pinned `:976` pairs. In the original overlapping stack, the rear raw
+Listener receives the touch for DeferToChild and Translucent over
+the empty foreground child, but not the default or explicit Opaque
+behavior. Previously the retained gesture route chose the opaque
+foreground while the shared raw hit path still reached the sibling.
+The raw sibling walk now stops at that opaque gesture surface.
+The exact pinned case and 28 focused Rust tests passed, including
+shared hit reuse, mouse regions and scroll overlays.

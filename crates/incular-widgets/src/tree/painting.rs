@@ -801,6 +801,12 @@ impl WidgetTree {
             {
                 result.coincident_gestures.push(element);
             }
+            // An opaque gesture surface ends the sibling search for raw
+            // listeners too. Translucent gestures still get their own
+            // contender without blocking the hit behind an empty child.
+            result.blocks_siblings |= matches!(
+                kind, Some(WidgetKind::Gesture { behavior: Opaque, .. })
+            );
             result.accepts_hit |= match kind {
                 Some(WidgetKind::Gesture { behavior, .. })
                 | Some(WidgetKind::Scroll {
