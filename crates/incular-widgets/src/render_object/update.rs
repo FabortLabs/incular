@@ -51,6 +51,15 @@ fn invalidation_for_change(old: &RenderKind, new: &RenderKind) -> Invalidation {
     if image_composite_only_change(old, new) {
         return I::COMPOSITE;
     }
+    if let (
+        RenderKind::ShaderMask { shader: old_shader, .. },
+        RenderKind::ShaderMask { shader: new_shader, .. },
+    ) = (old, new)
+    {
+        // Resolve a different application callback only when the mask
+        // actually paints. Merely changing the blend keeps the old shader.
+        return if old_shader == new_shader { I::COMPOSITE } else { I::PAINT };
+    }
     if same_compositor_family(old, new) {
         // Geometry consumers read the current retained transform directly; they
         // do not require measurement or picture recording to observe movement.
@@ -288,7 +297,6 @@ fn same_compositor_family(old: &RenderKind, new: &RenderKind) -> bool {
                 RenderKind::ColorFiltered { .. }
             )
             | (RenderKind::Blend { .. }, RenderKind::Blend { .. })
-            | (RenderKind::ShaderMask { .. }, RenderKind::ShaderMask { .. })
             | (
                 RenderKind::BackdropFilter { .. },
                 RenderKind::BackdropFilter { .. }

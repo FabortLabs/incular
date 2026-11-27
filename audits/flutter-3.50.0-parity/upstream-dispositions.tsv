@@ -3018,3 +3018,4 @@ packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	18	RenderLim
 packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	28	RenderAspectRatio getters and setters	paired-match	upstream-render-proxy-properties.md
 packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	37	RenderIntrinsicWidth getters and setters	paired-match	upstream-render-proxy-properties.md
 packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	47	RenderOpacity getters and setters	paired-match	upstream-render-proxy-properties.md
+packages/flutter/test/rendering/proxy_getters_and_setters_test.dart	54	RenderShaderMask getters and setters	paired-match	upstream-render-proxy-properties.md

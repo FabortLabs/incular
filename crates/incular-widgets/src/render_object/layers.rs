@@ -810,7 +810,6 @@ impl RenderLayers {
         compositor: &mut LayerTree,
         kind: &RenderKind,
         size: Size,
-        world_transform: CoreTransform,
         content_transform: Option<CoreTransform>,
     ) {
         if matches!(self.attachment, LayerAttachment::Clip { .. }) {
@@ -881,15 +880,9 @@ impl RenderLayers {
             ) => layers.update(compositor, source_effects.raster_paint_sources(*blend_mode)),
             (
                 LayerAttachment::ShaderMask { layer },
-                RenderKind::ShaderMask { shader, blend_mode },
+                RenderKind::ShaderMask { blend_mode, .. },
             ) => {
-                compositor.update_shader_mask(
-                    *layer,
-                    shader.call(Rect::from_origin_size(Offset::ZERO, size)),
-                    *blend_mode,
-                    size,
-                    world_transform,
-                );
+                compositor.update_shader_mask_blend(*layer, *blend_mode);
             }
             (
                 LayerAttachment::BackdropFilter { layer },

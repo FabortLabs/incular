@@ -739,15 +739,8 @@ impl WidgetTree {
             node.object.shared_kind(),
             node.size,
         );
-        let world_transform = self.render_world_transform(render);
         let content_transform = self.content_transform(render);
-        layers.update_from_kind(
-            &mut self.compositor,
-            &kind,
-            size,
-            world_transform,
-            content_transform,
-        );
+        layers.update_from_kind(&mut self.compositor, &kind, size, content_transform);
         if layers.has_box_semantic_clip(&kind) {
             // A live reclip can change the accessibility rectangle without
             // changing the retained widget or any child's layout.
@@ -1114,15 +1107,8 @@ impl WidgetTree {
                 let node = self.render_live(render, "updated render must remain live");
                 (node.object.layers.clone(), node.size)
             };
-            let world_transform = self.render_world_transform(render);
             let content_transform = self.content_transform(render);
-            layers.update_from_kind(
-                &mut self.compositor,
-                &new_kind,
-                size,
-                world_transform,
-                content_transform,
-            );
+            layers.update_from_kind(&mut self.compositor, &new_kind, size, content_transform);
             if matches!(new_kind, RenderKind::FittedBox { .. }) {
                 self.sync_fitted_clip(render);
             }

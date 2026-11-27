@@ -394,8 +394,8 @@ fn ancestor_move_keeps_resolve_time_transform_with_live_bounds() {
 #[test]
 fn mask_under_clip_and_transform_positions_together() {
     // Nested clipping and transforms compose: the clip encloses the mask
-    // stage, the mask bounds carry the ancestor transform, and the child
-    // stays hittable with whole semantic bounds.
+    // stage, the mask bounds carry the ancestor transform, and hit/semantic
+    // geometry still obeys the ancestor clip.
     let probe = Probe::new(Color::WHITE);
     let mut tree = WidgetTree::new();
     let root = tree
@@ -436,8 +436,8 @@ fn mask_under_clip_and_transform_positions_together() {
         .expect("masked semantics");
     assert_rect_eq(
         semantic.bounds,
-        Rect::from_origin_size(Offset::new(90., 5.), Size::new(40., 40.)),
-        "masked semantic bounds",
+        Rect::from_origin_size(Offset::new(90., 5.), Size::new(30., 35.)),
+        "masked semantic bounds after intersecting the ancestor clip",
     );
 }
 

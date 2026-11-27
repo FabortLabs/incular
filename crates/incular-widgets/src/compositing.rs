@@ -89,6 +89,18 @@ impl ShaderMask {
         }
     }
 
+    /// Returns the retained shader callback without resolving it.
+    #[must_use]
+    pub const fn shader(&self) -> &ShaderCallback {
+        &self.shader
+    }
+
+    /// Returns the configured blend mode.
+    #[must_use]
+    pub const fn mode(&self) -> BlendMode {
+        self.blend_mode
+    }
+
     #[must_use]
     pub fn shader_callback(mut self, shader: impl Into<ShaderCallback>) -> Self {
         self.shader = shader.into();
