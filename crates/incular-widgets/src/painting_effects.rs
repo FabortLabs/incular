@@ -30,7 +30,8 @@ pub use decoration::{
     TileMode,
 };
 pub use geometry::{
-    BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, EllipticalRoundedRect, Radius,
+    BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderRadiusResolutionError,
+    EllipticalRoundedRect, Radius,
 };
 pub(crate) use images::RasterPaintSources;
 pub use images::{ImageFiltered, ImageIcon, RawImage};

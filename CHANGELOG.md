@@ -13,6 +13,9 @@ a version and date when publishing.
 
 ### Added
 
+- Directional and mixed border radii can resolve an optional text direction
+  without silently guessing how to map start and end corners.
+
 - `FocusScope` accepts independent widget settings for skipping its own
   traversal node, excluding descendants from traversal, and allowing
   descendant focus requests.

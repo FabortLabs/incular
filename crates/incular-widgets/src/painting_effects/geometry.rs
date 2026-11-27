@@ -6,7 +6,7 @@ use std::{
     ops::{Add, Div, Mul, Neg, Rem, Sub},
 };
 
-use incular_config::EdgeInsets;
+use incular_config::{EdgeInsets, TextDirection};
 use incular_core::{Lerp, Offset, Rect, Size};
 use incular_rendering::{CornerRadii, Path};
 use typed_builder::TypedBuilder;
@@ -507,6 +507,19 @@ impl BorderRadiusDirectional {
         Self::ZERO
     }
 
+    /// Resolves the corners when a text direction is available.
+    ///
+    /// Returns a diagnostic instead of choosing a default direction.
+    pub const fn try_resolve(
+        self,
+        direction: Option<TextDirection>,
+    ) -> Result<BorderRadius, BorderRadiusResolutionError> {
+        match direction {
+            Some(direction) => Ok(self.resolve(direction)),
+            None => Err(BorderRadiusResolutionError::Directional),
+        }
+    }
+
     #[must_use]
     pub const fn resolve(self, direction: incular_config::TextDirection) -> BorderRadius {
         match direction {
@@ -611,6 +624,21 @@ impl_corner_arithmetic!(
     bottom_start
 );
 
+/// A logical corner radius could not resolve without a text direction.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum BorderRadiusResolutionError {
+    /// All corners are direction-relative.
+    #[error(
+        "No TextDirection found. BorderRadiusDirectional cannot resolve without a Directionality ancestor or an explicit text direction."
+    )]
+    Directional,
+    /// The radii combine physical and direction-relative corners.
+    #[error(
+        "No TextDirection found. Mixed border radii cannot resolve without a Directionality ancestor or an explicit text direction."
+    )]
+    Mixed,
+}
+
 /// Flutter's direction-aware corner geometry. Mixed values keep physical and
 /// logical corners separate until a text direction is known.
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
@@ -702,6 +730,20 @@ impl BorderRadiusGeometry {
                 physical: physical(p),
                 directional: directional(d),
             },
+        }
+    }
+
+    /// Resolves physical radii without a direction, but does not guess
+    /// which corners are start and end for directional or mixed radii.
+    pub fn try_resolve(
+        self,
+        direction: Option<TextDirection>,
+    ) -> Result<BorderRadius, BorderRadiusResolutionError> {
+        match (self, direction) {
+            (Self::Physical(value), _) => Ok(value),
+            (_, Some(direction)) => Ok(self.resolve(direction)),
+            (Self::Directional(_), None) => Err(BorderRadiusResolutionError::Directional),
+            (Self::Mixed { .. }, None) => Err(BorderRadiusResolutionError::Mixed),
         }
     }
 

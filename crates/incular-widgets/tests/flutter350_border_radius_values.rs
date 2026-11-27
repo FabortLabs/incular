@@ -210,3 +210,64 @@ fn copying_with_no_corner_overrides_preserves_value_and_hash() {
     assert_eq!(first, second);
     assert_eq!(hash(first), hash(second));
 }
+
+#[test]
+fn missing_direction_is_rejected_without_guessing_directional_or_mixed_corners() {
+    use incular_widgets::BorderRadiusResolutionError::{Directional, Mixed};
+
+    let uniform = BorderRadiusDirectional::all(Radius::circular(1.));
+    let err = uniform.try_resolve(None).unwrap_err();
+    assert_eq!(err, Directional);
+    let message = err.to_string();
+    assert!(message.contains("No TextDirection found."));
+    assert!(message.contains("without a Directionality ancestor"));
+    assert_eq!(
+        uniform.try_resolve(Some(Ltr)),
+        Ok(BorderRadius::circular(1.))
+    );
+    assert_eq!(
+        BorderRadiusDirectional::ZERO.try_resolve(None),
+        Err(Directional)
+    );
+    assert_eq!(
+        BorderRadiusGeometry::from(uniform).try_resolve(None),
+        Err(Directional)
+    );
+
+    let r = Radius::elliptical;
+    let a = BorderRadius::only(r(10., 20.), r(30., 40.), Radius::ZERO, r(50., 60.));
+    let b =
+        BorderRadiusDirectional::only(Radius::ZERO, r(100., 110.), r(140., 150.), r(120., 130.));
+    let physical = BorderRadiusGeometry::from(a);
+    let directional = BorderRadiusGeometry::from(b);
+    assert_eq!(physical.try_resolve(None), Ok(a));
+    for mixed in [physical + directional, directional - physical] {
+        let err = mixed.try_resolve(None).unwrap_err();
+        assert_eq!(err, Mixed);
+        assert!(err.to_string().contains("No TextDirection found."));
+        assert!(
+            err.to_string()
+                .contains("without a Directionality ancestor")
+        );
+    }
+
+    let added = physical + directional;
+    assert_eq!(
+        added.try_resolve(Some(Ltr)),
+        Ok(BorderRadius::only(
+            r(10., 20.),
+            r(130., 150.),
+            r(140., 150.),
+            r(170., 190.)
+        ))
+    );
+    assert_eq!(
+        added.try_resolve(Some(Rtl)),
+        Ok(BorderRadius::only(
+            r(110., 130.),
+            r(30., 40.),
+            r(120., 130.),
+            r(190., 210.)
+        ))
+    );
+}

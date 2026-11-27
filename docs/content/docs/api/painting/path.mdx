@@ -91,5 +91,10 @@ start/end edges; [`BorderRadiusDirectional`](/docs/api/painting/path) mirrors co
 [`BorderRadius`](/docs/api/painting/path) is the four-corner radius set; `BorderStyle`: solid and
 decorative stroke styles.
 
+Use `BorderRadiusGeometry::try_resolve(direction)` when text direction may
+be missing. Physical radii resolve without it. Directional and mixed radii
+return `BorderRadiusResolutionError` instead of guessing which corner is
+start or end.
+
 Related: [`Paint`](/docs/api/painting/paint),
 [`Canvas`](/docs/api/painting/canvas).

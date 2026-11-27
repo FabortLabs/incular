@@ -23,6 +23,10 @@ behind that child without intercepting pointer input.
 `GridPaper` paints a foreground engineering grid over its optional child.
 Its line spacing and widths are retained across identical rebuilds.
 
+`BorderRadiusGeometry::try_resolve` accepts optional text direction.
+Physical corners need no direction; mixed and directional corners report
+a typed error when one is missing.
+
 ## Frame recursion diagnostics
 
 Build, layout, paint, semantics, and compositor traversal track their active
