@@ -432,6 +432,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `DecoratedBoxTransition` preserves foreground paint order for shapes and
+  mixed decoration tweens without blocking child taps.
+
 - `GridPaper` now paints the engineering grid above its child, with the
   configured spacing and distinct primary, medium, and fine lines.
 

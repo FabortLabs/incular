@@ -30,6 +30,9 @@ a typed error when one is missing.
 `BoxDecoration::padding()` returns the border's insets, retaining any
 logical start or end edges until they are resolved for text direction.
 
+`DecoratedShapeBox` and `DecoratedBoxTransition` support both foreground
+and background paint order. Painting in front does not block child input.
+
 ## Frame recursion diagnostics
 
 Build, layout, paint, semantics, and compositor traversal track their active

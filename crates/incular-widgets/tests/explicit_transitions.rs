@@ -488,3 +488,83 @@ fn scale_transition_filter_quality_applies_only_while_the_scale_animates() {
     assert!((scale.scale() - 2.).abs() < 1e-4);
     assert!(matrix_filter_samplings(&tree.paint()).is_empty(), "settled");
 }
+
+#[test]
+fn shape_decoration_transition_respects_order_and_keeps_the_child_tappable() {
+    use incular_core::{Offset, PointerDeviceKind, PointerPhase};
+    use incular_gestures::PointerEvent;
+    use incular_widgets::{GestureDetector, HitTestBehavior};
+
+    const RED: Color = Color::rgba(255, 0, 0, 255);
+    const GREEN: Color = Color::rgba(0, 255, 0, 255);
+    let controller = AnimationController::new(DURATION);
+    let taps = Rc::new(Cell::new(0));
+    for (position, expected) in [
+        (DecorationPosition::Foreground, [RED, GREEN]),
+        (DecorationPosition::Background, [GREEN, RED]),
+    ] {
+        let child = GestureDetector::new(Widget::box_(Size::new(40., 40.), RED))
+            .behavior(HitTestBehavior::Opaque)
+            .on_tap({
+                let taps = Rc::clone(&taps);
+                move || taps.set(taps.get() + 1)
+            });
+        let mut tree = mount(
+            DecoratedBoxTransition::new(
+                TweenAnimation::new(
+                    controller.clone(),
+                    shape_decoration(GREEN),
+                    shape_decoration(GREEN),
+                ),
+                child,
+            )
+            .position(position),
+        );
+        assert_eq!(painted_colors(&tree.paint()), expected);
+
+        let now = Instant::now();
+        for (phase, time) in [
+            (PointerPhase::Down, now),
+            (PointerPhase::Up, now + Duration::from_millis(10)),
+        ] {
+            let _ = tree.dispatch_pointer_gesture_in_window(
+                0,
+                1,
+                PointerDeviceKind::Touch,
+                PointerEvent {
+                    phase,
+                    time,
+                    pointer: 1,
+                    position: Offset::new(20., 20.),
+                },
+            );
+        }
+    }
+    assert_eq!(taps.get(), 2);
+}
+
+#[test]
+fn mixed_decoration_honors_foreground_through_both_endpoints_and_midpoints() {
+    use incular_widgets::Decoration;
+    const RED: Color = Color::rgba(255, 0, 0, 255);
+    const GREEN: Color = Color::rgba(0, 255, 0, 255);
+    let controller = AnimationController::new(DURATION);
+    let tween = TweenAnimation::new(
+        controller.clone(),
+        Decoration::Box(BoxDecoration::new().color(GREEN)),
+        Decoration::Shape(shape_decoration(GREEN)),
+    );
+    let mut tree = mount(
+        DecoratedBoxTransition::new(tween, Widget::box_(Size::new(40., 40.), RED))
+            .position(DecorationPosition::Foreground),
+    );
+    for time in [0., 0.25, 0.5, 0.75, 1.] {
+        controller.set_value(time);
+        layout(&mut tree);
+        assert_eq!(
+            painted_colors(&tree.paint()),
+            [RED, GREEN],
+            "fraction {time}"
+        );
+    }
+}

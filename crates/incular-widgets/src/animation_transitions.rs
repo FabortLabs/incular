@@ -537,8 +537,7 @@ impl Lerp for Decoration {
 /// follows `decoration`, rebuilt on every change of its animation.
 ///
 /// Accepts a tween of [`BoxDecoration`] or of [`ShapeDecoration`] (through
-/// [`Decoration`]). A shape decoration always paints behind the child, so
-/// [`DecoratedBoxTransition::position`] applies to box decorations only.
+/// [`Decoration`]). Both honor [`DecoratedBoxTransition::position`].
 #[derive(Clone)]
 pub struct DecoratedBoxTransition {
     decoration: TweenAnimation<Decoration>,
@@ -559,7 +558,7 @@ impl DecoratedBoxTransition {
         }
     }
 
-    /// Defaults to [`DecorationPosition::Background`]. Box decorations only.
+    /// Defaults to [`DecorationPosition::Background`].
     #[must_use]
     pub fn position(mut self, position: DecorationPosition) -> Self {
         self.position = position;
@@ -601,9 +600,9 @@ impl From<DecoratedBoxTransition> for Widget {
                 .decoration(decoration)
                 .position(value.position)
                 .into(),
-            Decoration::Shape(decoration) => {
-                DecoratedShapeBox::new(decoration, value.child.clone()).into()
-            }
+            Decoration::Shape(decoration) => DecoratedShapeBox::new(decoration, value.child.clone())
+                .position(value.position)
+                .into(),
         })
     }
 }

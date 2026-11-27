@@ -9,6 +9,7 @@ use incular_config::{Clip, TextDirection};
 use incular_core::{Color, Lerp, Offset, Rect, Size};
 use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, GradientStops};
 
+use super::box_painter::DecorationPosition;
 use super::decoration::{
     BorderSide, BoxDecoration, BoxLinearGradient, BoxRadialGradient, BoxShadow, BoxShape,
     BoxSweepGradient, DecorationImage, faded_brush, faded_decoration_image,
@@ -522,11 +523,12 @@ fn blend_shape_gradient(
     }
 }
 
-/// Flutter `DecoratedBox` with a [`ShapeDecoration`]: the decoration paints
-/// behind the child, at the child's size.
+/// Flutter `DecoratedBox` with a [`ShapeDecoration`] at the child's size.
+/// The decoration paints behind the child by default.
 #[derive(Clone)]
 pub struct DecoratedShapeBox {
     decoration: ShapeDecoration,
+    position: DecorationPosition,
     child: Widget,
 }
 
@@ -535,8 +537,16 @@ impl DecoratedShapeBox {
     pub fn new(decoration: ShapeDecoration, child: impl Into<Widget>) -> Self {
         Self {
             decoration,
+            position: DecorationPosition::Background,
             child: child.into(),
         }
+    }
+
+    /// Places the decoration before or after the child in paint order.
+    #[must_use]
+    pub fn position(mut self, position: DecorationPosition) -> Self {
+        self.position = position;
+        self
     }
 }
 
@@ -545,6 +555,7 @@ impl From<DecoratedShapeBox> for Widget {
         use crate::tree::DecorationHitGeometry;
         let decoration = Rc::new(value.decoration);
         let child = value.child;
+        let position = value.position;
         let needs_direction = decoration.shape.needs_text_direction()
             || decoration
                 .aligned_gradient
@@ -591,10 +602,11 @@ impl From<DecoratedShapeBox> for Widget {
                 );
                 Stack::new(layers).clip_behavior(Clip::None).into()
             });
-            let stack = Stack::new([
-                Positioned::fill(IgnorePointer::new(painted)).into(),
-                child.clone(),
-            ])
+            let layer = Positioned::fill(IgnorePointer::new(painted)).into();
+            let stack = Stack::new(match position {
+                DecorationPosition::Background => [layer, child.clone()],
+                DecorationPosition::Foreground => [child.clone(), layer],
+            })
             .fit(StackFit::Passthrough)
             .clip_behavior(Clip::None);
             Widget::decorated_with_geometry(

@@ -5,11 +5,13 @@ icon: PaintBucket
 ---
 
 [`DecoratedBoxTransition`](/docs/api/transitions/decorated-box-transition) paints a
-[`BoxDecoration`](/docs/api/layout-widgets/decorated-box) that follows an animation, as
-Flutter's does. Its decoration is a `TweenAnimation<BoxDecoration>`: a controller
-value passed through a curve, then interpolated from `begin` to `end`
+decoration that follows an animation. It accepts box or shape decoration
+tweens, including `TweenAnimation<Decoration>` for a mixed tween. A controller
+value passes through a curve, then interpolates from `begin` to `end`
 (Flutter's `DecorationTween.animate(CurvedAnimation(...))`). The widget rebuilds
-on every tick of the controller.
+on every tick of the controller. Both box and shape decorations honor
+`.position(...)`: the default paints behind the child; foreground paints
+above it without intercepting the child's pointer events.
 
 ```rust
 use std::time::Duration;
@@ -52,8 +54,8 @@ normalizes the radius when drawing the shape.
 <TypeTable
   type={{
     decoration: {
-      description: 'Animated decoration (TweenAnimation<BoxDecoration>)',
-      type: 'TweenAnimation<BoxDecoration>',
+      description: 'Animated box, shape, or mixed decoration',
+      type: 'TweenAnimation<Decoration>',
       default: 'required',
     },
     position: {
