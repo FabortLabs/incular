@@ -691,6 +691,39 @@ impl LayerTree {
             .get(id.0)
             .map(|layer| (&layer.kind, layer.children.as_slice()))
     }
+    /// Visits retained descendants in depth-first paint order, excluding
+    /// the starting layer. Removed handles and their branches are skipped.
+    #[must_use]
+    pub fn depth_first_children(&self, root: LayerId) -> Vec<LayerId> {
+        let Some(parent) = self.layers.get(root.0) else {
+            return Vec::new();
+        };
+        let mut pending: Vec<_> = parent.children.iter().rev().copied().collect();
+        let mut seen = std::collections::HashSet::from([root]);
+        let mut descendants = Vec::new();
+        while let Some(id) = pending.pop() {
+            if let Some(layer) = self.layers.get(id.0)
+                && seen.insert(id)
+            {
+                descendants.push(id);
+                pending.extend(layer.children.iter().rev().copied());
+            }
+        }
+        descendants
+    }
+
+    /// Describes this layer's own clip in local coordinates. Like Flutter,
+    /// a path reports its control bounds, not its tighter culling bounds.
+    #[must_use]
+    pub fn describe_clip_bounds(&self, id: LayerId) -> Option<Rect> {
+        match &self.layers.get(id.0)?.kind {
+            LayerKind::ClipRect { rect, .. } | LayerKind::ClipOval { rect, .. } => Some(*rect),
+            LayerKind::ClipRRect { rrect, .. } => Some(rrect.rect),
+            LayerKind::ClipPath { path, .. } => Some(path.bounds().unwrap_or_default()),
+            _ => None,
+        }
+    }
+
     #[doc(hidden)]
     #[must_use]
     pub fn contains(&self, id: LayerId) -> bool {
@@ -1089,22 +1122,39 @@ impl LayerTree {
                 child.parent = None;
             }
         }
+        let mut previous_parents = Vec::new();
         for index in 0.. {
-            let Some(child) = self
+            let Some(child_id) = self
                 .layers
                 .get(id.0)
                 .and_then(|layer| layer.children.get(index).copied())
             else {
                 break;
             };
-            let Some(child) = self.layers.get_mut(child.0) else {
+            let Some(child) = self.layers.get_mut(child_id.0) else {
                 continue;
             };
-            // A layer adopted from another container leaves that one's
-            // bounds behind as well.
             if let Some(old) = child.parent.replace(id).filter(|old| *old != id) {
-                self.reset_cull_bounds(old);
+                previous_parents.push(old);
             }
+        }
+        // Every adopted child belongs to precisely one scene branch.
+        // Process each old parent once, even when moving many siblings.
+        previous_parents.sort_unstable_by_key(|parent| parent.raw());
+        previous_parents.dedup();
+        for old in previous_parents {
+            let Some(parent) = self.layers.get_mut(old.0) else {
+                continue;
+            };
+            let mut retained = std::mem::take(&mut parent.children);
+            retained.retain(|child| {
+                self.layers.get(child.0).is_some_and(|layer| layer.parent == Some(old))
+            });
+            if let Some(parent) = self.layers.get_mut(old.0) {
+                parent.children = retained;
+                parent.generation = next_generation(&mut self.next_generation);
+            }
+            self.reset_cull_bounds(old);
         }
         self.reset_cull_bounds(id);
     }

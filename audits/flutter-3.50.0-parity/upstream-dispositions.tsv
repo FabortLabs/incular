@@ -3001,3 +3001,5 @@ packages/flutter/test/rendering/layers_test.dart	342	ClipRectLayer prints clipBe
 packages/flutter/test/rendering/layers_test.dart	350	ClipRRectLayer prints clipBehavior in debug info	paired-match	upstream-layer-clip-diagnostics.md
 packages/flutter/test/rendering/layers_test.dart	358	ClipRSuperellipseLayer prints clipBehavior in debug info	paired-match	upstream-layer-clip-diagnostics.md
 packages/flutter/test/rendering/layers_test.dart	366	ClipPathLayer prints clipBehavior in debug info	paired-match	upstream-layer-clip-diagnostics.md
+packages/flutter/test/rendering/layers_test.dart	280	depthFirstIterateChildren	paired-match	upstream-layer-topology.md
+packages/flutter/test/rendering/layers_test.dart	726	Layers describe clip bounds	paired-match	upstream-layer-topology.md
