@@ -3295,3 +3295,7 @@ packages/flutter/test/widgets/focus_traversal_test.dart	1227	Fall back to the se
 packages/flutter/test/widgets/focus_traversal_test.dart	1279	Move focus to next/previous node using numerical order.	paired-match	upstream-ordered-focus-secondary.md
 packages/flutter/test/widgets/focus_traversal_test.dart	1331	Move focus to next/previous node using lexical order.	paired-match	upstream-ordered-focus-secondary.md
 packages/flutter/test/widgets/focus_traversal_test.dart	1389	Focus order is correct in the presence of FocusTraversalPolicyGroups.	paired-match	upstream-ordered-focus-secondary.md
+packages/flutter/test/painting/stadium_border_test.dart	80	StadiumBorder and CircleBorder	paired-match	upstream-stadium-morphing.md
+packages/flutter/test/painting/stadium_border_test.dart	196	StadiumBorder and RoundedRectBorder with BorderRadius.zero	paired-match	upstream-stadium-morphing.md
+packages/flutter/test/painting/stadium_border_test.dart	330	StadiumBorder and RoundedRectBorder with circular BorderRadius	paired-match	upstream-stadium-morphing.md
+packages/flutter/test/painting/stadium_border_test.dart	464	StadiumBorder and RoundedRectBorder with BorderRadiusDirectional	paired-match	upstream-stadium-morphing.md

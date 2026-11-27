@@ -568,8 +568,28 @@ impl ShapeBorder for RoundedCircleOutline {
 
 impl std::fmt::Display for RoundedCircleOutline {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Outline::Morph(shape) = self.0 else {
-            return std::fmt::Debug::fmt(&self.0, f);
+        let shape = match self.0 {
+            Outline::Morph(shape) => shape,
+            Outline::StadiumMorph(shape) => {
+                let percent = shape.fraction * 100.;
+                write!(f, "StadiumBorder({}, ", shape.side)?;
+                match shape.target {
+                    StadiumTarget::Circle { eccentricity } => {
+                        write!(f, "{percent:.1}% of the way to being a CircleBorder")?;
+                        if eccentricity != 0. {
+                            write!(f, " that is {:.1}% oval", eccentricity * 100.)?;
+                        }
+                    }
+                    StadiumTarget::Rounded { radius } => {
+                        write!(
+                            f,
+                            "{radius}, {percent:.1}% of the way to being a RoundedRectangleBorder"
+                        )?;
+                    }
+                }
+                return f.write_str(")");
+            }
+            _ => return std::fmt::Debug::fmt(&self.0, f),
         };
         let name = match shape.family {
             CornerFamily::Rounded => "RoundedRectangleBorder",

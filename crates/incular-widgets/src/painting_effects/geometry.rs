@@ -444,6 +444,40 @@ pub struct BorderRadiusDirectional {
     pub bottom_start: Radius,
 }
 
+impl fmt::Display for BorderRadiusDirectional {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if *self == Self::ZERO {
+            return f.write_str("BorderRadius.zero");
+        }
+        let corners = [
+            ("topStart", self.top_start),
+            ("topEnd", self.top_end),
+            ("bottomStart", self.bottom_start),
+            ("bottomEnd", self.bottom_end),
+        ];
+        let first = self.top_start;
+        if corners.iter().all(|(_, radius)| *radius == first) {
+            return if first.x == first.y {
+                write!(f, "BorderRadiusDirectional.circular({:.1})", first.x)
+            } else {
+                write!(f, "BorderRadiusDirectional.all({first})")
+            };
+        }
+        f.write_str("BorderRadiusDirectional.only(")?;
+        for (index, (name, radius)) in corners
+            .into_iter()
+            .filter(|(_, radius)| *radius != Radius::ZERO)
+            .enumerate()
+        {
+            if index != 0 {
+                f.write_str(", ")?;
+            }
+            write!(f, "{name}: {radius}")?;
+        }
+        f.write_str(")")
+    }
+}
+
 impl BorderRadiusDirectional {
     pub const ZERO: Self = Self {
         top_start: Radius::ZERO,
@@ -652,6 +686,26 @@ pub enum BorderRadiusGeometry {
         physical: BorderRadius,
         directional: BorderRadiusDirectional,
     },
+}
+
+impl fmt::Display for BorderRadiusGeometry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Physical(radius) => fmt::Display::fmt(radius, f),
+            Self::Directional(radius) => fmt::Display::fmt(radius, f),
+            Self::Mixed {
+                physical,
+                directional,
+            } => match (
+                *physical == BorderRadius::ZERO,
+                *directional == BorderRadiusDirectional::ZERO,
+            ) {
+                (true, _) => fmt::Display::fmt(directional, f),
+                (_, true) => fmt::Display::fmt(physical, f),
+                _ => write!(f, "{physical} + {directional}"),
+            },
+        }
+    }
 }
 
 impl BorderRadiusGeometry {
