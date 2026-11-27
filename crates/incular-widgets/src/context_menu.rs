@@ -562,8 +562,9 @@ impl TextContextMenuState {
     }
 
     /// Shows `button_items` at `anchors`, replacing any open menu. Each
-    /// button closes the menu before running its callback, as Flutter's
-    /// desktop toolbars do. Returns false when there is nothing to show.
+    /// editing button closes the menu before running its callback. Mobile
+    /// dictionary, search, and share actions leave the menu in place.
+    /// Returns false when there is nothing to show.
     pub fn show(
         self: &Rc<Self>,
         anchors: TextSelectionToolbarAnchors,
@@ -619,16 +620,31 @@ impl TextContextMenuState {
                 };
                 let hide = hide.clone();
                 let weak = weak.clone();
+                let adaptive = matches!(
+                    item.kind(),
+                    ContextMenuButtonKind::LookUp | ContextMenuButtonKind::SearchWeb
+                        | ContextMenuButtonKind::Share
+                );
                 ContextMenuButtonItem {
                     on_pressed: Some(Rc::new(move || {
-                        // A retained suggestion can outlive the menu, but a
-                        // dismissed overlay must not edit the field.
-                        if spelling && !weak.upgrade().is_some_and(|state| {
-                            state.incarnation.get() == incarnation && state.is_spell_check_showing()
-                        }) {
-                            return;
+                        // Retained callbacks cannot edit or send text on behalf
+                        // of a dismissed or replaced menu.
+                        if spelling || adaptive {
+                            let current = weak.upgrade().is_some_and(|state| {
+                                state.incarnation.get() == incarnation
+                                    && if spelling {
+                                        state.is_spell_check_showing()
+                                    } else {
+                                        state.is_showing()
+                                    }
+                            });
+                            if !current {
+                                return;
+                            }
                         }
-                        hide();
+                        if spelling || !adaptive {
+                            hide();
+                        }
                         on_pressed();
                     })),
                     ..item

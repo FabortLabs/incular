@@ -281,6 +281,13 @@ impl MobileEngine {
         })
     }
 
+    /// Takes user-selected dictionary, search, and share commands for the host.
+    pub fn take_text_selection_actions(&mut self) -> Vec<incular_platform::TextSelectionActionRequest> {
+        self.window.as_ref().map_or_else(Vec::new, |window| {
+            self.application.take_window_text_selection_actions(window.id)
+        })
+    }
+
     /// Takes the system bar style the app or its annotations asked for since the
     /// last call, to apply on the platform. iOS ignores it for now: its status
     /// bar style needs a view controller override, tracked separately.

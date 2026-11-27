@@ -350,6 +350,7 @@ pub struct Runtime {
     text_history_time: Option<Instant>,
     text_history_epoch: Option<(u64, u64)>,
     pub(crate) text_input_commands: VecDeque<TextInputCommand>,
+    pub(crate) text_selection_actions: Vec<incular_platform::TextSelectionActionRequest>,
     /// The style the app or an annotation asked for; `None` until one does.
     pub(crate) system_ui_overlay_style: Option<SystemUiOverlayStyle>,
     /// The style the host last received, so an unchanged style is not sent again.
@@ -616,6 +617,7 @@ impl Runtime {
             text_history_time: None,
             text_history_epoch: None,
             text_input_commands: VecDeque::new(),
+            text_selection_actions: Vec::new(),
             system_ui_overlay_style: None,
             system_ui_overlay_style_applied: None,
             undo_manager_commands: VecDeque::new(),
@@ -802,6 +804,11 @@ impl Runtime {
     pub fn take_text_input_commands(&mut self) -> Vec<TextInputCommand> {
         self.collect_autofill_context_completions();
         self.text_input_commands.drain(..).collect()
+    }
+
+    /// Drains adaptive text-selection commands for the platform's own UI.
+    pub fn take_text_selection_actions(&mut self) -> Vec<incular_platform::TextSelectionActionRequest> {
+        std::mem::take(&mut self.text_selection_actions)
     }
 
     fn collect_autofill_context_completions(&mut self) {

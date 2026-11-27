@@ -1646,6 +1646,15 @@ impl Application {
         .unwrap_or_default()
     }
 
+    /// Drains the selected-text actions requested in one window.
+    pub fn take_window_text_selection_actions(
+        &mut self,
+        window_id: WindowId,
+    ) -> Vec<incular_platform::TextSelectionActionRequest> {
+        self.with_window_mut(window_id, |record| record.runtime.take_text_selection_actions())
+            .unwrap_or_default()
+    }
+
     /// Sets the status and navigation bar style of one native window, as Flutter's
     /// `SystemChrome.setSystemUIOverlayStyle`. Hosts without system bars drop it.
     pub fn set_window_system_ui_overlay_style(

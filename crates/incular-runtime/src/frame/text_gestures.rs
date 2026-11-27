@@ -6,6 +6,7 @@
 use super::*;
 use crate::text_shortcuts::{TextIntent, TextShortcutPlatform};
 use incular_core::SECONDARY_POINTER_BUTTON;
+use incular_platform::{TextSelectionAction, TextSelectionActionRequest};
 use incular_text::{TextAffinity, is_layout_whitespace, word_boundary_at};
 use incular_widgets::internal::{
     TextSelectionHandleEndpoint,
@@ -319,15 +320,15 @@ impl Runtime {
     fn text_field_context_menu_button_types(
         &mut self,
         field: ElementId,
-    ) -> [Option<ContextMenuButtonType>; 4] {
-        use ContextMenuButtonType::{Copy, Cut, Paste, SelectAll};
+    ) -> Vec<ContextMenuButtonType> {
+        use ContextMenuButtonType::{Copy, Cut, LookUp, Paste, SearchWeb, SelectAll, Share};
         use incular_widgets::ToolbarOptions;
 
         let Some(snapshot) = self.tree.text_field_input_geometry(field) else {
-            return [None; 4];
+            return Vec::new();
         };
         let Some(controller) = self.tree.text_controller(field) else {
-            return [None; 4];
+            return Vec::new();
         };
         let read_only = snapshot.read_only || !snapshot.enabled;
         let obscured = snapshot.obscure_text;
@@ -368,24 +369,78 @@ impl Runtime {
                     options.select_all && can_select_all && select_all,
                 )
             };
-        [(Cut, cut), (Copy, copy), (Paste, paste), (SelectAll, select_all)]
-            .map(|(kind, enabled)| enabled.then_some(kind))
+        let target = self.text_shortcut_platform;
+        let adaptive = !legacy_controls
+            && options.is_none_or(|options| options == ToolbarOptions::EMPTY)
+            && matches!(target, TextShortcutPlatform::Ios | TextShortcutPlatform::Android)
+            && !obscured
+            && controller.with_value(|value| {
+                adaptive_selected_text(&value.text, value.selection.range().as_range()).is_some()
+            });
+        let android = adaptive && target == TextShortcutPlatform::Android;
+        let ios = adaptive && target == TextShortcutPlatform::Ios;
+        [
+            (Cut, cut),
+            (Copy, copy),
+            (Paste, paste),
+            (Share, android),
+            (SelectAll, select_all),
+            (LookUp, ios),
+            (SearchWeb, ios),
+            (Share, ios),
+        ]
+        .into_iter()
+        .filter_map(|(kind, enabled)| enabled.then_some(kind))
+        .collect()
+    }
+
+    fn adaptive_text_menu_label(&self, field: ElementId, kind: ContextMenuButtonType) -> String {
+        let key = match kind {
+            ContextMenuButtonType::LookUp => "widgets.look_up_button_label",
+            ContextMenuButtonType::SearchWeb => "widgets.search_web_button_label",
+            ContextMenuButtonType::Share => "widgets.share_button_label",
+            _ => unreachable!("only adaptive menu buttons use these labels"),
+        };
+        self.tree
+            .localized_text_at(field, key)
+            .or_else(|| kind.default_label().map(str::to_owned))
+            .unwrap_or_default()
     }
 
     fn text_field_context_menu_items(&mut self, field: ElementId) -> Vec<ContextMenuButtonItem> {
         let dispatcher = self.dispatcher();
         self.text_field_context_menu_button_types(field)
             .into_iter()
-            .flatten()
             .filter_map(|button_type| {
+                let dispatcher = dispatcher.clone();
                 let intent = match button_type {
                     ContextMenuButtonType::Cut => TextIntent::Cut,
                     ContextMenuButtonType::Copy => TextIntent::Copy,
                     ContextMenuButtonType::Paste => TextIntent::Paste,
                     ContextMenuButtonType::SelectAll => TextIntent::SelectAll,
-                    _ => return None,
+                    _ => {
+                        let action = match button_type {
+                            ContextMenuButtonType::LookUp => TextSelectionAction::LookUp,
+                            ContextMenuButtonType::SearchWeb => TextSelectionAction::SearchWeb,
+                            ContextMenuButtonType::Share => TextSelectionAction::Share,
+                            _ => return None,
+                        };
+                        let controller = self.tree.text_controller(field)?;
+                        let item = ContextMenuButtonItem::new(button_type, move || {
+                            let text = controller.with_value(|value| {
+                                adaptive_selected_text(&value.text, value.selection.range().as_range())
+                                    .map(str::to_owned)
+                            });
+                            let Some(text) = text else {
+                                return;
+                            };
+                            dispatcher.dispatch(move |runtime: &mut Runtime| {
+                                runtime.run_adaptive_text_menu_action(field, action, text);
+                            });
+                        });
+                        return Some(item.label(self.adaptive_text_menu_label(field, button_type)));
+                    }
                 };
-                let dispatcher = dispatcher.clone();
                 Some(ContextMenuButtonItem::new(button_type, move || {
                     dispatcher.dispatch(move |runtime: &mut Runtime| {
                         runtime.run_text_menu_intent(field, intent);
@@ -393,6 +448,26 @@ impl Runtime {
                 }))
             })
             .collect()
+    }
+
+    fn run_adaptive_text_menu_action(
+        &mut self,
+        field: ElementId,
+        action: TextSelectionAction,
+        text: String,
+    ) {
+        if self.focused != Some(field) || self.text_field_obscured(field) {
+            return;
+        }
+        if self.tree.text_controller(field).is_some_and(|controller| {
+            controller.with_value(|value| {
+                adaptive_selected_text(&value.text, value.selection.range().as_range())
+                    == Some(text.as_str())
+            })
+        }) {
+            self.text_selection_actions
+                .push(TextSelectionActionRequest { action, text });
+        }
     }
 
     /// Whether the mounted editor can use the native context menu instead
@@ -423,61 +498,23 @@ impl Runtime {
             .editable_selection_menu_rect(connection.target)
             .ok_or(SystemContextMenuError::InvalidTarget)?;
         let field = connection.target;
-        let mut items: Vec<_> = self
-            .text_field_context_menu_button_types(field)
+        let kinds = self.text_field_context_menu_button_types(field);
+        let label = |kind| self.adaptive_text_menu_label(field, kind);
+        let items = kinds
             .into_iter()
-            .flatten()
             .filter_map(|kind| {
                 Some(match kind {
                     ContextMenuButtonType::Cut => SystemContextMenuItem::Cut,
                     ContextMenuButtonType::Copy => SystemContextMenuItem::Copy,
                     ContextMenuButtonType::Paste => SystemContextMenuItem::Paste,
                     ContextMenuButtonType::SelectAll => SystemContextMenuItem::SelectAll,
+                    ContextMenuButtonType::LookUp => SystemContextMenuItem::LookUp(label(kind)),
+                    ContextMenuButtonType::SearchWeb => SystemContextMenuItem::SearchWeb(label(kind)),
+                    ContextMenuButtonType::Share => SystemContextMenuItem::Share(label(kind)),
                     _ => return None,
                 })
             })
             .collect();
-        let (legacy, options) = self.tree.text_field_toolbar_policy(field).unwrap_or_default();
-        // Explicit nonempty legacy toolbar options bypass Flutter's adaptive
-        // text processing actions even when modern controls are installed.
-        let has_adaptive_actions = !legacy
-            && options.is_none_or(|options| options == incular_widgets::ToolbarOptions::EMPTY);
-        let target = self.text_shortcut_platform;
-        if has_adaptive_actions
-            && matches!(target, TextShortcutPlatform::Ios | TextShortcutPlatform::Android)
-            && !self.text_field_obscured(field)
-            && self.tree.text_controller(field).is_some_and(|editor| {
-                editor.with_value(|value| value.text.get(value.selection.range().as_range())
-                    .is_some_and(|text| {
-                        !text.trim_matches(|c: char| c.is_whitespace() || c == '\u{FEFF}').is_empty()
-                    }))
-            })
-        {
-            let label = |kind: ContextMenuButtonType, key: &str| {
-                self.tree.localized_text_at(field, key)
-                    .or_else(|| kind.default_label().map(str::to_owned))
-                    .unwrap_or_default()
-            };
-            if target == TextShortcutPlatform::Ios {
-                items.push(SystemContextMenuItem::LookUp(label(
-                    ContextMenuButtonType::LookUp, "widgets.look_up_button_label",
-                )));
-                items.push(SystemContextMenuItem::SearchWeb(label(
-                    ContextMenuButtonType::SearchWeb, "widgets.search_web_button_label",
-                )));
-            }
-            let share = SystemContextMenuItem::Share(label(
-                ContextMenuButtonType::Share,
-                "widgets.share_button_label",
-            ));
-            if target == TextShortcutPlatform::Android
-                && matches!(items.last(), Some(SystemContextMenuItem::SelectAll))
-            {
-                items.insert(items.len() - 1, share);
-            } else {
-                items.push(share);
-            }
-        }
         menus.show_with_items(controller, Some(connection.client), rect, items)
     }
 
@@ -1675,4 +1712,12 @@ impl Runtime {
             self.show_text_field_touch_menu(field, position);
         }
     }
+}
+
+/// Dart's `String.trim` treats Unicode whitespace and U+FEFF as blank.
+/// Use that only for eligibility; the host must receive the whole selection.
+fn adaptive_selected_text(text: &str, selection: std::ops::Range<usize>) -> Option<&str> {
+    text.get(selection).filter(|selected| {
+        !selected.trim_matches(|c: char| c.is_whitespace() || c == '\u{FEFF}').is_empty()
+    })
 }

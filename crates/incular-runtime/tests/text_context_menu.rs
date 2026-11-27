@@ -24,9 +24,17 @@ fn bounds() -> Constraints {
 }
 
 fn mount(text: &str, platform: TextShortcutPlatform) -> (Runtime, TextEditingController, Shown) {
+    mount_with(text, platform, |field| field)
+}
+
+fn mount_with(
+    text: &str,
+    platform: TextShortcutPlatform,
+    configure: impl FnOnce(EditableText) -> EditableText,
+) -> (Runtime, TextEditingController, Shown) {
     let controller = TextEditingController::with_text(text);
     let shown: Shown = Rc::default();
-    let field = EditableText::new(controller.clone())
+    let field = configure(EditableText::new(controller.clone()))
         .text_direction(TextDirection::Ltr)
         .size(Size::new(300., 32.))
         .context_menu_builder({
@@ -274,5 +282,237 @@ fn right_click_focus_keeps_the_hit_word_or_caret_and_preserves_both_selection_or
             secondary_click(&mut runtime, pos);
             assert_eq!(controller.selection(), selection, "{platform:?}");
         }
+    }
+}
+
+fn prepare_adaptive_menu(
+    runtime: &mut Runtime,
+    controller: &TextEditingController,
+    selection: TextSelection,
+) -> String {
+    use incular_platform::TextInputCommand;
+
+    secondary_click(runtime, Offset::new(12., 10.));
+    let field = runtime.focused_element().expect("focused field");
+    runtime
+        .tree()
+        .text_field_context_menu(field)
+        .unwrap()
+        .hide();
+    let client = runtime
+        .take_text_input_commands()
+        .into_iter()
+        .find_map(|command| match command {
+            TextInputCommand::SetClient { configuration, .. } => Some(configuration.client),
+            _ => None,
+        })
+        .expect("mounted input connection");
+    controller.set_selection(selection);
+    let request = serde_json::json!({
+        "method":"TextInputClient.showToolbar", "args":[client.get(),0,1]
+    })
+    .to_string();
+    show_adaptive_menu(runtime, &request);
+    request
+}
+
+fn show_adaptive_menu(runtime: &mut Runtime, request: &str) {
+    runtime.run_frame(bounds()).unwrap();
+    assert_eq!(
+        runtime
+            .handle_flutter_text_toolbar_call(request.as_bytes())
+            .unwrap(),
+        Some(true)
+    );
+    runtime.run_frame(bounds()).unwrap();
+}
+
+#[test]
+fn adaptive_editable_menu_orders_and_dispatches_mobile_actions_without_hiding() {
+    use ContextMenuButtonType::{Copy, Cut, LookUp, SearchWeb, SelectAll, Share};
+    use incular_platform::{TextSelectionAction, TextSelectionActionRequest};
+
+    for (platform, expected) in [
+        (
+            TextShortcutPlatform::Android,
+            vec![Cut, Copy, Share, SelectAll],
+        ),
+        (
+            TextShortcutPlatform::Ios,
+            vec![Cut, Copy, LookUp, SearchWeb, Share],
+        ),
+        (TextShortcutPlatform::Linux, vec![Cut, Copy, SelectAll]),
+    ] {
+        let (mut runtime, editor, shown) = mount("  word  rest", platform);
+        let selection = TextSelection::new(8, 0);
+        let request = prepare_adaptive_menu(&mut runtime, &editor, selection);
+        let field = runtime.focused_element().unwrap();
+        let menu = last(&shown);
+        assert_eq!(types(&menu), expected);
+        let mut actions = Vec::new();
+        for (kind, action) in [
+            (LookUp, TextSelectionAction::LookUp),
+            (SearchWeb, TextSelectionAction::SearchWeb),
+            (Share, TextSelectionAction::Share),
+        ] {
+            if let Some(item) = menu
+                .button_items
+                .iter()
+                .find(|item| item.button_type() == kind)
+            {
+                assert_eq!(item.label.as_deref(), kind.default_label());
+                item.press();
+                actions.push(TextSelectionActionRequest {
+                    action,
+                    text: "  word  ".into(),
+                });
+            }
+        }
+        let mut runtime = process(runtime);
+        assert_eq!(runtime.take_text_selection_actions(), actions);
+        assert!(runtime.take_text_selection_actions().is_empty());
+        assert_eq!(runtime.focused_element(), Some(field));
+        assert_eq!(editor.selection(), selection);
+        assert!(
+            runtime
+                .tree()
+                .text_field_context_menu(field)
+                .unwrap()
+                .is_showing()
+        );
+
+        // Showing a new menu must not revive callbacks to its predecessor.
+        menu.hide();
+        show_adaptive_menu(&mut runtime, &request);
+        for item in menu
+            .button_items
+            .iter()
+            .filter(|item| matches!(item.button_type(), LookUp | SearchWeb | Share))
+        {
+            item.press();
+        }
+        let mut runtime = process(runtime);
+        assert!(runtime.take_text_selection_actions().is_empty());
+        assert!(
+            runtime
+                .tree()
+                .text_field_context_menu(field)
+                .unwrap()
+                .is_showing()
+        );
+    }
+}
+
+#[test]
+fn adaptive_editable_menu_rejects_blank_collapsed_obscured_and_legacy_selections() {
+    use ContextMenuButtonType::{LookUp, SearchWeb, Share};
+    use incular_widgets::ToolbarOptions;
+
+    // UTF-8 storage uses byte offsets: U+FEFF (3 bytes), U+00A0 (2 bytes).
+    for (selection, obscure, options) in [
+        (TextSelection::new(0, 5), false, None),
+        (TextSelection::collapsed(6), false, None),
+        (TextSelection::new(5, 9), true, None),
+        (
+            TextSelection::new(5, 9),
+            false,
+            Some(ToolbarOptions::for_field(false, false)),
+        ),
+    ] {
+        let (mut runtime, editor, shown) =
+            mount_with("\u{feff}\u{a0}word", TextShortcutPlatform::Ios, |field| {
+                let field = field.obscure_text(obscure);
+                match options {
+                    Some(options) => field.toolbar_options(options),
+                    None => field,
+                }
+            });
+        // Keep one ordinary button visible when an obscured iOS
+        // selection disables copy, cut, and select-all.
+        runtime.set_clipboard_text("clipboard");
+        prepare_adaptive_menu(&mut runtime, &editor, selection);
+        assert!(
+            !types(&last(&shown))
+                .iter()
+                .any(|kind| matches!(kind, LookUp | SearchWeb | Share))
+        );
+        assert!(runtime.take_text_selection_actions().is_empty());
+    }
+}
+
+#[test]
+fn adaptive_editable_menu_can_share_from_a_read_only_field() {
+    use ContextMenuButtonType::{Copy, LookUp, SearchWeb, Share};
+
+    let (mut runtime, editor, shown) =
+        mount_with("word rest", TextShortcutPlatform::Ios, |field| {
+            field.read_only(true)
+        });
+    secondary_click(&mut runtime, Offset::new(12., 10.));
+    assert_eq!(editor.selection(), TextSelection::new(0, 4));
+    let menu = last(&shown);
+    assert_eq!(types(&menu), vec![Copy, LookUp, SearchWeb, Share]);
+    menu.button_items.last().unwrap().press();
+    let mut runtime = process(runtime);
+    let [request] = runtime.take_text_selection_actions().try_into().unwrap();
+    assert_eq!(request.action, incular_platform::TextSelectionAction::Share);
+    assert_eq!(request.text, "word");
+}
+
+#[test]
+fn flutter_text_selection_actions_send_the_unmodified_string_on_platform() {
+    use incular_platform::{
+        FlutterPlatformMessenger, TextSelectionAction, TextSelectionActionRequest,
+        message_codecs::{JsonMethodCodec, MethodCall},
+    };
+    use std::{
+        convert::Infallible,
+        future::{Future, ready},
+        pin::pin,
+        task::{Context, Poll, Waker},
+    };
+
+    #[derive(Default)]
+    struct Messenger(Vec<(&'static str, MethodCall<serde_json::Value>)>);
+    impl FlutterPlatformMessenger for Messenger {
+        type Error = Infallible;
+
+        fn send_platform_message(
+            &mut self,
+            channel: &'static str,
+            payload: Option<Vec<u8>>,
+        ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
+            self.0.push((
+                channel,
+                JsonMethodCodec::decode_method_call(&payload.unwrap()).unwrap(),
+            ));
+            ready(Ok(None))
+        }
+    }
+    let mut transport = Messenger::default();
+    for (action, name) in [
+        (TextSelectionAction::LookUp, "LookUp.invoke"),
+        (TextSelectionAction::SearchWeb, "SearchWeb.invoke"),
+        (TextSelectionAction::Share, "Share.invoke"),
+    ] {
+        let request = TextSelectionActionRequest {
+            action,
+            text: " café 🦀 ".to_owned(),
+        };
+        assert!(matches!(
+            pin!(request.send_flutter(&mut transport))
+                .poll(&mut Context::from_waker(Waker::noop())),
+            Poll::Ready(Ok(()))
+        ));
+        assert_eq!(
+            transport.0.pop(),
+            Some((
+                "flutter/platform",
+                MethodCall {
+                    method: name.to_owned(),
+                    arguments: serde_json::json!(" café 🦀 "),
+                }
+            ))
+        );
     }
 }
