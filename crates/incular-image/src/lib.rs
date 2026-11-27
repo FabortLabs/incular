@@ -255,31 +255,53 @@ pub fn clear_shared_memory_image_cache() {
 
 /// Loads an image from encoded in-memory bytes.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MemoryImage(Arc<[u8]>);
+pub struct MemoryImage {
+    bytes: Arc<[u8]>,
+    scale_bits: u64,
+}
 
 impl MemoryImage {
     #[must_use]
     pub fn new(bytes: impl Into<Arc<[u8]>>) -> Self {
-        Self(bytes.into())
+        Self {
+            bytes: bytes.into(),
+            scale_bits: 1.0_f64.to_bits(),
+        }
     }
 
     #[must_use]
     pub fn bytes(&self) -> &Arc<[u8]> {
-        &self.0
+        &self.bytes
+    }
+
+    /// Source pixels per logical pixel. Changing scale does not decode twice.
+    #[must_use]
+    pub fn scale(mut self, scale: f64) -> Self {
+        self.scale_bits = finite_positive_or_one(scale).to_bits();
+        self
+    }
+
+    #[must_use]
+    pub const fn image_scale(&self) -> f64 {
+        f64::from_bits(self.scale_bits)
     }
 
     /// Resolves through an explicitly supplied decoded-image cache without
     /// changing the shared provider cache.
     #[must_use]
     pub fn resolve_in_cache(&self, cache: &mut ImageCache) -> ImageStream {
-        ImageStream::from_result(cache.load_with_key(&self.0, || self.0.clone()))
-            .with_debug_label(self.source_label())
+        ImageStream::from_result(
+            cache
+                .load_with_key(&self.bytes, || self.bytes.clone())
+                .map(|image| image.with_scale(self.image_scale())),
+        )
+        .with_debug_label(self.source_label())
     }
 
     fn source_label(&self) -> String {
         use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
         let hash = BuildHasherDefault::<DefaultHasher>::default()
-            .hash_one(Arc::as_ptr(&self.0).cast::<u8>());
+            .hash_one(Arc::as_ptr(&self.bytes).cast::<u8>());
         format!("MemoryImage(Uint8List#{:05x})", hash & 0xfffff)
     }
 
@@ -293,13 +315,13 @@ impl MemoryImage {
     /// Drops this image from just the supplied cache. Other caches and
     /// already delivered image handles are unaffected.
     pub fn evict_from(&self, cache: &mut ImageCache) -> bool {
-        cache.evict_bytes(&self.0)
+        cache.evict_bytes(&self.bytes)
     }
 }
 
 impl ImageProvider for MemoryImage {
     fn load(&self) -> Result<ImageHandle, ImageError> {
-        ImageHandle::from_bytes(&*self.0)
+        ImageHandle::from_bytes(&*self.bytes).map(|image| image.with_scale(self.image_scale()))
     }
 
     fn resolve(&self, _configuration: &ImageConfiguration) -> ImageStream {
@@ -319,37 +341,58 @@ impl ImageProvider for MemoryImage {
                 .get()?
                 .borrow_mut()
                 .images
-                .get(self.0.as_ref())?
+                .get(self.bytes.as_ref())?
                 .clone();
-            Some(ImageStream::ready(image).with_debug_label(self.source_label()))
+            Some(
+                ImageStream::ready(image.with_scale(self.image_scale()))
+                    .with_debug_label(self.source_label()),
+            )
         })
     }
 }
 
 /// Loads an image from a filesystem path.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FileImage(PathBuf);
+pub struct FileImage {
+    path: PathBuf,
+    scale_bits: u64,
+}
 
 impl FileImage {
     #[must_use]
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self(path.into())
+        Self {
+            path: path.into(),
+            scale_bits: 1.0_f64.to_bits(),
+        }
+    }
+
+    /// Source pixels per logical pixel.
+    #[must_use]
+    pub fn scale(mut self, scale: f64) -> Self {
+        self.scale_bits = finite_positive_or_one(scale).to_bits();
+        self
+    }
+
+    #[must_use]
+    pub const fn image_scale(&self) -> f64 {
+        f64::from_bits(self.scale_bits)
     }
 
     #[must_use]
     pub fn path(&self) -> &Path {
-        &self.0
+        &self.path
     }
 }
 
 impl ImageProvider for FileImage {
     fn load(&self) -> Result<ImageHandle, ImageError> {
-        ImageHandle::from_file(&self.0)
+        ImageHandle::from_file(&self.path).map(|image| image.with_scale(self.image_scale()))
     }
 
     fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
         ImageStream::from_result(self.load_with(configuration))
-            .with_debug_label(self.0.to_string_lossy().into_owned())
+            .with_debug_label(self.path.to_string_lossy().into_owned())
     }
 }
 
@@ -457,13 +500,12 @@ pub enum ImageError {
 
 /// Cheap `Send + Sync` strong handle. Cloning never reads or copies pixels.
 #[derive(Clone)]
-pub struct ImageHandle(Arc<ImageResource>);
+pub struct ImageHandle(Arc<ImageResource>, f64);
 #[derive(Debug)]
 struct ImageResource {
     id: ImageId,
     source: ImageSource,
     image: DecodedImage,
-    scale: f64,
 }
 impl Drop for ImageResource {
     fn drop(&mut self) {
@@ -659,12 +701,14 @@ impl ImageHandle {
         }
         LIVE_IMAGES.fetch_add(1, Ordering::Relaxed);
         LIVE_IMAGE_BYTES.fetch_add(image.byte_len() as u64, Ordering::Relaxed);
-        Ok(Self(Arc::new(ImageResource {
-            id: next_image_id(),
-            source,
-            image,
-            scale: 1.0,
-        })))
+        Ok(Self(
+            Arc::new(ImageResource {
+                id: next_image_id(),
+                source,
+                image,
+            }),
+            1.0,
+        ))
     }
     #[must_use]
     pub fn id(&self) -> ImageId {
@@ -677,13 +721,18 @@ impl ImageHandle {
     /// Encoded source pixels per logical image pixel.
     #[must_use]
     pub fn scale(&self) -> f64 {
-        self.0.scale
+        self.1
+    }
+
+    /// Changes logical density without modifying or reallocating decoded pixels.
+    #[must_use]
+    pub fn with_scale(mut self, scale: f64) -> Self {
+        self.set_decoded_scale(scale);
+        self
     }
 
     fn set_decoded_scale(&mut self, scale: f64) {
-        Arc::get_mut(&mut self.0)
-            .expect("freshly decoded image")
-            .scale = finite_positive_or_one(scale);
+        self.1 = finite_positive_or_one(scale);
     }
 
     /// Decoded RGBA8 pixel bytes, independent of the image's logical scale.
@@ -702,14 +751,14 @@ impl ImageHandle {
     /// can draw its image again (each decode has its own [`ImageId`]).
     #[must_use]
     pub fn downgrade(&self) -> WeakImageHandle {
-        WeakImageHandle(Arc::downgrade(&self.0))
+        WeakImageHandle(Arc::downgrade(&self.0), self.1)
     }
 }
 
 /// Non-owning reference to an [`ImageHandle`]'s pixels: it never keeps them
 /// alive. See [`ImageHandle::downgrade`].
 #[derive(Clone, Debug)]
-pub struct WeakImageHandle(std::sync::Weak<ImageResource>);
+pub struct WeakImageHandle(std::sync::Weak<ImageResource>, f64);
 impl WeakImageHandle {
     /// Whether every [`ImageHandle`] to the image has been dropped.
     #[must_use]
@@ -719,7 +768,9 @@ impl WeakImageHandle {
     /// A strong handle, while any other handle still exists.
     #[must_use]
     pub fn upgrade(&self) -> Option<ImageHandle> {
-        self.0.upgrade().map(ImageHandle)
+        self.0
+            .upgrade()
+            .map(|resource| ImageHandle(resource, self.1))
     }
 }
 impl fmt::Debug for ImageHandle {
@@ -729,12 +780,13 @@ impl fmt::Debug for ImageHandle {
             .field("source", self.source())
             .field("width", &self.decoded().width())
             .field("height", &self.decoded().height())
+            .field("scale", &self.scale())
             .finish()
     }
 }
 impl PartialEq for ImageHandle {
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
+        self.id() == other.id() && self.scale() == other.scale()
     }
 }
 impl Eq for ImageHandle {}

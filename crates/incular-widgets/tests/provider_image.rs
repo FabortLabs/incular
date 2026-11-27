@@ -237,3 +237,34 @@ fn a_semantic_label_describes_the_image() {
     assert_eq!(node.role, incular_semantics::SemanticRole::Image);
     harness.layout();
 }
+
+#[test]
+fn updating_memory_image_density_reflows_without_replacing_the_source_pixels() {
+    use incular_image::MemoryImage;
+    use incular_rendering::PaintCommand;
+
+    let encoded: &[u8] = include_bytes!(
+        "../../../audits/flutter-3.50.0-parity/reference-probes/fixtures/decode_cache_8x8.png"
+    );
+    let provider = MemoryImage::new(encoded);
+    let mut harness = Harness::new(Image::provider(provider.clone()));
+    assert_eq!(harness.size(), Size::new(8., 8.));
+    let painted = |tree: &mut WidgetTree| {
+        tree.paint()
+            .commands()
+            .iter()
+            .find_map(|cmd| match cmd {
+                PaintCommand::Image {
+                    destination, image, ..
+                } => Some((destination.size, image.id())),
+                _ => None,
+            })
+            .expect("provider paints a decoded image")
+    };
+    let original = painted(&mut harness.tree);
+    assert_eq!(original.0, Size::new(8., 8.));
+
+    harness.update(Image::provider(provider.scale(2.)));
+    assert_eq!(harness.size(), Size::new(4., 4.));
+    assert_eq!(painted(&mut harness.tree), (Size::new(4., 4.), original.1));
+}

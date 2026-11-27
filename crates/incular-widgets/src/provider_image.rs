@@ -529,6 +529,7 @@ impl PlaybackImageState {
         config: &ProviderImage,
         source: &ImagePlayback,
         context: &BuildContext<'_>,
+        provider_density: f64,
     ) -> Widget {
         let replacing = self.source.borrow().as_ref() != Some(source);
         if replacing {
@@ -585,7 +586,7 @@ impl PlaybackImageState {
         if let (Some(error), Some(builder)) = (&error, &config.error_builder) {
             return builder(context, error);
         }
-        let scale = image.as_ref().map(ImageInfo::scale);
+        let scale = image.as_ref().map(|info| info.scale() * provider_density);
         let raw = config.raw(image.map(ImageInfo::into_image), scale);
         config.decorate(context, raw, frame, synchronous, None)
     }
@@ -719,7 +720,11 @@ impl AnimatedMemoryState {
             self.resolution.replace(Some(resolution.clone()));
             resolution
         });
-        self.playback.build(config, &resolution.source, context)
+        let density = fallback
+            .downcast_ref::<incular_image::MemoryImage>()
+            .map_or(1., incular_image::MemoryImage::image_scale);
+        self.playback
+            .build(config, &resolution.source, context, density)
     }
 }
 
@@ -745,7 +750,7 @@ impl From<ProviderImage> for Widget {
             ImageWidgetSource::Playback(playback) => {
                 let playback = playback.clone();
                 Widget::mount_scoped_builder(PlaybackImageState::new, move |state, context| {
-                    state.build(&config, &playback, context)
+                    state.build(&config, &playback, context, 1.)
                 })
             }
         }

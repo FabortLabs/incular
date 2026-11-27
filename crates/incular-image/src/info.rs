@@ -82,7 +82,7 @@ impl ImageInfo {
     /// A separately decoded image with identical bytes is not a clone.
     #[must_use]
     pub fn is_clone_of(&self, other: &Self) -> bool {
-        self.image == other.image
+        self.image.id() == other.image.id()
             && self.scale == other.scale
             && self.debug_label == other.debug_label
     }
