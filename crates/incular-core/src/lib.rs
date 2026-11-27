@@ -52,7 +52,8 @@ pub use debug_instrumentation::{
 };
 pub use debug_print::{DebugPrintBuffer, debug_print_synchronously, debug_word_wrap};
 pub use diagnostic_property::{
-    DiagnosticFailure, DiagnosticLevel, DiagnosticValue, DiagnosticsProperty, DiagnosticsTreeStyle,
+    DiagnosticCallback, DiagnosticFailure, DiagnosticLevel, DiagnosticValue, DiagnosticsProperty,
+    DiagnosticsTreeStyle,
 };
 pub use debug_timeline::{AggregatedTimedBlock, AggregatedTimings, DebugTimeline, DebugTimelineError, TimedBlock};
 pub use context::{BuildContext, ConsumerId, ContextGuard, DependencySnapshot};

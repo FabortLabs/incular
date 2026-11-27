@@ -49,3 +49,16 @@ recursive observation sees no value until the active computation
 returns. Rust providers return a typed failure; this API does not
 catch arbitrary Rust panics. All 13 focused native cases passed
 and the no-default-features facade check passed.
+
+## Object presence and color diagnostics
+
+Five exact pinned originals passed: present and missing callback flags,
+explicit boolean flag names, named presence shorthand, and color
+properties. The native fixtures check raw callback identity, contextual
+labels and fallback visibility, without invoking or serializing the
+callback. A real present color retains all channels and its sRGB
+description while remaining a non-scalar inspector value.
+
+All 18 focused native diagnostic tests passed. The missing-callback
+registration was exercised on Linux, where it is enabled; its browser
+branch is skipped by Flutter.

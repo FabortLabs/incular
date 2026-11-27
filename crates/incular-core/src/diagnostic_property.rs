@@ -155,6 +155,70 @@ impl DiagnosticValue for crate::Rect {
     }
 }
 
+impl DiagnosticValue for crate::Color {
+    const TYPE_NAME: &'static str = "Color";
+
+    fn diagnostic_text(&self) -> String {
+        let [a, r, g, b] = [self.alpha, self.red, self.green, self.blue].map(|component| {
+            crate::debug_double::format_double_fixed(f64::from(component) / 255., 4)
+        });
+        format!("Color(alpha: {a}, red: {r}, green: {g}, blue: {b}, colorSpace: ColorSpace.sRGB)")
+    }
+
+    fn to_diagnostic_json(&self) -> Value {
+        Value::Null
+    }
+    fn has_json_value(&self) -> bool {
+        false
+    }
+}
+
+/// A zero-argument callback whose identity is retained in diagnostics.
+/// Formatting or serializing it never invokes the callback.
+#[derive(Clone)]
+pub struct DiagnosticCallback(Rc<dyn Fn()>);
+
+impl DiagnosticCallback {
+    /// Retains a callback for later application use or diagnostics.
+    #[must_use]
+    pub fn new(callback: impl Fn() + 'static) -> Self {
+        Self(Rc::new(callback))
+    }
+
+    /// Invokes the application callback explicitly.
+    pub fn invoke(&self) {
+        (self.0)();
+    }
+}
+
+impl PartialEq for DiagnosticCallback {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl fmt::Debug for DiagnosticCallback {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DiagnosticCallback")
+            .finish_non_exhaustive()
+    }
+}
+
+impl DiagnosticValue for DiagnosticCallback {
+    const TYPE_NAME: &'static str = "Function";
+
+    fn diagnostic_text(&self) -> String {
+        "Closure: () => void".to_owned()
+    }
+    fn to_diagnostic_json(&self) -> Value {
+        Value::Null
+    }
+    fn has_json_value(&self) -> bool {
+        false
+    }
+}
+
 /// A failed attempt to compute an inspector property.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiagnosticFailure {
@@ -219,6 +283,7 @@ enum Presentation<T> {
         quoted: bool,
     },
     Flag,
+    ObjectFlag,
     Number {
         type_name: &'static str,
         format: fn(Option<&T>) -> String,
@@ -239,6 +304,7 @@ pub struct DiagnosticsProperty<T> {
     description: Option<String>,
     if_empty: Option<String>,
     if_null: Option<String>,
+    if_present: Option<String>,
     tooltip: Option<String>,
     unit: Option<String>,
     show_name: bool,
@@ -260,6 +326,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             description: None,
             if_empty: None,
             if_null: None,
+            if_present: None,
             tooltip: None,
             unit: None,
             show_name: true,
@@ -269,6 +336,33 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             flag_labels: [None, None],
             presentation: Presentation::Plain,
         }
+    }
+
+    /// Describes the presence or absence of an opaque object, e.g. a callback.
+    #[must_use]
+    pub fn object_flag(
+        name: impl Into<String>,
+        value: Option<T>,
+        if_present: Option<&str>,
+        if_null: Option<&str>,
+    ) -> Self {
+        assert!(
+            if_present.is_some() || if_null.is_some(),
+            "an object flag needs at least one label"
+        );
+        let mut property = Self::new(name, value).show_name(false);
+        property.if_present = if_present.map(str::to_owned);
+        property.if_null = if_null.map(str::to_owned);
+        property.presentation = Presentation::ObjectFlag;
+        property
+    }
+
+    /// Displays `has {name}` when the named object is present.
+    #[must_use]
+    pub fn has(name: impl Into<String>, value: Option<T>) -> Self {
+        let name = name.into();
+        let label = format!("has {name}");
+        Self::object_flag(name, value, Some(&label), None)
     }
 
     /// Computes a property only when it is first observed, retaining both
@@ -379,21 +473,34 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         self.flag_labels[usize::from(value)].as_deref()
     }
 
+    fn object_flag_label(&self) -> Option<&str> {
+        if self.value().is_some() {
+            self.if_present.as_deref()
+        } else {
+            self.if_null.as_deref()
+        }
+    }
+
     /// Whether the name is shown for the current value.
     #[must_use]
     pub fn shows_name(&self) -> bool {
         self.show_name
-            || (matches!(self.presentation, Presentation::Flag) && self.flag_label().is_none())
+            || match self.presentation {
+                Presentation::Flag => self.flag_label().is_none(),
+                Presentation::ObjectFlag => self.object_flag_label().is_none(),
+                _ => false,
+            }
     }
 
     /// Returns the effective level after default-value and missing-value rules.
     #[must_use]
     pub fn effective_level(&self) -> DiagnosticLevel {
-        if self.level == DiagnosticLevel::Hidden
-            || (matches!(self.presentation, Presentation::Flag)
-                && self.value().is_some()
-                && self.flag_label().is_none())
-        {
+        let hidden_flag = match self.presentation {
+            Presentation::Flag => self.value().is_some() && self.flag_label().is_none(),
+            Presentation::ObjectFlag => self.object_flag_label().is_none(),
+            _ => false,
+        };
+        if self.level == DiagnosticLevel::Hidden || hidden_flag {
             DiagnosticLevel::Hidden
         } else if self.exception().is_some() {
             DiagnosticLevel::Error
@@ -425,6 +532,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             match self.presentation {
                 Presentation::String { quoted: true } if empty.is_none() => format!("\"{text}\""),
                 Presentation::Flag => self.flag_label().map_or(text, str::to_owned),
+                Presentation::ObjectFlag => self.if_present.as_deref().map_or(text, str::to_owned),
                 Presentation::Number {
                     format,
                     unit_separator,
@@ -459,11 +567,18 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
     /// Returns a scalar diagnostics wire object with typed JSON values.
     #[must_use]
     pub fn to_json(&self) -> Value {
-        let default_type = format!("DiagnosticsProperty<{}>", T::TYPE_NAME);
+        let generated_type;
         let type_name = match self.presentation {
-            Presentation::Plain => &default_type,
+            Presentation::Plain => {
+                generated_type = format!("DiagnosticsProperty<{}>", T::TYPE_NAME);
+                generated_type.as_str()
+            }
             Presentation::String { .. } => "StringProperty",
             Presentation::Flag => "FlagProperty",
+            Presentation::ObjectFlag => {
+                generated_type = format!("ObjectFlagProperty<{}>", T::TYPE_NAME);
+                generated_type.as_str()
+            }
             Presentation::Number { type_name, .. } => type_name,
         };
         let level = self.effective_level();
@@ -502,6 +617,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         for (key, value) in [
             ("ifEmpty", &self.if_empty),
             ("ifNull", &self.if_null),
+            ("ifPresent", &self.if_present),
             ("tooltip", &self.tooltip),
         ] {
             if let Some(value) = value {
@@ -523,7 +639,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                     output["unit"] = json!(unit);
                 }
             }
-            Presentation::Plain => {}
+            Presentation::Plain | Presentation::ObjectFlag => {}
         }
         output
     }
@@ -585,7 +701,7 @@ impl DiagnosticsProperty<f64> {
     /// Constructs a floating-point property using diagnostic precision.
     #[must_use]
     pub fn double(name: impl Into<String>, value: Option<f64>) -> Self {
-        Self::new(name, value).as_double()
+        Self::new(name, value).into_double_property()
     }
 
     /// A lazily resolved double, with the same display as an eager double.
@@ -594,10 +710,10 @@ impl DiagnosticsProperty<f64> {
         name: impl Into<String>,
         compute: impl FnOnce() -> Result<Option<f64>, DiagnosticFailure> + 'static,
     ) -> Self {
-        Self::lazy(name, compute).as_double()
+        Self::lazy(name, compute).into_double_property()
     }
 
-    fn as_double(mut self) -> Self {
+    fn into_double_property(mut self) -> Self {
         self.presentation = Presentation::Number {
             type_name: "DoubleProperty",
             unit_separator: "",

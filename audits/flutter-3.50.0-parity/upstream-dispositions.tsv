@@ -2988,3 +2988,8 @@ packages/flutter/test/foundation/diagnostics_test.dart	1418	flag property test	p
 packages/flutter/test/foundation/diagnostics_test.dart	2018	IntProperty arguments passed to super	paired-match	upstream-diagnostic-scalar-properties.md#flags-percentages-and-special-numbers
 packages/flutter/test/foundation/diagnostics_test.dart	1084	unsafe double property test	paired-match	upstream-diagnostic-scalar-properties.md#lazy-values-and-diagnostic-failures
 packages/flutter/test/foundation/diagnostics_test.dart	1341	lazy object property test	paired-match	upstream-diagnostic-scalar-properties.md#lazy-values-and-diagnostic-failures
+packages/flutter/test/foundation/diagnostics_test.dart	1139	callback property test	paired-match	upstream-diagnostic-scalar-properties.md#object-presence-and-color-diagnostics
+packages/flutter/test/foundation/diagnostics_test.dart	1153	missing callback property test	paired-match	upstream-diagnostic-scalar-properties.md#object-presence-and-color-diagnostics
+packages/flutter/test/foundation/diagnostics_test.dart	1168	describe bool property	paired-match	upstream-diagnostic-scalar-properties.md#object-presence-and-color-diagnostics
+packages/flutter/test/foundation/diagnostics_test.dart	1405	color property test	paired-match	upstream-diagnostic-scalar-properties.md#object-presence-and-color-diagnostics
+packages/flutter/test/foundation/diagnostics_test.dart	1441	has property test	paired-match	upstream-diagnostic-scalar-properties.md#object-presence-and-color-diagnostics
