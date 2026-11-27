@@ -684,7 +684,7 @@ impl DirectionalFocusIntent {
 }
 
 /// A widget that listens for keyboard events routed from platform input.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct KeyboardListener {
     on_key: Option<Rc<dyn Fn(KeyboardEvent) -> bool>>,
     on_key_down: Option<Rc<dyn Fn(KeyboardEvent)>>,
@@ -696,6 +696,12 @@ pub struct KeyboardListener {
     autofocus: bool,
     include_semantics: bool,
     child: Option<Widget>,
+}
+
+impl Default for KeyboardListener {
+    fn default() -> Self {
+        Self::new(crate::SizedBox::shrink())
+    }
 }
 
 impl KeyboardListener {
@@ -1201,6 +1207,9 @@ impl KeyboardListener {
             on_key_up: self.on_key_up.clone(),
             on_shortcut: self.shortcut_dispatch.clone(),
             shortcut_scope: self.shortcut_scope.clone(),
+            // The Flutter form has an explicit focus node. Incular also
+            // supports node-less listeners that only route descendant keys.
+            annotates_focus: self.focus_node.is_some(),
             focus_node: self.focus_node.clone(),
             autofocus: self.autofocus,
             include_semantics: self.include_semantics,

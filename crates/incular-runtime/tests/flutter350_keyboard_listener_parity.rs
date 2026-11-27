@@ -158,3 +158,69 @@ fn raw_keyboard_listener_can_hide_semantics_without_losing_keyboard_focus_or_eve
     );
     assert!(runtime.tree().semantics().is_empty());
 }
+
+#[test]
+fn explicit_keyboard_listener_focus_node_annotates_semantics_unless_opted_out() {
+    use incular_semantics::SemanticActionKind;
+    use incular_widgets::Focus;
+
+    let node = FocusNode::new();
+    let events = Events::default();
+    let listener = || {
+        KeyboardListener::new(SizedBox::expand())
+            .focus_node(node.clone())
+            .on_key({
+                let events = events.clone();
+                move |event| {
+                    events.borrow_mut().push(event);
+                    false
+                }
+            })
+    };
+    let mut runtime = Runtime::new(listener().into()).unwrap();
+    frame(&mut runtime);
+
+    let check = |runtime: &Runtime, focused| {
+        let tree = runtime.tree().semantics();
+        assert_eq!(tree.len(), 1);
+        let [id] = tree.roots() else {
+            panic!("expected the listener's semantic annotation");
+        };
+        let semantic = tree.node(*id).unwrap();
+        assert!(semantic.state.focusable);
+        assert_eq!(semantic.state.focused, focused);
+        assert!(semantic.actions.contains(&SemanticActionKind::Focus));
+    };
+    check(&runtime, false);
+    let tree = runtime.tree();
+    let child = tree.children(tree.root().unwrap()).unwrap()[0];
+    assert_eq!(Focus::maybe_of(tree, child, false), Some(node.clone()));
+    node.request_focus();
+    frame(&mut runtime);
+    check(&runtime, true);
+
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, listener().include_semantics(false).into())
+        .unwrap();
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    assert!(runtime.tree().semantics().is_empty());
+    send_meta_left(&mut runtime);
+    assert_eq!(events.borrow().len(), 2);
+}
+
+#[test]
+fn a_node_less_keyboard_routing_wrapper_does_not_add_a_focus_stop() {
+    assert!(KeyboardListener::default().includes_semantics());
+    let child = FocusNode::new();
+    let scene =
+        KeyboardListener::new(incular_widgets::Focus::new(SizedBox::expand()).node(child.clone()));
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    frame(&mut runtime);
+    let tree = runtime.tree();
+    let targets = tree.focusable_elements();
+    assert_eq!(targets.len(), 1);
+    assert_eq!(tree.focus_node_at(targets[0]), Some(child));
+    assert_eq!(tree.semantics().len(), 1);
+}
