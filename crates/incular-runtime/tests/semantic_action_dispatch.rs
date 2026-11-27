@@ -337,7 +337,7 @@ fn semantic_activate_respects_button_enabled_gate() {
 }
 
 #[test]
-fn semantic_set_selection_disabled_field_applies_without_mutating() {
+fn disabled_field_hides_selection_action_but_accepts_direct_selection_without_editing() {
     let controller = TextEditingController::with_text("hello");
     let mut runtime = Runtime::new(
         Stack::new([
@@ -359,11 +359,12 @@ fn semantic_set_selection_disabled_field_applies_without_mutating() {
     let root = tree.root().expect("root");
     let field = tree.children(root).expect("children").to_vec()[0];
     let node = tree.semantic_node_for_element(field).expect("field node");
-    // SetSelection is advertised even for disabled fields, while SetText
-    // requires editability — matching pointer and keyboard behavior, where
-    // selection works but mutation is gated.
-    assert!(node_actions(&runtime, node).contains(&SemanticActionKind::SetSelection));
+    // Flutter only advertises SetSelection while focused. A disabled
+    // field cannot focus, but the native direct-dispatch API can still
+    // set a range without editing the buffer.
+    assert!(!node_actions(&runtime, node).contains(&SemanticActionKind::SetSelection));
     assert!(!node_actions(&runtime, node).contains(&SemanticActionKind::SetText));
+    assert!(!runtime.dispatch_semantic_action(node, SemanticAction::SetText("ignored".into())));
     assert!(
         runtime.dispatch_semantic_action(node, SemanticAction::SetSelection { base: 1, extent: 3 })
     );

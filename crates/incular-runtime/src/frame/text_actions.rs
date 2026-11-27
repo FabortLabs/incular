@@ -72,10 +72,12 @@ impl Runtime {
         let Some(controller) = self.tree.text_controller(field) else {
             return false;
         };
+        let previous = self.observed_editor_selection(field);
         controller.select_all();
         if self.focused != Some(field) {
             self.set_focus(Some(field));
         }
+        self.report_editor_selection_delta(field, previous, cause);
         controller.reset_caret(self.input_now());
         if cause == SelectionChangedCause::Toolbar {
             if matches!(

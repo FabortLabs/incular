@@ -1466,6 +1466,17 @@ impl Runtime {
                 return true;
             }
         }
+        let previous_selection = match kind {
+            incular_semantics::SemanticActionKind::SetText
+            | incular_semantics::SemanticActionKind::SetSelection
+            | incular_semantics::SemanticActionKind::MoveCursorForwardByCharacter
+            | incular_semantics::SemanticActionKind::MoveCursorBackwardByCharacter
+            | incular_semantics::SemanticActionKind::MoveCursorForwardByWord
+            | incular_semantics::SemanticActionKind::MoveCursorBackwardByWord => {
+                self.observed_editor_selection(element)
+            }
+            _ => None,
+        };
         let handled = match action {
             SemanticAction::Focus => {
                 let blocked =
@@ -1639,6 +1650,11 @@ impl Runtime {
                 }),
         };
         if handled {
+            self.report_editor_selection_delta(
+                element,
+                previous_selection,
+                incular_text::SelectionChangedCause::Keyboard,
+            );
             self.frame_requested = true;
         }
         handled

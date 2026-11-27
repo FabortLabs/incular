@@ -566,7 +566,9 @@ impl Runtime {
             return;
         };
         let editable = self.tree.text_field_is_editable(field);
+        let previous = self.observed_editor_selection(field);
         if self.run_text_intent(field, &controller, intent, editable) {
+            self.report_editor_selection_delta(field, previous, SelectionChangedCause::Toolbar);
             controller.reset_caret(self.input_now());
         }
         self.frame_requested = true;
