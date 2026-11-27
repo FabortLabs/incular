@@ -27,7 +27,9 @@ impl FlutterPlatformMessenger for Messenger {
         channel: &'static str,
         payload: Option<Vec<u8>>,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
-        self.calls.borrow_mut().push((channel, payload.expect("method call bytes")));
+        self.calls
+            .borrow_mut()
+            .push((channel, payload.expect("method call bytes")));
         ready(Ok(self.replies.then(|| b"[null]".to_vec())))
     }
 }
@@ -174,4 +176,150 @@ fn visibility_subscription_only_sends_a_request_when_installing_a_callback() {
     wait(chrome.handle_platform_message(visible)).unwrap();
     assert_eq!(*events.borrow(), [true, false]);
     assert!(log.borrow().is_empty());
+}
+
+#[test]
+fn deferred_overlay_style_sends_one_exact_nullable_payload_and_only_the_last_style() {
+    use incular_platform::SystemUiOverlayStyle as Style;
+    let (mut chrome, log) = fixture(true);
+    assert!(chrome.queue_system_ui_overlay_style(Style::DARK));
+    assert!(wait(chrome.flush_system_ui_overlay_style()).unwrap());
+    log.borrow_mut().clear();
+
+    assert!(chrome.queue_system_ui_overlay_style(Style::LIGHT));
+    assert!(log.borrow().is_empty());
+    assert!(wait(chrome.flush_system_ui_overlay_style()).unwrap());
+    check(
+        &log,
+        "SystemChrome.setSystemUIOverlayStyle",
+        json!({
+            "systemNavigationBarColor": 4278190080_u32,
+            "systemNavigationBarDividerColor": null,
+            "systemStatusBarContrastEnforced": null,
+            "statusBarColor": null,
+            "statusBarBrightness": "Brightness.dark",
+            "statusBarIconBrightness": "Brightness.light",
+            "systemNavigationBarIconBrightness": "Brightness.light",
+            "systemNavigationBarContrastEnforced": null,
+        }),
+    );
+    assert!(!chrome.queue_system_ui_overlay_style(Style::LIGHT));
+    assert!(!wait(chrome.flush_system_ui_overlay_style()).unwrap());
+    assert!(log.borrow().is_empty());
+
+    let contrast = Style {
+        system_status_bar_contrast_enforced: Some(false),
+        system_navigation_bar_contrast_enforced: Some(true),
+        ..Style::default()
+    };
+    assert!(chrome.queue_system_ui_overlay_style(contrast));
+    assert!(wait(chrome.flush_system_ui_overlay_style()).unwrap());
+    check(
+        &log,
+        "SystemChrome.setSystemUIOverlayStyle",
+        json!({
+            "systemNavigationBarColor": null,
+            "systemNavigationBarDividerColor": null,
+            "systemStatusBarContrastEnforced": false,
+            "statusBarColor": null,
+            "statusBarBrightness": null,
+            "statusBarIconBrightness": null,
+            "systemNavigationBarIconBrightness": null,
+            "systemNavigationBarContrastEnforced": true,
+        }),
+    );
+
+    assert!(chrome.queue_system_ui_overlay_style(Style::DARK));
+    assert!(!chrome.queue_system_ui_overlay_style(contrast));
+    assert!(!wait(chrome.flush_system_ui_overlay_style()).unwrap());
+    assert!(log.borrow().is_empty());
+}
+
+#[test]
+fn a_platform_overlay_failure_is_reported_once_with_exception_and_context() {
+    use incular_platform::{
+        FlutterPlatformChannelError, SystemUiOverlayStyle as Style,
+        message_codecs::{JsonMethodCodecError, PlatformException},
+    };
+    const MESSAGE: &str = "Failed to set system UI overlay style";
+    struct FailingMessenger {
+        calls: usize,
+        reply_ready: Rc<std::cell::Cell<bool>>,
+    }
+
+    impl FlutterPlatformMessenger for FailingMessenger {
+        type Error = std::convert::Infallible;
+
+        fn send_platform_message(
+            &mut self,
+            channel: &'static str,
+            payload: Option<Vec<u8>>,
+        ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
+            assert_eq!(channel, "flutter/platform");
+            let method = JsonMethodCodec::decode_method_call(&payload.unwrap()).unwrap();
+            assert_eq!(method.method, "SystemChrome.setSystemUIOverlayStyle");
+            self.calls += 1;
+            assert_eq!(self.calls, 1);
+            let reply = JsonMethodCodec::encode_error_envelope(&PlatformException {
+                code: "error".into(),
+                message: Some(MESSAGE.into()),
+                details: Value::Null,
+                stacktrace: None,
+            })
+            .unwrap();
+            let reply_ready = self.reply_ready.clone();
+            let mut reply = Some(reply);
+            std::future::poll_fn(move |_| {
+                if reply_ready.get() {
+                    Poll::Ready(Ok(reply.take()))
+                } else {
+                    Poll::Pending
+                }
+            })
+        }
+    }
+
+    let errors = Rc::new(RefCell::new(Vec::new()));
+    let reply_ready = Rc::new(std::cell::Cell::new(false));
+    let mut chrome = SystemChrome::new(FailingMessenger {
+        calls: 0,
+        reply_ready: reply_ready.clone(),
+    });
+    chrome.set_overlay_style_error_callback(Some(Box::new({
+        let errors = errors.clone();
+        move |report| {
+            let FlutterPlatformChannelError::Codec(JsonMethodCodecError::Platform(error)) =
+                &report.source
+            else {
+                panic!("expected typed PlatformException");
+            };
+            errors
+                .borrow_mut()
+                .push((report.context(), error.message.clone()));
+        }
+    })));
+    assert!(chrome.queue_system_ui_overlay_style(Style::LIGHT));
+    assert!(errors.borrow().is_empty());
+    let report = {
+        let mut delivery = pin!(chrome.flush_system_ui_overlay_style());
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(delivery.as_mut().poll(&mut context).is_pending());
+        assert!(errors.borrow().is_empty());
+        reply_ready.set(true);
+        let Poll::Ready(Err(report)) = delivery.as_mut().poll(&mut context) else {
+            panic!("expected the rejected platform method reply");
+        };
+        report
+    };
+    assert!(report.to_string().contains(MESSAGE));
+    assert_eq!(
+        *errors.borrow(),
+        [(
+            "while setting the system UI overlay style",
+            Some(MESSAGE.into())
+        )]
+    );
+    assert!(!chrome.queue_system_ui_overlay_style(Style::LIGHT));
+    assert!(!wait(chrome.flush_system_ui_overlay_style()).unwrap());
+    assert_eq!(errors.borrow().len(), 1);
 }

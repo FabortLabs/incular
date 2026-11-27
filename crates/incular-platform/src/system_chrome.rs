@@ -2,7 +2,11 @@
 
 use std::{future::Future, pin::Pin};
 
+use incular_config::Brightness;
+use incular_core::Color;
 use serde_json::{Value, json};
+
+use crate::SystemUiOverlayStyle;
 
 use crate::flutter_platform_channel::{
     FlutterPlatformChannelError, FlutterPlatformMessenger, invoke_optional_json,
@@ -72,11 +76,31 @@ pub enum SystemUiChangeMessageError {
     InvalidArguments,
 }
 
+/// The platform rejected a system bar style. Keeps the original transport
+/// or platform reply and its usage context for the host's error reporter.
+#[derive(Debug, thiserror::Error)]
+#[error("while setting the system UI overlay style: {source}")]
+pub struct SystemUiOverlayStyleError<E> {
+    pub source: FlutterPlatformChannelError<E>,
+}
+
+impl<E> SystemUiOverlayStyleError<E> {
+    #[must_use]
+    pub const fn context(&self) -> &'static str {
+        "while setting the system UI overlay style"
+    }
+}
+
+pub type SystemUiOverlayStyleErrorCallback<E> = Box<dyn FnMut(&SystemUiOverlayStyleError<E>)>;
+
 /// Sends system chrome policy to a compatible host and receives changes to
 /// overlay visibility. The transport and physical effects are host-owned.
-pub struct SystemChrome<M> {
+pub struct SystemChrome<M: FlutterPlatformMessenger> {
     messenger: M,
     visibility_listener: Option<SystemUiChangeCallback>,
+    pending_style: Option<SystemUiOverlayStyle>,
+    latest_style: Option<SystemUiOverlayStyle>,
+    overlay_style_error: Option<SystemUiOverlayStyleErrorCallback<M::Error>>,
 }
 
 impl<M: FlutterPlatformMessenger> SystemChrome<M> {
@@ -87,7 +111,61 @@ impl<M: FlutterPlatformMessenger> SystemChrome<M> {
         Self {
             messenger,
             visibility_listener: None,
+            pending_style: None,
+            latest_style: None,
+            overlay_style_error: None,
         }
+    }
+
+    /// Queues the style for the host's next microtask or UI turn. Returns
+    /// true only when a new flush needs scheduling. Repeated writes before
+    /// flushing replace the pending style instead of sending more calls.
+    pub fn queue_system_ui_overlay_style(&mut self, style: SystemUiOverlayStyle) -> bool {
+        if let Some(pending) = &mut self.pending_style {
+            *pending = style;
+            false
+        } else if self.latest_style == Some(style) {
+            false
+        } else {
+            self.pending_style = Some(style);
+            true
+        }
+    }
+
+    pub fn set_overlay_style_error_callback(
+        &mut self,
+        callback: Option<SystemUiOverlayStyleErrorCallback<M::Error>>,
+    ) {
+        self.overlay_style_error = callback;
+    }
+
+    /// Sends one queued style and reports any asynchronous platform failure.
+    /// A turn that returns to the last style does not send another call.
+    pub async fn flush_system_ui_overlay_style(
+        &mut self,
+    ) -> Result<bool, SystemUiOverlayStyleError<M::Error>> {
+        let Some(style) = self.pending_style.take() else {
+            return Ok(false);
+        };
+        if self.latest_style == Some(style) {
+            return Ok(false);
+        }
+        // Flutter remembers the attempted style before its Future resolves.
+        self.latest_style = Some(style);
+        if let Err(source) = self
+            .send(
+                "SystemChrome.setSystemUIOverlayStyle",
+                overlay_style_arguments(style),
+            )
+            .await
+        {
+            let report = SystemUiOverlayStyleError { source };
+            if let Some(callback) = &mut self.overlay_style_error {
+                callback(&report);
+            }
+            return Err(report);
+        }
+        Ok(true)
     }
 
     pub async fn set_preferred_orientations(
@@ -198,4 +276,26 @@ impl<M: FlutterPlatformMessenger> SystemChrome<M> {
     ) -> Result<(), FlutterPlatformChannelError<M::Error>> {
         invoke_optional_json(&mut self.messenger, Self::CHANNEL, method, arguments).await
     }
+}
+
+fn overlay_style_arguments(style: SystemUiOverlayStyle) -> Value {
+    fn argb(color: Color) -> u32 {
+        u32::from_be_bytes([color.alpha, color.red, color.green, color.blue])
+    }
+    fn brightness(value: Brightness) -> &'static str {
+        match value {
+            Brightness::Dark => "Brightness.dark",
+            Brightness::Light => "Brightness.light",
+        }
+    }
+    json!({
+        "systemNavigationBarColor": style.system_navigation_bar_color.map(argb),
+        "systemNavigationBarDividerColor": style.system_navigation_bar_divider_color.map(argb),
+        "systemStatusBarContrastEnforced": style.system_status_bar_contrast_enforced,
+        "statusBarColor": style.status_bar_color.map(argb),
+        "statusBarBrightness": style.status_bar_brightness.map(brightness),
+        "statusBarIconBrightness": style.status_bar_icon_brightness.map(brightness),
+        "systemNavigationBarIconBrightness": style.system_navigation_bar_icon_brightness.map(brightness),
+        "systemNavigationBarContrastEnforced": style.system_navigation_bar_contrast_enforced,
+    })
 }

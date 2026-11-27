@@ -64,3 +64,20 @@ removed callback no longer sees messages. All 19 selected native
 checks passed. These are host messages, not proof of OS-level
 orientation or bar drawing. Deferred overlay style and its
 error-reporting original `:393` are separate from this command set.
+
+## Deferred style messages and failure reports
+
+Pinned `:393` pairs. The service dispatches the exact platform JSON
+method, waits for a deferred error envelope, then reports one typed
+PlatformException with its original message and the context
+"while setting the system UI overlay style". No report occurs while
+the reply is still pending. Repeating the attempted style does not
+send or report again, as on Flutter.
+
+The `:14` port now also verifies the exact eight nullable wire
+properties, one queued flush, suppression of duplicates, and a
+pending update that returns to the last sent value. It remains
+partial because the Rust service tells its embedder when to schedule
+a flush rather than registering a Dart microtask directly. Both
+pinned originals and 14 focused Rust host channel tests passed.
+This does not assert any physical change to system bar pixels.

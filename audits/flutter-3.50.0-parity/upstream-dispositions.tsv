@@ -1174,7 +1174,7 @@ packages/flutter/test/services/system_chrome_test.dart	154	setEnabledSystemUIMod
 packages/flutter/test/services/system_chrome_test.dart	174	setEnabledSystemUIMode asserts for overlays in manual configuration	paired-match	upstream-system-chrome-comparisons.md#system-chrome-json-commands
 packages/flutter/test/services/system_chrome_test.dart	189	setEnabledSystemUIMode passes correct overlays for manual configuration	paired-match	upstream-system-chrome-comparisons.md#system-chrome-json-commands
 packages/flutter/test/services/system_chrome_test.dart	215	setSystemUIChangeCallback control test	paired-match	upstream-system-chrome-comparisons.md#system-chrome-json-commands
-packages/flutter/test/services/system_chrome_test.dart	393	SystemChrome reports error when setSystemUIOverlayStyle fails	reference-ran-incular-open	upstream-system-chrome-comparisons.md#imperative-delivery-and-remaining-platform-commands
+packages/flutter/test/services/system_chrome_test.dart	393	SystemChrome reports error when setSystemUIOverlayStyle fails	paired-match	upstream-system-chrome-comparisons.md#deferred-style-messages-and-failure-reports
 packages/flutter/test/painting/box_decoration_test.dart	69	BoxDecoration.lerp supports custom BoxBorder subclasses	paired-match	upstream-custom-box-border.md
 packages/flutter/test/painting/box_decoration_test.dart	79	BoxDecoration.scale supports custom BoxBorder subclasses	paired-match	upstream-custom-box-border.md
 packages/flutter/test/animation/tween_test.dart	99	Can chain tweens	paired-match	upstream-tween-transform-and-lifecycle.md#nullable-borders-and-typed-tween-values

@@ -174,7 +174,8 @@ pub use system_context_menu::{
 };
 pub use system_chrome::{
     ApplicationSwitcherDescription, DeviceOrientation, SystemChrome, SystemUiChangeCallback,
-    SystemUiChangeMessageError, SystemUiMode, SystemUiOverlay,
+    SystemUiChangeMessageError, SystemUiMode, SystemUiOverlay, SystemUiOverlayStyleError,
+    SystemUiOverlayStyleErrorCallback,
 };
 pub use system_environment::{
     MemorySystemEnvironmentProvider, SystemEnvironmentPreferences, SystemEnvironmentProvider,
