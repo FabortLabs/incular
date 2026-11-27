@@ -51,15 +51,17 @@ impl KeepAliveHandle {
                 return;
             }
             state.released = true;
-            state
-                .listeners
-                .iter()
-                .map(|(_, listener)| listener.clone())
-                .collect::<Vec<_>>()
+            std::mem::take(&mut state.listeners)
         };
-        for listener in listeners {
+        for (_, listener) in listeners {
             listener();
         }
+    }
+
+    /// Whether any keep-alive ancestor is currently listening to this handle.
+    #[must_use]
+    pub fn has_listeners(&self) -> bool {
+        !self.inner.borrow().listeners.is_empty()
     }
 
     fn add_listener(&self, listener: Rc<dyn Fn()>) -> Option<u64> {
@@ -113,6 +115,14 @@ struct KeepAliveRegistryState {
     revision: u64,
 }
 
+impl Drop for KeepAliveRegistryState {
+    fn drop(&mut self) {
+        for (_, (handle, listener_id)) in self.clients.drain() {
+            handle.remove_listener(listener_id);
+        }
+    }
+}
+
 /// Ancestor-side registry implementing the notification semantics of
 /// `AutomaticKeepAlive`.
 #[derive(Clone)]
@@ -147,40 +157,18 @@ impl KeepAliveRegistry {
             }
         }
         let weak_state: Weak<RefCell<KeepAliveRegistryState>> = Rc::downgrade(&self.state);
-        let weak_handle = Rc::downgrade(&handle.inner);
-        let listener_id_cell = Rc::new(RefCell::new(None::<u64>));
-        let listener_id_for_callback = listener_id_cell.clone();
-        let listener = Rc::new(move || {
-            let Some(state) = weak_state.upgrade() else {
-                return;
-            };
-            let removed = {
+        let Some(listener_id) = handle.add_listener(Rc::new(move || {
+            if let Some(state) = weak_state.upgrade() {
                 let mut state = state.borrow_mut();
-                let removed = state.clients.remove(&id).is_some();
-                if removed {
+                if state.clients.remove(&id).is_some() {
                     state.revision = state.revision.checked_add(1).expect("revision exhausted");
                 }
-                removed
-            };
-            if removed
-                && let (Some(handle), Some(listener_id)) =
-                    (weak_handle.upgrade(), *listener_id_for_callback.borrow())
-            {
-                handle
-                    .borrow_mut()
-                    .listeners
-                    .retain(|(id, _)| *id != listener_id);
             }
-        });
-        let Some(listener_id) = handle.add_listener(listener) else {
+        })) else {
             return false;
         };
-        *listener_id_cell.borrow_mut() = Some(listener_id);
-        self.state
-            .borrow_mut()
-            .clients
-            .insert(id, (handle, listener_id));
         let mut state = self.state.borrow_mut();
+        state.clients.insert(id, (handle, listener_id));
         state.revision = state.revision.checked_add(1).expect("revision exhausted");
         false
     }
@@ -209,15 +197,11 @@ impl KeepAliveRegistry {
     pub fn clear(&self) {
         let clients = {
             let mut state = self.state.borrow_mut();
-            let clients = state
-                .clients
-                .drain()
-                .map(|(_, value)| value)
-                .collect::<Vec<_>>();
+            let clients = std::mem::take(&mut state.clients);
             state.revision = state.revision.checked_add(1).expect("revision exhausted");
             clients
         };
-        for (handle, listener_id) in clients {
+        for (_, (handle, listener_id)) in clients {
             handle.remove_listener(listener_id);
         }
     }

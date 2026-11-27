@@ -218,3 +218,34 @@ fn keep_alive_notifications_bubble_and_release_only_their_own_retention() {
     assert!(keep_alive.keep_alive());
     assert!(keep_alive.request().keep_alive);
 }
+
+
+#[test]
+fn keep_alive_handles_detach_on_release_clear_and_last_registry_drop() {
+    let handle = KeepAliveHandle::new();
+    let notification = KeepAliveNotification::new(handle.clone());
+    let inner = KeepAliveRegistry::new();
+    let outer = KeepAliveRegistry::new();
+    assert!(!handle.has_listeners());
+
+    inner.dispatch(notification.clone());
+    outer.dispatch(notification.clone());
+    assert!(handle.has_listeners());
+    inner.clear();
+    assert!(handle.has_listeners());
+    let same_outer = outer.clone();
+    drop(outer);
+    assert!(handle.has_listeners());
+    drop(same_outer);
+    assert!(!handle.has_listeners());
+
+    inner.dispatch(notification.clone());
+    assert!(handle.has_listeners());
+    handle.release();
+    assert!(!handle.has_listeners());
+    assert!(!inner.keeping_alive());
+    let released_revision = inner.revision();
+    inner.dispatch(notification);
+    handle.release();
+    assert_eq!(inner.revision(), released_revision);
+}
