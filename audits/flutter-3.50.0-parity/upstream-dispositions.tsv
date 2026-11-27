@@ -3489,3 +3489,8 @@ packages/flutter/test/rendering/editable_test.dart	872	getEndpointsForSelection 
 packages/flutter/test/rendering/editable_test.dart	891	TextSelectionPoint can compare	paired-match	upstream-editable-selection-endpoints.md
 packages/flutter/test/widgets/text_selection_test.dart	1275	dragging selection handle does not crash when RenderObject is degenerate	paired-match	upstream-selection-handle-degenerate.md
 packages/flutter/test/widgets/text_selection_test.dart	1359	dragging selection handle does not crash when layout is degenerate (preferredLineHeight == 0)	paired-match	upstream-selection-handle-degenerate.md
+packages/flutter/test/rendering/editable_test.dart	583	selects correct place with offsets	paired-match	upstream-editable-position-selection.md
+packages/flutter/test/rendering/editable_test.dart	652	selects readonly renderEditable matches native behavior for android	paired-match	upstream-editable-position-selection.md
+packages/flutter/test/rendering/editable_test.dart	685	selects renderEditable matches native behavior for iOS case 1	paired-match	upstream-editable-position-selection.md
+packages/flutter/test/rendering/editable_test.dart	717	selects renderEditable matches native behavior for iOS case 2	paired-match	upstream-editable-position-selection.md
+packages/flutter/test/rendering/editable_test.dart	749	selects correct place when offsets are flipped	paired-match	upstream-editable-position-selection.md

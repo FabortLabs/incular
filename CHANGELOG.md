@@ -28,6 +28,9 @@ a version and date when publishing.
 
 ### Added
 
+- `Runtime::select_editable_position_at` selects from laid-out global points
+  without requesting focus, and preserves backward selection direction.
+
 - Laid-out editables can report local selection endpoints, including the
   direction of each visible edge and a caret fallback for invisible text.
 

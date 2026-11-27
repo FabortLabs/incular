@@ -2891,23 +2891,35 @@ pub(super) fn caret_for_line_position(
         return (0, incular_text::TextAffinity::Downstream);
     };
     let positions = layout.line_caret_positions(line);
-    positions
+    let nearest = positions
         .iter()
-        .min_by(|left, right| {
+        .enumerate()
+        .min_by(|(_, left), (_, right)| {
             (left.x - x)
                 .abs()
                 .total_cmp(&(right.x - x).abs())
                 .then_with(|| left.x.total_cmp(&right.x))
-        })
-        .map_or_else(
-            || {
-                (
-                    caret_for_line_x(line_data, x),
-                    incular_text::TextAffinity::Downstream,
-                )
-            },
-            |position| (position.offset, position.affinity),
-        )
+        });
+    let Some((index, position)) = nearest else {
+        return (
+            caret_for_line_x(line_data, x),
+            incular_text::TextAffinity::Downstream,
+        );
+    };
+    // Adjacent clusters can encode the same caret byte at the same screen
+    // edge twice. The stops are in visual cluster order, so a pointer on
+    // or to the right of the shared edge belongs to the right cluster.
+    // Keep distinct logical stops at bidi boundaries separate.
+    let position = if x >= position.x {
+        positions[index + 1..]
+            .iter()
+            .take_while(|next| next.x == position.x && next.offset == position.offset)
+            .last()
+            .unwrap_or(position)
+    } else {
+        position
+    };
+    (position.offset, position.affinity)
 }
 /// Flutter's `_moveToTextBoundary` over `LineBoundary` in `layout` (see
 /// [`WidgetTree::text_field_line_boundary`]).

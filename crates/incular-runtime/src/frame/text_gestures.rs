@@ -941,6 +941,34 @@ impl Runtime {
         }
     }
 
+    /// Selects between two global points in a laid-out editor, preserving
+    /// the first point as the base even when the second lies before it.
+    /// Without a second point, places a collapsed caret. This does not
+    /// request focus.
+    pub fn select_editable_position_at(
+        &mut self,
+        field: ElementId,
+        from: Offset,
+        to: Option<Offset>,
+    ) -> bool {
+        let Some((base, affinity)) = self.tree.text_field_position_at(field, from) else {
+            return false;
+        };
+        let extent = if let Some(point) = to {
+            let Some((extent, _)) = self.tree.text_field_position_at(field, point) else {
+                return false;
+            };
+            extent
+        } else {
+            base
+        };
+        let changed = self.tree.text_field_select(
+            field, TextSelection::new(base, extent), affinity, self.input_now(),
+        );
+        self.frame_requested |= changed;
+        changed
+    }
+
     /// Selects whole words between two global points in a laid-out editor.
     /// This does not request focus or change either scroll position directly.
     pub fn select_editable_words_in_range(
