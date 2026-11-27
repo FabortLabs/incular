@@ -49,3 +49,15 @@ flag starts a fresh normal blink without changing focus. Incular
 scopes the debug setting to one runtime so tests and unrelated windows
 can coexist; Flutter uses a process-wide flag. All 10 focused native
 cursor tests passed.
+
+## Vertical placement of explicit caret heights
+
+Both non-Apple originals passed across Flutter's Android, Fuchsia,
+Linux, and Windows variants. The native renderer-neutral fixture
+uses a 16 px line. A 4×12 caret paints from y=2; a 4×24 caret paints
+from y=−4. Previously the tall caret started at y=0 because its
+vertical offset was clamped, misaligning it with the text. The same
+calculation is used by the IME caret rectangle. All 19 focused
+native tests passed (including the Ahem-backed IME geometry tests).
+Apple's taller caret convention and native GPU pixels are not
+part of this result.

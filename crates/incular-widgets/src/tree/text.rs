@@ -65,7 +65,9 @@ pub(super) fn editable_horizontal_max_scroll(
 /// uses these dimensions, even when the visual caret is not painted.
 pub(super) fn editable_cursor_rect(field: &TextFieldRender, origin: Offset, line_height: f32) -> Rect {
     let height = field.cursor_height.unwrap_or(line_height).max(0.);
-    let top = origin.y + (line_height - height).max(0.) * 0.5;
+    // When the caret is taller than its line, the signed offset evenly
+    // distributes the overflow above and below the line's center.
+    let top = origin.y + (line_height - height) * 0.5;
     Rect::from_origin_size(
         Offset::new(origin.x, top),
         Size::new(field.cursor_width.max(0.), height),
