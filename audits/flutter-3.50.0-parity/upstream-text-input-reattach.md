@@ -192,3 +192,10 @@ edit it. All 17 focused lifecycle/private-command tests passed.
 The original :876 uses an arbitrary fake client and tests delivery
 of unknown names to it; that separate extension surface remains
 partial rather than counted.
+
+A second authored reference control starts with two mounted editors.
+Tab from A focuses B on a new client ID. An old A message cannot
+move focus; Backtab from B returns to A with a third client ID.
+Both values remain unchanged. All 13 focused native lifecycle cases
+and both pinned authored selector controls passed. No new original
+registration credit accompanies this control.

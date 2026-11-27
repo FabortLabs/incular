@@ -47,4 +47,69 @@ void main() {
     await selectors(client + 1, ['deleteBackward:']);
     expect(controller.text, 'AB');
   });
+
+  testWidgets('native Tab and Backtab retire the previous focused attachment', (tester) async {
+    final first = FocusNode();
+    final second = FocusNode();
+    final a = TextEditingController(text: 'first');
+    final b = TextEditingController(text: 'second');
+    addTearDown(first.dispose);
+    addTearDown(second.dispose);
+    addTearDown(a.dispose);
+    addTearDown(b.dispose);
+
+    Widget editor(FocusNode focus, TextEditingController controller) => SizedBox(
+      height: 40,
+      child: EditableText(
+        controller: controller,
+        focusNode: focus,
+        style: const TextStyle(fontSize: 14),
+        cursorColor: const Color(0xFF000000),
+        backgroundCursorColor: const Color(0xFF333333),
+      ),
+    );
+
+    await tester.pumpWidget(
+      WidgetsApp(
+        color: const Color(0xFF000000),
+        builder: (_, _) => Column(children: [editor(first, a), editor(second, b)]),
+      ),
+    );
+    int activeClient() {
+      final attach = tester.testTextInput.log.lastWhere((call) => call.method == 'TextInput.setClient');
+      return (attach.arguments as List<dynamic>).first as int;
+    }
+    Future<void> selector(int id, String name) async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'flutter/textinput',
+        const JSONMethodCodec().encodeMethodCall(
+          MethodCall('TextInputClient.performSelectors', <dynamic>[id, <String>[name]]),
+        ),
+        (_) {},
+      );
+      await tester.pump();
+    }
+
+    first.requestFocus();
+    await tester.pump();
+    final original = activeClient();
+    expect(first.hasPrimaryFocus, isTrue);
+
+    await selector(original, 'insertTab:');
+    expect(second.hasPrimaryFocus, isTrue);
+    final next = activeClient();
+    expect(next, isNot(original));
+
+    await selector(original, 'insertBacktab:');
+    expect(second.hasPrimaryFocus, isTrue);
+    expect(activeClient(), next);
+
+    await selector(next, 'insertBacktab:');
+    final returned = activeClient();
+    expect(first.hasPrimaryFocus, isTrue);
+    expect(returned, isNot(original));
+    expect(returned, isNot(next));
+    expect(a.text, 'first');
+    expect(b.text, 'second');
+  });
 }

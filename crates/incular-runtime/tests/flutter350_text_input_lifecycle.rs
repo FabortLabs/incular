@@ -701,4 +701,26 @@ fn a_native_selector_batch_cannot_edit_a_different_focus_target() {
     assert!(second_node.has_primary_focus());
     assert_eq!(first.text(), "first");
     assert_eq!(second.text(), "second");
+    let second_client = attached(&mut runtime);
+    assert_ne!(second_client, client);
+
+    assert_eq!(
+        send_selectors(&mut runtime, client, json!(["insertBacktab:"])).unwrap(),
+        Some(false)
+    );
+    frame(&mut runtime);
+    assert!(second_node.has_primary_focus());
+    assert!(runtime.take_text_input_commands().is_empty());
+
+    assert_eq!(
+        send_selectors(&mut runtime, second_client, json!(["insertBacktab:"])).unwrap(),
+        Some(true)
+    );
+    frame(&mut runtime);
+    assert!(first_node.has_primary_focus());
+    let returned = attached(&mut runtime);
+    assert_ne!(returned, client);
+    assert_ne!(returned, second_client);
+    assert_eq!(first.text(), "first");
+    assert_eq!(second.text(), "second");
 }
