@@ -287,3 +287,12 @@ successful relayout. The native point query uses the measured paint
 offset and snaps to the nearest retained caret in the selected visual
 line. The extra native control hits both rows of a centered paragraph.
 The original and all 50 focused painter tests passed.
+
+## TextPainter allocation lifecycle
+
+The pinned creation/disposal registration pairs. Debug builds dispatch
+one painting/TextPainter creation and one disposal with the same
+stable identity. Repeated explicit disposal is rejected and dropping an
+already disposed painter emits nothing. Ordinary Rust scope exit also
+disposes an undropped token once. The original and all 51 focused
+painter tests passed.

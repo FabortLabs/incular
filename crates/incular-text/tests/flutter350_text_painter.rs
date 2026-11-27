@@ -1725,3 +1725,39 @@ fn positions_use_the_painted_x_offset_and_line_vertical_extent() {
         );
     }
 }
+
+#[test]
+#[cfg(debug_assertions)]
+fn painter_creation_and_disposal_dispatch_the_same_stable_identity() {
+    use incular_core::memory::allocations::{MemoryAllocations, ObjectEventKind};
+    use std::{cell::RefCell, rc::Rc};
+
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let observed = events.clone();
+    let _subscription = MemoryAllocations::current().add_listener(move |event| {
+        if event.class_name == "TextPainter" {
+            observed.borrow_mut().push(event);
+        }
+    });
+    let mut explicit = TextPainter::new();
+    assert_eq!(events.borrow().len(), 1);
+    assert_eq!(events.borrow()[0].kind, ObjectEventKind::Created);
+    explicit.dispose().unwrap();
+    assert_eq!(explicit.dispose(), Err(TextPainterError::Disposed));
+    drop(explicit);
+
+    let implicit = TextPainter::default();
+    assert_eq!(events.borrow().len(), 3);
+    drop(implicit);
+
+    let events = events.borrow();
+    assert_eq!(events.len(), 4);
+    for pair in events.chunks_exact(2) {
+        assert_eq!(pair[0].library, "painting");
+        assert_eq!(pair[1].library, "painting");
+        assert_eq!(pair[0].id, pair[1].id);
+        assert_eq!(pair[0].kind, ObjectEventKind::Created);
+        assert_eq!(pair[1].kind, ObjectEventKind::Disposed);
+    }
+    assert_ne!(events[0].id, events[2].id);
+}

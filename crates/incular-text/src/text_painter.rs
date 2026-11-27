@@ -203,7 +203,6 @@ impl MeasuredText {
 /// Measures and positions a text span without building widgets or owning
 /// a renderer. Configuration changes invalidate measurements. Drawing
 /// consumers use the retained layout together with `paint_offset`.
-#[derive(Default)]
 pub struct TextPainter {
     text: Option<TextSpan>,
     plain: String,
@@ -224,6 +223,38 @@ pub struct TextPainter {
     first_invalidation: Option<Arc<Backtrace>>,
     debug_paint_text_layout_boxes: bool,
     disposed: bool,
+    #[cfg(debug_assertions)]
+    allocation: Option<incular_core::memory::allocations::ObjectLifetime>,
+}
+
+impl Default for TextPainter {
+    fn default() -> Self {
+        Self {
+            text: None,
+            plain: String::new(),
+            direction: None,
+            alignment: TextAlign::default(),
+            width_basis: TextWidthBasis::default(),
+            max_lines: None,
+            default_style: TextStyle::default(),
+            scaler: TextScaler::default(),
+            strut_style: None,
+            height_behavior: None,
+            hyphens: Hyphens::default(),
+            has_soft_hyphen: false,
+            placeholder_dimensions: Vec::new(),
+            measured: None,
+            layout_invalidated: false,
+            #[cfg(debug_assertions)]
+            first_invalidation: None,
+            debug_paint_text_layout_boxes: false,
+            disposed: false,
+            #[cfg(debug_assertions)]
+            allocation: Some(incular_core::memory::allocations::ObjectLifetime::new(
+                "painting", "TextPainter",
+            )),
+        }
+    }
 }
 
 impl TextPainter {
@@ -1033,6 +1064,8 @@ impl TextPainter {
             return Err(TextPainterError::Disposed);
         }
         self.disposed = true;
+        #[cfg(debug_assertions)]
+        drop(self.allocation.take());
         self.measured = None;
         #[cfg(debug_assertions)]
         {
