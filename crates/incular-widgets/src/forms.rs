@@ -47,6 +47,8 @@ trait FormEntry {
     fn save_entry(&self);
     /// Restores the field to its declared initial value and clears its error.
     fn reset_entry(&self);
+    /// Clears error presentation and interaction without changing the value.
+    fn clear_error_entry(&self);
     fn error_entry(&self) -> Option<String>;
     fn has_error_entry(&self) -> bool;
 }
@@ -77,6 +79,10 @@ impl FormEntry for FieldState {
 
     fn reset_entry(&self) {
         self.controller.set_text(self.initial_text.clone());
+        self.clear_error_entry();
+    }
+
+    fn clear_error_entry(&self) {
         self.interacted.set(false);
         self.error.replace(None);
     }
@@ -283,6 +289,14 @@ impl Form {
     pub fn reset(&self) {
         for (_, field) in self.live_fields() {
             field.reset_entry();
+        }
+        notify_form_listeners(&self.state);
+    }
+
+    /// Clears errors and interaction flags without changing the values.
+    pub fn clear_error(&self) {
+        for (_, field) in self.live_fields() {
+            field.clear_error_entry();
         }
         notify_form_listeners(&self.state);
     }
@@ -501,6 +515,12 @@ impl FormField {
         self.notify_form();
     }
 
+    /// Clears the displayed error without resetting the text or selection.
+    pub fn clear_error(&self) {
+        self.field.clear_error_entry();
+        self.notify_form();
+    }
+
     fn notify_form(&self) {
         if let Some(form) = self.form.upgrade() {
             notify_form_listeners(&form);
@@ -613,6 +633,7 @@ type GenericSaveCallback<T> = Rc<dyn Fn(T)>;
 pub struct GenericFormField<T: Clone + 'static> {
     initial_value: Option<T>,
     validator: Option<GenericValidator<T>>,
+    force_error_text: Option<String>,
     on_saved: Option<Rc<dyn Fn(T)>>,
     on_reset: Option<Rc<dyn Fn()>>,
     autovalidate_mode: AutovalidateMode,
@@ -631,6 +652,7 @@ impl<T: Clone + 'static> GenericFormField<T> {
         Self {
             initial_value: None,
             validator: None,
+            force_error_text: None,
             on_saved: None,
             on_reset: None,
             autovalidate_mode: AutovalidateMode::Disabled,
@@ -660,6 +682,14 @@ impl<T: Clone + 'static> GenericFormField<T> {
     #[must_use]
     pub fn validator(mut self, validator: impl Fn(Option<&T>) -> Option<String> + 'static) -> Self {
         self.validator = Some(Rc::new(validator));
+        self
+    }
+
+    /// Displays this error and skips the validator until the option is
+    /// removed. Reset can clear the display until the next validation.
+    #[must_use]
+    pub fn force_error_text(mut self, error: impl Into<String>) -> Self {
+        self.force_error_text = Some(error.into());
         self
     }
 
@@ -703,6 +733,7 @@ impl<T: Clone + 'static> From<GenericFormField<T>> for Widget {
         if let Some(validator) = value.validator {
             state.inner.validator.replace(Some(validator));
         }
+        state.inner.update_forced_error(value.force_error_text);
         if let Some(on_saved) = value.on_saved {
             state.inner.on_saved.replace(Some(on_saved));
         }
@@ -1265,6 +1296,7 @@ struct GenericFieldState<T> {
     initial: Option<T>,
     value: RefCell<Option<T>>,
     error: RefCell<Option<String>>,
+    forced_error: RefCell<Option<String>>,
     validator: RefCell<Option<GenericValidator<T>>>,
     on_saved: RefCell<Option<GenericSaveCallback<T>>>,
     on_reset: RefCell<Option<Rc<dyn Fn()>>>,
@@ -1281,17 +1313,26 @@ impl<T: Clone + 'static> GenericFieldState<T> {
     }
 
     fn query_validity(&self, commit_error: bool) -> bool {
-        let value = self.value.borrow().clone();
         run_validation(&self.validating, &self.error, commit_error, || {
+            if let Some(forced) = self.forced_error.borrow().clone() {
+                return Some(forced);
+            }
+            let value = self.value.borrow().clone();
             let validator = self.validator.borrow().clone();
             validator.and_then(|validator| validator(value.as_ref()))
         })
     }
 
+    fn update_forced_error(&self, error: Option<String>) {
+        if *self.forced_error.borrow() != error {
+            self.forced_error.replace(error.clone());
+            self.error.replace(error);
+        }
+    }
+
     fn reset_value(&self, value: Option<T>) {
         self.value.replace(value);
-        self.error.replace(None);
-        self.interacted.set(false);
+        self.clear_error_entry();
         let callback = self.on_reset.borrow().clone();
         if let Some(callback) = callback {
             callback();
@@ -1327,6 +1368,11 @@ impl<T: Clone + 'static> FormEntry for GenericFieldState<T> {
         self.reset_value(self.initial.clone());
     }
 
+    fn clear_error_entry(&self) {
+        self.error.replace(None);
+        self.interacted.set(false);
+    }
+
     fn error_entry(&self) -> Option<String> {
         self.error.borrow().clone()
     }
@@ -1346,6 +1392,7 @@ impl<T: Clone + 'static> FormFieldState<T> {
                 value: RefCell::new(initial.clone()),
                 initial,
                 error: RefCell::new(None),
+                forced_error: RefCell::new(None),
                 validator: RefCell::new(None),
                 on_saved: RefCell::new(None),
                 on_reset: RefCell::new(None),
@@ -1444,6 +1491,12 @@ impl<T: Clone + 'static> FormFieldState<T> {
     /// Replaces the value with `initial` and clears the recorded error.
     pub fn reset(&self, initial: Option<T>) {
         self.inner.reset_value(initial);
+        self.inner.notify_form();
+    }
+
+    /// Clears the displayed error while preserving the value.
+    pub fn clear_error(&self) {
+        self.inner.clear_error_entry();
         self.inner.notify_form();
     }
 }

@@ -21,3 +21,17 @@ The 24 focused native editor and form cases passed. The adjacent
 restoration test's serialized selection expectation includes the
 existing affinity and direction metadata. No Material styling or
 accessibility announcement parity is claimed.
+
+## Forced and explicitly cleared errors
+
+Six further exact pinned registrations passed. At :1375, :1401,
+:1438 and :1471, a forced error shows from first layout or from a
+configuration change, makes form validation fail, and bypasses the
+validator. Reset clears the presentation without removing the force;
+the next explicit validation restores it. The native control also
+removes the forcing option on the same registered field.
+
+At :1975 and :2002, clearing one field or the entire form removes the
+rendered error labels without changing the values. The native fixtures
+read mounted text widgets after each update. All 26 focused native
+form state and error-presentation cases passed.

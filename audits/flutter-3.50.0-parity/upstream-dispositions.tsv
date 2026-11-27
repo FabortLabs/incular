@@ -3822,3 +3822,9 @@ packages/flutter/test/widgets/form_test.dart	330	validateGranularly returns a se
 packages/flutter/test/widgets/form_test.dart	1295	hasInteractedByUser returns false when the input has not changed	paired-match	upstream-form-state.md
 packages/flutter/test/widgets/form_test.dart	1317	hasInteractedByUser returns true after the input has changed	paired-match	upstream-form-state.md
 packages/flutter/test/widgets/form_test.dart	1344	hasInteractedByUser returns false after the field is reset	paired-match	upstream-form-state.md
+packages/flutter/test/widgets/form_test.dart	1375	forceErrorText forces an error state when first init	paired-match	upstream-form-state.md#forced-and-explicitly-cleared-errors
+packages/flutter/test/widgets/form_test.dart	1401	Validate returns false when forceErrorText is non-null even when validator returns a null value	paired-match	upstream-form-state.md#forced-and-explicitly-cleared-errors
+packages/flutter/test/widgets/form_test.dart	1438	forceErrorText forces an error state only after setting it to a non-null value	paired-match	upstream-form-state.md#forced-and-explicitly-cleared-errors
+packages/flutter/test/widgets/form_test.dart	1471	Validator will not be called if forceErrorText is provided	paired-match	upstream-form-state.md#forced-and-explicitly-cleared-errors
+packages/flutter/test/widgets/form_test.dart	1975	clearError() clears error but keeps value	paired-match	upstream-form-state.md#forced-and-explicitly-cleared-errors
+packages/flutter/test/widgets/form_test.dart	2002	clearError() clears all field errors	paired-match	upstream-form-state.md#forced-and-explicitly-cleared-errors
