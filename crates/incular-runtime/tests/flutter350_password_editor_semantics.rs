@@ -32,7 +32,10 @@ fn node(runtime: &Runtime) -> &SemanticNode {
         panic!("expected one editable semantic root")
     };
     let node = tree.node(*id).unwrap();
-    assert_eq!(node.role, SemanticRole::TextField);
+    assert!(matches!(
+        node.role,
+        SemanticRole::TextField | SemanticRole::TextArea
+    ));
     assert_eq!(node.state.input_type, SemanticsInputType::Text);
     assert_eq!(node.state.text_direction, Some(TextDirection::Ltr));
     assert!(node.state.focusable);
@@ -190,4 +193,73 @@ fn a_focused_editor_advertises_only_the_cursor_directions_that_can_move() {
             );
         }
     }
+}
+
+#[test]
+fn a_tap_sets_focused_on_the_same_focusable_text_field_semantics_node() {
+    use incular_core::{InputEvent, Offset, PointerPhase};
+
+    let controller = TextEditingController::new();
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(field(&controller, &focus, false)).unwrap();
+    frame(&mut runtime);
+    let id = node(&runtime).id;
+    assert!(!node(&runtime).state.focused);
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        let _ = runtime.handle_input(InputEvent::Pointer {
+            phase,
+            position: Offset::new(12., 12.),
+        });
+    }
+    frame(&mut runtime);
+    assert!(focus.has_primary_focus());
+    assert_eq!(node(&runtime).id, id);
+    assert!(node(&runtime).state.focused);
+}
+
+#[test]
+fn max_lines_changes_the_multiline_semantics_flag_on_the_retained_editor() {
+    let controller = TextEditingController::new();
+    let build = |lines| {
+        Widget::from(
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .max_lines(lines),
+        )
+    };
+    let mut runtime = Runtime::new(build(Some(1))).unwrap();
+    frame(&mut runtime);
+    let id = node(&runtime).id;
+    assert_eq!(node(&runtime).role, SemanticRole::TextField);
+    assert!(!node(&runtime).state.multiline);
+
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, build(Some(3))).unwrap();
+    frame(&mut runtime);
+    assert_eq!(node(&runtime).id, id);
+    assert_eq!(node(&runtime).role, SemanticRole::TextArea);
+    assert!(node(&runtime).state.multiline);
+    assert!(!node(&runtime).state.focused);
+}
+
+#[test]
+fn an_unfocused_editors_value_updates_in_semantics_when_the_controller_changes() {
+    let controller = TextEditingController::with_text("EditableText content");
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(field(&controller, &focus, false)).unwrap();
+    frame(&mut runtime);
+    let id = node(&runtime).id;
+    assert_eq!(
+        node(&runtime).value.as_deref(),
+        Some("EditableText content")
+    );
+    controller.set_text("Changed the EditableText content");
+    frame(&mut runtime);
+    let updated = node(&runtime);
+    assert_eq!(updated.id, id);
+    assert!(!updated.state.focused);
+    assert_eq!(
+        updated.value.as_deref(),
+        Some("Changed the EditableText content")
+    );
 }

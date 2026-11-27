@@ -3700,3 +3700,6 @@ packages/flutter/test/widgets/editable_text_test.dart	13797	Should not scroll on
 packages/flutter/test/widgets/editable_text_test.dart	1715	selection overlay will update when text grow bigger	partial-match	upstream-editable-selection-paint.md#selection-handle-anchors-after-font-changes
 packages/flutter/test/widgets/editable_text_test.dart	448	when open input connection in didUpdateWidget, should not throw	paired-match	upstream-text-input-reattach.md#reparenting-a-focused-editor-and-swapping-its-controller
 packages/flutter/test/widgets/editable_text_test.dart	10368	input from changing controller	partial-match	upstream-text-input-reattach.md#reparenting-a-focused-editor-and-swapping-its-controller
+packages/flutter/test/widgets/editable_text_test.dart	4729	EditableText identifies as text field (w/ focus) in semantics	paired-match	upstream-raw-editor-semantics.md
+packages/flutter/test/widgets/editable_text_test.dart	4779	EditableText sets multi-line flag in semantics	paired-match	upstream-raw-editor-semantics.md
+packages/flutter/test/widgets/editable_text_test.dart	4844	EditableText includes text as value in semantics	paired-match	upstream-raw-editor-semantics.md
