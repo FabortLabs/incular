@@ -815,7 +815,7 @@ pub(crate) enum WidgetKind {
     },
     ProxyLayout {
         mode: ChildLayoutMode,
-        child: Widget,
+        child: Option<Widget>,
     },
     Fractional {
         width_factor: Option<f32>,

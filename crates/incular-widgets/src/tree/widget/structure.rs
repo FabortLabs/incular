@@ -2421,8 +2421,8 @@ impl WidgetKind {
                 Optional,
                 WidgetChildren::Optional(child.as_ref()),
             ),
-            WidgetKind::ProxyLayout { mode, child } => (
-                match mode {
+            WidgetKind::ProxyLayout { mode, child } => {
+                let widget_type = match mode {
                     ChildLayoutMode::IntrinsicWidth { .. } => WidgetType::IntrinsicWidth,
                     ChildLayoutMode::IntrinsicHeight => WidgetType::IntrinsicHeight,
                     ChildLayoutMode::MaxIntrinsicSize { .. } => WidgetType::MaxIntrinsicSize,
@@ -2431,11 +2431,16 @@ impl WidgetKind {
                     ChildLayoutMode::TableCell(_) => WidgetType::TableCell,
                     ChildLayoutMode::SemanticBlocker => WidgetType::SemanticBlocker,
                     ChildLayoutMode::QuarterTurns(_) => WidgetType::RotatedBox,
-                },
-                Layout,
-                Single,
-                WidgetChildren::Single(child),
-            ),
+                };
+                match (mode, child.as_ref()) {
+                    (
+                        ChildLayoutMode::IntrinsicWidth { .. } | ChildLayoutMode::IntrinsicHeight,
+                        child,
+                    ) => (widget_type, Layout, Optional, WidgetChildren::Optional(child)),
+                    (_, Some(child)) => (widget_type, Layout, Single, WidgetChildren::Single(child)),
+                    (_, child) => (widget_type, Layout, Optional, WidgetChildren::Optional(child)),
+                }
+            }
             WidgetKind::Fractional { child, .. } => (
                 WidgetType::Fractional,
                 Layout,

@@ -584,17 +584,33 @@ pub struct IntrinsicWidth {
     step_width: Option<f32>,
     #[builder(default, setter(transform = |step: f32| intrinsic_step(step)))]
     step_height: Option<f32>,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
+}
+
+impl Default for IntrinsicWidth {
+    fn default() -> Self {
+        Self::empty()
+    }
 }
 
 impl IntrinsicWidth {
+    /// Creates a childless render proxy. Its size uses the incoming minima.
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self {
+            step_width: None,
+            step_height: None,
+            child: None,
+        }
+    }
+
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             step_width: None,
             step_height: None,
-            child: child.into(),
+            child: Some(child.into()),
         }
     }
 
@@ -639,15 +655,29 @@ impl From<IntrinsicWidth> for Widget {
 /// Sizes its child to the child's intrinsic height.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct IntrinsicHeight {
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
+}
+
+impl Default for IntrinsicHeight {
+    fn default() -> Self {
+        Self::empty()
+    }
 }
 
 impl IntrinsicHeight {
+    /// Creates a childless render proxy. Its size uses the incoming minima.
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self {
+            child: None,
+        }
+    }
+
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
-            child: child.into(),
+            child: Some(child.into()),
         }
     }
 }
@@ -724,7 +754,7 @@ impl From<MaxIntrinsicSize> for Widget {
                 maximum: value.maximum,
                 minimum: value.minimum,
             },
-            child: value.child,
+            child: Some(value.child),
         })
     }
 }

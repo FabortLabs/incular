@@ -81,7 +81,7 @@ impl From<TableCell> for Widget {
             matches!(child.kind(), WidgetKind::Text { .. }) && !child.has_explicit_semantics();
         let wrapper = Widget::from_kind(WidgetKind::ProxyLayout {
             mode: ChildLayoutMode::TableCell(value.vertical_alignment),
-            child,
+            child: Some(child),
         })
         .semantics(explicit);
         // A plain Text supplies the cell's label, while interactive

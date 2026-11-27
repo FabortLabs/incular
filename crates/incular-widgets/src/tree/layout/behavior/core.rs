@@ -458,7 +458,9 @@ impl WidgetTree {
             }
             RenderKind::ProxyLayout { mode } => {
                 let Some(&child) = children.first() else {
-                    return Ok((constraints.constrain(Size::ZERO), ChildOffsets::default()));
+                    self.render_live_mut(id, "childless layout proxy remains live")
+                        .baseline = None;
+                    return Ok((constraints.smallest(), ChildOffsets::default()));
                 };
                 match mode {
                     ChildLayoutMode::IntrinsicWidth {

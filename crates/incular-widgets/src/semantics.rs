@@ -1014,7 +1014,7 @@ impl From<Semantics> for Widget {
             // children that contribute implicit semantics such as Text.
             widget = Widget::from_kind(WidgetKind::ProxyLayout {
                 mode: ChildLayoutMode::SemanticAnnotation,
-                child: widget,
+                child: Some(widget),
             });
         }
         if value.block_user_actions {
@@ -1187,9 +1187,11 @@ impl From<BlockSemantics> for Widget {
     fn from(value: BlockSemantics) -> Self {
         let widget = Widget::from_kind(WidgetKind::ProxyLayout {
             mode: ChildLayoutMode::SemanticBlocker,
-            child: value
-                .child
-                .unwrap_or_else(|| crate::SizedBox::shrink().into()),
+            child: Some(
+                value
+                    .child
+                    .unwrap_or_else(|| crate::SizedBox::shrink().into()),
+            ),
         });
         if value.blocking {
             widget.block_semantics()

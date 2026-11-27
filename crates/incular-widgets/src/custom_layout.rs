@@ -1039,7 +1039,7 @@ impl From<IgnoreBaseline> for Widget {
     fn from(value: IgnoreBaseline) -> Self {
         Widget::from_kind(WidgetKind::ProxyLayout {
             mode: ChildLayoutMode::IgnoreBaseline,
-            child: value.child,
+            child: Some(value.child),
         })
     }
 }

@@ -34,7 +34,7 @@ impl From<RotatedBox> for Widget {
         let rotated: Widget = crate::Transform::rotation(radians, value.child).into();
         Widget::from_kind(WidgetKind::ProxyLayout {
             mode: ChildLayoutMode::QuarterTurns(value.quarter_turns),
-            child: rotated,
+            child: Some(rotated),
         })
     }
 }

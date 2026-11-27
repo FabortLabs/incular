@@ -4452,7 +4452,6 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         | WidgetKind::DragTarget { child, .. }
         | WidgetKind::IgnorePointer { child, .. }
         | WidgetKind::AbsorbPointer { child, .. }
-        | WidgetKind::ProxyLayout { child, .. }
         | WidgetKind::RepaintBoundary { child }
         | WidgetKind::AnimationTicker { child, .. }
         | WidgetKind::Opacity { child, .. }
@@ -4478,6 +4477,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         | WidgetKind::ClipRect { child, .. }
         | WidgetKind::ClipRRect { child, .. }
         | WidgetKind::FittedBox { child, .. }
+        | WidgetKind::ProxyLayout { child, .. }
         | WidgetKind::ClipPath { child, .. } => child
             .as_ref()
             .map_or(Some(0.), |child| widget_main_extent_hint(child, axis)),

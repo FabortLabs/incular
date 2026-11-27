@@ -122,6 +122,7 @@ pub(crate) fn install_listener(
         | WidgetKind::Colored { child, .. }
         | WidgetKind::Limited { child, .. }
         | WidgetKind::Fractional { child, .. }
+        | WidgetKind::ProxyLayout { child, .. }
         | WidgetKind::Overflow { child, .. }
         | WidgetKind::SizedOverflow { child, .. }
         | WidgetKind::Unconstrained { child, .. }
@@ -136,7 +137,6 @@ pub(crate) fn install_listener(
         | WidgetKind::Decorated { child, .. }
         | WidgetKind::Padding { child, .. }
         | WidgetKind::Constrained { child, .. }
-        | WidgetKind::ProxyLayout { child, .. }
         | WidgetKind::Baseline { child, .. }
         | WidgetKind::RepaintBoundary { child, .. }
         | WidgetKind::AnimationTicker { child, .. }

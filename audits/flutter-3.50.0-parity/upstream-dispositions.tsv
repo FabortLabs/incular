@@ -3034,3 +3034,5 @@ packages/flutter/test/rendering/intrinsic_width_test.dart	130	Shrink-wrapping wi
 packages/flutter/test/rendering/intrinsic_width_test.dart	170	Shrink-wrapping width (stepped height)	paired-match	upstream-render-intrinsic-constraints.md#stepped-and-shrink-wrapped-proxy-measurements
 packages/flutter/test/rendering/intrinsic_width_test.dart	208	Shrink-wrapping width (stepped everything)	paired-match	upstream-render-intrinsic-constraints.md#stepped-and-shrink-wrapped-proxy-measurements
 packages/flutter/test/rendering/intrinsic_width_test.dart	306	Shrink-wrapping height	paired-match	upstream-render-intrinsic-constraints.md#stepped-and-shrink-wrapped-proxy-measurements
+packages/flutter/test/rendering/intrinsic_width_test.dart	95	IntrinsicWidth without a child	paired-match	upstream-render-intrinsic-constraints.md#childless-intrinsic-proxies
+packages/flutter/test/rendering/intrinsic_width_test.dart	344	IntrinsicHeight without a child	paired-match	upstream-render-intrinsic-constraints.md#childless-intrinsic-proxies

@@ -71,3 +71,16 @@ to make an unbounded cross query visibly different from the finite
 case. Both derived cross extents agree with Flutter; the width proxy
 uses the stepped width rather than the unrounded width for that probe.
 All 24 focused native cases passed.
+
+## Childless intrinsic proxies
+
+Both pinned originals pass with no child in the tree. Under minima
+5×8 and maxima 500×800, both proxies lay out at 5×8, but all four
+intrinsic queries return zero at 0, 10, 80, and infinite cross extents.
+The native descriptors support an optional child without a dummy
+widget. An extra retained regression removes and restores a real
+baselined child: the same render object clears the stale baseline
+when empty and reports a baseline again after reattachment. All
+27 focused native intrinsic, table, structure and reorder tests
+passed. The other single-child layout descriptors keep their
+original child classification.
