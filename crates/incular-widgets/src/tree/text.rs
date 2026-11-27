@@ -3,6 +3,7 @@
 use super::*;
 use crate::selection::{
     SelectedContentRange, SelectionGeometry, SelectionHandleType, SelectionPoint, SelectionStatus,
+    TextSelectionPoint,
 };
 use incular_text::{LineBoundary, TextGeometry};
 
@@ -2042,6 +2043,62 @@ impl WidgetTree {
             WidgetKind::TextField(spec) => spec.selection_handles.clone(),
             _ => None,
         }
+    }
+
+    /// Returns a laid-out editable's selection endpoints in local
+    /// coordinates (Flutter `getEndpointsForSelection`). The selection uses
+    /// UTF-8 byte offsets. A caret or zero-width range gives one point with
+    /// no direction; visible selection boxes give two directional edges.
+    #[must_use]
+    pub fn editable_selection_endpoints(
+        &self,
+        id: ElementId,
+        selection: TextSelection,
+        affinity: incular_text::TextAffinity,
+    ) -> Option<Vec<TextSelectionPoint>> {
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let empty = field.controller.with_value(|value| {
+            (value.text.is_char_boundary(selection.start())
+                && value.text.is_char_boundary(selection.end()))
+                .then_some(value.text.is_empty())
+        })?;
+        let layout = node.field_layout()?;
+        let state = node.text_field_state()?;
+        let scroll = field.scroll_offset(state.scroll_x, state.scroll_y);
+        let padding = field.content_padding;
+        let preferred_height = layout.metrics().line_height;
+        let top =
+            text_field_content_top(field.multiline, node.size.height, preferred_height, padding);
+        let local = Offset::new(padding.left - scroll.x, top - scroll.y);
+        if !selection.is_collapsed() && field.controller.preedit().is_none() {
+            let mask = field.obscure_text.then_some(field.obscuring_character);
+            let start = text_field_display_offset(&field.controller, selection.start(), mask);
+            let end = text_field_display_offset(&field.controller, selection.end(), mask);
+            let width = layout
+                .metrics()
+                .size
+                .width
+                .max((node.size.width - padding.horizontal()).max(0.));
+            let edge = |first| {
+                let (x, bottom, _, direction) = editor_selection_edge(&layout, start, end, first)?;
+                Some(TextSelectionPoint::new(
+                    local + Offset::new(x.clamp(0., width), bottom),
+                    Some(direction),
+                ))
+            };
+            if let (Some(start), Some(end)) = (edge(true), edge(false)) {
+                return Some(vec![start, end]);
+            }
+        }
+        let (x, y, _) = text_field_caret_geometry(&layout, selection.extent, affinity, empty, field);
+        Some(vec![TextSelectionPoint::new(
+            local + Offset::new(x, y + preferred_height),
+            None,
+        )])
     }
 
     /// The handles of a field's selection at its current layout (Flutter

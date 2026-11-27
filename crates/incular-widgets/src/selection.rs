@@ -7,7 +7,7 @@
 //! means a selection listener can observe revisions without coupling the
 //! renderer-neutral API to a particular text engine or backend.
 
-use incular_core::{Offset, Rect};
+use incular_core::{Offset, Rect, TextDirection};
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -83,6 +83,31 @@ pub struct SelectionPoint {
     pub local_position: Offset,
     pub line_height: f32,
     pub handle_type: SelectionHandleType,
+}
+
+/// A laid-out editable's local selection edge. A caret or a selection
+/// without visible glyph boxes has no directional edge.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextSelectionPoint {
+    pub point: Offset,
+    pub direction: Option<TextDirection>,
+}
+
+impl TextSelectionPoint {
+    #[must_use]
+    pub const fn new(point: Offset, direction: Option<TextDirection>) -> Self {
+        Self { point, direction }
+    }
+}
+
+impl std::hash::Hash for TextSelectionPoint {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for coordinate in [self.point.x, self.point.y] {
+            // Positive and negative zero compare equal as coordinates.
+            state.write_u32(if coordinate == 0. { 0 } else { coordinate.to_bits() });
+        }
+        std::hash::Hash::hash(&self.direction, state);
+    }
 }
 
 /// Geometry of a retained selection container.

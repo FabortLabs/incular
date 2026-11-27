@@ -28,6 +28,9 @@ a version and date when publishing.
 
 ### Added
 
+- Laid-out editables can report local selection endpoints, including the
+  direction of each visible edge and a caret fallback for invisible text.
+
 - Preview host operations now wait for the connection, coalesce bursts,
   and keep a pending restart ahead of ordinary reloads.
 

@@ -425,7 +425,7 @@ pub use scrolling::{
 pub use selection::{
     SelectableChildPolicy, SelectedContent, SelectedContentRange, SelectionAreaController,
     SelectionContainerDelegate, SelectionDetails, SelectionGeometry, SelectionHandleType,
-    SelectionListenerNotifier, SelectionPoint, SelectionStatus,
+    SelectionListenerNotifier, SelectionPoint, SelectionStatus, TextSelectionPoint,
 };
 pub use selection_container::SelectionContainer;
 pub use selection_listener::SelectionListener;
