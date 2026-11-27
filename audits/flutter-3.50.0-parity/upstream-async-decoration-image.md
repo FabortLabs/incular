@@ -64,3 +64,20 @@ The native check proves the actual displayed bitmap changes only when
 the current size's stream completes. A completion for a superseded
 width cannot overwrite the current image. All 27 focused native cases
 passed. The authored comparison adds no original-registration credit.
+
+## Image clipping after async completion
+
+Pinned painting/decoration_test.dart:250 already pairs in the decoration
+image paint audit. This adds a provider-backed runtime control. Before decoding there is no image draw. Completion requests one frame. A circular box or a
+box rounded by 16 px emits a clip path before the newly loaded image
+and restores it afterwards; the ordinary rectangle emits no clip
+at all. The runtime test checks the decoded image identity and exact
+command order. A separate native control checks that an already
+resolved decoration paints immediately without another frame request.
+Two additional original listener cases now pair against actual
+zero-size decorations. A synchronously ready stream resolves once
+at the zero paint size and requests no further frame. A deferred
+stream at that same size requests one frame only after completion.
+Both emit no image draws, so the listener distinction is not an
+artifact of accidentally painting visible content. All nine focused
+runtime tests passed.

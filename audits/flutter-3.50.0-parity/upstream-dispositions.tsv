@@ -3165,3 +3165,5 @@ packages/flutter/test/painting/text_painter_test.dart	123	TextPainter caret test
 packages/flutter/test/painting/text_painter_rtl_test.dart	13	TextPainter - basic words	paired-match	upstream-text-painter.md#bidi-hard-boundaries-and-forced-wraps
 packages/flutter/test/painting/text_painter_rtl_test.dart	306	TextPainter - forced line-wrapping with bidi	paired-match	upstream-text-painter.md#bidi-hard-boundaries-and-forced-wraps
 packages/flutter/test/painting/text_painter_rtl_test.dart	729	TextPainter - empty text baseline	paired-match	upstream-text-painter.md#bidi-hard-boundaries-and-forced-wraps
+packages/flutter/test/painting/decoration_test.dart	170	BoxDecorationImageListenerSync	paired-match	upstream-async-decoration-image.md#image-clipping-after-async-completion
+packages/flutter/test/painting/decoration_test.dart	189	BoxDecorationImageListenerAsync	paired-match	upstream-async-decoration-image.md#image-clipping-after-async-completion

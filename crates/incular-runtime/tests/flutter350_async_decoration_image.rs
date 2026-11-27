@@ -241,3 +241,98 @@ fn a_loaded_decoration_image_is_clipped_by_circles_and_rounded_boxes_only() {
         assert!(!runtime.frame_requested());
     }
 }
+
+#[test]
+fn a_synchronously_ready_decoration_does_not_request_another_frame() {
+    let completed = pix();
+    let provider = Deferred {
+        stream: ImageStream::ready(completed.clone()),
+        resolutions: Rc::default(),
+    };
+    let mut runtime = Runtime::new(Stack::new([decoration(provider)]).into()).unwrap();
+    let list = frame(&mut runtime);
+    assert_eq!(draws(&list).len(), 1);
+    assert_eq!(draws(&list)[0].0, completed.id().0);
+    assert!(!runtime.frame_requested());
+}
+
+#[test]
+fn newly_loaded_decoration_images_clip_only_when_their_shape_requires_it() {
+    use incular_widgets::{BorderRadius, BoxShape, Radius};
+    for (shape, radius, expected) in [
+        (BoxShape::Rectangle, None, vec!["image"]),
+        (BoxShape::Circle, None, vec!["path", "image", "restore"]),
+        (
+            BoxShape::Rectangle,
+            Some(BorderRadius::all(Radius::circular(16.))),
+            vec!["path", "image", "restore"],
+        ),
+    ] {
+        let (provider, completer) = pending();
+        let mut decoration = BoxDecoration::new()
+            .shape(shape)
+            .image(DecorationImage::from_provider(provider));
+        decoration.border_radius = radius;
+        let widget =
+            DecoratedBox::new(SizedBox::new().width(100.).height(100.)).decoration(decoration);
+        let mut runtime = Runtime::new(Stack::new([widget]).into()).unwrap();
+        assert!(draws(&frame(&mut runtime)).is_empty());
+        assert!(!runtime.frame_requested());
+        let completed = pix();
+        assert!(completer.complete(completed.clone()));
+        assert!(runtime.frame_requested());
+        let list = frame(&mut runtime);
+        let operations: Vec<_> = list
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::PushClipRRect { .. } => Some("rounded"),
+                PaintCommand::PushClipOval { .. } => Some("oval"),
+                PaintCommand::PushClipPath { .. } => Some("path"),
+                PaintCommand::PushClip { .. } => Some("rectangle"),
+                PaintCommand::Image { image, .. } => {
+                    assert_eq!(image.id(), completed.id());
+                    Some("image")
+                }
+                PaintCommand::PopClip => Some("restore"),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(operations, expected, "{shape:?} with {radius:?}");
+    }
+}
+
+fn zero_size_decoration(provider: Deferred) -> Widget {
+    DecoratedBox::new(SizedBox::new().width(0.).height(0.))
+        .decoration(BoxDecoration::new().image(DecorationImage::from_provider(provider)))
+        .into()
+}
+
+#[test]
+fn a_ready_provider_does_not_notify_during_zero_size_decoration_paint() {
+    let provider = Deferred {
+        stream: ImageStream::ready(pix()),
+        resolutions: Rc::default(),
+    };
+    let resolutions = provider.resolutions.clone();
+    let mut runtime = Runtime::new(Stack::new([zero_size_decoration(provider)]).into()).unwrap();
+    assert!(draws(&frame(&mut runtime)).is_empty());
+    assert!(!runtime.frame_requested());
+    assert_eq!(resolutions.borrow().len(), 1);
+    assert_eq!(resolutions.borrow()[0].size, Some(Size::ZERO));
+}
+
+#[test]
+fn an_unfinished_zero_size_decoration_notifies_only_after_completion() {
+    let (provider, completion) = pending();
+    let resolutions = provider.resolutions.clone();
+    let mut runtime = Runtime::new(Stack::new([zero_size_decoration(provider)]).into()).unwrap();
+    assert!(draws(&frame(&mut runtime)).is_empty());
+    assert!(!runtime.frame_requested());
+    assert_eq!(resolutions.borrow().len(), 1);
+    assert_eq!(resolutions.borrow()[0].size, Some(Size::ZERO));
+    assert!(completion.complete(pix()));
+    assert!(runtime.frame_requested());
+    assert!(draws(&frame(&mut runtime)).is_empty());
+    assert!(!runtime.frame_requested());
+}
