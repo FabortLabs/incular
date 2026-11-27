@@ -362,3 +362,18 @@ paint coverage. Painting either direction produces exactly one edge
 with an unchanged physical top or bottom. The physical Border value
 has the same keyed-edge behavior. All 19 focused border tests passed;
 the numeric hash itself is Rust-specific.
+
+## Border-side diagnostics
+
+Exact pinned `painting/border_side_test.dart:119` passed. A side whose
+paint width is 1.2345 now describes it as `1.2`, together with the
+exact sRGB channel proportions. Both width and stroke alignment follow
+Flutter's diagnostic precision override, including valid defaults and
+half-way rounding. The authored reference pairs default one-place
+formatting with the two-significant-digit override. This is display
+only: physical stroke geometry keeps its original width and alignment.
+Twelve focused native border tests passed.
+
+The pinned :105 identity case also ran. Native lerp preserves the
+equal value, but a copyable Rust border side has no Dart wrapper-object
+identity, so it stays partial.

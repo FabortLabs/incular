@@ -75,3 +75,33 @@ fn equally_aligned_no_stroke_sides_keep_the_interpolated_layout_insets() {
     assert_eq!(middle, BorderSide::new(OPAQUE, 4., BorderStyle::None));
     assert_eq!(middle.stroke_inset(), 4.);
 }
+
+#[test]
+fn border_side_display_uses_the_diagnostic_width_precision() {
+    let side = BorderSide::solid(Color::rgba(0xaa, 0xbb, 0xcc, 0xff), 1.2345);
+    assert_eq!(
+        side.to_string(),
+        "BorderSide(color: Color(alpha: 1.0000, red: 0.6667, green: 0.7333, blue: 0.8000, colorSpace: ColorSpace.sRGB), width: 1.2)"
+    );
+    let default_side = BorderSide::solid(Color::BLACK, 1.);
+    assert_eq!(default_side.to_string(), "BorderSide()");
+    assert_eq!(default_side.lerp(&default_side, 0.5), default_side);
+}
+
+#[test]
+fn border_side_formats_width_and_alignment_with_the_current_debug_precision() {
+    use incular_core::set_debug_double_precision;
+
+    struct Restore(Option<u8>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            set_debug_double_precision(self.0);
+        }
+    }
+
+    let _restore = Restore(set_debug_double_precision(Some(2)));
+    let side = BorderSide { stroke_align: 0.125, ..BorderSide::solid(Color::BLACK, 1.25) };
+    assert_eq!(side.to_string(), "BorderSide(width: 1.3, strokeAlign: 0.13)");
+    set_debug_double_precision(None);
+    assert_eq!(side.to_string(), "BorderSide(width: 1.3, strokeAlign: 0.1)");
+}

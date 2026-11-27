@@ -2727,3 +2727,5 @@ packages/flutter_tools/test/commands.shard/hermetic/widget_preview/preview_code_
 packages/flutter/test/semantics/semantics_binding_test.dart	93	SemanticsHandle dispatches memory events	paired-match	upstream-semantics-binding.md#unknown-geometry-targets-and-handle-allocation-events
 packages/flutter/test/semantics/semantics_binding_test.dart	103	getRectOfSemanticsNodeInViewCoordinates asserts for unknown views and nodes	paired-match	upstream-semantics-binding.md#unknown-geometry-targets-and-handle-allocation-events
 packages/flutter/test/painting/text_span_test.dart	433	TextSpan can compute StringAttributes	paired-match	upstream-inline-text-spans.md#inherited-pronunciation-and-combined-utf-16-ranges
+packages/flutter/test/painting/border_side_test.dart	105	BorderSide - lerp identical a,b	partial-match	upstream-border-constraints-formatters.md#border-side-diagnostics
+packages/flutter/test/painting/border_side_test.dart	119	BorderSide - toString	paired-match	upstream-border-constraints-formatters.md#border-side-diagnostics

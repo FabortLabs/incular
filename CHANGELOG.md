@@ -419,6 +419,8 @@ a version and date when publishing.
 
 ### Fixed
 
+- Border-side diagnostics honor the current Flutter-compatible precision.
+
 - Due long-tap callbacks run by deadline and then contact registration order.
 
 - Star borders morph from and to circle borders instead of switching abruptly.

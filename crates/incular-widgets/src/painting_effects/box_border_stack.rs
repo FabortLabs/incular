@@ -324,13 +324,7 @@ impl fmt::Display for BorderSide {
         let side = *self;
         f.write_str("BorderSide(")?;
         let mut separated = false;
-        let scalar = |value: f32| {
-            let mut text = value.to_string();
-            if value.is_finite() && !text.contains('.') && !text.contains('e') {
-                text.push_str(".0");
-            }
-            text
-        };
+        let scalar = |value: f32| incular_core::debug_format_double(Some(f64::from(value)));
         if side.color != Color::BLACK {
             let c = side.color;
             let fraction = |channel| f64::from(channel) / 255.;
