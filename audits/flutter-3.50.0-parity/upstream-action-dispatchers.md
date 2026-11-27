@@ -28,3 +28,16 @@ checks intent, action, handler order and dispatcher identity.
 All 25 focused runtime tests and the renderer-neutral facade check
 passed. This batch verifies programmatic action dispatch; separate
 shortcut-bound action paths are not counted here.
+
+## Typed lookup and optional callbacks
+
+Four exact registrations passed. Looking up a typed action returns
+the registered action state across repeated builds without invoking
+it. Optional lookup gives none for an absent mapping; required lookup
+returns a typed Rust error instead of a Dart assertion.
+
+The callback factory forwards the original typed command to the
+registered action and returns no callback for a missing or disabled
+action. The native fixture also disables the same action after
+obtaining its callback, then verifies that the callback rechecks
+its enabled state. All 21 focused native runtime tests passed.

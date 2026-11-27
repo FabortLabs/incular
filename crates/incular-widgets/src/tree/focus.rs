@@ -984,6 +984,57 @@ impl WidgetTree {
         self.route_keyboard_with_lock_modes(focused, event, lock_modes) == KeyEventResult::Handled
     }
 
+    /// Reads the nearest mapping for an intent without invoking it.
+    #[must_use]
+    pub fn maybe_find_action_at<C: incular_gestures::CommandId>(
+        &self,
+        element: ElementId,
+        intent: &incular_gestures::Intent<C>,
+    ) -> Option<incular_gestures::Action<C>> {
+        let mut current = Some(element);
+        while let Some(id) = current {
+            let entry = self.elements.get(id.0)?;
+            if let WidgetKind::Gesture { callbacks, .. } = entry.widget.kind()
+                && let Some(action) = callbacks.action_scope.as_ref().and_then(|s| s.action(intent))
+            {
+                return Some(action);
+            }
+            current = entry.parent;
+        }
+        None
+    }
+
+    /// Reads a required action mapping; an absent mapping is a typed error.
+    pub fn find_action_at<C: incular_gestures::CommandId>(
+        &self,
+        element: ElementId,
+        intent: &incular_gestures::Intent<C>,
+    ) -> Result<incular_gestures::Action<C>, crate::ActionLookupError> {
+        self.maybe_find_action_at(element, intent).ok_or(crate::ActionLookupError {
+            command_type: std::any::type_name::<C>(),
+        })
+    }
+
+    /// Captures a currently enabled action as a callback, using the caller's
+    /// nearest dispatcher. An action that becomes disabled is not invoked.
+    #[must_use]
+    pub fn action_handler_at<C: incular_gestures::CommandId>(
+        &self,
+        element: ElementId,
+        intent: &incular_gestures::Intent<C>,
+    ) -> Option<Rc<dyn Fn()>> {
+        let action = self.maybe_find_action_at(element, intent)?;
+        if !action.is_action_enabled(intent) {
+            return None;
+        }
+        let intent = intent.clone();
+        let dispatcher = self.action_dispatcher_at(element);
+        Some(Rc::new(move || {
+            let _ = incular_gestures::ActionDispatcher::new()
+                .invoke_action_with(&action, &intent, dispatcher.clone());
+        }))
+    }
+
     /// Finds the nearest explicit action dispatcher for this element.
     #[must_use]
     pub fn action_dispatcher_at(

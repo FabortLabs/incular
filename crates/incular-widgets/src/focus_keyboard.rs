@@ -16,6 +16,13 @@ pub use incular_gestures::{
 
 use crate::{Widget, WidgetKind};
 
+/// A required action lookup found no mapping in any enclosing scope.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("no enclosing action maps command type {command_type}")]
+pub struct ActionLookupError {
+    pub command_type: &'static str,
+}
+
 /// Supplies an inherited command-to-action mapping without claiming focus.
 ///
 /// Commands resolved from its descendants use the nearest mapping. An

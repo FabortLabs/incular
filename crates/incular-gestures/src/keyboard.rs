@@ -709,51 +709,89 @@ impl ActionDispatchInvocation<'_> {
 pub type ScopedActionDispatcher = dyn for<'a> Fn(ActionDispatchInvocation<'a>) -> ActionResult;
 
 type DispatcherLookup<'a> = dyn Fn() -> Option<Rc<ScopedActionDispatcher>> + 'a;
-type ErasedActionInvoker = dyn Fn(&ErasedIntent, &DispatcherLookup<'_>) -> Option<ActionResult>;
+
+fn dispatch_bound_action<C: CommandId>(
+    action: &Action<C>,
+    intent: &Intent<C>,
+    erased: &ErasedIntent,
+    dispatcher: &DispatcherLookup<'_>,
+) -> ActionResult {
+    if !action.is_action_enabled(intent) {
+        return ActionResult::Ignored;
+    }
+    let invoke = || action.invoke_enabled(intent);
+    if let Some(dispatcher) = dispatcher() {
+        dispatcher(ActionDispatchInvocation { intent: erased, action, invoke: &invoke })
+    } else {
+        invoke()
+    }
+}
+
+impl ActionDispatcher {
+    /// Invokes an enabled action through a supplied scope dispatcher.
+    #[must_use]
+    pub fn invoke_action_with<C: CommandId>(
+        &self,
+        action: &Action<C>,
+        intent: &Intent<C>,
+        dispatcher: Option<Rc<ScopedActionDispatcher>>,
+    ) -> ActionResult {
+        if dispatcher.is_none() {
+            return self.invoke_action(action, intent);
+        }
+        let erased = ErasedIntent::from_intent(intent);
+        dispatch_bound_action(action, intent, &erased, &|| dispatcher.clone())
+    }
+}
+
+trait ActionRegistry {
+    fn action_for(&self, command: &dyn std::any::Any) -> Option<&dyn std::any::Any>;
+    fn invoke(&self, erased: &ErasedIntent, dispatcher: &DispatcherLookup<'_>) -> Option<ActionResult>;
+}
+
+impl<C: CommandId> ActionRegistry for Actions<C> {
+    fn action_for(&self, command: &dyn std::any::Any) -> Option<&dyn std::any::Any> {
+        self.action_ref(command.downcast_ref::<C>()?)
+            .map(|action| action as &dyn std::any::Any)
+    }
+
+    fn invoke(&self, erased: &ErasedIntent, dispatcher: &DispatcherLookup<'_>) -> Option<ActionResult> {
+        let command = erased.downcast_command::<C>()?;
+        let action = self.action_ref(command)?;
+        let intent: Intent<C> = Intent::new(command.clone());
+        Some(dispatch_bound_action(action, &intent, erased, dispatcher))
+    }
+}
 
 /// Type-erased mapping used by the retained widget tree.
 pub struct ErasedActionScope {
-    invoker: Rc<ErasedActionInvoker>,
+    registry: Rc<dyn ActionRegistry>,
     dispatcher: Option<Rc<ScopedActionDispatcher>>,
 }
 
 impl ErasedActionScope {
     #[must_use]
     pub fn from_actions<C: CommandId>(actions: Rc<Actions<C>>) -> Rc<Self> {
-        Rc::new(Self {
-            invoker: Rc::new(move |erased, dispatcher| {
-                let command = erased.downcast_command::<C>()?;
-                let action = actions.action_ref(command)?;
-                let intent = Intent::new(command.clone());
-                if !action.is_action_enabled(&intent) {
-                    return Some(ActionResult::Ignored);
-                }
-                let invoke = || action.invoke_enabled(&intent);
-                Some(if let Some(dispatcher) = dispatcher() {
-                    dispatcher(ActionDispatchInvocation {
-                        intent: erased,
-                        action,
-                        invoke: &invoke,
-                    })
-                } else {
-                    invoke()
-                })
-            }),
-            dispatcher: None,
-        })
+        Rc::new(Self { registry: actions, dispatcher: None })
     }
 
     #[must_use]
     pub fn with_dispatcher(&self, dispatcher: Rc<ScopedActionDispatcher>) -> Rc<Self> {
         Rc::new(Self {
             dispatcher: Some(dispatcher),
-            invoker: self.invoker.clone(),
+            registry: self.registry.clone(),
         })
     }
 
     #[must_use]
     pub fn dispatcher(&self) -> Option<Rc<ScopedActionDispatcher>> {
         self.dispatcher.clone()
+    }
+
+    /// Reads a typed mapping without invoking the action or dispatcher.
+    #[must_use]
+    pub fn action<C: CommandId>(&self, intent: &Intent<C>) -> Option<Action<C>> {
+        self.registry.action_for(intent.command())?.downcast_ref::<Action<C>>().cloned()
     }
 
     #[must_use]
@@ -768,7 +806,7 @@ impl ErasedActionScope {
         intent: &ErasedIntent,
         find: impl Fn() -> Option<Rc<ScopedActionDispatcher>>,
     ) -> Option<ActionResult> {
-        (self.invoker)(intent, &find)
+        self.registry.invoke(intent, &find)
     }
 }
 
