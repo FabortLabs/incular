@@ -3305,3 +3305,5 @@ packages/flutter/test/widgets/text_semantics_test.dart	177	GIVEN a Text widget w
 packages/flutter/test/widgets/text_semantics_test.dart	196	GIVEN a Text with a locale is within a SelectionContainer WHEN semantics are built THEN the SemanticsNode contains the correct language tag	paired-match	upstream-text-semantics.md
 packages/flutter/test/widgets/text_semantics_test.dart	231	Text with semanticsIdentifier creates its own semantic node	paired-match	upstream-text-semantics.md
 packages/flutter/test/widgets/text_semantics_test.dart	252	Text with semanticsIdentifier is not absorbed by route-scoping ancestor	paired-match	upstream-text-semantics.md
+packages/flutter/test/widgets/shader_mask_test.dart	23	Can be constructed	paired-match	upstream-widget-shader-mask-offset.md
+packages/flutter/test/widgets/shader_mask_test.dart	28	Bounds rect includes offset	paired-match	upstream-widget-shader-mask-offset.md
