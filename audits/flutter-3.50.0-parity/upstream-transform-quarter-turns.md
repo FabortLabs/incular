@@ -67,3 +67,22 @@ logical-pixel tolerance for the f32 scale representation. The two
 constructors are separate in Rust, so the invalid option combinations
 tested in Dart are not claimed as runtime assertion equivalents.
 Eighteen focused transform tests and two focus geometry tests passed.
+
+### Filtered transforms in the retained renderer
+
+Five pinned `widgets/transform_test.dart` registrations (560, 592, 624,
+656, 693) passed. Four have complete native counterparts in
+`flutter350_transform_filters`. Each fixture uses the same viewport and
+one low-quality linear matrix resampling stage. The tests project the
+native local matrix through its published stage transform to compare
+the effective world-space matrix: (25, 25) translation; 3.14159
+centered scale; 45-degree rotation; and the same rotation around the
+world pivot when the child is offset inside Center. They verify
+coefficients against the pinned numbers and count actual resampling
+commands rather than generic transform wrappers.
+
+Case 693 remains partial: removing and restoring sampling drops and
+reinstates the native stage, but Rust's Transform takes a required child
+and the Dart absent-child intermediate state was not compared. These
+fixtures verify retained command semantics with the wgpu renderer
+unchanged, not an external filter golden or native GPU pixels.
