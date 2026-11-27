@@ -3349,3 +3349,5 @@ packages/flutter/test/widgets/focus_traversal_test.dart	2985	Focus traversal wit
 packages/flutter/test/widgets/focus_traversal_test.dart	3253	Focus traversal does not break when no focusable is available on a WidgetsApp	paired-match	upstream-focus-key-scroll.md#empty-focus-tree
 packages/flutter/test/widgets/focus_traversal_test.dart	3272	Focus traversal does not throw when no focusable is available in a group	paired-match	upstream-focus-key-scroll.md#empty-focus-tree
 packages/flutter/test/widgets/focus_traversal_test.dart	3286	Focus traversal does not break when no focusable is available on a WidgetsApp	paired-match	upstream-focus-key-scroll.md#empty-focus-tree
+packages/flutter/test/widgets/rich_text_test.dart	169	WidgetSpan calculate correct intrinsic heights	paired-match	upstream-rich-text-layout.md
+packages/flutter/test/widgets/rich_text_test.dart	313	RichText does not crash at zero area	paired-match	upstream-rich-text-layout.md

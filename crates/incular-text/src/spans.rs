@@ -20,12 +20,12 @@ pub struct WidgetSpan {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum WidgetSpanAlignment {
-    #[default]
     Baseline,
     AboveBaseline,
     BelowBaseline,
     Middle,
     TextTop,
+    #[default]
     TextBottom,
 }
 
@@ -35,7 +35,8 @@ impl WidgetSpan {
         Self {
             id,
             size: Size::ZERO,
-            alignment: WidgetSpanAlignment::Baseline,
+            // Flutter PlaceholderSpan defaults to bottom alignment.
+            alignment: WidgetSpanAlignment::TextBottom,
         }
     }
 
@@ -44,7 +45,7 @@ impl WidgetSpan {
         Self {
             id,
             size,
-            alignment: WidgetSpanAlignment::Baseline,
+            alignment: WidgetSpanAlignment::TextBottom,
         }
     }
 

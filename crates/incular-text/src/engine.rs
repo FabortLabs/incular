@@ -8,7 +8,7 @@ use super::{
     FontFamily, FontStyle, LineHeight, TextAffinity, TextAlign, TextHeightBehavior,
     TextLeadingDistribution, TextOverflow, TextStyle,
 };
-use crate::spans::StyledTextRun;
+use crate::spans::{StyledTextRun, WidgetSpanAlignment};
 use icu_segmenter::GraphemeClusterSegmenter;
 pub use incular_assets::FontId;
 use incular_assets::{FontBytes, FontHandle};
@@ -26,7 +26,8 @@ mod pool;
 pub use document::TextDocumentLayout;
 pub use inline::{TextPlaceholder, TextPlaceholderBox, TextStrut};
 use inline::{
-    apply_strut, center_middle_boxes, inline_box, placeholders_in, shaped_placeholder_text,
+    PLACEHOLDER_CHAR, apply_strut, center_middle_boxes, inline_box, placeholders_in,
+    shaped_placeholder_text,
 };
 use pool::{DEFAULT_CACHE_BYTE_BUDGET, LAYOUT_CACHE_CAPACITY, LayoutPool};
 
@@ -1808,6 +1809,9 @@ impl TextEngine {
                 style.leading_distribution,
             );
         }
+        if !translated.placeholders.is_empty() {
+            fit_bottom_aligned_placeholder_lines(&layout, text, &self.placeholders, &mut boxes);
+        }
         if let Some(strut) = strut {
             apply_strut(&mut boxes, strut);
         }
@@ -2650,6 +2654,49 @@ fn line_boxes(layout: &Layout<()>) -> Vec<LineBox> {
             }
         })
         .collect()
+}
+
+/// A line consisting entirely of bottom-aligned inline boxes gets its
+/// height from those boxes, not from the font that shaped the synthetic
+/// zero-width characters (there is no such glyph in Flutter's paragraph).
+fn fit_bottom_aligned_placeholder_lines(
+    layout: &Layout<()>,
+    text: &str,
+    placeholders: &[TextPlaceholder],
+    boxes: &mut [LineBox],
+) {
+    for (line, bounds) in layout.lines().zip(boxes) {
+        let Some(source_text) = text.get(line.text_range()) else {
+            continue;
+        };
+        let source_text = source_text.trim_end_matches(['\r', '\n']);
+        if source_text.is_empty() || !source_text.chars().all(|c| c == PLACEHOLDER_CHAR) {
+            continue;
+        }
+        let mut top = f32::INFINITY;
+        let mut bottom = f32::NEG_INFINITY;
+        let mut count = 0;
+        for item in line.items() {
+            let PositionedLayoutItem::InlineBox(item) = item else {
+                continue;
+            };
+            if !placeholders.get(item.id as usize)
+                .is_some_and(|source| source.alignment == WidgetSpanAlignment::TextBottom)
+            {
+                break;
+            }
+            top = top.min(item.y);
+            bottom = bottom.max(item.y + item.height);
+            count += 1;
+        }
+        if count * PLACEHOLDER_CHAR.len_utf8() == source_text.len() {
+            bounds.top = top;
+            bounds.bottom = bottom;
+            // Ignore the synthetic character's height adjustment without
+            // moving the inline boxes relative to Parley's placement anchor.
+            bounds.baseline = line.metrics().baseline;
+        }
+    }
 }
 
 /// Stacks the line boxes at whole-pixel heights while each baseline keeps
