@@ -85,3 +85,16 @@ platform surface answers true at either position in the path. An
 additional check keeps a transparent platform surface out of the
 answer. A query forwards no pointer command. Five focused and nine
 adjacent runtime tests passed.
+
+## Failed host dispatch
+
+The pinned :687 “Error handling” registration passed. In Rust the
+host pre-dispatch callback uses a typed failure instead of throwing.
+A failure on the first down reports the failed event and packet
+context exactly once, without calling the handler on the following up
+or notifying mounted listeners. When a later packet pumps the queue,
+the remaining valid samples resume in arrival order ahead of new
+input. The failed down is not replayed and its orphan up reaches no
+widget. Shutdown discards deferred packets and cancellation requests.
+Ten focused and five adjacent runtime tests passed. This boundary is
+distinct from a widget callback throwing after delivery has started.

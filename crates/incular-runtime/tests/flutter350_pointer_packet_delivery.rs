@@ -330,3 +330,103 @@ fn packet_pan_zoom_retains_its_raw_listener_path_and_normalizes_pan_and_delta() 
             .all(|sample| sample.event.device == 25 && sample.event.pointer == 11)
     );
 }
+
+#[test]
+fn a_failed_packet_handler_reports_only_the_failed_down_and_stops_immediately() {
+    use incular_widgets::internal::ConvertedPointerKind;
+
+    let mut f = Fixture::new();
+    let start = PointerData {
+        view_id: VIEW,
+        pointer: 7,
+        device: 24,
+        physical_position: Offset::new(25., 50.),
+        ..PointerData::new(Data::Down, f.now)
+    };
+    let release = PointerData {
+        change: Data::Up,
+        ..start
+    };
+    let mut calls = 0;
+    let failure = f
+        .runtime
+        .handle_pointer_data_packet_checked(VIEW, RATIO, [start, release], |_| {
+            calls += 1;
+            Err("zipzapzooey")
+        })
+        .unwrap_err();
+    assert_eq!(calls, 1);
+    assert!(
+        matches!(failure.event.kind, ConvertedPointerKind::Contact { event, .. }
+        if event.phase == PointerPhase::Down && event.pointer == 7 && event.device == 24)
+    );
+    let detail = failure.to_string();
+    assert!(detail.contains("while handling a pointer data packet"));
+    assert!(detail.contains("zipzapzooey"));
+    assert!(detail.contains("Down"));
+    assert!(!detail.contains("phase: Up"));
+    assert!(f.hit_phases().is_empty());
+    assert!(f.routed_phases().is_empty());
+}
+
+#[test]
+fn after_failure_valid_queued_contacts_resume_before_new_input_without_replaying_the_error() {
+    use incular_widgets::internal::ConvertedPointerKind;
+
+    let mut f = Fixture::new();
+    let down = PointerData {
+        view_id: VIEW,
+        pointer: 7,
+        device: 24,
+        physical_position: Offset::new(25., 50.),
+        ..PointerData::new(Data::Down, f.now)
+    };
+    let up = |pointer| PointerData {
+        pointer,
+        change: Data::Up,
+        ..down
+    };
+    let failure = f
+        .runtime
+        .handle_pointer_data_packet_checked(
+            VIEW,
+            RATIO,
+            [down, up(7), PointerData { pointer: 8, ..down }, up(8)],
+            |_| Err("intentionally failed"),
+        )
+        .unwrap_err();
+    assert_eq!(failure.cause, "intentionally failed");
+    let mut seen = Vec::new();
+    f.runtime
+        .handle_pointer_data_packet_checked(
+            VIEW,
+            RATIO,
+            [PointerData { pointer: 9, ..down }, up(9)],
+            |converted| {
+                if let ConvertedPointerKind::Contact { event, .. } = converted.kind {
+                    seen.push((event.pointer, event.phase));
+                }
+                Ok::<_, std::convert::Infallible>(())
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        seen,
+        [
+            (7, PointerPhase::Up),
+            (8, PointerPhase::Down),
+            (8, PointerPhase::Up),
+            (9, PointerPhase::Down),
+            (9, PointerPhase::Up),
+        ]
+    );
+    assert_eq!(*f.taps.borrow(), ["tap", "tap"]);
+    assert_eq!(
+        f.routed
+            .borrow()
+            .iter()
+            .map(|sample| sample.pointer)
+            .collect::<Vec<_>>(),
+        [8, 8, 9, 9]
+    );
+}

@@ -89,6 +89,15 @@ pub struct EventTarget {
     pub element: ElementId,
     pub action: Option<ActionId>,
 }
+/// A host-level handler rejected one converted event before its delivery.
+/// The event is removed, while the rest of the packet can be resumed.
+#[derive(Debug, thiserror::Error)]
+#[error("{cause} while handling a pointer data packet: {event:?}")]
+pub struct PointerPacketDispatchError<E> {
+    pub cause: E,
+    pub event: ConvertedPointerEvent,
+}
+
 type PacketContactKey = (u64, u64);
 type PendingPacketCancels = RefCell<Vec<PacketContactKey>>;
 
@@ -292,6 +301,7 @@ pub struct Runtime {
     /// contacts still reach retained gesture regions for scale/pan input.
     pub(crate) legacy_pointer: Option<(u64, u64)>,
     packet_contacts: HashMap<PacketContactKey, RawPointerEvent>,
+    deferred_packet_events: VecDeque<ConvertedPointerEvent>,
     pending_packet_cancels: Option<Rc<PendingPacketCancels>>,
     pub(crate) last_pointer: Offset,
     hover_devices: hover_devices::HoverDevices,
@@ -566,6 +576,7 @@ impl Runtime {
             pressed_button: None,
             legacy_pointer: None,
             packet_contacts: HashMap::new(),
+            deferred_packet_events: VecDeque::new(),
             pending_packet_cancels: None,
             last_pointer: Offset::ZERO,
             hover_devices: hover_devices::HoverDevices::default(),
@@ -1174,6 +1185,9 @@ impl Runtime {
             self.sync_text_input_client();
         }
         self.tree.cancel_all_gesture_streams();
+        self.packet_contacts.clear();
+        self.deferred_packet_events.clear();
+        self.pending_packet_cancels = None;
         self.captured_text_field = None;
         self.captured_selectable_text = None;
         self.hovered_button = None;
@@ -1202,6 +1216,9 @@ impl Runtime {
             self.sync_text_input_client();
         }
         self.tree.cancel_all_gesture_streams();
+        self.packet_contacts.clear();
+        self.deferred_packet_events.clear();
+        self.pending_packet_cancels = None;
         self.tree.release_edit_subscriptions();
         self.legacy_pointer = None;
         self.window_scope.cancel();
@@ -1977,14 +1994,37 @@ impl Runtime {
         device_pixel_ratio: f64,
         records: impl IntoIterator<Item = PointerData>,
     ) {
-        let converted = PointerEventConverter::expand(records, |id| {
+        let _ = self.handle_pointer_data_packet_checked(
+            view_id, device_pixel_ratio, records, |_| Ok::<_, std::convert::Infallible>(()),
+        );
+    }
+
+    /// Dispatch a packet with a fallible host handler ahead of retained input.
+    /// A failed sample is reported with its identity and does not reach widgets.
+    /// The remaining samples stay in arrival order for the next packet pump.
+    pub fn handle_pointer_data_packet_checked<E>(
+        &mut self,
+        view_id: u64,
+        device_pixel_ratio: f64,
+        records: impl IntoIterator<Item = PointerData>,
+        mut before_event: impl FnMut(&ConvertedPointerEvent) -> Result<(), E>,
+    ) -> Result<(), PointerPacketDispatchError<E>> {
+        if self.lifecycle == ApplicationLifecycle::Terminated {
+            return Ok(());
+        }
+        let mut converted = PointerEventConverter::expand(records, |id| {
             (id == view_id).then_some(device_pixel_ratio)
         });
         self.flush_pointer_packet_cancellations();
-        for event in converted {
+        while let Some(event) = self.deferred_packet_events.pop_front().or_else(|| converted.next()) {
+            if let Err(cause) = before_event(&event) {
+                self.deferred_packet_events.extend(converted);
+                return Err(PointerPacketDispatchError { cause, event });
+            }
             self.handle_converted_pointer_event(event);
             self.flush_pointer_packet_cancellations();
         }
+        Ok(())
     }
 
     /// A handle suitable for capture by a listener or recognizer. Drivers

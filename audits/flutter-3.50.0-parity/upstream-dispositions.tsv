@@ -3521,3 +3521,4 @@ packages/flutter/test/gestures/gesture_binding_test.dart	105	Platform view hit t
 packages/flutter/test/gestures/gesture_binding_test.dart	120	Platform view hit test should not accept gesture if no platform view	paired-match	upstream-pointer-packet-converter.md#native-platform-view-hit-requests
 packages/flutter/test/gestures/gesture_binding_test.dart	133	Platform view hit test should accept gesture if a platform view is not the first hit in hitTest result path	paired-match	upstream-pointer-packet-converter.md#native-platform-view-hit-requests
 packages/flutter/test/gestures/gesture_binding_test.dart	149	Platform view hit test should accept gesture if a platform view is the first hit in hitTest result path	paired-match	upstream-pointer-packet-converter.md#native-platform-view-hit-requests
+packages/flutter/test/gestures/gesture_binding_test.dart	687	Error handling	paired-match	upstream-pointer-packet-converter.md#failed-host-dispatch

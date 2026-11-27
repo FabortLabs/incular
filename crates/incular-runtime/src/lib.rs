@@ -76,8 +76,8 @@ pub use semantics_activation::{SemanticsEnabledSubscription, SemanticsHandle};
 pub use focus_keys::FocusKeySubscription;
 pub use frame::{
     EditingDiagnostics, EventTarget, FocusDiagnostics, FrameStats, HardwareKeyHandlerError,
-    KeyMessage, KeyMessageHandlerError, MouseCursorUpdate, Runtime,
-    PointerPacketCancellation,
+    KeyMessage, KeyMessageHandlerError, MouseCursorUpdate, PointerPacketCancellation,
+    PointerPacketDispatchError, Runtime,
 };
 pub use global_shortcuts::{
     GlobalShortcutCompletionStatus, GlobalShortcutRegistration, GlobalShortcutRegistrationRequest,
