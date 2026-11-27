@@ -18,8 +18,178 @@ use incular_core::{Offset, Rect, Size};
 use std::{
     cell::{Cell, RefCell},
     fmt,
-    rc::Rc,
+    rc::{Rc, Weak},
 };
+
+struct ActiveContextMenu {
+    owner: Weak<()>,
+    close: Rc<dyn Fn()>,
+}
+
+thread_local! {
+    static ACTIVE_CONTEXT_MENU: RefCell<Option<ActiveContextMenu>> = const { RefCell::new(None) };
+}
+
+fn claim_context_menu(owner: &Rc<()>, close: Rc<dyn Fn()>) {
+    let owner = Rc::downgrade(owner);
+    let previous = ACTIVE_CONTEXT_MENU.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.as_ref().is_some_and(|active| active.owner.ptr_eq(&owner)) {
+            return None;
+        }
+        slot.replace(ActiveContextMenu { owner, close })
+    });
+    if let Some(previous) = previous {
+        (previous.close)();
+    }
+}
+
+fn release_context_menu(owner: &Rc<()>) {
+    let owner = Rc::downgrade(owner);
+    let removed = ACTIVE_CONTEXT_MENU.try_with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.as_ref().is_some_and(|active| active.owner.ptr_eq(&owner)) {
+            slot.take()
+        } else {
+            None
+        }
+    });
+    drop(removed);
+}
+
+type MenuBuilder = Rc<dyn for<'a> Fn(&BuildContext<'a>) -> Widget>;
+
+#[derive(Default)]
+struct ContextMenuControllerState {
+    owner: Rc<()>,
+    revision: Rc<Cell<u64>>,
+    builder: RefCell<Option<MenuBuilder>>,
+    entry: Cell<u64>,
+    on_remove: RefCell<Option<Rc<dyn Fn()>>>,
+}
+
+impl ContextMenuControllerState {
+    fn invalidate(&self) {
+        self.revision.set(self.revision.get().wrapping_add(1));
+        incular_animation::scheduler::schedule_frame();
+    }
+
+    fn remove(&self) -> bool {
+        let Some(builder) = self.builder.borrow_mut().take() else {
+            return false;
+        };
+        release_context_menu(&self.owner);
+        self.invalidate();
+        let callback = self.on_remove.borrow().clone();
+        drop(builder);
+        if let Some(callback) = callback {
+            callback();
+        }
+        true
+    }
+}
+
+impl Drop for ContextMenuControllerState {
+    fn drop(&mut self) {
+        release_context_menu(&self.owner);
+    }
+}
+
+/// Hosts any widget as the current context menu. A controller's [host](Self::host)
+/// supplies the retained overlay and inherited context; only one controller
+/// or editable text toolbar is visible on the UI thread at a time.
+#[derive(Clone, Default)]
+pub struct ContextMenuController(Rc<ContextMenuControllerState>);
+
+impl ContextMenuController {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the notification fired when this menu is removed or replaced.
+    #[must_use]
+    pub fn on_remove(self, callback: impl Fn() + 'static) -> Self {
+        self.0.on_remove.replace(Some(Rc::new(callback)));
+        self
+    }
+
+    /// Keeps the anchor unchanged and attaches the menu's root overlay.
+    /// Mount one host per controller.
+    #[must_use]
+    pub fn host(&self, child: impl Into<Widget>) -> Widget {
+        let child = child.into();
+        let state = self.0.clone();
+        Widget::stateful_builder(state.revision.clone(), move |_| {
+            let builder = state.builder.borrow().clone();
+            let mut portal = OverlayPortal::new(child.clone())
+                .role(TransientRole::ContextMenu)
+                .root_overlay(true)
+                .show(builder.is_some());
+            if let Some(builder) = builder {
+                let weak = Rc::downgrade(&state);
+                let content: Widget = crate::Builder::new(move |context| builder(context)).into();
+                portal = portal
+                    .overlay_child(content.with_key(state.entry.get()))
+                    .on_dismiss(move |_| {
+                        if let Some(state) = weak.upgrade() {
+                            state.remove();
+                        }
+                    });
+            }
+            portal.into()
+        })
+    }
+
+    /// Shows a menu on the next build. Replacing the builder while open
+    /// preserves the existing overlay entry and its retained child state.
+    pub fn show(&self, builder: impl for<'a> Fn(&BuildContext<'a>) -> Widget + 'static) {
+        let previous = self.0.builder.replace(Some(Rc::new(builder)));
+        if previous.is_none() {
+            self.0.entry.set(self.0.entry.get().wrapping_add(1));
+            let weak = Rc::downgrade(&self.0);
+            claim_context_menu(
+                &self.0.owner,
+                Rc::new(move || {
+                    if let Some(state) = weak.upgrade() {
+                        state.remove();
+                    }
+                }),
+            );
+        }
+        self.0.invalidate();
+    }
+
+    #[must_use]
+    pub fn is_shown(&self) -> bool {
+        self.0.builder.borrow().is_some()
+    }
+
+    /// Schedules a rebuild of the visible menu, returning false if hidden.
+    pub fn mark_needs_build(&self) -> bool {
+        if !self.is_shown() {
+            return false;
+        }
+        self.0.invalidate();
+        true
+    }
+
+    /// Removes only this controller's menu.
+    pub fn remove(&self) -> bool {
+        self.0.remove()
+    }
+
+    /// Removes the current context menu, including a built-in toolbar.
+    pub fn remove_any() -> bool {
+        let menu = ACTIVE_CONTEXT_MENU.with(|slot| slot.borrow_mut().take());
+        if let Some(menu) = menu {
+            (menu.close)();
+            true
+        } else {
+            false
+        }
+    }
+}
 
 /// The type of a context menu button, which decides its default label
 /// (Flutter's `ContextMenuButtonType`).
@@ -207,6 +377,7 @@ pub type EditableTextContextMenuBuilder =
 /// close it.
 #[doc(hidden)]
 pub struct TextContextMenuState {
+    owner: Rc<()>,
     menu: RefCell<Option<Rc<TextContextMenu>>>,
     revision: RefCell<Rc<Cell<u64>>>,
     incarnation: Cell<u64>,
@@ -218,9 +389,16 @@ impl RetainedState for TextContextMenuState {
     }
 }
 
+impl Drop for TextContextMenuState {
+    fn drop(&mut self) {
+        release_context_menu(&self.owner);
+    }
+}
+
 impl TextContextMenuState {
     fn new(revision: Rc<Cell<u64>>) -> Self {
         Self {
+            owner: Rc::new(()),
             menu: RefCell::new(None),
             revision: RefCell::new(revision),
             incarnation: Cell::new(0),
@@ -318,6 +496,14 @@ impl TextContextMenuState {
             spell_check_span,
             hide,
         }));
+        claim_context_menu(
+            &self.owner,
+            Rc::new(move || {
+                if let Some(state) = weak.upgrade() {
+                    state.hide();
+                }
+            }),
+        );
         self.bump();
         true
     }
@@ -325,11 +511,10 @@ impl TextContextMenuState {
     /// Closes the menu. Returns whether one was showing.
     pub fn hide(&self) -> bool {
         let menu = self.menu.borrow_mut().take();
-        if let Some(menu) = &menu {
+        if menu.is_some() {
+            release_context_menu(&self.owner);
             self.bump();
-            if menu.spell_check_span.is_some() {
-                incular_animation::scheduler::schedule_frame();
-            }
+            incular_animation::scheduler::schedule_frame();
         }
         menu.is_some()
     }

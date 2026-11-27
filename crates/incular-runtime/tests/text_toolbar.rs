@@ -164,3 +164,81 @@ fn native_text_toolbar_request_shows_once_without_changing_selection() {
     runtime.run_frame(bounds()).unwrap();
     assert_eq!(shown.borrow().len(), builds);
 }
+
+#[test]
+fn direct_context_menu_replaces_the_focused_editor_toolbar_without_losing_focus() {
+    use incular_core::Color;
+    use incular_platform::TextInputCommand;
+    use incular_text::TextSelection;
+    use incular_widgets::{ContextMenuController, internal::Key};
+    use serde_json::json;
+
+    let editor = TextEditingController::with_text("hello world");
+    let direct = ContextMenuController::new();
+    let manual = Key::from("direct menu");
+    let built_in = Key::from("editor menu");
+    let field = EditableText::new(editor.clone())
+        .text_direction(TextDirection::Ltr)
+        .size(Size::new(400., 40.))
+        .context_menu_builder({
+            let built_in = built_in.clone();
+            move |_, _| Widget::box_(Size::new(70., 20.), Color::WHITE).with_key(built_in.clone())
+        });
+    let mut runtime = Runtime::new(direct.host(field)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    runtime.run_frame(bounds()).unwrap();
+    tap(
+        &mut runtime,
+        Offset::new(12., 10.),
+        PointerDeviceKind::Mouse,
+        Instant::now(),
+    );
+    runtime.run_frame(bounds()).unwrap();
+    let field = runtime.focused_element().unwrap();
+    let state = TextSelection::new(0, 5);
+    editor.set_selection(state);
+    runtime.run_frame(bounds()).unwrap();
+    let client = runtime
+        .take_text_input_commands()
+        .into_iter()
+        .find_map(|command| match command {
+            TextInputCommand::SetClient { configuration, .. } => Some(configuration.client),
+            _ => None,
+        })
+        .expect("mounted input attachment");
+    let request =
+        json!({"method":"TextInputClient.showToolbar", "args":[client.get(),0,1]}).to_string();
+    let was_visible = |runtime: &Runtime, key: &Key| runtime.tree().element_with_key(key).is_some();
+
+    assert_eq!(
+        runtime
+            .handle_flutter_text_toolbar_call(request.as_bytes())
+            .unwrap(),
+        Some(true)
+    );
+    runtime.run_frame(bounds()).unwrap();
+    assert!(was_visible(&runtime, &built_in));
+
+    direct.show({
+        let manual = manual.clone();
+        move |_| Widget::box_(Size::new(48., 20.), Color::WHITE).with_key(manual.clone())
+    });
+    runtime.run_frame(bounds()).unwrap();
+    assert!(!was_visible(&runtime, &built_in));
+    assert!(was_visible(&runtime, &manual));
+    assert_eq!(runtime.focused_element(), Some(field));
+    assert_eq!(editor.selection(), state);
+
+    assert_eq!(
+        runtime
+            .handle_flutter_text_toolbar_call(request.as_bytes())
+            .unwrap(),
+        Some(true)
+    );
+    runtime.run_frame(bounds()).unwrap();
+    assert!(was_visible(&runtime, &built_in));
+    assert!(!was_visible(&runtime, &manual));
+    assert!(!direct.remove());
+    assert_eq!(runtime.focused_element(), Some(field));
+    assert_eq!(editor.selection(), state);
+}

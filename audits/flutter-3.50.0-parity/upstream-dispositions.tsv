@@ -3611,3 +3611,9 @@ packages/flutter/test/widgets/default_text_editing_shortcuts_test.dart	690	are t
 packages/flutter/test/painting/shape_border_test.dart	61	Outlined shape borders interpolate symmetrically	partial-match	upstream-shape-outline-symmetry.md
 packages/flutter/test/widgets/app_lifecycle_listener_test.dart	192	Receives exit requests	paired-match	upstream-app-exit-observers.md
 packages/flutter/test/widgets/app_lifecycle_listener_test.dart	207	Does not notify listeners disposed while handling an exit request	paired-match	upstream-app-exit-observers.md
+packages/flutter/test/widgets/context_menu_controller_test.dart	28	Hides and shows only a single menu	paired-match	upstream-context-menu-controller.md
+packages/flutter/test/widgets/context_menu_controller_test.dart	96	A menu can be hidden and then reshown	paired-match	upstream-context-menu-controller.md
+packages/flutter/test/widgets/context_menu_controller_test.dart	146	markNeedsBuild causes the builder to update	paired-match	upstream-context-menu-controller.md
+packages/flutter/test/widgets/context_menu_controller_test.dart	181	Calling show when a built-in widget is already showing its context menu hides the built-in menu	paired-match	upstream-context-menu-controller.md
+packages/flutter/test/widgets/context_menu_controller_test.dart	268	ContextMenuController.show updates in-place	paired-match	upstream-context-menu-controller.md
+packages/flutter/test/widgets/context_menu_controller_test.dart	304	ContextMenuController.show after remove creates a new overlay entry	paired-match	upstream-context-menu-controller.md
