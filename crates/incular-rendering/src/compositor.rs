@@ -2658,6 +2658,12 @@ impl LayerTree {
                 let Some(world_bounds) = clip_world_bounds(&kind, world_transform) else {
                     return;
                 };
+                if !(world_bounds.size.width > 0. && world_bounds.size.height > 0.) {
+                    return;
+                }
+                // After a reflection two clips can share an included leading
+                // edge even if their world bounds only touch. Leave edge
+                // ownership to the exact local-space clip checks.
                 let (bounds, parent) = if let Some((active, parent)) = clip {
                     let Some(bounds) = active.intersection(world_bounds) else {
                         return;
@@ -2666,9 +2672,6 @@ impl LayerTree {
                 } else {
                     (world_bounds, None)
                 };
-                if !(bounds.size.width > 0. && bounds.size.height > 0.) {
-                    return;
-                }
                 let shape = match kind {
                     LayerKind::ClipRect { rect, .. } => AnnotationClipShape::Rect(rect),
                     LayerKind::ClipRRect { rrect, .. } => AnnotationClipShape::RRect(rrect),
@@ -2714,6 +2717,9 @@ impl LayerTree {
                 let region = sized.then(|| Rect::from_origin_size(options.offset, size));
                 let placement = world_transform.inverse().and_then(|world_to_local| {
                     let world_bounds = if let Some(region) = region {
+                        if !(size.width > 0. && size.height > 0.) {
+                            return None;
+                        }
                         let world = world_transform.transform_rect_bbox(region);
                         match clip {
                             Some((active, _)) => Some(active.intersection(world)?),
@@ -2722,11 +2728,8 @@ impl LayerTree {
                     } else {
                         clip.map(|(bounds, _)| bounds)
                     };
-                    (options.offset.x.is_finite()
-                        && options.offset.y.is_finite()
-                        && world_bounds
-                            .is_none_or(|bounds| bounds.size.width > 0. && bounds.size.height > 0.))
-                    .then_some((world_bounds, world_to_local))
+                    (options.offset.x.is_finite() && options.offset.y.is_finite())
+                        .then_some((world_bounds, world_to_local))
                 });
                 let site = placement.map(|_| {
                     let site = self.annotation_sites.len();

@@ -419,6 +419,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Retained annotation lookups preserve a shared clip edge when a reflection
+  makes it the included edge of both shapes.
+
 - Border-side diagnostics honor the current Flutter-compatible precision.
 
 - Due long-tap callbacks run by deadline and then contact registration order.

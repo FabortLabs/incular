@@ -2729,3 +2729,20 @@ packages/flutter/test/semantics/semantics_binding_test.dart	103	getRectOfSemanti
 packages/flutter/test/painting/text_span_test.dart	433	TextSpan can compute StringAttributes	paired-match	upstream-inline-text-spans.md#inherited-pronunciation-and-combined-utf-16-ranges
 packages/flutter/test/painting/border_side_test.dart	105	BorderSide - lerp identical a,b	partial-match	upstream-border-constraints-formatters.md#border-side-diagnostics
 packages/flutter/test/painting/border_side_test.dart	119	BorderSide - toString	paired-match	upstream-border-constraints-formatters.md#border-side-diagnostics
+packages/flutter/test/rendering/annotated_region_test.dart	11	finds the first value in a OffsetLayer when sized	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	30	finds a value within the clip in a ClipRectLayer	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	49	finds a value within the clip in a ClipRRectLayer	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	74	finds a value under a TransformLayer	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	114	looks for child AnnotatedRegions before parents	partial-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	124	looks for correct type	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	134	does not clip Layer.find on an AnnotatedRegion with an unrelated type	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	144	handles non-invertible transforms	partial-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	157	finds the first value in a OffsetLayer when sized	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	185	finds a value within the clip in a ClipRectLayer	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	213	finds a value within the clip in a ClipRRectLayer	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	247	finds a value under a TransformLayer	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	302	finds multiple nested, overlapping regions	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	325	looks for child AnnotatedRegions before parents	partial-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	342	looks for correct type	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	355	does not clip Layer.find on an AnnotatedRegion with an unrelated type	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/rendering/annotated_region_test.dart	368	handles non-invertible transforms	partial-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers

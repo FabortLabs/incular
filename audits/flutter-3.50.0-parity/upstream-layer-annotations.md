@@ -92,3 +92,40 @@ compositor layer tree and reproduce the translated case: (10, 10)
 misses, and (50, 50) hits value 1 at local (25, 25). Positions presented to
 the Incular tree are logical pixels, equivalent to the DPR-adjusted
 test points on Flutter's root layer.
+
+### AnnotatedRegion search across retained layers
+
+All 17 original registrations in `rendering/annotated_region_test.dart`
+ran against the pinned SDK. Their full runtime test names begin with
+`AnnotatedRegion<Object>`. Thirteen have equivalent native assertions in
+`flutter350_annotated_region_search`: the three adjacent sized/offset,
+rectangular, and rounded stripes; inverse composition of a 2.625 scale
+with three local offsets; searching for a runtime type behind an unrelated
+type; not clipping an integer child to an unrelated parent's 10×10 size;
+and the nested front-to-back result `[3, 1, 2, 0]`. The tests assert both
+first and all matches where Flutter does, with controls checking adjacent
+stripes, trailing edges, and rounded corners.
+
+Four cases stay partial. Flutter can search an annotated layer directly
+while it remains mounted under another container (114, 325), and observe
+a new transform immediately after mutating that layer (144, 368). The
+native fixture verifies child-before-parent order when the queried layer
+is the published root, and a singular transform hides the annotation
+until the next flatten after resetting it. Incular's scene queries
+intentionally use the published frame; these tests do not prove an
+equivalent direct live subtree query.
+
+### Reflected annotation boundaries
+
+Both authored `reflected_annotation_edge_test.dart` cases passed against
+the pinned reference. Before the fix, both native counterparts returned
+no hit at (0, 5). A rectangular clip in a reflected space and a sized
+region in the original space can share a leading edge that both contain.
+The same holds for two clips surrounding an unsized region. Their world
+AABBs touch without positive area, but the exact local half-open
+containment tests accept the shared edge. The annotation collector now
+preserves a touching world intersection and lets those local tests
+decide. Checks immediately to either side and at the trailing corner
+still return no hit. This adjusts annotation lookup, not painting,
+clipping coverage, or renderer culling. Authored cases are not counted
+as original registrations.
