@@ -967,8 +967,13 @@ impl WidgetTree {
                 // A press competes only with the callbacks of its own button.
                 let mut live_tap_buttons = callbacks.on_any_tap.is_some().then_some(buttons);
                 let Some(mut callbacks) = callbacks.for_button_mask(buttons) else {
+                    self.reject_deferred_tap_at(candidate);
+                    self.interrupt_mounted_double_tap(candidate);
                     continue;
                 };
+                if !primary && !callbacks.has_tap_callbacks() {
+                    self.reject_deferred_tap_at(candidate);
+                }
                 let tracks_tap = callbacks.has_tap_callbacks() && inner_button.is_none();
                 let owns_tap = tracks_tap && self.register_mounted_tap_contact(candidate, key);
                 if tracks_tap && !owns_tap {
@@ -986,13 +991,20 @@ impl WidgetTree {
                     callbacks.on_long_press_down = None;
                     callbacks.on_long_press_cancel = None;
                 }
-                if callbacks.on_tap.is_some() {
+                if callbacks.has_tap_callbacks() {
                     // A new press on this detector replaces its ordinary
                     // tap candidate, even if its double recognizer ignores
                     // the new position or later rejects the second press.
                     self.input
                         .deferred_single_taps
                         .retain(|tap| tap.owner != candidate);
+                }
+                // A non-primary press reached the double-tap recognizer on
+                // this route even though it cannot enter that arena. Reset
+                // the pending pair. An admitted single above has already
+                // replaced any older single belonging to this same detector.
+                if !primary {
+                    self.interrupt_mounted_double_tap(candidate);
                 }
                 if let Some(binding) = shared_drag {
                     if buttons != 0 && buttons != incular_core::PRIMARY_POINTER_BUTTON {
@@ -2135,6 +2147,24 @@ impl WidgetTree {
             }
         }
         pending
+    }
+
+    fn reject_deferred_tap_at(&mut self, element: ElementId) {
+        if let Some(index) = self.input.deferred_single_taps.iter().position(|tap| tap.owner == element) {
+            let tap = self.input.deferred_single_taps.remove(index);
+            if let Some(details) = tap.details
+                && let Some(callbacks) = self.mounted_tap_callbacks(tap.owner, tap.live_tap_buttons)
+            {
+                details.cancel(&callbacks, incular_gestures::TapCancelReason::Forced);
+            }
+        }
+    }
+
+    fn interrupt_mounted_double_tap(&mut self, element: ElementId) {
+        let empty = incular_gestures::TapMemory::default();
+        if self.input.tap_memories.get(&element).is_some_and(|memory| memory.replace(empty) != empty) {
+            self.release_deferred_taps(|tap| tap.double_tap_owner == element);
+        }
     }
 
     fn flush_single_tap_deadlines(&mut self, now: Instant) {

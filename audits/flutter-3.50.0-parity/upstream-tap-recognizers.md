@@ -213,3 +213,12 @@ a double tap. The latter is an additional native control.
 Four new native cases failed before the fix; all 57 focused native
 tests passed afterwards. This slice does not claim mounted arena
 release timing or cross-detector competition for non-primary presses.
+
+Five authored mounted comparisons also passed. A non-primary press
+only interrupts a double candidate if it reaches that detector. It
+does not emit a phantom primary single; an admitted secondary single
+still completes normally. If the held primary had already delivered
+TapDown, an inadmissible press cancels it once; a silent candidate
+stays silent. The runtime now invalidates the held tap before releasing
+the double-tap sequence on the hit route. All 22 focused native tests
+passed. These are mounted backfill cases, not new original credit.
