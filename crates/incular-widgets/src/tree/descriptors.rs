@@ -698,6 +698,7 @@ pub struct Text {
     strut: Option<StrutStyle>,
     locale: Option<incular_config::Locale>,
     semantics_identifier: Option<String>,
+    semantics_label: Option<String>,
 }
 impl Text {
     #[must_use]
@@ -717,6 +718,7 @@ impl Text {
             strut: None,
             locale: None,
             semantics_identifier: None,
+            semantics_label: None,
         }
     }
     /// Flutter's `Text.textHeightBehavior`. Without it the nearest
@@ -760,6 +762,15 @@ impl Text {
     #[must_use]
     pub fn locale(mut self, locale: incular_config::Locale) -> Self {
         self.locale = Some(locale);
+        self
+    }
+
+    /// Sets the label announced by assistive technology without changing
+    /// visible text. The replacement does not reuse the visible text's
+    /// pronunciation spans.
+    #[must_use]
+    pub fn semantics_label(mut self, label: impl Into<String>) -> Self {
+        self.semantics_label = Some(label.into());
         self
     }
 
@@ -832,17 +843,7 @@ impl From<Text> for Widget {
                 })
             })
         });
-        let has_semantics = value.semantics_identifier.is_some() || text_attributes.is_some();
-        let annotation = has_semantics.then(|| {
-            crate::ExplicitSemantics::new(SemanticRole::GenericContainer)
-                .label(value.text.as_str())
-                .state(SemanticState {
-                    identifier: value.semantics_identifier,
-                    text_attributes,
-                    ..SemanticState::default()
-                })
-        });
-        let widget = Widget::text_configured(
+        let mut widget = Widget::text_configured(
             value.text,
             style,
             TextParagraphPolicy {
@@ -858,10 +859,21 @@ impl From<Text> for Widget {
             None,
             value.strut.map(Box::new),
         );
-        match annotation {
-            Some(annotation) => widget.semantics(annotation),
-            None => widget,
+        if let Some(attributes) = text_attributes {
+            widget.semantic_properties_mut().implicit_text_attributes = Some(attributes);
         }
+        if let Some(identifier) = value.semantics_identifier {
+            widget = widget.semantics(
+                crate::ExplicitSemantics::new(SemanticRole::GenericContainer).state(SemanticState {
+                    identifier: Some(identifier),
+                    ..SemanticState::default()
+                }),
+            );
+        }
+        if let Some(label) = value.semantics_label {
+            widget = widget.accessibility_label(label);
+        }
+        widget
     }
 }
 

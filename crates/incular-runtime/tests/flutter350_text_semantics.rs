@@ -213,3 +213,95 @@ fn desktop_does_not_promote_a_partial_range_to_the_whole_node() {
     let (_, published) = update.nodes.iter().find(|(id, _)| id.0 == native).unwrap();
     assert_eq!(published.language(), None);
 }
+
+#[test]
+fn semantic_label_overrides_spoken_text_with_explicit_or_inherited_direction() {
+    let make = || Text::new("$$").semantics_label("Double dollars");
+    for fixture in [
+        make().text_direction(TextDirection::Ltr).into(),
+        scene(make()),
+    ] {
+        let mut runtime = Runtime::new(fixture).unwrap();
+        frame(&mut runtime);
+        let tree = runtime.tree().semantics();
+        let [id] = tree.roots() else {
+            panic!("expected one semantic root: {:?}", tree.roots());
+        };
+        let annotation = tree.node(*id).unwrap();
+        assert_eq!(annotation.label.as_deref(), Some("Double dollars"));
+        assert_eq!(annotation.state.text_direction, Some(TextDirection::Ltr));
+        assert!(annotation.children.is_empty());
+        assert_eq!(
+            tree.len(),
+            1,
+            "the visible source must not publish a second label"
+        );
+    }
+}
+
+#[test]
+fn spoken_label_can_be_replaced_without_reusing_visual_text_locale_or_glyphs() {
+    use incular_rendering::PaintCommand;
+
+    let make = || Text::new("$$").locale(locale("de-DE"));
+    let mut runtime = Runtime::new(scene(make())).unwrap();
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    let (before, _) = runtime.run_frame(constraints).unwrap();
+    let (id, source) = node_by_label(&runtime, "$$");
+    assert_eq!(
+        source.state.text_attributes.as_ref().unwrap().label,
+        [StringAttribute::locale(0..2, "de-DE")]
+    );
+
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .tree_mut()
+        .update(root, scene(make().semantics_label("Double dollars")))
+        .unwrap();
+    let (after, _) = runtime.run_frame(constraints).unwrap();
+    let (updated_id, label) = node_by_label(&runtime, "Double dollars");
+    assert_eq!(updated_id, id);
+    assert!(label.state.text_attributes.is_none());
+    let glyphs = |list: &incular_rendering::DisplayList| {
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::GlyphRun { run, .. } => Some(run.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let before = glyphs(&before);
+    assert!(!before.is_empty());
+    assert_eq!(glyphs(&after), before);
+
+    // The lower-level label API likewise replaces the implicit label.
+    let widget = Widget::from(make()).accessibility_label("Dollars");
+    runtime.tree_mut().update(root, scene(widget)).unwrap();
+    frame(&mut runtime);
+    assert!(
+        node_by_label(&runtime, "Dollars")
+            .1
+            .state
+            .text_attributes
+            .is_none()
+    );
+}
+
+#[test]
+fn semantic_hint_and_implicit_text_locale_keep_separate_attributes() {
+    use incular_semantics::AttributedString;
+    let mut runtime = Runtime::new(scene(
+        Semantics::new(Text::new("😀A").locale(locale("ja-JP"))).attributed_hint(
+            AttributedString::try_with_attributes("Info", [StringAttribute::spell_out(0..4)])
+                .unwrap(),
+        ),
+    ))
+    .unwrap();
+    frame(&mut runtime);
+    let (_, text) = node_by_label(&runtime, "😀A");
+    let attributes = text.state.text_attributes.as_ref().unwrap();
+    assert_eq!(attributes.label, [StringAttribute::locale(0..3, "ja-JP")]);
+    assert_eq!(text.description.as_deref(), Some("Info"));
+    assert_eq!(attributes.hint, [StringAttribute::spell_out(0..4)]);
+}

@@ -22,3 +22,14 @@ an operating-system screen reader.
 
 The separate rich-text identifier and recognizer-child identity originals
 (`:142` and `:13`) are not covered by this slice.
+
+## Spoken label replacement
+
+The exact pinned `widgets/text_test.dart:428` passed. Both explicit
+and inherited LTR produce just one leaf, “Double dollars,” with no
+second semantic node for the visible “$$.” The native comparison also
+updates the spoken label without changing retained glyph runs or the
+semantic node's identity. The replacement does not reuse the visible
+text's UTF-16 locale span. An independently attributed hint still
+coexists with the locale on the original implicit text label.
+Seventeen focused runtime and projection tests passed.

@@ -447,9 +447,6 @@ impl MobileAccessibilityProjection {
     }
 }
 
-/// Flutter tags inform framework tree assembly but are not transmitted to
-/// accessibility adapters. Compare the projected form as well as exporting
-/// it, so a tag-only tree revision produces no native update.
 fn whole_label_language(node: &SemanticNode) -> Option<&str> {
     let [StringAttribute::Locale { range, locale }] =
         node.state.text_attributes.as_ref()?.label.as_slice()
@@ -461,6 +458,9 @@ fn whole_label_language(node: &SemanticNode) -> Option<&str> {
         .then_some(locale.as_str())
 }
 
+/// Flutter tags inform framework tree assembly but are not transmitted to
+/// accessibility adapters. Compare the projected form as well as exporting
+/// it, so a tag-only tree revision produces no native update.
 fn platform_semantic_node(node: &SemanticNode) -> Cow<'_, SemanticNode> {
     if node.tags().is_empty() {
         return Cow::Borrowed(node);

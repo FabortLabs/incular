@@ -1596,6 +1596,15 @@ impl WidgetTree {
                 actions = actions_with_room(&explicit.actions);
             }
         }
+        if properties.label.is_none()
+            && properties.explicit.as_ref().is_none_or(|explicit| explicit.label.is_none())
+            && let Some(attributes) = &properties.implicit_text_attributes
+        {
+            match &mut state.text_attributes {
+                Some(current) => Arc::make_mut(current).label.clone_from(&attributes.label),
+                None => state.text_attributes = Some(attributes.clone()),
+            }
+        }
         if merged_label.is_some()
             && (!merged.label_attributes.is_empty() || state.text_attributes.is_some())
         {
@@ -3201,14 +3210,17 @@ fn element_own_label(entry: &Element) -> Option<Cow<'_, str>> {
 }
 
 fn element_label_attributes(entry: &Element) -> &[StringAttribute] {
-    entry
-        .widget
-        .semantic_properties()
-        .explicit
-        .as_ref()
-        .filter(|explicit| explicit.label.is_some())
-        .and_then(|explicit| explicit.state.text_attributes.as_ref())
-        .map_or(&[], |attributes| attributes.label.as_slice())
+    let properties = entry.widget.semantic_properties();
+    let attributes = if let Some(explicit) =
+        properties.explicit.as_ref().filter(|explicit| explicit.label.is_some())
+    {
+        explicit.state.text_attributes.as_ref()
+    } else if properties.label.is_none() {
+        properties.implicit_text_attributes.as_ref()
+    } else {
+        None
+    };
+    attributes.map_or(&[], |attributes| attributes.label.as_slice())
 }
 
 struct DragSemanticPhases<'a> {
