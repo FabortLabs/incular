@@ -11,3 +11,22 @@ the static or animated half-opacity layer.
 These registrations contain one sliver box each. A sliver producing
 several retained boxes currently wraps the boxes individually;
 group compositing when they visually overlap is outside this claim.
+
+## Overlapping static sliver children
+
+An authored pinned Flutter raster probe measured alpha 128 at a
+half-opacity sliver's isolated and overlapping pixels alike.
+Incular originally submitted two separate half-opacity groups, which
+could darken the overlap. It now supplies one retained scope for
+consecutive rows, with clip and opacity scopes nested in source order.
+A zero-opacity scope still follows the appropriate semantics policy;
+revealing it retains the existing children.
+
+The narrow-viewport regression also exposed staging measurements
+temporarily reparenting pictures out of their retained scopes. Final
+layout now assigns those parents once, so clipping cannot cull a
+newly revealed picture on stale bounds. Forty targeted native tests
+passed, including the overlap, nested order, and reveal at viewport
+sizes 10 and 100. This fixes static sliver opacity; the animated
+siblings' multi-row scope remains open. The authored result adds
+no original registration credit.

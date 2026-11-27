@@ -113,6 +113,7 @@ mod sliver_decoration;
 pub use sliver_decoration::{SliverBoxPaintConfiguration, SliverBoxPainter, SliverBoxPainterFactory};
 mod sliver_fade;
 mod sliver_paint_geometry;
+pub(crate) mod sliver_layer;
 pub(crate) mod sliver_clip;
 pub use sliver_clip::{ClipOverlapBehavior, SliverClipRRect, SliverClipRect};
 mod sliver_lists;

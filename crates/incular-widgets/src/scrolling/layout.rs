@@ -3073,8 +3073,8 @@ impl RenderSliver for WidgetWrapRenderSliver {
         }
         for child in &mut layout.children {
             let mut inner = child.widget.clone();
-            let clips = inner.take_sliver_clips();
-            child.widget = (self.wrap)(inner).restore_sliver_clips(clips);
+            let clips = inner.take_sliver_layers();
+            child.widget = (self.wrap)(inner).restore_sliver_layers(clips);
         }
         layout
     }
@@ -3452,6 +3452,12 @@ pub(crate) fn transfer_retained_sliver_state(
         return;
     }
     transfer_single_inner_sliver_state::<super::sliver_clip::ClipRenderSliver>(
+        fresh,
+        retained,
+        probes,
+        preserve_anchor,
+    );
+    transfer_single_inner_sliver_state::<super::sliver_layer::OpacityRenderSliver>(
         fresh,
         retained,
         probes,

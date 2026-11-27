@@ -2097,18 +2097,11 @@ impl Sliver for SliverOpacity {
         axis: Axis,
         reverse: bool,
     ) -> Box<dyn RenderSliver> {
-        let opacity = self.opacity;
-        let include = self.always_include_semantics;
-        let inner = self.sliver.create_render_sliver(controller, axis, reverse);
-        Box::new(WidgetWrapRenderSliver {
-            inner: RefCell::new(inner),
-            hidden: false,
-            wrap: Rc::new(move |widget| {
-                crate::Opacity::new(opacity, widget)
-                    .always_include_semantics(include)
-                    .into()
-            }),
-        })
+        Box::new(super::sliver_layer::OpacityRenderSliver::new(
+            self.sliver.create_render_sliver(controller, axis, reverse),
+            self.opacity,
+            self.always_include_semantics,
+        ))
     }
 }
 

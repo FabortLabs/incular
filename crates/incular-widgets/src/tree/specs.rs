@@ -289,7 +289,7 @@ pub(crate) struct SemanticProperties {
     pub(super) preserves_semantic_child_order: bool,
     // Private sliver parent data, transferred to the retained render
     // before comparing the declarative child. Never part of its identity.
-    pub(super) sliver_clip_placements: Option<Rc<[crate::scrolling::sliver_clip::SliverClipPlacement]>>,
+    pub(super) sliver_layer_placements: Option<Rc<[crate::scrolling::sliver_layer::SliverLayerPlacement]>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

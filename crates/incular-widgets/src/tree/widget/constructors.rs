@@ -276,30 +276,30 @@ impl Widget {
         self
     }
 
-    pub(crate) fn with_sliver_clip(
+    pub(crate) fn with_sliver_layer(
         mut self,
-        placement: crate::scrolling::sliver_clip::SliverClipPlacement,
+        placement: crate::scrolling::sliver_layer::SliverLayerPlacement,
     ) -> Self {
         let properties = self.semantic_properties_mut();
         let mut chain = vec![placement];
-        chain.extend(properties.sliver_clip_placements.iter().flat_map(|old| old.iter().cloned()));
-        properties.sliver_clip_placements = Some(chain.into());
+        chain.extend(properties.sliver_layer_placements.iter().flat_map(|old| old.iter().cloned()));
+        properties.sliver_layer_placements = Some(chain.into());
         self
     }
 
-    pub(crate) fn take_sliver_clips(
+    pub(crate) fn take_sliver_layers(
         &mut self,
-    ) -> Option<Rc<[crate::scrolling::sliver_clip::SliverClipPlacement]>> {
-        self.semantic_properties().sliver_clip_placements.as_ref()?;
-        self.semantic_properties_mut().sliver_clip_placements.take()
+    ) -> Option<Rc<[crate::scrolling::sliver_layer::SliverLayerPlacement]>> {
+        self.semantic_properties().sliver_layer_placements.as_ref()?;
+        self.semantic_properties_mut().sliver_layer_placements.take()
     }
 
-    pub(crate) fn restore_sliver_clips(
+    pub(crate) fn restore_sliver_layers(
         mut self,
-        clips: Option<Rc<[crate::scrolling::sliver_clip::SliverClipPlacement]>>,
+        clips: Option<Rc<[crate::scrolling::sliver_layer::SliverLayerPlacement]>>,
     ) -> Self {
         if clips.is_some() {
-            self.semantic_properties_mut().sliver_clip_placements = clips;
+            self.semantic_properties_mut().sliver_layer_placements = clips;
         }
         self
     }

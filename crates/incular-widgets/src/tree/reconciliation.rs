@@ -666,7 +666,7 @@ impl WidgetTree {
             },
             dirty: DirtyFlags::LAYOUT | DirtyFlags::PAINT,
             parked: false,
-            parent_sliver_clips: None,
+            parent_sliver_layers: None,
             subtree_needs_paint: true,
             semantics_dirty: SemanticsDirty::Subtree,
             subtree_needs_semantics: true,
@@ -1569,7 +1569,7 @@ impl WidgetTree {
             .enumerate()
             .map(|(index, child)| {
                 let mut widget = child.widget.clone();
-                if let Some(clips) = widget.take_sliver_clips() {
+                if let Some(clips) = widget.take_sliver_layers() {
                     placements.get_or_insert_with(|| vec![None; layout.children.len()])[index] = Some(clips);
                 }
                 DesiredDynamicChild { key: child.id, widget }
@@ -1625,17 +1625,22 @@ impl WidgetTree {
                 .render;
             let node = self.render_live_mut(render, "materialized sliver child render");
             let placement = placements.as_ref().and_then(|p| p[index].clone());
-            let clip_changed = node.parent_sliver_clips != placement;
-            if clip_changed {
-                node.parent_sliver_clips = placement;
+            let layer_changed = node.parent_sliver_layers != placement;
+            let hit_clip_changed = layer_changed
+                && node.parent_sliver_layers.iter().flat_map(|scopes| scopes.iter())
+                    .filter_map(|scope| scope.hit_clip())
+                    .ne(placement.iter().flat_map(|scopes| scopes.iter())
+                        .filter_map(|scope| scope.hit_clip()));
+            if layer_changed {
+                node.parent_sliver_layers = placement;
             }
             let parked = layout.placement == crate::scrolling::SliverChildPlacement::Parked;
             let visibility_changed = node.parked != parked;
             node.parked = parked;
-            if clip_changed || visibility_changed {
+            if hit_clip_changed || visibility_changed {
                 self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
             }
-            if clip_changed || visibility_changed {
+            if layer_changed || visibility_changed {
                 self.mark_render_semantics(render, SemanticsDirty::Subtree);
             }
         }
@@ -2729,7 +2734,7 @@ impl WidgetTree {
                         continue;
                     };
                     if let Some(layers) = element.scrolling_state.as_mut()
-                        .and_then(|state| state.sliver_clip_layers.take())
+                        .and_then(|state| state.sliver_layer_scopes.take())
                     {
                         layers.remove_all(&mut self.compositor);
                     }
@@ -3163,8 +3168,9 @@ impl WidgetTree {
                 .filter_map(layer_for_child)
                 .collect()
         };
-        if !measuring_sliver && self.sliver_clip_layers_present(id) {
-            child_layers = self.arrange_sliver_clip_layers(id, &render_children, child_layers);
+        let scoped = self.sliver_layer_scopes_present(id);
+        if !measuring_sliver && scoped {
+            child_layers = self.arrange_sliver_layer_scopes(id, &render_children, child_layers);
         }
         let object = &self
             .renders
@@ -3184,9 +3190,12 @@ impl WidgetTree {
             }
             _ => {}
         }
-        object
-            .layers
-            .set_render_children(&mut self.compositor, object.kind(), child_layers);
+        if !measuring_sliver || !scoped {
+            object.layers.set_render_children(&mut self.compositor, object.kind(), child_layers);
+        }
+        // Do not move pictures out of retained clip/opacity scopes for
+        // intermediate measurements. The final layout assigns their layers;
+        // temporary reparenting would invalidate a reused scope's back links.
         let mut child_needs_paint = false;
         for child in render_children {
             let child = self.render_live_mut(child, "mounted child render must remain live");

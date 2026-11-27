@@ -589,7 +589,7 @@ impl RenderSliver for ClipRenderSliver {
                 live: live.clone(),
                 translation,
             };
-            child.widget = child.widget.clone().with_sliver_clip(placement);
+            child.widget = child.widget.clone().with_sliver_layer(super::sliver_layer::SliverLayerPlacement::Clip(placement));
         }
         layout
     }

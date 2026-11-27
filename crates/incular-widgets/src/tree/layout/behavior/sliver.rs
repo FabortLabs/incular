@@ -579,7 +579,7 @@ impl WidgetTree {
                 // Custom shape callbacks see only the final measured
                 // geometry, not the successive guesses used by lazy layout.
                 if let Some(owner) = viewport_element
-                    && self.sliver_clip_layers_present(owner)
+                    && self.sliver_layer_scopes_present(owner)
                 {
                     self.sync_render_children(owner);
                 }

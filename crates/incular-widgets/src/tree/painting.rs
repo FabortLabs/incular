@@ -791,6 +791,7 @@ impl WidgetTree {
         self.diagnostics.paint_visits += 1;
         let node = self.render_live(id, "retained render must remain live");
         if self.hides_render_paint(id, node.object.kind())
+            || node.parent_sliver_layers.as_ref().is_some_and(|scopes| scopes.iter().any(|scope| scope.hides_paint()))
         {
             // Hidden or singular content keeps its pending paint until it is shown.
             return;
@@ -1193,9 +1194,9 @@ impl WidgetTree {
         if node.parked {
             return true;
         }
-        if let Some(clips) = &node.parent_sliver_clips {
+        if let Some(clips) = &node.parent_sliver_layers {
             let local = point - self.hit_origin(id, node, origin);
-            if clips.iter().any(|clip| !crate::scrolling::sliver_clip::shape_contains(&clip.resolved_shape(), local)) {
+            if clips.iter().any(|clip| !clip.contains(local)) {
                 return true;
             }
         }

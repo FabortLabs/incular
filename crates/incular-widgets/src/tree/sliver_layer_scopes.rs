@@ -1,19 +1,19 @@
-//! A sliver clip owns one retained layer per consecutive paint scope, not
-//! a clip (or offscreen isolation) per materialized row.
+//! A sliver effect owns one retained layer per consecutive paint scope,
+//! not a clip or opacity isolation per materialized row.
 
 use super::*;
-use crate::scrolling::sliver_clip::SliverClipPlacement;
+use crate::scrolling::sliver_layer::{SliverLayerKey, SliverLayerPlacement};
 use incular_core::reactivity::Subscription;
 use incular_rendering::{LayerId, LayerTree};
 use std::collections::HashMap;
 
 #[derive(Default)]
-pub(super) struct SliverClipLayers {
-    layers: HashMap<(u64, usize), LayerId>,
+pub(super) struct SliverLayerScopes {
+    layers: HashMap<(SliverLayerKey, usize), LayerId>,
     listeners: HashMap<u64, Subscription>,
 }
 
-impl SliverClipLayers {
+impl SliverLayerScopes {
     pub(super) fn remove_all(self, compositor: &mut LayerTree) {
         for layer in self.layers.into_values() {
             compositor.remove(layer);
@@ -21,20 +21,20 @@ impl SliverClipLayers {
     }
 }
 
-struct PendingClip {
-    placement: SliverClipPlacement,
+struct PendingScope {
+    placement: SliverLayerPlacement,
     children: Vec<LayerId>,
     segment: usize,
 }
 
 fn finish(
-    active: &mut Vec<PendingClip>,
+    active: &mut Vec<PendingScope>,
     root: &mut Vec<LayerId>,
-    layers: &mut SliverClipLayers,
-    previous: &mut SliverClipLayers,
+    layers: &mut SliverLayerScopes,
+    previous: &mut SliverLayerScopes,
     compositor: &mut LayerTree,
 ) {
-    let Some(PendingClip {
+    let Some(PendingScope {
         placement,
         children,
         segment,
@@ -42,28 +42,38 @@ fn finish(
     else {
         return;
     };
-    let k = (placement.key, segment);
-    let layer = match placement.shape {
-        crate::ClipShape::Rect(rect) => {
+    let k = (placement.key(), segment);
+    let layer = match placement {
+        SliverLayerPlacement::Opacity(opacity) => {
             if let Some(layer) = previous.layers.remove(&k) {
-                compositor.update_clip(layer, rect);
-                compositor.update_clip_rect_coverage(layer, placement.coverage);
+                compositor.update_opacity(layer, opacity.alpha);
                 layer
             } else {
-                compositor.create_clip_rect_with_coverage(rect, placement.coverage)
+                compositor.create_opacity(opacity.alpha)
             }
         }
-        crate::ClipShape::RRect(rrect) => {
-            let rrect = incular_rendering::RRect::new(rrect.rect, rrect.radii);
-            if let Some(layer) = previous.layers.remove(&k) {
-                compositor.update_clip_rrect(layer, rrect);
-                compositor.update_clip_rrect_coverage(layer, placement.coverage);
-                layer
-            } else {
-                compositor.create_clip_rrect_with_coverage(rrect, placement.coverage)
+        SliverLayerPlacement::Clip(placement) => match placement.shape {
+            crate::ClipShape::Rect(rect) => {
+                if let Some(layer) = previous.layers.remove(&k) {
+                    compositor.update_clip(layer, rect);
+                    compositor.update_clip_rect_coverage(layer, placement.coverage);
+                    layer
+                } else {
+                    compositor.create_clip_rect_with_coverage(rect, placement.coverage)
+                }
             }
-        }
-        crate::ClipShape::Path(_) => unreachable!("sliver clips resolve a rect or rrect"),
+            crate::ClipShape::RRect(rrect) => {
+                let rrect = incular_rendering::RRect::new(rrect.rect, rrect.radii);
+                if let Some(layer) = previous.layers.remove(&k) {
+                    compositor.update_clip_rrect(layer, rrect);
+                    compositor.update_clip_rrect_coverage(layer, placement.coverage);
+                    layer
+                } else {
+                    compositor.create_clip_rrect_with_coverage(rrect, placement.coverage)
+                }
+            }
+            crate::ClipShape::Path(_) => unreachable!("sliver clips resolve a rect or rrect"),
+        },
     };
     compositor.set_children(layer, children);
     layers.layers.insert(k, layer);
@@ -74,7 +84,7 @@ fn finish(
 }
 
 impl WidgetTree {
-    pub(super) fn arrange_sliver_clip_layers(
+    pub(super) fn arrange_sliver_layer_scopes(
         &mut self,
         owner: ElementId,
         renders: &[RenderObjectId],
@@ -84,14 +94,14 @@ impl WidgetTree {
             .iter()
             .filter_map(|id| {
                 let node = self.renders.get(id.0)?;
-                let clips = node.parent_sliver_clips.as_ref()?;
+                let clips = node.parent_sliver_layers.as_ref()?;
                 (!node.parked).then(|| (node.object.layers.root, (clips.clone(), node.offset)))
             })
             .collect::<HashMap<_, _>>();
         let mut previous = self
-            .element_live_mut(owner, "sliver clip owner")
+            .element_live_mut(owner, "sliver layer scope owner")
             .scrolling_state_mut()
-            .sliver_clip_layers
+            .sliver_layer_scopes
             .take()
             .map(|b| *b)
             .unwrap_or_default();
@@ -100,7 +110,7 @@ impl WidgetTree {
             return ordered_layers;
         }
 
-        let mut layers = SliverClipLayers::default();
+        let mut layers = SliverLayerScopes::default();
         for (clips, _) in sources.values() {
             for clip in clips.iter() {
                 let Some(source) = clip.dependency() else {
@@ -122,9 +132,9 @@ impl WidgetTree {
                 });
             }
         }
-        let mut seen = HashMap::<u64, usize>::new();
+        let mut seen = HashMap::<SliverLayerKey, usize>::new();
         let mut root = Vec::new();
-        let mut active = Vec::<PendingClip>::new();
+        let mut active = Vec::<PendingScope>::new();
         for layer in ordered_layers {
             let (clips, origin) = sources
                 .get(&layer)
@@ -134,7 +144,7 @@ impl WidgetTree {
             let shared = active
                 .iter()
                 .zip(clips)
-                .take_while(|(a, b)| a.placement.key == b.key)
+                .take_while(|(a, b)| a.placement.key() == b.key())
                 .count();
             while active.len() > shared {
                 finish(
@@ -146,9 +156,9 @@ impl WidgetTree {
                 );
             }
             for clip in &clips[shared..] {
-                let next = seen.entry(clip.key).or_default();
+                let next = seen.entry(clip.key()).or_default();
                 let placement = clip.in_parent_space(origin);
-                active.push(PendingClip {
+                active.push(PendingScope {
                     placement,
                     children: Vec::new(),
                     segment: *next,
@@ -170,30 +180,30 @@ impl WidgetTree {
             );
         }
         previous.remove_all(&mut self.compositor);
-        self.element_live_mut(owner, "sliver clip owner")
+        self.element_live_mut(owner, "sliver layer scope owner")
             .scrolling_state_mut()
-            .sliver_clip_layers = Some(Box::new(layers));
+            .sliver_layer_scopes = Some(Box::new(layers));
         root
     }
 
-    pub(super) fn sliver_clip_layers_present(&self, owner: ElementId) -> bool {
-        self.has_sliver_clip_layers(owner)
+    pub(super) fn sliver_layer_scopes_present(&self, owner: ElementId) -> bool {
+        self.has_sliver_layer_scopes(owner)
             || self.elements.get(owner.0).is_some_and(|element| {
                 matches!(element.widget.kind(), WidgetKind::SliverViewport { .. })
                     && element.children.iter().any(|child| {
                         self.render_id(*child)
                             .and_then(|render| self.renders.get(render.0))
-                            .is_some_and(|node| node.parent_sliver_clips.is_some())
+                            .is_some_and(|node| node.parent_sliver_layers.is_some())
                     })
             })
     }
 
-    pub(super) fn has_sliver_clip_layers(&self, owner: ElementId) -> bool {
+    pub(super) fn has_sliver_layer_scopes(&self, owner: ElementId) -> bool {
         self.elements.get(owner.0).is_some_and(|entry| {
             entry
                 .scrolling_state
                 .as_ref()
-                .is_some_and(|s| s.sliver_clip_layers.is_some())
+                .is_some_and(|s| s.sliver_layer_scopes.is_some())
         })
     }
 }
@@ -209,7 +219,7 @@ impl WidgetTree {
         let pending = std::mem::take(&mut *updates.borrow_mut());
         let mut changed = false;
         for owner in pending {
-            if self.has_sliver_clip_layers(owner) {
+            if self.has_sliver_layer_scopes(owner) {
                 self.sync_render_children(owner);
                 if let Some(render) = self.render_id(owner) {
                     self.mark_render_semantics(render, SemanticsDirty::Subtree);

@@ -110,7 +110,7 @@ mod painting;
 mod raw_input;
 mod reconciliation;
 mod custom_painter_repaints;
-mod sliver_clip_layers;
+mod sliver_layer_scopes;
 mod rendering;
 mod retained;
 mod retained_state;
@@ -375,7 +375,7 @@ struct ElementScrollingState {
     /// Pinned children are painted above normal flow children while logical
     /// accessibility order remains unchanged.
     sliver_overlay_ids: FastHashSet<SliverChildId>,
-    sliver_clip_layers: Option<Box<crate::tree::sliver_clip_layers::SliverClipLayers>>,
+    sliver_layer_scopes: Option<Box<crate::tree::sliver_layer_scopes::SliverLayerScopes>>,
     /// Stable identities for lazily materialized advanced-scrolling children.
     advanced_child_keys: Vec<AdvancedChildKey>,
     sliver_delegate_revision: u64,

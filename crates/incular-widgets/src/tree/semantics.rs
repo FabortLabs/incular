@@ -1027,9 +1027,15 @@ impl WidgetTree {
         // walk over the ancestors per node.
         let world = parent_world.then(CoreTransform::translation(render.offset));
         let child_world = world.then(self.child_content_transform(render_id));
-        if let Some(clips) = &render.parent_sliver_clips {
+        if let Some(clips) = &render.parent_sliver_layers {
             for placement in clips.iter() {
-                let clip = world.transform_rect_bbox(placement.approximate_rect());
+                if placement.hides_semantics() {
+                    return;
+                }
+                let Some(rect) = placement.approximate_clip() else {
+                    continue;
+                };
+                let clip = world.transform_rect_bbox(rect);
                 semantic_bounds_clip = Some(semantic_bounds_clip.map_or(clip, |outer| {
                     outer.intersection(clip).unwrap_or_default()
                 }));
