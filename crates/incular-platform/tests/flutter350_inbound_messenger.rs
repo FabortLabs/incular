@@ -189,3 +189,135 @@ fn shrinking_drops_oldest_reentrantly_and_preserves_empty_and_null_payloads() {
     tasks.run_all();
     assert_eq!(*seen.borrow(), [Some(vec![]), None]);
 }
+
+fn control(method: &str, name: &str, second: &[u8], extra: bool) -> Vec<u8> {
+    let mut bytes = vec![7, u8::try_from(method.len()).unwrap()];
+    bytes.extend_from_slice(method.as_bytes());
+    bytes.extend([12, if extra { 3 } else { 2 }, 7, u8::try_from(name.len()).unwrap()]);
+    bytes.extend_from_slice(name.as_bytes());
+    bytes.extend_from_slice(second);
+    if extra {
+        bytes.extend_from_slice(&[7, 6, b'f', b'u', b't', b'u', b'r', b'e']);
+    }
+    bytes
+}
+
+fn capacity(value: i32) -> Vec<u8> {
+    [3].into_iter().chain(value.to_ne_bytes()).collect()
+}
+
+#[test]
+fn channel_control_resize_applies_both_wire_formats_and_replies_once() {
+    let tasks = Microtasks::default();
+    let messenger = tasks.messenger();
+    let control_replies = Rc::new(Cell::new(0));
+    messenger.push(
+        FlutterInboundMessenger::CONTROL_CHANNEL_NAME,
+        Some(control("resize", "custom", &capacity(3), true)),
+        {
+            let control_replies = control_replies.clone();
+            move |reply| {
+                assert!(reply.is_none());
+                control_replies.set(control_replies.get() + 1);
+            }
+        },
+    );
+    assert_eq!(control_replies.get(), 1);
+    let dropped = Rc::new(RefCell::new(Vec::new()));
+    for id in 1..=3 {
+        let dropped = dropped.clone();
+        messenger.push("custom", Some(vec![id]), move |reply| {
+            if reply.is_none() {
+                dropped.borrow_mut().push(id);
+            }
+        });
+    }
+    assert!(dropped.borrow().is_empty());
+    messenger.handle_control_message(b"resize\rcustom\r1").unwrap();
+    assert_eq!(*dropped.borrow(), [1, 2]);
+    let received = Rc::new(RefCell::new(Vec::new()));
+    messenger.set_message_handler("custom", {
+        let received = received.clone();
+        move |payload, reply| {
+            received.borrow_mut().extend(payload.unwrap());
+            reply(Some(vec![]));
+        }
+    });
+    assert!(received.borrow().is_empty());
+    tasks.run_all();
+    assert_eq!(*received.borrow(), [3]);
+    assert_eq!(*dropped.borrow(), [1, 2]);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn channel_control_overflow_changes_only_the_warning_and_not_the_null_reply() {
+    use incular_platform::FlutterChannelControlError;
+
+    let tasks = Microtasks::default();
+    let messenger = tasks.messenger();
+    let warnings = Rc::new(RefCell::new(Vec::new()));
+    let dropped = Rc::new(RefCell::new(Vec::new()));
+    messenger.on_overflow_warning({
+        let warnings = warnings.clone();
+        move |channel, capacity| warnings.borrow_mut().push((channel.to_owned(), capacity))
+    });
+    messenger.handle_control_message(&control("overflow", "custom", &[1], false)).unwrap();
+    let push = |id| {
+        let dropped = dropped.clone();
+        messenger.push("custom", None, move |reply| {
+            assert!(reply.is_none());
+            dropped.borrow_mut().push(id);
+        });
+    };
+    push(1);
+    push(2);
+    assert!(warnings.borrow().is_empty());
+    assert_eq!(*dropped.borrow(), [1]);
+    messenger.handle_control_message(&control("overflow", "custom", &[2], false)).unwrap();
+    push(3);
+    assert_eq!(*warnings.borrow(), [("custom".to_owned(), 1)]);
+    assert_eq!(*dropped.borrow(), [1, 2]);
+
+    let good = control("resize", "custom", &capacity(5), false);
+    for size in 0..good.len() {
+        assert!(messenger.handle_control_message(&good[..size]).is_err());
+    }
+    assert_eq!(
+        messenger.handle_control_message(&control("resize", "custom", &capacity(-1), false)),
+        Err(FlutterChannelControlError::InvalidCapacity),
+    );
+    assert_eq!(
+        messenger.handle_control_message(&control("resize", "bad\0name", &capacity(3), false)),
+        Err(FlutterChannelControlError::InvalidChannel),
+    );
+    push(4);
+    assert_eq!(warnings.borrow().len(), 2);
+    assert_eq!(*dropped.borrow(), [1, 2, 3], "invalid commands mutate no capacity");
+}
+
+#[test]
+fn control_reply_is_sent_even_if_a_dropped_message_callback_panics() {
+    let tasks = Microtasks::default();
+    let messenger = tasks.messenger();
+    messenger.push("custom", Some(vec![1]), |reply| {
+        assert!(reply.is_none());
+        panic!("test callback panic");
+    });
+    let acknowledged = Rc::new(Cell::new(0));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let acknowledged = acknowledged.clone();
+        messenger.push(
+            FlutterInboundMessenger::CONTROL_CHANNEL_NAME,
+            Some(control("resize", "custom", &capacity(0), false)),
+            move |reply| {
+                assert!(reply.is_none());
+                acknowledged.set(acknowledged.get() + 1);
+            },
+        );
+    }));
+    assert!(result.is_err());
+    assert_eq!(acknowledged.get(), 1);
+    messenger.set_message_handler("custom", |_, _| panic!("the queue should be empty"));
+    tasks.run_all();
+}

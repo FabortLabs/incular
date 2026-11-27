@@ -6,6 +6,8 @@ use std::{
     rc::Rc,
 };
 
+use crate::channel_buffer_control::{self, Control, FlutterChannelControlError};
+
 /// Nullable binary platform payload. An empty byte buffer is distinct from null.
 pub type FlutterBinaryPayload = Option<Vec<u8>>;
 /// Reply to one inbound platform message. The responder cannot be called twice.
@@ -41,6 +43,8 @@ struct Channel {
     pending: VecDeque<Message>,
     handler: Option<Handler>,
     draining: bool,
+    #[cfg(debug_assertions)]
+    expected_overflow: bool,
 }
 
 impl Default for Channel {
@@ -50,11 +54,18 @@ impl Default for Channel {
             pending: VecDeque::new(),
             handler: None,
             draining: false,
+            #[cfg(debug_assertions)]
+            expected_overflow: false,
         }
     }
 }
 
+#[cfg(debug_assertions)]
+type OverflowObserver = Rc<dyn Fn(&str, usize)>;
+
 struct Inner {
+    #[cfg(debug_assertions)]
+    overflow_observer: RefCell<Option<OverflowObserver>>,
     channels: RefCell<HashMap<Rc<str>, Channel>>,
     schedule: Box<dyn Fn(FlutterChannelMicrotask)>,
 }
@@ -71,11 +82,46 @@ pub struct FlutterInboundMessenger(Rc<Inner>);
 
 impl FlutterInboundMessenger {
     pub const DEFAULT_CAPACITY: usize = 1;
+    pub const CONTROL_CHANNEL_NAME: &'static str = "dev.flutter/channel-buffers";
+
+    /// Applies a control-channel wire message rather than queueing it.
+    ///
+    /// # Errors
+    /// Invalid methods or arguments leave all channel buffers unchanged.
+    pub fn handle_control_message(&self, bytes: &[u8]) -> Result<(), FlutterChannelControlError> {
+        match channel_buffer_control::parse(bytes)? {
+            Control::Resize { channel, capacity } => self.resize(channel, capacity),
+            Control::Overflow { channel, expected } => {
+                #[cfg(debug_assertions)]
+                {
+                    let mut channels = self.0.channels.borrow_mut();
+                    if expected {
+                        let key = channel_key(&channels, channel);
+                        channels.entry(key).or_default().expected_overflow = true;
+                    } else if let Some(channel) = channels.get_mut(channel) {
+                        channel.expected_overflow = false;
+                    }
+                }
+                #[cfg(not(debug_assertions))]
+                let _ = (channel, expected);
+            }
+        }
+        Ok(())
+    }
+
+    /// Captures debug overflow diagnostics on an owning host or test.
+    #[cfg(debug_assertions)]
+    pub fn on_overflow_warning(&self, observer: impl Fn(&str, usize) + 'static) {
+        let previous = self.0.overflow_observer.replace(Some(Rc::new(observer)));
+        drop(previous);
+    }
 
     /// `schedule` must enqueue, not run the task inline. A handler can reply
     /// later by moving its one-shot responder into its own local task.
     pub fn new(schedule: impl Fn(FlutterChannelMicrotask) + 'static) -> Self {
         Self(Rc::new(Inner {
+            #[cfg(debug_assertions)]
+            overflow_observer: RefCell::new(None),
             channels: RefCell::default(),
             schedule: Box::new(schedule),
         }))
@@ -140,11 +186,31 @@ impl FlutterInboundMessenger {
         payload: FlutterBinaryPayload,
         reply: impl FnOnce(FlutterBinaryPayload) + 'static,
     ) {
+        if name == Self::CONTROL_CHANNEL_NAME {
+            // Match the embedder's finally block: a panic from a discarded
+            // message's responder must not lose the control acknowledgement.
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                payload.as_deref().map_or(
+                    Err(FlutterChannelControlError::Malformed),
+                    |bytes| self.handle_control_message(bytes),
+                )
+            }));
+            reply(None);
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(_error)) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("{_error}");
+                }
+                Err(panic) => std::panic::resume_unwind(panic),
+            }
+            return;
+        }
         let message = Message {
             payload,
             reply: Box::new(reply),
         };
-        let dropped = {
+        let (dropped, warn_capacity) = {
             let mut channels = self.0.channels.borrow_mut();
             let key = channel_key(&channels, name);
             let channel = channels.entry(key).or_default();
@@ -155,20 +221,37 @@ impl FlutterInboundMessenger {
                 handler(message.payload, message.reply);
                 return;
             }
+            #[cfg(debug_assertions)]
+            let warning = (!channel.expected_overflow && channel.pending.len() == channel.capacity)
+                .then_some(channel.capacity);
+            #[cfg(not(debug_assertions))]
+            let warning = None::<usize>;
             if channel.capacity == 0 {
-                return;
-            }
-            let oldest = if channel.pending.len() == channel.capacity {
-                channel.pending.pop_front()
+                (None, warning)
             } else {
-                None
-            };
-            channel.pending.push_back(message);
-            oldest
+                let oldest = if channel.pending.len() == channel.capacity {
+                    channel.pending.pop_front()
+                } else {
+                    None
+                };
+                channel.pending.push_back(message);
+                (oldest, warning)
+            }
         };
         if let Some(oldest) = dropped {
             (oldest.reply)(None);
         }
+        #[cfg(debug_assertions)]
+        if let Some(capacity) = warn_capacity {
+            let observer = self.0.overflow_observer.borrow().clone();
+            if let Some(observer) = observer {
+                observer(name, capacity);
+            } else {
+                eprintln!("Flutter channel {name} overflowed its {capacity}-message buffer");
+            }
+        }
+        #[cfg(not(debug_assertions))]
+        let _ = warn_capacity;
     }
 
     fn schedule_drain(&self, name: Rc<str>) {

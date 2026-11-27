@@ -24,5 +24,25 @@ and framework `lib/src/services/binding.dart`.
 The native receiver takes a host-local microtask scheduler and explicit
 reply closures; it is not a process-global binding, Dart Zone, or new
 wire transport. No parity credit is claimed for Flutter's test-only mock
-handler introspection or for built-in host or plugin wiring, the control
-channel protocol, or Dart's exception-reporting wrapper.
+handler introspection or for Dart's exception-reporting wrapper.
+
+
+## Platform buffer control messages
+
+Two authored pinned Flutter probes compare actual control-channel
+bytes. The StandardMethodCodec resize can carry additional arguments;
+the two known fields apply a capacity without allocating that many
+slots. The legacy carriage-return resize still works, and shrinking
+replies null to older entries in arrival order. The remaining entry
+arrives only on the scheduled drain. Overflow permission can be turned
+on or off without altering which messages receive a null reply.
+
+Native platform delivery now handles the reserved channel before normal
+buffering. A control call acknowledges exactly once, including the
+Rust control where a dropped message's reply panics. Malformed and
+truncated wire data leave queue state untouched. Rust directly verifies
+that overflow warning callbacks are suppressed or enabled without
+affecting delivery. Flutter's engine prints these warnings outside the
+Dart Zone, so the authored fixture tests the null replies rather than
+capturing its log. Twenty-one focused native cases passed; this
+authored comparison adds no original registration credit.

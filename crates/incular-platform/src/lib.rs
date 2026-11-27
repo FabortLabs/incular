@@ -29,6 +29,7 @@ mod flutter_keyboard_state;
 mod flutter_lifecycle;
 mod flutter_scribble;
 mod flutter_basic_message_channel;
+mod channel_buffer_control;
 mod flutter_inbound_messenger;
 mod flutter_event_channel;
 mod flutter_floating_cursor;
@@ -128,6 +129,7 @@ pub use flutter_lifecycle::{
 pub use flutter_basic_message_channel::{
     FlutterBasicMessageChannel, FlutterBasicMessageError, FlutterBasicMessageReply, FlutterMessageCodec,
 };
+pub use channel_buffer_control::FlutterChannelControlError;
 pub use flutter_inbound_messenger::{
     FlutterBinaryPayload, FlutterBinaryReply, FlutterChannelMicrotask, FlutterInboundMessenger,
 };
