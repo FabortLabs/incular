@@ -30,3 +30,19 @@ fn converted_view_bounds_constrain_the_retained_root_on_both_axes() {
         Size::new(5., 6.),
     );
 }
+
+#[test]
+fn fractional_view_scale_preserves_the_exact_physical_size_of_the_retained_root() {
+    use incular_platform::{PhysicalSize, WindowMetrics};
+    let metrics = WindowMetrics::new(PhysicalSize::new(1008, 2198), 1.912500023841858);
+    let view = metrics.view_configuration().unwrap();
+    let mut runtime = Runtime::new(SizedBox::new().into()).unwrap();
+    let root = runtime.tree().root().unwrap();
+    runtime.run_frame(view.logical_constraints()).unwrap();
+    let logical = runtime.tree().element_bounds(root).unwrap().size;
+    assert_eq!(logical, metrics.logical_size());
+    assert_eq!(
+        view.to_physical_size(logical),
+        Some(Size::new(1008., 2198.))
+    );
+}

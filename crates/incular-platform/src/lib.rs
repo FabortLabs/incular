@@ -4,7 +4,9 @@
 //! between those coordinates and physical surface/window coordinates.
 
 use directories::ProjectDirs;
-use incular_config::ApplicationDefaults;
+use incular_config::{
+    ApplicationDefaults, ViewConfiguration, ViewConfigurationError, ViewConstraints,
+};
 use incular_core::{Color, InputEvent, KeyboardEvent, Offset, Rect, Size};
 use std::{fmt, path::PathBuf};
 
@@ -640,11 +642,25 @@ impl WindowMetrics {
             scale_factor,
         }
     }
+    /// Builds the view layout and presentation constraints from the host's
+    /// metrics. Native surfaces keep their original integer physical size.
+    /// # Errors
+    /// Returns an error for an invalid scale or unrepresentable logical bounds.
+    pub fn view_configuration(self) -> Result<ViewConfiguration, ViewConfigurationError> {
+        ViewConfiguration::from_view_constraints(
+            ViewConstraints::tight(Size::new(
+                self.physical_size.width as f32,
+                self.physical_size.height as f32,
+            )),
+            self.scale_factor,
+        )
+    }
+
     #[must_use]
     pub fn logical_size(self) -> Size {
         Size::new(
-            self.physical_size.width as f32 / self.scale_factor as f32,
-            self.physical_size.height as f32 / self.scale_factor as f32,
+            (f64::from(self.physical_size.width) / self.scale_factor) as f32,
+            (f64::from(self.physical_size.height) / self.scale_factor) as f32,
         )
     }
     #[must_use]

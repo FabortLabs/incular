@@ -274,7 +274,8 @@ pub use incular_animation::{
 pub use incular_config::{
     Alignment, AlignmentDirectional, Axis, AxisDirection, Brightness, Clip, CrossAxisAlignment,
     FlexFit, FractionalOffset, MainAxisAlignment, MainAxisSize, StackFit, TextDirection,
-    TransientPresentation, TransientRole, VerticalDirection, WrapAlignment, WrapCrossAlignment,
+    TransientPresentation, TransientRole, VerticalDirection, ViewConfiguration, ViewConfigurationError,
+    WrapAlignment, WrapCrossAlignment,
 };
 pub use incular_core::{Color, Key, LocalKey, Offset, Rect, Size, UniqueKey, ValueKey};
 pub use incular_gestures::{FocusHighlightManager, FocusHighlightMode, FocusHighlightStrategy};

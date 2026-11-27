@@ -3790,3 +3790,5 @@ packages/flutter/test/painting/colors_test.dart	547	Wikipedia Examples Table tes
 packages/flutter/test/painting/colors_test.dart	730	ColorDiagnosticsProperty includes valueProperties in JSON	paired-match	color-clamp-comparisons.md#rgb-examples-and-color-inspector-metadata
 packages/flutter/test/rendering/selection_test.dart	21	selectionBasedOnRect works	paired-match	upstream-selection-rectangle-order.md
 packages/flutter/test/rendering/selection_test.dart	33	adjustDragOffset works	paired-match	upstream-selection-rectangle-order.md
+packages/flutter/test/rendering/view_test.dart	71	ViewConfiguration == and hashCode	paired-match	upstream-view-configuration.md
+packages/flutter/test/rendering/view_constraints_test.dart	11	Properly constraints the physical size	paired-match	upstream-view-configuration.md

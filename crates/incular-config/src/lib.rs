@@ -13,6 +13,7 @@ mod insets;
 mod insets_geometry;
 mod localization;
 mod transient;
+mod view_configuration;
 
 pub use alignment::{
     Alignment, AlignmentDirectional, Axis, AxisDirection, Clip, CrossAxisAlignment, FlexFit,
@@ -36,6 +37,7 @@ pub use localization::{
     PluralForms,
 };
 pub use transient::{TransientPresentation, TransientRole};
+pub use view_configuration::{ViewConfiguration, ViewConfigurationError};
 
 // Preserve the equality of IEEE positive and negative zero in value keys.
 fn hash_layout_floats<const N: usize>(values: [f32; N], state: &mut impl std::hash::Hasher) {
