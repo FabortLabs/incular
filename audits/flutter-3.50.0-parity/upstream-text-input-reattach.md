@@ -210,3 +210,22 @@ repeated request. The authored pinned mounted-editor control and
 all four native toolbar tests passed. The arbitrary fake client
 dispatch remains partial, and the native adapter does not alter
 browser context-menu ownership.
+
+## Reparenting a focused editor and swapping its controller
+
+Pinned :448 passes. The neutral native test starts with a focused
+read-only editor, moves the globally keyed field under a new fractional
+translation and changes it to writable with a replacement controller.
+The frame opens the writable input client without throwing or losing
+focus. Typing updates the replacement controller, not its former owner.
+The native adapter can keep a read-only client for geometry and focus;
+the assertion is about the writable attachment after reparenting.
+
+Pinned :10368 also passes. The native same-renderer test observes one
+native edit update per replacement, no new client or duplicate follow-up,
+and passes the full `new text` and `new new text` past a six-character
+user-edit formatter. The controller's logical selection stays unset.
+This remains partial because the generic native command exposes a
+usable caret offset, not Flutter's signed -1 editing-state wire fields.
+Pinned :4643 ran, but its exact replacement size/transform wire payload
+has not been compared. All six focused native controller tests passed.

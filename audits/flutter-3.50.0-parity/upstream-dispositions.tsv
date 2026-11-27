@@ -3698,3 +3698,5 @@ packages/flutter/test/widgets/editable_text_test.dart	13726	SelectAll toolbar ac
 packages/flutter/test/widgets/editable_text_test.dart	13742	Selection will be scrolled into view with SelectionChangedCause	paired-match	upstream-editable-selection-paint.md#clipboard-actions-selection-cause-and-scroll
 packages/flutter/test/widgets/editable_text_test.dart	13797	Should not scroll on paste if caret already visible	paired-match	upstream-editable-selection-paint.md#clipboard-actions-selection-cause-and-scroll
 packages/flutter/test/widgets/editable_text_test.dart	1715	selection overlay will update when text grow bigger	partial-match	upstream-editable-selection-paint.md#selection-handle-anchors-after-font-changes
+packages/flutter/test/widgets/editable_text_test.dart	448	when open input connection in didUpdateWidget, should not throw	paired-match	upstream-text-input-reattach.md#reparenting-a-focused-editor-and-swapping-its-controller
+packages/flutter/test/widgets/editable_text_test.dart	10368	input from changing controller	partial-match	upstream-text-input-reattach.md#reparenting-a-focused-editor-and-swapping-its-controller
