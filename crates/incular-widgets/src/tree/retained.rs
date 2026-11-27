@@ -1242,8 +1242,6 @@ impl WidgetTree {
     pub fn render_id(&self, id: ElementId) -> Option<RenderObjectId> {
         self.elements.get(id.0).map(|e| e.render)
     }
-    /// Returns the retained render kind for diagnostics and framework tooling.
-    #[doc(hidden)]
     /// Reports whether a mounted render object is waiting for layout.
     /// Returns `None` if the render object has already been detached.
     #[must_use]
@@ -1253,6 +1251,17 @@ impl WidgetTree {
             .map(|render| render.dirty.contains(DirtyFlags::LAYOUT))
     }
 
+    /// Reports whether a mounted render object is waiting for paint.
+    /// Returns `None` when the render object is no longer mounted.
+    #[must_use]
+    pub fn render_needs_paint(&self, id: RenderObjectId) -> Option<bool> {
+        self.renders
+            .get(id.0)
+            .map(|render| render.dirty.contains(DirtyFlags::PAINT))
+    }
+
+    /// Returns the retained render kind for diagnostics and framework tooling.
+    #[doc(hidden)]
     #[must_use]
     pub fn render_object_kind(&self, id: RenderObjectId) -> Option<&RenderKind> {
         self.renders.get(id.0).map(|render| render.object.kind())

@@ -106,3 +106,42 @@ fn a_notice_during_transient_callbacks_waits_for_the_next_frame() {
         old_metrics
     );
 }
+
+#[test]
+fn banner_is_paint_dirty_before_the_next_font_update_frame() {
+    use incular_runtime::Runtime;
+    use incular_widgets::{Banner, BannerLocation};
+
+    let banner = Banner::new("message", BannerLocation::TopStart)
+        .text_direction(TextDirection::Ltr)
+        .layout_direction(TextDirection::Ltr)
+        .child(Text::new("dependent paragraph").text_direction(TextDirection::Ltr));
+    let mut runtime = Runtime::new(banner.into()).unwrap();
+    runtime.run_frame(bounds()).unwrap();
+    let banner_element = runtime.tree().root().unwrap();
+    let banner_id = runtime.tree().render_id(banner_element).unwrap();
+    let paragraph = runtime.tree().children(banner_element).unwrap()[0];
+    let paragraph_id = runtime.tree().render_id(paragraph).unwrap();
+    let metrics = runtime.tree().text_layout(paragraph_id).unwrap().metrics;
+    assert_eq!(runtime.tree().render_needs_paint(banner_id), Some(false));
+
+    let app = Application::from_runtime(runtime, |_| {});
+    assert!(app.handle_system_message("flutter/system", MESSAGE));
+    let mut runtime = app.into_runtime();
+    assert_eq!(runtime.tree().render_needs_paint(banner_id), Some(true));
+    assert_eq!(runtime.tree().render_needs_layout(banner_id), Some(false));
+    assert_eq!(
+        runtime.tree().render_needs_layout(paragraph_id),
+        Some(false)
+    );
+    assert_eq!(runtime.tree().render_needs_paint(paragraph_id), Some(false));
+    assert_eq!(
+        runtime.tree().text_layout(paragraph_id).unwrap().metrics,
+        metrics
+    );
+
+    let (_, frame) = runtime.run_frame(bounds()).unwrap();
+    assert!(frame.repainted_render_objects > 0);
+    assert_eq!(runtime.tree().render_needs_paint(banner_id), Some(false));
+    assert_eq!(runtime.tree().render_id(banner_element), Some(banner_id));
+}

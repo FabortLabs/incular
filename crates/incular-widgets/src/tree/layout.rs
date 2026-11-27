@@ -131,6 +131,23 @@ impl WidgetTree {
         self.text_engine.has_pending_system_fonts()
     }
 
+    /// Marks the paint-only font listeners immediately without changing
+    /// the collection or invalidating the text measurements of this frame.
+    #[doc(hidden)]
+    pub fn notify_system_font_painters(&mut self) {
+        let banners = self
+            .renders
+            .iter()
+            .filter_map(|(id, node)| {
+                matches!(node.object.kind(), RenderKind::Banner { .. })
+                    .then_some(RenderObjectId(id))
+            })
+            .collect::<Vec<_>>();
+        for id in banners {
+            self.mark_render_paint(id);
+        }
+    }
+
     /// Refresh text consumers without rebuilding widgets or dirtying
     /// unrelated non-text render objects.
     #[doc(hidden)]

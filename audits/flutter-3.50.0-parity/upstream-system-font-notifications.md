@@ -17,9 +17,12 @@ five existing platform memory-pressure tests and four package-font
 checks. These tests exercise explicit native notification delivery; they
 do not certify automatic detection by each operating-system adapter.
 
-Pinned :46 and :73 also passed, but these are not counted. The native
-suite checks that previous text measures stay usable before refresh, not
-that a custom render mixin exposes the same interface as :46. Incular's
-Banner is repainted when applying the queued generation, rather than
-proving Flutter's immediate dirty flag at notice receipt as :73 asks.
-Design-system controls stay out of scope.
+Pinned :46 also passed but is not counted. The native suite checks
+that previous text measures stay usable before refresh, not that a
+custom render mixin exposes the same interface.
+
+Pinned :73 now pairs: the real system channel synchronously marks a
+Banner paint-dirty without moving the deferred paragraph layout boundary.
+The mounted test inspects both dirty flags and existing paragraph
+metrics before the next frame, then checks the same banner repaints
+and clears its paint flag. Design-system controls stay out of scope.

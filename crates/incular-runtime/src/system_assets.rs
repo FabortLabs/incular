@@ -32,7 +32,22 @@ impl Application {
         };
         match notice.kind.as_str() {
             "memoryPressure" => self.handle_memory_pressure(),
-            "fontsChange" => incular_text::TextEngine::notify_system_fonts_changed(),
+            "fontsChange" => {
+                incular_text::TextEngine::notify_system_fonts_changed();
+                // Flutter's BannerPainter listens for paint synchronously,
+                // unlike its paragraph/editable layout listeners. A window
+                // currently executing a frame is temporarily taken from the
+                // registry; its queued font refresh also dirties its painters.
+                if let Ok(mut registry) = self.registry.try_borrow_mut() {
+                    for record in registry
+                        .slots
+                        .iter_mut()
+                        .filter_map(|slot| slot.record.as_mut())
+                    {
+                        record.runtime.tree.notify_system_font_painters();
+                    }
+                }
+            }
             _ => return false,
         }
         true
