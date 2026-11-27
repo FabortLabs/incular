@@ -213,7 +213,10 @@ pub use environment::{
     MediaQueryEdges, Orientation, OrientationBuilder, PrimaryScrollController, ScrollConfiguration,
     SensitiveContent, SensitiveContentHost, TickerMode,
 };
-pub use explicit_animations::{AnimatedBuilder, Listenable, ListenableBuilder, TransitionBuilder};
+pub use explicit_animations::{
+    AnimatedBuilder, Listenable, ListenableBuilder, TransitionBuilder, ValueListenable,
+    ValueListenableBuilder,
+};
 pub use fade_in_image::FadeInImage;
 pub use flutter_logo::{FlutterLogo, FlutterLogoLayout, FlutterLogoStyle};
 pub use incular_gestures::{

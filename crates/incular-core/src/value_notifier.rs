@@ -60,6 +60,12 @@ impl<T> ValueNotifier<T> {
         self.inner.cell.borrow().clone()
     }
 
+    /// Whether this notifier currently has listeners or reactive subscribers.
+    #[must_use]
+    pub fn has_listeners(&self) -> bool {
+        self.inner.cell.source().subscriber_count() != 0
+    }
+
     /// Calls `listener` synchronously when the value changes. Keep the
     /// returned subscription alive to continue receiving notifications.
     pub fn add_listener(&self, listener: impl Fn() + 'static) -> Subscription {

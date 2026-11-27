@@ -301,6 +301,57 @@ impl From<ListenableBuilder> for Widget {
     }
 }
 
+/// A [Listenable] that supplies a typed value to its subscribers.
+pub trait ValueListenable<T>: Listenable {
+    fn value(&self) -> T;
+}
+
+impl<T: Clone> ValueListenable<T> for incular_core::ValueNotifier<T> {
+    fn value(&self) -> T {
+        incular_core::ValueNotifier::value(self)
+    }
+}
+
+impl<T, L: ValueListenable<T>> ValueListenable<T> for Rc<L> {
+    fn value(&self) -> T {
+        (**self).value()
+    }
+}
+
+/// Rebuilds from a typed listenable and retains an optional static child.
+pub struct ValueListenableBuilder<T> {
+    inner: ListenableBuilder,
+    output: std::marker::PhantomData<fn() -> T>,
+}
+
+impl<T: 'static> ValueListenableBuilder<T> {
+    #[must_use]
+    pub fn new(
+        listenable: impl ValueListenable<T> + 'static,
+        builder: impl for<'a> Fn(&BuildContext<'a>, T, Option<Widget>) -> Widget + 'static,
+    ) -> Self {
+        let source = Rc::new(listenable);
+        Self {
+            inner: ListenableBuilder::new(source.clone(), move |context, child| {
+                builder(context, source.value(), child)
+            }),
+            output: std::marker::PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.inner = self.inner.child(child);
+        self
+    }
+}
+
+impl<T> From<ValueListenableBuilder<T>> for Widget {
+    fn from(value: ValueListenableBuilder<T>) -> Self {
+        value.inner.into()
+    }
+}
+
 /// The clocks of a listenable, as an animation source with no value of its
 /// own.
 struct Clocks(Vec<AnimationController>);

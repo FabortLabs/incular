@@ -405,6 +405,7 @@ pub mod prelude {
     };
     pub use incular_widgets::{
         AnimatedBuilder, Listenable, ListenableBuilder, OpacityController, RelativeRect,
+        ValueListenable, ValueListenableBuilder,
         RotationController, ScaleController, TransitionBuilder, TranslationController,
     };
 }
