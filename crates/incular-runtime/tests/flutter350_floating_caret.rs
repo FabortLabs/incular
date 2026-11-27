@@ -6,7 +6,7 @@ use incular_platform::{FlutterFloatingCursorPoint, TextInputClientId, TextInputC
 use incular_rendering::{Brush, DisplayList, PaintCommand};
 use incular_runtime::Runtime;
 use incular_text::{TextAffinity, TextEditingController, TextSelection};
-use incular_widgets::EditableText;
+use incular_widgets::{Column, EditableText, SizedBox};
 use serde_json::{Value, json};
 
 fn constraints() -> Constraints {
@@ -240,4 +240,70 @@ fn reversing_after_overshoot_reenters_from_the_edge_without_a_long_dead_zone() {
         .run_frame_at(constraints(), Instant::now() + Duration::from_millis(130))
         .unwrap();
     assert!(controller.selection().extent < controller.text().len());
+}
+
+#[test]
+fn removing_the_editor_while_the_floating_caret_resets_cancels_frame_work() {
+    let controller = TextEditingController::with_text("A");
+    let editor = EditableText::new(controller.clone())
+        .autofocus(true)
+        .text_direction(TextDirection::Ltr)
+        .cursor_color(CURSOR)
+        .cursor_opacity_animates(true);
+    let mut runtime = Runtime::new(Column::new([editor]).into()).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let start = Instant::now();
+    runtime.run_frame_at(constraints(), start).unwrap();
+    assert!(runtime.focused_element().is_some());
+    assert!(
+        runtime.next_frame_deadline().is_some(),
+        "ordinary blink is armed"
+    );
+    let client = runtime
+        .take_text_input_commands()
+        .into_iter()
+        .find_map(|command| match command {
+            TextInputCommand::SetClient { configuration, .. } => Some(configuration.client),
+            _ => None,
+        })
+        .unwrap();
+    let sender = json!(client.get());
+    assert_eq!(
+        wire(&mut runtime, sender.clone(), "start", json!({"X":0, "Y":0})),
+        Some(true)
+    );
+    let (dragging, _) = runtime
+        .run_frame_at(constraints(), start + Duration::from_millis(150))
+        .unwrap();
+    assert!(visible_floating_caret(&dragging));
+    runtime
+        .run_frame_at(constraints(), start + Duration::from_millis(650))
+        .unwrap();
+    assert_eq!(
+        wire(&mut runtime, sender, "end", json!({"X":0, "Y":0})),
+        Some(true)
+    );
+    let ending = Instant::now();
+    let (settling, stats) = runtime
+        .run_frame_at(constraints(), ending + Duration::from_millis(10))
+        .unwrap();
+    assert!(visible_floating_caret(&settling));
+    assert!(stats.requested_another_frame, "caret reset is active");
+
+    let value = controller.value();
+    runtime
+        .schedule_update(root, Column::new([SizedBox::shrink()]).into())
+        .unwrap();
+    let (removed, stats) = runtime
+        .run_frame_at(constraints(), ending + Duration::from_millis(20))
+        .unwrap();
+    assert!(!visible_floating_caret(&removed));
+    assert!(runtime.focused_element().is_none());
+    assert!(!stats.requested_another_frame);
+    assert!(runtime.next_frame_deadline().is_none());
+    let (_, stats) = runtime
+        .run_frame_at(constraints(), ending + Duration::from_secs(2))
+        .unwrap();
+    assert!(!stats.requested_another_frame);
+    assert_eq!(controller.value(), value);
 }

@@ -22,3 +22,14 @@ background caret and the Flutter force-press selection notification
 are not fully paired.
 
 Four focused native floating-caret tests and 13 lifecycle regressions passed.
+
+## Editor unmount
+
+Pinned `widgets/editable_text_test.dart:13306`, “EditableText does not leak
+animation controllers,” passes. The native regression mounts an autofocus
+editor with animated caret opacity, verifies its blink deadline and visible
+floating-caret reset, and unmounts it before the 125 ms reset completes. No
+caret remains, no new frame or animation deadline is requested, and the old
+controller's value is untouched even after the reset would have elapsed.
+Incular checks actual frame demand rather than counting Flutter's internal
+ticker objects. All five focused native floating-caret tests passed.

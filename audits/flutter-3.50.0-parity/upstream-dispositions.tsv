@@ -3640,3 +3640,4 @@ packages/flutter/test/widgets/dismissible_test.dart	1127	Change direction does n
 packages/flutter/test/widgets/dismissible_test.dart	976	Dismissible.behavior should behave correctly during hit testing	paired-match	upstream-dismissible-direction-and-confirmation.md#opaque-gesture-surfaces-stop-raw-sibling-hits
 packages/flutter/test/widgets/focus_scope_test.dart	875	Moving FocusScopeNodes retains focus	paired-match	upstream-mounted-focus-scope-nodes.md#swapping-external-scope-nodes
 packages/flutter/test/gestures/locking_test.dart	42	Pointer events are locked during reassemble	paired-match	upstream-reassemble-pointer-queue.md#physical-packets
+packages/flutter/test/widgets/editable_text_test.dart	13306	EditableText does not leak animation controllers	paired-match	upstream-floating-caret.md#editor-unmount
