@@ -257,3 +257,22 @@ before drawing the paragraph. With the embedded FlutterTest font, the
 occupies (128, 48)–(192, 112). The native test also checks translation,
 paint order, disabling the diagnostic, and retained paragraph identity
 across toggles. The pinned original and 45 focused painter tests passed.
+
+## Discretionary hyphen paint and caret geometry
+
+Three pinned originals pair. Manual is the default. Hidden and manual
+take the same discretionary break; only manual appends the paint
+glyph. The retained source, line metrics and caret stops remain
+unchanged. At max width 49 px with 10 px test glyphs, the widths are
+40 px with the mark and 30 px without, but the first reported line
+width is 30 px in both modes. Changing the option invalidates paint
+geometry; setting it to the same value preserves it.
+
+The separate reference probe checks the width threshold and both
+affinities. An untaken break and a final soft hyphen draw nothing;
+a soft hyphen before an explicit line break still draws the mark on
+the preceding line. The probe also records the unresolved Parley
+gap for other Unicode separators, with no original test credit for
+that gap. Three original registrations, both authored reference
+controls, 48 native painter tests and 4 native placeholder tests
+passed. The native exact assertions use pinned Ahem advances.

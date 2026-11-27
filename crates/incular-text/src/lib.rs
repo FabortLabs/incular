@@ -12,7 +12,7 @@ mod spans;
 mod style;
 mod text_painter;
 pub use text_painter::{
-    PlaceholderDimensions, TextPainter, TextPainterBox, TextPainterError, TextPainterLine,
+    Hyphens, PlaceholderDimensions, TextPainter, TextPainterBox, TextPainterError, TextPainterLine,
     TextPainterPaint,
 };
 #[cfg(all(target_os = "windows", not(feature = "bundled-dictionaries")))]

@@ -45,6 +45,16 @@ impl fmt::Display for TextPainterError {
 }
 impl std::error::Error for TextPainterError {}
 
+/// Whether a discretionary line break paints a soft hyphen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Hyphens {
+    /// Paint a hyphen when a line ends at U+00AD, not at the end of text.
+    #[default]
+    Manual,
+    /// Take the same line breaks without drawing a hyphen.
+    Hidden,
+}
+
 /// A paragraph paint operation, in the caller's drawing coordinates.
 pub enum TextPainterPaint<'a> {
     DebugBox {
@@ -169,6 +179,8 @@ pub struct TextPainter {
     scaler: TextScaler,
     strut_style: Option<StrutStyle>,
     height_behavior: Option<TextHeightBehavior>,
+    hyphens: Hyphens,
+    has_soft_hyphen: bool,
     placeholder_dimensions: Vec<PlaceholderDimensions>,
     measured: Option<MeasuredText>,
     debug_paint_text_layout_boxes: bool,
@@ -218,6 +230,7 @@ impl TextPainter {
     pub fn set_text(&mut self, text: Option<TextSpan>) {
         if self.text != text {
             self.plain = text.as_ref().map_or_else(String::new, TextSpan::plain_text);
+            self.has_soft_hyphen = self.plain.contains('\u{00ad}');
             if !self.placeholder_dimensions.is_empty()
                 && text.as_ref().map_or(0, |span| span.placeholders().len()) != self.placeholder_dimensions.len()
             {
@@ -308,6 +321,18 @@ impl TextPainter {
     pub fn set_strut_style(&mut self, strut: Option<StrutStyle>) {
         if self.strut_style != strut {
             self.strut_style = strut;
+            self.measured = None;
+        }
+    }
+
+    #[must_use]
+    pub const fn hyphens(&self) -> Hyphens {
+        self.hyphens
+    }
+
+    pub fn set_hyphens(&mut self, hyphens: Hyphens) {
+        if self.hyphens != hyphens {
+            self.hyphens = hyphens;
             self.measured = None;
         }
     }
@@ -428,7 +453,7 @@ impl TextPainter {
             (TextAlign::Center, _) => 0.5,
             _ => 1.,
         };
-        let (intrinsic, shaped, shaping_width) = if max_width.is_finite() {
+        let (intrinsic, mut shaped, shaping_width) = if max_width.is_finite() {
             let intrinsic = reusable.map_or_else(
                 || longest(&measure(engine, None, None)),
                 |last| last.max_intrinsic_width,
@@ -456,13 +481,13 @@ impl TextPainter {
             };
             (intrinsic, shaped, intrinsic)
         };
+        let hyphenated_width = (self.hyphens == Hyphens::Manual
+            && self.has_soft_hyphen
+            && shaped.lines.len() > 1)
+            .then(|| paint_discretionary_hyphens(engine, &self.plain, &base, &runs, &mut shaped));
         let measured_width = match self.width_basis {
             TextWidthBasis::Parent => intrinsic,
-            TextWidthBasis::LongestLine => shaped
-                .lines
-                .iter()
-                .map(|line| line.width - line.hanging_advance)
-                .fold(0., f32::max),
+            TextWidthBasis::LongestLine => hyphenated_width.unwrap_or_else(|| visual_width(&shaped)),
         }
         .clamp(min_width, max_width);
         self.measured = Some(MeasuredText {
@@ -911,6 +936,116 @@ impl TextPainter {
         self.plain = String::new();
         Ok(())
     }
+}
+
+fn visual_width(layout: &TextLayout) -> f32 {
+    layout
+        .lines
+        .iter()
+        .map(|line| line.width - line.hanging_advance)
+        .fold(0., f32::max)
+}
+
+/// A discretionary mark is painted by the line without adding a text
+/// cluster. Flutter exposes its advance in the overall painted width,
+/// not in line metrics, selection geometry, or caret positions.
+fn paint_discretionary_hyphens(
+    engine: &mut TextEngine,
+    source: &str,
+    base: &TextStyle,
+    styles: &[crate::StyledTextRun],
+    shaped: &mut Arc<TextLayout>,
+) -> f32 {
+    use incular_rendering::GlyphRun;
+    let mut width = visual_width(shaped);
+    let mut marks = Vec::new();
+    for (index, lines) in shaped.lines.windows(2).enumerate() {
+        let line = &lines[0];
+        let next = &lines[1];
+        let Some(prefix) = source.get(..next.start) else {
+            continue;
+        };
+        let line_break = |ch| matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}');
+        let Some(prefix) = prefix.trim_end_matches(line_break).strip_suffix('\u{00ad}') else {
+            continue;
+        };
+        let byte = prefix.len();
+        if byte < line.start
+            || (line.end < next.start
+                && !source
+                    .get(line.end..next.start)
+                    .is_some_and(|gap| gap.chars().all(line_break)))
+        {
+            continue;
+        }
+        let style = styles
+            .get(styles.partition_point(|run| run.range.end <= byte))
+            .filter(|run| run.range.contains(&byte))
+            .map_or(base, |run| &run.style);
+        let edge = line
+            .clusters
+            .iter()
+            .rev()
+            .find(|cluster| cluster.range().start <= byte && cluster.range().end >= byte);
+        let rtl = edge.is_some_and(|cluster| cluster.rtl);
+        let hyphen = engine.layout_with_options(
+            "\u{2010}",
+            style,
+            TextLayoutOptions::new(None, TextAlign::Left),
+        );
+        let Some(template) = hyphen.lines.first() else {
+            continue;
+        };
+        let advance = template.width;
+        let x = edge.map_or(line.offset + line.width - line.hanging_advance, |cluster| {
+            if rtl {
+                cluster.left - advance
+            } else {
+                cluster.right
+            }
+        });
+        let snapped_baseline =
+            |line: &crate::TextLine| line.top + (line.baseline - line.top).round();
+        let dy = snapped_baseline(template) - snapped_baseline(line);
+        width = width.max(line.width - line.hanging_advance + advance);
+        marks.push((
+            index,
+            template
+                .runs
+                .iter()
+                .map(|run| {
+                    Arc::new(GlyphRun {
+                        glyphs: run
+                            .glyphs
+                            .iter()
+                            .map(|glyph| {
+                                let mut marked = *glyph;
+                                marked.offset.x += x;
+                                marked.offset.y += dy;
+                                marked.cluster = byte as u32;
+                                marked
+                            })
+                            .collect(),
+                        ..run.as_ref().clone()
+                    })
+                })
+                .collect::<Vec<_>>(),
+        ));
+    }
+    if !marks.is_empty() {
+        let lines = Arc::make_mut(&mut Arc::make_mut(shaped).lines);
+        for (index, marks) in marks {
+            let line = &mut lines[index];
+            line.glyphs = line
+                .glyphs
+                .iter()
+                .copied()
+                .chain(marks.iter().flat_map(|mark| mark.glyphs.iter().copied()))
+                .collect();
+            line.runs = line.runs.iter().cloned().chain(marks).collect();
+        }
+    }
+    width
 }
 
 fn longest(layout: &TextLayout) -> f32 {

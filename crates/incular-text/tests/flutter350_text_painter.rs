@@ -1565,3 +1565,88 @@ fn debug_boxes_outline_natural_text_bounds_before_painting_the_paragraph() {
         }
     }
 }
+
+#[test]
+fn manual_soft_hyphens_are_the_painter_default() {
+    let mut painter = TextPainter::new();
+    assert_eq!(painter.hyphens(), incular_text::Hyphens::Manual);
+    painter.set_hyphens(incular_text::Hyphens::Hidden);
+    assert_eq!(painter.hyphens(), incular_text::Hyphens::Hidden);
+}
+
+#[test]
+fn a_taken_soft_hyphen_changes_paint_width_but_not_line_or_caret_geometry() {
+    use incular_text::{Hyphens, TextAffinity};
+    let Some((mut engine, font)) = centered_width_ahem() else {
+        return;
+    };
+    let style = font.font_size(10.);
+    let span = TextSpan::new("abc\u{00ad}de").style(style.clone());
+    let mut painter = painter(span, TextDirection::Ltr);
+    painter.set_text_width_basis(TextWidthBasis::LongestLine);
+    for (mode, count, full) in [(Hyphens::Hidden, 3, 30_f32), (Hyphens::Manual, 4, 40.)] {
+        painter.set_hyphens(mode);
+        for (max, expected) in [(30., 30.), (35., full.min(35.)), (49., full), (50., 50.)] {
+            painter.layout_with_engine(&mut engine, 0., max).unwrap();
+            assert_eq!(painter.width(), Ok(expected), "{mode:?} at {max}");
+            let lines = painter.line_metrics().unwrap();
+            assert_eq!(
+                lines.iter().map(|m| m.width).collect::<Vec<_>>(),
+                if max < 50. { vec![30., 20.] } else { vec![50.] }
+            );
+            let shape = painter.shaped_layout().unwrap();
+            if max < 50. {
+                assert_eq!(
+                    shape.lines[0]
+                        .glyphs
+                        .iter()
+                        .filter(|g| g.advance > 0.)
+                        .count(),
+                    count
+                );
+            }
+            assert_eq!(
+                painter
+                    .caret_offset_utf16(4, TextAffinity::Upstream, 0.)
+                    .unwrap()
+                    .x,
+                30.
+            );
+            assert_eq!(
+                painter
+                    .caret_offset_utf16(4, TextAffinity::Downstream, 0.)
+                    .unwrap()
+                    .x,
+                if max < 50. { 0. } else { 30. }
+            );
+        }
+    }
+    for (source, expected) in [("abc\u{00ad}", 30.), ("abc\u{00ad}\nde", 40.)] {
+        painter.set_text(Some(TextSpan::new(source).style(style.clone())));
+        painter.layout_with_engine(&mut engine, 0., 49.).unwrap();
+        assert_eq!(painter.width(), Ok(expected));
+    }
+}
+
+#[test]
+fn changing_soft_hyphens_invalidates_the_retained_paint_width() {
+    use incular_text::Hyphens;
+    let Some((mut engine, font)) = centered_width_ahem() else {
+        return;
+    };
+    let mut painter = painter(
+        TextSpan::new("abc\u{00ad}de").style(font.font_size(10.)),
+        TextDirection::Ltr,
+    );
+    painter.set_text_width_basis(TextWidthBasis::LongestLine);
+    painter.set_hyphens(Hyphens::Hidden);
+    painter.layout_with_engine(&mut engine, 0., 49.).unwrap();
+    assert_eq!(painter.width(), Ok(30.));
+    let shape = painter.shaped_layout().unwrap().clone();
+    painter.set_hyphens(Hyphens::Hidden);
+    assert!(Arc::ptr_eq(&shape, painter.shaped_layout().unwrap()));
+    painter.set_hyphens(Hyphens::Manual);
+    assert_eq!(painter.width(), Err(TextPainterError::NeedsLayout));
+    painter.layout_with_engine(&mut engine, 0., 49.).unwrap();
+    assert_eq!(painter.width(), Ok(40.));
+}
