@@ -2659,3 +2659,16 @@ packages/flutter/test/services/font_loader_test.dart	22	Font loader test	paired-
 packages/flutter/test/services/font_loader_test.dart	39	FontLoader loads fonts in order	paired-match	upstream-font-loader.md
 packages/flutter/test/services/channel_buffers_test.dart	24	does drain channel buffers	paired-match	upstream-inbound-messenger.md
 packages/flutter/test/services/default_binary_messenger_test.dart	18	default binary messenger calls callback once	paired-match	upstream-inbound-messenger.md
+packages/flutter/test/services/system_context_menu_controller_test.dart	34	showing and hiding one controller	paired-match	upstream-system-context-menu.md#controller-ownership-and-platform-commands
+packages/flutter/test/services/system_context_menu_controller_test.dart	128	the system can hide the menu with handleSystemHide	paired-match	upstream-system-context-menu.md#controller-ownership-and-platform-commands
+packages/flutter/test/services/system_context_menu_controller_test.dart	210	showing a second controller while one is visible is an error	paired-match	upstream-system-context-menu.md#controller-ownership-and-platform-commands
+packages/flutter/test/services/system_context_menu_controller_test.dart	248	showing and hiding two controllers	paired-match	upstream-system-context-menu.md#controller-ownership-and-platform-commands
+packages/flutter/test/services/system_context_menu_controller_test.dart	336	showing a controller with custom items	paired-match	upstream-system-context-menu.md#controller-ownership-and-platform-commands
+packages/flutter/test/services/system_context_menu_controller_test.dart	410	showing a controller with empty items	paired-match	upstream-system-context-menu.md#controller-ownership-and-platform-commands
+packages/flutter/test/services/system_context_menu_controller_test.dart	537	custom action callbacks are properly managed	paired-match	upstream-system-context-menu.md#action-lifetime-and-late-platform-messages
+packages/flutter/test/services/system_context_menu_controller_test.dart	590	multiple controllers handle callbacks independently	paired-match	upstream-system-context-menu.md#action-lifetime-and-late-platform-messages
+packages/flutter/test/services/system_context_menu_controller_test.dart	650	platform dismissal clears callbacks	paired-match	upstream-system-context-menu.md#action-lifetime-and-late-platform-messages
+packages/flutter/test/services/system_context_menu_controller_test.dart	687	calling handleCustomContextMenuAction with no systemContextMenuClient	partial-match	upstream-system-context-menu.md#action-lifetime-and-late-platform-messages
+packages/flutter/test/services/system_context_menu_controller_test.dart	703	handleCustomContextMenuAction with non-existent callbackId	paired-match	upstream-system-context-menu.md#action-lifetime-and-late-platform-messages
+packages/flutter/test/services/system_context_menu_controller_test.dart	726	handleCustomContextMenuAction after hide clears callbacks	paired-match	upstream-system-context-menu.md#action-lifetime-and-late-platform-messages
+packages/flutter/test/services/system_context_menu_controller_test.dart	767	showing new menu invalidates old menu callbacks	paired-match	upstream-system-context-menu.md#action-lifetime-and-late-platform-messages
