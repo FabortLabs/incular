@@ -2789,3 +2789,5 @@ packages/flutter/test/gestures/recognizer_test.dart	42	OffsetPair	paired-match	u
 packages/flutter/test/gestures/velocity_tracker_test.dart	82	FreeScrollStartVelocityTracker.getVelocity throws when no points	paired-match	upstream-checked-fling-velocity.md
 packages/flutter/test/gestures/velocity_tracker_test.dart	96	FreeScrollStartVelocityTracker.getVelocity throws when the new point precedes the previous point	paired-match	upstream-checked-fling-velocity.md
 packages/flutter/test/gestures/velocity_tracker_test.dart	114	Estimate does not throw when there are more than 1 point	paired-match	upstream-checked-fling-velocity.md
+packages/flutter/test/gestures/tap_test.dart	483	No duplicate tap events	paired-match	upstream-competing-tap-lifecycle.md
+packages/flutter/test/gestures/tap_test.dart	598	PointerCancelEvent after exceeding deadline cancels tap	paired-match	upstream-competing-tap-lifecycle.md
