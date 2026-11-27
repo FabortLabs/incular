@@ -1310,6 +1310,31 @@ impl Runtime {
         }
     }
 
+    /// Allows the native text-input host to request the active editor's
+    /// retained selection toolbar without synthesizing a pointer gesture.
+    pub(crate) fn show_flutter_editor_toolbar(&mut self) -> bool {
+        // On web the default browser context menu owns this affordance.
+        if cfg!(target_arch = "wasm32") {
+            return false;
+        }
+        let Some(field) = self.focused else {
+            return false;
+        };
+        let Some(menu) = self.tree.text_field_context_menu(field) else {
+            return false;
+        };
+        if menu.is_showing() {
+            return false;
+        }
+        let Some(snapshot) = self.tree.text_field_input_geometry(field) else {
+            return false;
+        };
+        let anchors = self.text_field_menu_anchors(field, snapshot.caret_rect.origin);
+        let shown = menu.show(anchors, self.text_field_context_menu_items(field));
+        self.frame_requested |= shown;
+        shown
+    }
+
     /// Shows the touch toolbar of `field` for the press at `position`, if the
     /// field has a context menu builder.
     fn show_text_field_touch_menu(&mut self, field: ElementId, position: Offset) {

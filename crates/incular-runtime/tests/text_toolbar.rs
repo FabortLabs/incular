@@ -119,3 +119,48 @@ fn typing_text_hides_the_open_toolbar() {
     runtime.run_frame_at(bounds(), at).unwrap();
     assert!(!toolbar_open(&runtime));
 }
+
+#[test]
+fn native_text_toolbar_request_shows_once_without_changing_selection() {
+    use incular_platform::TextInputCommand;
+    use incular_text::TextSelection;
+    use serde_json::json;
+
+    let (mut runtime, controller, shown) = mount("hello world");
+    let start = Instant::now();
+    tap(
+        &mut runtime,
+        Offset::new(12., 10.),
+        PointerDeviceKind::Mouse,
+        start,
+    );
+    runtime.run_frame_at(bounds(), start).unwrap();
+    let client = runtime
+        .take_text_input_commands()
+        .into_iter()
+        .find_map(|command| match command {
+            TextInputCommand::SetClient { configuration, .. } => Some(configuration.client),
+            _ => None,
+        })
+        .expect("mounted input attachment");
+    let selection = TextSelection::new(0, 5);
+    controller.set_selection(selection);
+    runtime.run_frame(bounds()).unwrap();
+
+    let show = |runtime: &mut Runtime, id| {
+        let wire = json!({"method":"TextInputClient.showToolbar", "args":[id,0,1]});
+        runtime
+            .handle_flutter_text_toolbar_call(wire.to_string().as_bytes())
+            .unwrap()
+    };
+    assert_eq!(show(&mut runtime, client.get() + 1), Some(false));
+    assert!(!toolbar_open(&runtime));
+    assert_eq!(show(&mut runtime, client.get()), Some(true));
+    runtime.run_frame(bounds()).unwrap();
+    let builds = shown.borrow().len();
+    assert!(builds > 0);
+    assert_eq!(controller.selection(), selection);
+    assert_eq!(show(&mut runtime, client.get()), Some(false));
+    runtime.run_frame(bounds()).unwrap();
+    assert_eq!(shown.borrow().len(), builds);
+}

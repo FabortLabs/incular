@@ -199,3 +199,14 @@ move focus; Backtab from B returns to A with a third client ID.
 Both values remain unchanged. All 13 focused native lifecycle cases
 and both pinned authored selector controls passed. No new original
 registration credit accompanies this control.
+
+## Host selection toolbar
+
+The pinned services :1078 fake-client registration ran. A mounted
+native editor now handles `showToolbar` from the active attachment
+without synthesizing a pointer gesture or changing selection. It
+shows the configured toolbar once and ignores a stale sender or
+repeated request. The authored pinned mounted-editor control and
+all four native toolbar tests passed. The arbitrary fake client
+dispatch remains partial, and the native adapter does not alter
+browser context-menu ownership.

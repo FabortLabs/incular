@@ -350,6 +350,28 @@ impl crate::Runtime {
         Ok(Some(true))
     }
 
+    /// Requests the active native editor toolbar. Returns false for a
+    /// stale sender or a toolbar that was already visible.
+    pub fn handle_flutter_text_toolbar_call(
+        &mut self,
+        data: &[u8],
+    ) -> Result<Option<bool>, FlutterTextInputLifecycleError> {
+        let call = JsonMethodCodec::decode_method_call(data)?;
+        if call.method != "TextInputClient.showToolbar" {
+            return Ok(None);
+        }
+        self.adopt_external_focus_change();
+        let Some(active) = self.active_flutter_editable_client() else {
+            return Ok(Some(false));
+        };
+        let sender = call.arguments.as_array().and_then(|args| args.first())
+            .ok_or(FlutterTextInputLifecycleError::InvalidClientId)?;
+        if !sender_matches(sender, active).ok_or(FlutterTextInputLifecycleError::InvalidClientId)? {
+            return Ok(Some(false));
+        }
+        Ok(Some(self.show_flutter_editor_toolbar()))
+    }
+
     /// Receives Flutter's keyboard floating-cursor gesture for the current
     /// attachment. Updates without a start are valid wire messages and do
     /// not implicitly start a gesture.
