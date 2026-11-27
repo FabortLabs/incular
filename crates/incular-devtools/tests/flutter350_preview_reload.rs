@@ -24,6 +24,8 @@ struct Trace {
     published: Vec<(PathBuf, String)>,
     publish_error: bool,
     manifests: Vec<PathBuf>,
+    analysis_disposed: bool,
+    dispose_after_lookup: bool,
     analysis_error: bool,
     lookup_failures: usize,
     hang_lookup: bool,
@@ -39,6 +41,10 @@ impl PreviewReloadHost for Host {
     type Previews = String;
     type Error = io::Error;
 
+    fn analysis_disposed(&self) -> bool {
+        self.trace.lock().unwrap().analysis_disposed
+    }
+
     async fn wait_for_analysis(&mut self) -> io::Result<()> {
         let mut trace = self.trace.lock().unwrap();
         trace.analysis += 1;
@@ -52,7 +58,14 @@ impl PreviewReloadHost for Host {
     async fn load_previews(&mut self, source: &Path) -> io::Result<Self::Previews> {
         let hang = {
             let mut trace = self.trace.lock().unwrap();
+            assert!(
+                !trace.analysis_disposed,
+                "disposed analysis must not be entered"
+            );
             trace.lookup.push(source.to_owned());
+            if trace.dispose_after_lookup {
+                trace.analysis_disposed = true;
+            }
             if trace.lookup_failures > 0 {
                 trace.lookup_failures -= 1;
                 return Err(io::Error::other("preview service unavailable"));
@@ -92,6 +105,57 @@ impl PreviewReloadHost for Host {
             .map_err(io::Error::other)?;
         Ok(())
     }
+}
+
+#[tokio::test]
+async fn a_late_watcher_event_does_not_reenter_disposed_analysis() {
+    let f = Fixture::new();
+    let path = f.change("src/foo.rs", "preview factory");
+    f.trace.lock().unwrap().analysis_disposed = true;
+    assert_eq!(
+        f.coordinator.handle(&path).await.unwrap(),
+        PreviewReload::Stopped
+    );
+    let trace = f.trace.lock().unwrap();
+    assert_eq!(trace.analysis, 0);
+    assert!(trace.lookup.is_empty());
+    assert!(trace.published.is_empty());
+}
+
+#[tokio::test]
+async fn direct_inspection_after_disposal_returns_an_empty_snapshot_without_publication() {
+    let f = Fixture::new();
+    let path = f.change("src/foo.rs", "preview factory");
+    assert_eq!(
+        f.coordinator.inspect(&path).await.unwrap(),
+        "preview factory"
+    );
+    {
+        let mut trace = f.trace.lock().unwrap();
+        assert_eq!(trace.analysis, 1);
+        assert_eq!(trace.lookup, [path.clone()]);
+        assert!(trace.published.is_empty());
+        trace.analysis_disposed = true;
+    }
+    assert_eq!(f.coordinator.inspect(&path).await.unwrap(), "");
+    let trace = f.trace.lock().unwrap();
+    assert_eq!(trace.analysis, 1);
+    assert_eq!(trace.lookup, [path]);
+    assert!(trace.published.is_empty());
+}
+
+#[tokio::test]
+async fn disposal_during_lookup_discards_the_snapshot_before_publication() {
+    let f = Fixture::new();
+    let path = f.change("src/foo.rs", "not safe to publish");
+    f.trace.lock().unwrap().dispose_after_lookup = true;
+    assert_eq!(
+        f.coordinator.handle(&path).await.unwrap(),
+        PreviewReload::Stopped
+    );
+    let trace = f.trace.lock().unwrap();
+    assert_eq!(trace.lookup, [path]);
+    assert!(trace.published.is_empty());
 }
 
 struct Fixture {

@@ -21,6 +21,13 @@ pub trait PreviewReloadHost: Send {
     /// An error from analysis, lookup, publication, or metadata refresh.
     type Error: std::error::Error + Send + Sync + 'static;
 
+    /// Reports that this host's analysis context was disposed independently
+    /// of its watcher or reload coordinator. No lookup or publication is
+    /// attempted once the context is gone.
+    fn analysis_disposed(&self) -> bool {
+        false
+    }
+
     /// Waits for the analysis source already selected by the host.
     fn wait_for_analysis(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send;
     /// Reads the current previews after a source update. May be retried.
@@ -71,7 +78,7 @@ impl Default for PreviewReloadPolicy {
 pub enum PreviewReload<Previews> {
     /// The path cannot affect this project.
     Ignored,
-    /// The coordinator stopped before this request completed.
+    /// The coordinator stopped or its analysis context was disposed.
     Stopped,
     /// A project manifest changed and dependency metadata was refreshed.
     ManifestRefreshed(PathBuf),
@@ -169,6 +176,30 @@ impl<Host: PreviewReloadHost> PreviewReloadCoordinator<Host> {
         }
     }
 
+    /// Discovers a source's previews without publishing or timing a reload.
+    /// An unavailable source, stopped coordinator or disposed analysis
+    /// context returns the snapshot type's empty default.
+    pub async fn inspect(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<Host::Previews, PreviewReloadError<Host::Error>>
+    where
+        Host::Previews: Default,
+    {
+        let Some(PreviewChange::Source(source)) = self.router.route(path) else {
+            return Ok(Host::Previews::default());
+        };
+        let mut stopped = self.stopped.subscribe();
+        tokio::select! {
+            biased;
+            _ = stopped.wait_for(|closed| *closed) => Ok(Host::Previews::default()),
+            result = async {
+                let mut host = self.host.lock().await;
+                self.lookup(&mut host, &source).await
+            } => result.map(Option::unwrap_or_default),
+        }
+    }
+
     async fn process(
         &self,
         change: PreviewChange,
@@ -185,22 +216,43 @@ impl<Host: PreviewReloadHost> PreviewReloadCoordinator<Host> {
         };
 
         let started = Instant::now();
-        host.wait_for_analysis()
+        let Some(previews) = self.lookup(&mut host, &source).await? else {
+            return Ok(PreviewReload::Stopped);
+        };
+        host.publish_previews(&source, &previews)
             .await
-            .map_err(PreviewReloadError::Analysis)?;
+            .map_err(PreviewReloadError::Publish)?;
+        Ok(PreviewReload::Reloaded {
+            source,
+            previews,
+            elapsed: started.elapsed(),
+        })
+    }
+
+    async fn lookup(
+        &self,
+        host: &mut Host,
+        source: &Path,
+    ) -> Result<Option<Host::Previews>, PreviewReloadError<Host::Error>> {
+        if host.analysis_disposed() {
+            return Ok(None);
+        }
+        let ready = host.wait_for_analysis().await;
+        if host.analysis_disposed() {
+            return Ok(None);
+        }
+        ready.map_err(PreviewReloadError::Analysis)?;
         let attempts = self.policy.lookup_attempts.get();
         for attempt in 1..=attempts {
-            match timeout(self.policy.lookup_timeout, host.load_previews(&source)).await {
-                Ok(Ok(previews)) => {
-                    host.publish_previews(&source, &previews)
-                        .await
-                        .map_err(PreviewReloadError::Publish)?;
-                    return Ok(PreviewReload::Reloaded {
-                        source,
-                        previews,
-                        elapsed: started.elapsed(),
-                    });
-                }
+            if host.analysis_disposed() {
+                return Ok(None);
+            }
+            let found = timeout(self.policy.lookup_timeout, host.load_previews(source)).await;
+            if host.analysis_disposed() {
+                return Ok(None);
+            }
+            match found {
+                Ok(Ok(previews)) => return Ok(Some(previews)),
                 Ok(Err(source)) if attempt == attempts => {
                     return Err(PreviewReloadError::Lookup { attempts, source });
                 }

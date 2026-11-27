@@ -28,6 +28,9 @@ a version and date when publishing.
 
 ### Added
 
+- Preview hosts can inspect a source without publishing a reload. Watch
+  events and inspection skip a disposed analysis context.
+
 - Flutter-compatible embedders can acknowledge services initialization and
   request host-managed deferred assets by component name.
 

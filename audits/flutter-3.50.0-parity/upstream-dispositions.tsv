@@ -3478,3 +3478,5 @@ packages/flutter/test/services/binding_test.dart	134	initInstances sets a defaul
 packages/flutter/test/services/binding_lifecycle_test.dart	36	can send message on completion of binding initialization	paired-match	upstream-services-startup-and-deferred.md
 packages/flutter/test/services/deferred_component_test.dart	11	installDeferredComponent test	paired-match	upstream-services-startup-and-deferred.md
 packages/flutter/test/services/deferred_component_test.dart	34	uninstallDeferredComponent test	paired-match	upstream-services-startup-and-deferred.md
+packages/flutter_tools/test/commands.shard/permeable/widget_preview/preview_detector_regression_178472_test.dart	69	do not throw when watch event is sent after the analysis context is disposed	paired-match	upstream-widget-previews-runtime.md#disposed-analysis-contexts
+packages/flutter_tools/test/commands.shard/permeable/widget_preview/preview_detector_regression_178472_test.dart	78	do not throw when findPreviewFunctions is invoked after the analysis context is disposed	paired-match	upstream-widget-previews-runtime.md#disposed-analysis-contexts

@@ -239,3 +239,22 @@ without a member removes its dependency and patch, without losing
 host metadata. An ambiguous duplicate name leaves the existing
 manifest untouched. Two direct and five adjacent native checks
 passed. This does not claim to launch a browser preview.
+
+## Disposed analysis contexts
+
+Both pinned permeable tool originals in
+`preview_detector_regression_178472_test.dart:69,78` passed. The
+coordinator now observes the lifecycle of its selected analysis
+context separately from the watcher. A late watcher event for a
+valid source finishes quietly without entering analysis. A direct
+inspection of that source returns the empty snapshot without
+trying to publish a reload. The native backend also disposes during
+lookup in a control: an already returned snapshot is dropped rather
+than installed in the preview.
+
+The native tests write a real file under an active source context.
+They first verify that live inspection returns its exact contents
+without a publication, then dispose the backend independently of
+the coordinator. Browser session setup is not part of these cases.
+
+Three direct and 12 adjacent native preview checks passed.
