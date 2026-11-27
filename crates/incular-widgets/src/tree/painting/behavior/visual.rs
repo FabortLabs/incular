@@ -75,17 +75,30 @@ impl WidgetTree {
                 ref background,
                 border,
                 radius,
+                background_inset,
                 ..
             } => {
-                let rrect = RRect::new(Rect::from_origin_size(Offset::ZERO, size), radius);
-                if let Some(brush) = background {
+                let rect = Rect::from_origin_size(Offset::ZERO, size);
+                let fill_width = size.width - background_inset * 2.;
+                let fill_height = size.height - background_inset * 2.;
+                if let Some(brush) = background
+                    && (background_inset == 0. || (fill_width > 0. && fill_height > 0.))
+                {
+                    let fill = if background_inset == 0. {
+                        rect
+                    } else {
+                        Rect::from_origin_size(
+                            Offset::new(background_inset, background_inset),
+                            Size::new(fill_width, fill_height),
+                        )
+                    };
                     cache.push(PaintCommand::RRect {
-                        rrect,
+                        rrect: RRect::new(fill, radius),
                         brush: brush.clone(),
                     });
                 }
                 if let Some(border) = border {
-                    cache.push(PaintCommand::Border { rrect, border });
+                    cache.push(PaintCommand::Border { rrect: RRect::new(rect, radius), border });
                 }
             }
             RenderKind::Banner {

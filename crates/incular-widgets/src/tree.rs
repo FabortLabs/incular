@@ -689,6 +689,8 @@ pub enum RenderKind {
         background: Option<Brush>,
         border: Option<Border>,
         radius: CornerRadii,
+        /// Flutter BoxDecoration's opaque inside outline covers this inset.
+        background_inset: f32,
     },
     Banner {
         message: String,

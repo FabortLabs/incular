@@ -19,3 +19,20 @@ The pinned authored probe and all 14 targeted Rust shape, hit and clip
 tests passed. This verifies submitted paint geometry without replacing
 wgpu. It does not claim the 75-shape overlap raster golden or add a
 registered upstream case.
+
+## Retained compact BoxDecoration
+
+The ordinary uniform rounded border used a compact retained path that
+bypassed the full decoration painter's background adjustment. In the
+pinned paint-call probe, a 250 by 250 box with corner radius 75 and a
+50-pixel opaque inside border starts its fill at (25,25). At opacity
+254/255 it starts at (0,0). That distinction applies to both color
+and gradient fills. The border still uses the original outer box and
+stroke width, and the shader keeps its original coordinates.
+
+The actual retained Rust command list now matches the paint geometry
+when the same decoration toggles both ways, without relayout or
+replacing the render object. It still emits one analytic fill and one
+analytic border; the low-level brush-only constructor stays unchanged.
+The pinned authored probe and seventeen focused Rust controls passed.
+This does not claim the full raster golden registration.

@@ -41,12 +41,21 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             background,
             border,
             radius,
+            hit_decoration,
             ..
         } => RenderKind::Decorated {
             desired: *size,
             background: background.clone(),
             border: *border,
             radius: *radius,
+            // Only the canonical Flutter decoration path has the opaque
+            // outline fill adjustment. Keep the low-level brush API intact.
+            background_inset: if hit_decoration.is_some() {
+                border.filter(|border| border.color.alpha == 255)
+                    .map_or(0., |border| border.width / 2.)
+            } else {
+                0.
+            },
         },
         WidgetKind::Banner {
             message,
