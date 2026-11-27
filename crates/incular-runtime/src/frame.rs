@@ -4109,7 +4109,17 @@ impl Runtime {
             && !event.modifiers.alt()
             && !event.modifiers.meta()
         {
-            return self.focus_next(event.modifiers.shift());
+            use incular_widgets::{NextFocusAction, NextFocusIntent, PreviousFocusAction, PreviousFocusIntent};
+            let result = if event.modifiers.shift() {
+                PreviousFocusAction.to_key_event_result(
+                    &PreviousFocusIntent, PreviousFocusAction.invoke(self, &PreviousFocusIntent),
+                )
+            } else {
+                NextFocusAction.to_key_event_result(
+                    &NextFocusIntent, NextFocusAction.invoke(self, &NextFocusIntent),
+                )
+            };
+            return result == KeyEventResult::Handled;
         }
         if let Some(label) = self.focused.filter(|id| self.tree.is_selectable_text(*id)) {
             let handled = self.run_selectable_text_key(label, &event);
@@ -5151,5 +5161,12 @@ impl Runtime {
             self.platform_view_commands
                 .extend(record.controller.take_commands());
         }
+    }
+}
+
+
+impl incular_widgets::SequentialFocusHost for Runtime {
+    fn traverse_sequential_focus(&mut self, reverse: bool) -> bool {
+        self.focus_next(reverse)
     }
 }

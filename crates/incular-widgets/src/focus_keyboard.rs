@@ -833,6 +833,53 @@ impl RequestFocusAction {
     }
 }
 
+/// The mounted owner of sequential focus and traversal history.
+pub trait SequentialFocusHost {
+    /// Returns whether focus moved. A false result can mean the host stopped
+    /// at an edge or offered focus back to the platform.
+    fn traverse_sequential_focus(&mut self, reverse: bool) -> bool;
+}
+
+/// Requests the next target in the active focus traversal policy.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct NextFocusIntent;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NextFocusAction;
+
+impl NextFocusAction {
+    pub fn invoke(self, host: &mut impl SequentialFocusHost, _intent: &NextFocusIntent) -> bool {
+        host.traverse_sequential_focus(false)
+    }
+
+    #[must_use]
+    pub const fn to_key_event_result(self, _intent: &NextFocusIntent, moved: bool) -> KeyEventResult {
+        sequential_key_result(moved)
+    }
+}
+
+/// Requests the previous target in the active focus traversal policy.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct PreviousFocusIntent;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PreviousFocusAction;
+
+impl PreviousFocusAction {
+    pub fn invoke(self, host: &mut impl SequentialFocusHost, _intent: &PreviousFocusIntent) -> bool {
+        host.traverse_sequential_focus(true)
+    }
+
+    #[must_use]
+    pub const fn to_key_event_result(self, _intent: &PreviousFocusIntent, moved: bool) -> KeyEventResult {
+        sequential_key_result(moved)
+    }
+}
+
+const fn sequential_key_result(moved: bool) -> KeyEventResult {
+    if moved { KeyEventResult::Handled } else { KeyEventResult::SkipRemainingHandlers }
+}
+
 /// Requests spatial keyboard focus traversal.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct DirectionalFocusIntent {

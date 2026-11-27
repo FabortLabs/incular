@@ -3546,3 +3546,5 @@ packages/flutter/test/widgets/focus_manager_test.dart	46	Can remove children.	pa
 packages/flutter/test/widgets/focus_manager_test.dart	518	Removing a node removes it from scope.	partial-match	upstream-focus-ancestry-updates.md
 packages/flutter/test/widgets/focus_manager_test.dart	547	Can add children to scope and focus	paired-match	upstream-focus-ancestry-updates.md
 packages/flutter/test/widgets/focus_manager_test.dart	592	removing grandchildren from scope updates focusedChild	paired-match	upstream-focus-ancestry-updates.md
+packages/flutter/test/widgets/focus_traversal_test.dart	3909	NextFocusAction converts invoke result to KeyEventResult	paired-match	upstream-sequential-focus-actions.md
+packages/flutter/test/widgets/focus_traversal_test.dart	3922	PreviousFocusAction converts invoke result to KeyEventResult	paired-match	upstream-sequential-focus-actions.md
