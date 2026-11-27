@@ -3528,3 +3528,10 @@ dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	84	Reset zoom 
 dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	106	Slider updates scale correctly	paired-match	upstream-preview-zoom.md
 dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	139	renders scaled layout wrapper when no tree construction error	paired-match	upstream-preview-zoom.md#two-axis-preview-viewport-and-construction-errors
 dev/integration_tests/widget_preview_scaffold/test/zoom_test.dart	161	renders unscaled child directly when tree construction error occurred	paired-match	upstream-preview-zoom.md#two-axis-preview-viewport-and-construction-errors
+dev/integration_tests/widget_preview_scaffold/test/ide_theme_test.dart	14	successfully creates params	paired-match	upstream-preview-host-theme.md
+dev/integration_tests/widget_preview_scaffold/test/ide_theme_test.dart	27	handles bad input	paired-match	upstream-preview-host-theme.md
+dev/integration_tests/widget_preview_scaffold/test/ide_theme_test.dart	40	ignores unsupported query params	paired-match	upstream-preview-host-theme.md
+dev/integration_tests/widget_preview_scaffold/test/ide_theme_test.dart	49	creates empty params	paired-match	upstream-preview-host-theme.md
+dev/integration_tests/widget_preview_scaffold/test/theme_test.dart	16	can be used without override	paired-match	upstream-preview-host-theme.md
+dev/integration_tests/widget_preview_scaffold/test/theme_test.dart	34	can be inferred from override background color	paired-match	upstream-preview-host-theme.md
+dev/integration_tests/widget_preview_scaffold/test/theme_test.dart	52	will not be inferred for colors that are not dark/light enough	paired-match	upstream-preview-host-theme.md

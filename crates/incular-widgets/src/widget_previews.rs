@@ -3,6 +3,8 @@
 //! This module configures directly supplied widgets. It neither scans source
 //! for preview annotations nor starts a preview server.
 
+pub mod ide_theme;
+
 use std::rc::Rc;
 
 use incular_config::{Alignment, Axis, Brightness, Locale, LocaleResolver, LocalizationCatalog};
