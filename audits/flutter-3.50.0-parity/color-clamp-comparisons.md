@@ -190,3 +190,13 @@ in order, right-only keys are not added when a left swatch exists,
 missing shades fade RGB-preservingly, and the pinned NaN clamp selects
 the upper byte. The native counterparts and 25 adjacent tests pass.
 This is a generic painting value, not a Material color palette.
+
+## Nullable HSL and HSV identity
+
+Exact `painting/colors_test.dart:129,413` passed. The Rust
+`lerp_ref` APIs return no result for two absent inputs and borrow
+the exact same input when both references identify one model. The
+authored pinned and native tests also verify that a missing endpoint
+scales alpha without normalizing a stored 360° hue or changing its
+other channels. Both-present, nonidentical inputs retain the usual
+short-arc interpolation.

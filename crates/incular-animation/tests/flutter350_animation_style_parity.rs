@@ -239,3 +239,21 @@ fn an_empty_style_copy_compares_equal_and_hashes_identically() {
     assert_ne!(positive, changed);
     assert_ne!(hash(&positive), hash(&changed));
 }
+
+#[test]
+fn a_shared_style_is_borrowed_and_absent_styles_stay_absent() {
+    use std::borrow::Cow;
+    use std::time::Duration;
+
+    assert!(AnimationStyle::lerp_ref(None, None, 0.).is_none());
+    for style in [AnimationStyle::new(), AnimationStyle::new().duration(Duration::from_secs(1))] {
+        let result = AnimationStyle::lerp_ref(Some(&style), Some(&style), 0.5).unwrap();
+        let Cow::Borrowed(same) = result else { panic!("an identical style must not clone") };
+        assert!(std::ptr::eq(same, &style));
+    }
+
+    let from = AnimationStyle::new().duration(Duration::from_secs(1));
+    let to = AnimationStyle::new().duration(Duration::from_secs(2));
+    let mixed = AnimationStyle::lerp_ref(Some(&from), Some(&to), 0.5).unwrap();
+    assert_eq!(mixed.duration, Some(Duration::from_millis(1500)));
+}

@@ -1,7 +1,7 @@
 //! Flutter's `AnimationStyle` (`animation/animation_style.dart`).
 
 use crate::Curve;
-use std::{fmt, time::Duration};
+use std::{borrow::Cow, fmt, time::Duration};
 
 /// Flutter `AnimationStyle`: overrides for the curve and duration of a
 /// widget's built-in animations, forward and in reverse. An unset field
@@ -112,6 +112,18 @@ impl AnimationStyle {
             reverse_curve: other.reverse_curve.or(self.reverse_curve),
             reverse_duration: other.reverse_duration.or(self.reverse_duration),
         }
+    }
+
+    /// Interpolates borrowed styles. A shared input style can pass through
+    /// without cloning either curve or constructing a new override value.
+    #[must_use]
+    pub fn lerp_ref<'a>(a: Option<&'a Self>, b: Option<&'a Self>, t: f32) -> Option<Cow<'a, Self>> {
+        if let (Some(left), Some(right)) = (a, b)
+            && std::ptr::eq(left, right)
+        {
+            return Some(Cow::Borrowed(left));
+        }
+        Self::lerp(a.cloned(), b.cloned(), t).map(Cow::Owned)
     }
 
     /// Interpolates durations in microseconds, treating a missing duration

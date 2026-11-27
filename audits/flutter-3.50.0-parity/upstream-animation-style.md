@@ -55,3 +55,11 @@ curve variants and blends, equivalent signed zeros, and that an
 explicit zero reverse duration differs from an absent override. Curve
 and style hashing do not sample animations. Built-in curves hash by value;
 named custom callbacks hash by shared identity. Numeric hashes remain Rust-specific. All 18 focused tests passed.
+
+## Borrowed identity
+
+Exact `animation_style_test.dart:51` passed. The new borrowed
+`AnimationStyle::lerp_ref` mirrors absent/absent and shared-instance
+interpolation without cloning a curve. The original owned API still
+returns owned values as before. The focused Rust tests check pointer
+identity of the borrow and an ordinary 1s → 2s midpoint.

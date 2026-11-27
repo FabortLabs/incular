@@ -553,7 +553,7 @@ packages/flutter/test/widgets/stack_test.dart	760	Stack does not crash at zero a
 packages/flutter/test/animation/animation_style_test.dart	12	copyWith, ==, hashCode basics	paired-match	upstream-animation-style.md#style-copy-and-hashing
 packages/flutter/test/animation/animation_style_test.dart	17	AnimationStyle.copyWith() overrides all properties	paired-match	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	36	AnimationStyle.merge() fills in null properties	paired-match	upstream-animation-style.md
-packages/flutter/test/animation/animation_style_test.dart	51	AnimationStyle.lerp identical a,b	partial-match	upstream-animation-style.md
+packages/flutter/test/animation/animation_style_test.dart	51	AnimationStyle.lerp identical a,b	paired-match	upstream-animation-style.md#borrowed-identity
 packages/flutter/test/animation/animation_style_test.dart	57	AnimationStyle.lerp smoothly transitions all values	paired-match	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	104	AnimationStyle.lerp with null property	paired-match	upstream-animation-style.md
 packages/flutter/test/animation/animation_style_test.dart	113	default AnimationStyle debugFillProperties	paired-match	upstream-animation-style.md#explicit-style-diagnostics
@@ -2856,3 +2856,5 @@ packages/flutter/test/painting/colors_test.dart	724	ColorSwatch.lerp identical a
 packages/flutter/test/painting/colors_test.dart	630	Display P3 to extended sRGB color conversion	paired-match	upstream-wide-color-conversion.md
 packages/flutter/test/painting/colors_test.dart	651	Display P3 pure green to extended sRGB	paired-match	upstream-wide-color-conversion.md
 packages/flutter/test/painting/colors_test.dart	668	sRGB to Display P3 round-trip	paired-match	upstream-wide-color-conversion.md
+packages/flutter/test/painting/colors_test.dart	129	HSVColor.lerp identical a,b	paired-match	color-clamp-comparisons.md#nullable-hsl-and-hsv-identity
+packages/flutter/test/painting/colors_test.dart	413	HSLColor.lerp identical a,b	paired-match	color-clamp-comparisons.md#nullable-hsl-and-hsv-identity

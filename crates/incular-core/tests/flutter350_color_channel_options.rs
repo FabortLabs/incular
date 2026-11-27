@@ -75,3 +75,58 @@ fn signed_zero_still_hashes_like_its_equal_positive_zero() {
         digest(HsvColor::new(0., 0., 0., 0.))
     );
 }
+
+#[test]
+fn optional_models_borrow_identical_input_and_preserve_hue_and_rgb_on_a_fade() {
+    use std::borrow::Cow;
+
+    assert!(HslColor::lerp_ref(None, None, 0.).is_none());
+    assert!(HsvColor::lerp_ref(None, None, 0.).is_none());
+
+    let hsl = HslColor::new(360., 0.4, 0.6, 0.5);
+    let hsv = HsvColor::new(360., 0.4, 0.6, 0.5);
+    let Cow::Borrowed(hsl_same) = HslColor::lerp_ref(Some(&hsl), Some(&hsl), 0.5).unwrap() else {
+        panic!("identical HSL must be borrowed");
+    };
+    let Cow::Borrowed(hsv_same) = HsvColor::lerp_ref(Some(&hsv), Some(&hsv), 0.5).unwrap() else {
+        panic!("identical HSV must be borrowed");
+    };
+    assert!(std::ptr::eq(hsl_same, &hsl));
+    assert!(std::ptr::eq(hsv_same, &hsv));
+
+    assert_eq!(
+        *HslColor::lerp_ref(None, Some(&hsl), 0.25).unwrap(),
+        hsl.with_alpha(0.125)
+    );
+    assert_eq!(
+        *HsvColor::lerp_ref(None, Some(&hsv), 0.25).unwrap(),
+        hsv.with_alpha(0.125)
+    );
+    assert_eq!(
+        *HslColor::lerp_ref(Some(&hsl), None, 0.25).unwrap(),
+        hsl.with_alpha(0.375)
+    );
+    assert_eq!(
+        *HsvColor::lerp_ref(Some(&hsv), None, 0.25).unwrap(),
+        hsv.with_alpha(0.375)
+    );
+    assert_eq!(
+        *HslColor::lerp_ref(None, Some(&hsl), 1.5).unwrap(),
+        hsl.with_alpha(0.75)
+    );
+    assert_eq!(
+        *HsvColor::lerp_ref(Some(&hsv), None, -0.5).unwrap(),
+        hsv.with_alpha(0.75)
+    );
+
+    let hsl_end = hsl.with_hue(20.);
+    let hsv_end = hsv.with_hue(20.);
+    assert_eq!(
+        *HslColor::lerp_ref(Some(&hsl), Some(&hsl_end), 0.5).unwrap(),
+        hsl.lerp(&hsl_end, 0.5)
+    );
+    assert_eq!(
+        *HsvColor::lerp_ref(Some(&hsv), Some(&hsv_end), 0.5).unwrap(),
+        hsv.lerp(&hsv_end, 0.5)
+    );
+}

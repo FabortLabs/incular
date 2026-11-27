@@ -1,6 +1,9 @@
 //! Small renderer-neutral geometry and paint values.
 
-use std::ops::{Add, Sub};
+use std::{
+    borrow::Cow,
+    ops::{Add, Sub},
+};
 
 use palette::{FromColor, Hsl, Hsv, LinSrgba, Srgba, WithAlpha};
 
@@ -304,6 +307,17 @@ impl HslColor {
         }
     }
 
+    /// Interpolates optional color models, scaling only alpha when one is
+    /// absent. Two references to the same model return a borrow.
+    #[must_use]
+    pub fn lerp_ref<'a>(
+        a: Option<&'a Self>,
+        b: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        lerp_optional_color(a, b, t, |color, factor| color.with_alpha(color.alpha * factor))
+    }
+
     #[must_use]
     pub fn from_color(color: Color) -> Self {
         let source = palette_color(color);
@@ -379,6 +393,17 @@ impl HsvColor {
         }
     }
 
+    /// Interpolates optional color models, scaling only alpha when one is
+    /// absent. Two references to the same model return a borrow.
+    #[must_use]
+    pub fn lerp_ref<'a>(
+        a: Option<&'a Self>,
+        b: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        lerp_optional_color(a, b, t, |color, factor| color.with_alpha(color.alpha * factor))
+    }
+
     #[must_use]
     pub fn from_color(color: Color) -> Self {
         let source = palette_color(color);
@@ -399,6 +424,21 @@ impl HsvColor {
             unit(self.value),
         );
         color_from_palette(Srgba::from_color(hsv).with_alpha(unit(self.alpha)))
+    }
+}
+
+fn lerp_optional_color<'a, T: Copy + Lerp>(
+    a: Option<&'a T>,
+    b: Option<&'a T>,
+    t: f32,
+    fade: impl FnOnce(T, f32) -> T,
+) -> Option<Cow<'a, T>> {
+    match (a, b) {
+        (None, None) => None,
+        (Some(a), Some(b)) if std::ptr::eq(a, b) => Some(Cow::Borrowed(a)),
+        (Some(a), Some(b)) => Some(Cow::Owned(a.lerp(b, t))),
+        (Some(a), None) => Some(Cow::Owned(fade(*a, 1.0 - t))),
+        (None, Some(b)) => Some(Cow::Owned(fade(*b, t))),
     }
 }
 
