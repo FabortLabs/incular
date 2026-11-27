@@ -2777,3 +2777,4 @@ packages/flutter/test/widgets/transform_test.dart	264	applyPaintTransform of Tra
 packages/flutter/test/widgets/transform_test.dart	356	Transform.rotate creates nice rotation matrices for 0, 90, 180, 270 degrees	partial-match	upstream-transform-quarter-turns.md#exact-quarter-turn-coefficients
 packages/flutter/test/widgets/transform_test.dart	874	Transform.flip does flip child correctly	paired-match	upstream-transform-quarter-turns.md#mirrored-hits-and-zero-area
 packages/flutter/test/widgets/transform_test.dart	958	Transform does not crash at zero area	paired-match	upstream-transform-quarter-turns.md#mirrored-hits-and-zero-area
+packages/flutter/test/widgets/transform_test.dart	500	Translated child into translated box - hit test	paired-match	upstream-transform-quarter-turns.md#nested-translation-hit-testing

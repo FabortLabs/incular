@@ -39,3 +39,20 @@ flipped, and (60, 60) with both. The unflipped control reaches (20, 20).
 A centered zero-area placeholder flipped on Y also completes layout
 and paint without growing. Fifteen focused transform tests and the
 existing rotated-drag test passed.
+
+### Nested translation hit testing
+
+The pinned `widgets/transform_test.dart:500` passed. Its retained native
+counterpart sends a raw pointer press at the black child's translated
+center, (1500, 1350). The listener reports the correct local (400, 300)
+and the original untransformed center is not a hit. Before the fix an
+intermediate layout bounds check suppressed that actual callback.
+Widget transforms now forward to their children without treating that
+rectangle as a clip. Actual clip nodes and bounded specialized
+render objects keep their own hit policies.
+
+The authored `nested_transform_hit_opt_out_test.dart` additionally checks
+that disabling hit conversion for the outer transform still allows
+the nested transform to move the target, while a surrounding ClipRect
+rejects the same outside hit. Native regressions cover both raw and
+direct retained hit paths (50 targeted tests passed).

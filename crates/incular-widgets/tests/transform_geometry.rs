@@ -712,3 +712,74 @@ fn zero_area_flip_of_a_placeholder_stays_zero_sized_and_paints_safely() {
     assert_eq!(tree.element_bounds(target).unwrap().size, Size::ZERO);
     let _ = tree.try_paint().unwrap();
 }
+
+#[test]
+fn nested_translations_deliver_pointer_down_outside_the_first_child_layout_box() {
+    use incular_core::{PointerDeviceKind, PointerPhase};
+    use incular_gestures::RawPointerEvent;
+    use incular_widgets::{GlobalKey, Listener};
+    use std::{cell::RefCell, rc::Rc};
+
+    let key = GlobalKey::new();
+    let received = Rc::new(RefCell::new(Vec::new()));
+    let listener = Listener::new(Widget::box_(Size::new(800., 600.), Color::BLACK).with_key(key))
+        .on_pointer_down({
+            let received = Rc::clone(&received);
+            move |event| {
+                received
+                    .borrow_mut()
+                    .push((event.position, event.local_position))
+            }
+        });
+    let translated = Transform::translation(
+        Offset::new(100., 50.),
+        Transform::translation(Offset::new(1000., 1000.), listener),
+    );
+    let mut tree = WidgetTree::new();
+    tree.mount(translated.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let target = tree.element_with_key(&key.into()).unwrap();
+    let bounds = tree.element_bounds(target).unwrap();
+    let hit = bounds.origin + Offset::new(bounds.size.width * 0.5, bounds.size.height * 0.5);
+    assert_eq!(hit, Offset::new(1500., 1350.));
+    let down = |pointer, position| {
+        RawPointerEvent::new(
+            pointer,
+            1,
+            PointerDeviceKind::Touch,
+            1,
+            position,
+            PointerPhase::Down,
+            Instant::now(),
+        )
+    };
+    let _ = tree.dispatch_raw_pointer(down(1, Offset::new(400., 300.)));
+    assert!(received.borrow().is_empty());
+    let _ = tree.dispatch_raw_pointer(down(2, hit));
+    assert_eq!(&*received.borrow(), &[(hit, Offset::new(400., 300.))]);
+    assert!(tree.hit_test(hit).is_some());
+}
+
+#[test]
+fn an_opted_out_outer_transform_does_not_bound_a_nested_hit() {
+    let scene = || {
+        Transform::translation(
+            Offset::new(50., 50.),
+            Transform::translation(Offset::new(1000., 1000.), button()),
+        )
+        .transform_hit_tests(false)
+    };
+    let mut tree = WidgetTree::new();
+    tree.mount(scene().into()).unwrap();
+    layout_paint_loose(&mut tree);
+    assert!(tree.hit_test(Offset::new(1020., 1010.)).is_some());
+    assert!(tree.hit_test(Offset::new(1070., 1060.)).is_none());
+
+    let mut clipped = WidgetTree::new();
+    clipped
+        .mount(incular_widgets::ClipRect::new(scene()).into())
+        .unwrap();
+    layout_paint_loose(&mut clipped);
+    assert!(clipped.hit_test(Offset::new(1020., 1010.)).is_none());
+}

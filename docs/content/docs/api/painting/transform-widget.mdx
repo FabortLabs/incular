@@ -16,6 +16,10 @@ it. Default pivot is the child center.
 | `flip(flip_x, flip_y, child)` | Mirror either or both axes about the center |
 | `skew(x, y, child)` | Shear |
 
+Transform itself does not clip hits at its layout rectangle. A nested
+transform can move a hit target beyond that rectangle; a surrounding clip
+or viewport can still bound interaction.
+
 ```rust
 use incular::prelude::*;
 

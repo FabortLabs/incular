@@ -594,33 +594,17 @@ impl WidgetTree {
             );
             return (result, target);
         }
-        // A transform that opts out of hit-test conversion falls through
-        // to the ordinary untransformed path below: hits land where the
-        // child lays out, not where it paints. Painting and semantics
-        // always follow the visual transform. Follower placement resolves
-        // through the same shared projection, so hits land where the
-        // content paints; hidden followers return above.
-        if hit_test_transforms_children(node.object.kind()) {
-            let current = origin + node.offset;
-            let Some(local) = self
-                .child_content_transform(id)
-                .inverse_transform_point(point - current)
+        if delegates_transformed_hits(node.object.kind()) {
+            let Some((local, claims_bounds)) =
+                self.transformed_hit_position(id, node, point, origin)
             else {
                 return (RawHitResult::default(), None);
             };
-            let child_size = node
-                .children
-                .first()
-                .and_then(|child| self.renders.get(child.0))
-                .map_or(node.size, |child| child.size);
-            if !Rect::from_origin_size(Offset::ZERO, child_size).contains(local) {
-                return (RawHitResult::default(), None);
-            }
             let mut result = RawHitResult {
-                subtree_hit: true,
+                subtree_hit: claims_bounds,
                 ..RawHitResult::default()
             };
-            let (_, target) = self.collect_pointer_hit_children(
+            let (child_hit, target) = self.collect_pointer_hit_children(
                 &node.children,
                 local,
                 Offset::ZERO,
@@ -628,6 +612,7 @@ impl WidgetTree {
                 precise,
                 &mut result,
             );
+            result.subtree_hit |= child_hit;
             return (result, target);
         }
         let current = self.hit_origin(id, node, origin);
@@ -1158,19 +1143,8 @@ impl WidgetTree {
         {
             return None;
         }
-        if hit_test_transforms_children(node.object.kind()) {
-            let current = origin + node.offset;
-            let local = self
-                .child_content_transform(id)
-                .inverse_transform_point(point - current)?;
-            let child_size = node
-                .children
-                .first()
-                .and_then(|child| self.renders.get(child.0))
-                .map_or(node.size, |child| child.size);
-            if !Rect::from_origin_size(Offset::ZERO, child_size).contains(local) {
-                return None;
-            }
+        if delegates_transformed_hits(node.object.kind()) {
+            let (local, _) = self.transformed_hit_position(id, node, point, origin)?;
             for child in node.children.iter().rev() {
                 if let Some(hit) = self.hit_test_render(*child, local, Offset::ZERO) {
                     return Some(hit);
@@ -1225,7 +1199,7 @@ impl WidgetTree {
         if matches!(
             node.object.kind(),
             RenderKind::Gesture | RenderKind::Positioned { .. }
-        ) || hit_test_transforms_children(node.object.kind())
+        ) || delegates_transformed_hits(node.object.kind())
         {
             return false;
         }
@@ -1235,6 +1209,37 @@ impl WidgetTree {
                 .object
                 .layers
                 .accepts_clip_hit(node.object.kind(), node.size, point - current)
+    }
+
+    fn transformed_hit_position(
+        &self,
+        id: RenderObjectId,
+        node: &RenderNode,
+        point: Offset,
+        origin: Offset,
+    ) -> Option<(Offset, bool)> {
+        let kind = node.object.kind();
+        let local = point - (origin + node.offset);
+        let local = if hit_test_transforms_children(kind) {
+            self.child_content_transform(id).inverse_transform_point(local)?
+        } else {
+            local
+        };
+        // Flutter RenderTransform forwards the hit without testing its
+        // own box, even when transformHitTests is false. A child Transform
+        // can move its real target outside that box. Other specialized
+        // render objects keep their explicit box/overflow policy.
+        if matches!(kind, RenderKind::Transform { .. }) {
+            return Some((local, false));
+        }
+        let child_size = node
+            .children
+            .first()
+            .and_then(|child| self.renders.get(child.0))
+            .map_or(node.size, |child| child.size);
+        Rect::from_origin_size(Offset::ZERO, child_size)
+            .contains(local)
+            .then_some((local, true))
     }
 
     /// The same coordinate path used by hit testing, not by paint.
@@ -1607,6 +1612,10 @@ fn retained_self_hit(kind: Option<&WidgetKind>) -> bool {
         Some(WidgetKind::Banner { .. } | WidgetKind::Positioned { .. }) => false,
         _ => true,
     }
+}
+
+fn delegates_transformed_hits(kind: &RenderKind) -> bool {
+    matches!(kind, RenderKind::Transform { .. }) || hit_test_transforms_children(kind)
 }
 
 fn hit_test_transforms_children(kind: &RenderKind) -> bool {

@@ -435,6 +435,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- Nested widget transforms route pointer hits to the mapped child instead
+  of clipping them at an intermediate layout rectangle.
+
 - `Transform::rotation` uses exact matrices at the standard quarter turns,
   avoiding tiny offsets at edges and centered pivots.
 
