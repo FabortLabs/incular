@@ -51,27 +51,15 @@ impl<T: Lerp + Clone> PropertyTween<T> {
 
 pub use incular_config::{AlignmentGeometry, EdgeInsetsGeometry};
 
-/// The two walks `ImplicitlyAnimatedWidgetState` makes over its tweens. Each
-/// carries the ambient text direction, which resolves directional targets.
+/// The two walks `ImplicitlyAnimatedWidgetState` makes over its tweens.
+/// Logical geometry remains unresolved until build.
 pub(crate) enum TweenPass {
     /// `_constructTweens`: creates and drops tweens as targets appear and
     /// disappear, recording whether any target moved.
-    Construct {
-        start: bool,
-        direction: TextDirection,
-    },
+    Construct { start: bool },
     /// `didUpdateWidget`'s restart: every tween runs from its value at the
     /// curved animation value `t` to its target.
-    Retarget { t: f32, direction: TextDirection },
-}
-
-impl TweenPass {
-    /// The ambient text direction the targets resolve with.
-    pub(crate) fn direction(&self) -> TextDirection {
-        match self {
-            Self::Construct { direction, .. } | Self::Retarget { direction, .. } => *direction,
-        }
-    }
+    Retarget { t: f32 },
 }
 
 /// Flutter's `TweenVisitor`, called once per property with its target.
@@ -184,14 +172,8 @@ pub(crate) trait ImplicitlyAnimated: 'static {
 
     /// `initState`: builds the first tweens and reports whether the
     /// animation runs at once. Only `TweenAnimationBuilder` starts one.
-    fn init_tweens(&self, tweens: &mut Self::Tweens, direction: TextDirection) -> bool {
-        self.for_each_tween(
-            tweens,
-            &mut TweenPass::Construct {
-                start: false,
-                direction,
-            },
-        );
+    fn init_tweens(&self, tweens: &mut Self::Tweens) -> bool {
+        self.for_each_tween(tweens, &mut TweenPass::Construct { start: false });
         false
     }
 
@@ -267,11 +249,11 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
         }
     }
 
-    fn update(&self, config: &Rc<W>, direction: TextDirection, context: &BuildContext<'_>) {
+    fn update(&self, config: &Rc<W>, context: &BuildContext<'_>) {
         let previous = self.config.replace(Some(config.clone()));
         let mut tweens = self.tweens.borrow_mut();
         let Some(previous) = previous else {
-            if config.init_tweens(&mut tweens, direction) {
+            if config.init_tweens(&mut tweens) {
                 self.controller.forward_on_next_tick();
             }
             return;
@@ -286,16 +268,13 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
             self.curve.replace(config.timing().curve.clone());
         }
         self.controller.set_duration(config.timing().duration);
-        let mut construct = TweenPass::Construct {
-            start: false,
-            direction,
-        };
+        let mut construct = TweenPass::Construct { start: false };
         config.for_each_tween(&mut tweens, &mut construct);
         if let TweenPass::Construct { start: true, .. } = construct {
             if let Some(transition) = &config.timing().transition {
                 // Retarget from the value on screen, then run 0 -> 1 again.
                 let t = self.t(&previous);
-                config.for_each_tween(&mut tweens, &mut TweenPass::Retarget { t, direction });
+                config.for_each_tween(&mut tweens, &mut TweenPass::Retarget { t });
                 let channel = config.timing().channel;
                 let scope = MotionConfig::of(context);
                 let transition =
@@ -311,7 +290,7 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
                 return;
             }
             let t = self.curve.borrow().apply(self.controller_progress.get());
-            config.for_each_tween(&mut tweens, &mut TweenPass::Retarget { t, direction });
+            config.for_each_tween(&mut tweens, &mut TweenPass::Retarget { t });
             // `controller.forward(from: 0.0)`. The build already consumes
             // this reset. Publishing it must not dirty a second build.
             self.controller_progress.set(0.0);
@@ -394,8 +373,7 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
                     }
                 });
             }
-            let direction = context.text_direction().unwrap_or(TextDirection::Ltr);
-            state.update(&config, direction, context);
+            state.update(&config, context);
             state.build(context)
         },
         false,
@@ -554,16 +532,35 @@ impl AnimatedContainer {
     }
 }
 
+impl fmt::Debug for AnimatedContainer {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AnimatedContainer")
+            .field("alignment", &self.alignment)
+            .field("padding", &self.padding)
+            .field("decoration", &self.effective_decoration())
+            .field("foreground_decoration", &self.foreground_decoration)
+            .field("constraints", &self.effective_constraints())
+            .field("margin", &self.margin)
+            .field("transform", &self.transform)
+            .field("transform_alignment", &self.transform_alignment)
+            .field("clip_behavior", &self.clip_behavior)
+            .field("duration", &self.timing.duration)
+            .field("curve", &self.timing.curve)
+            .finish()
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct ContainerTweens {
-    alignment: Option<PropertyTween<Alignment>>,
+    alignment: Option<PropertyTween<AlignmentGeometry>>,
     padding: Option<PropertyTween<EdgeInsetsGeometry>>,
     decoration: Option<PropertyTween<BoxDecoration>>,
     foreground_decoration: Option<PropertyTween<BoxDecoration>>,
     constraints: Option<PropertyTween<Constraints>>,
     margin: Option<PropertyTween<EdgeInsetsGeometry>>,
     transform: Option<PropertyTween<CoreTransform>>,
-    transform_alignment: Option<PropertyTween<Alignment>>,
+    transform_alignment: Option<PropertyTween<AlignmentGeometry>>,
 }
 
 impl ImplicitlyAnimated for AnimatedContainer {
@@ -574,9 +571,7 @@ impl ImplicitlyAnimated for AnimatedContainer {
     }
 
     fn for_each_tween(&self, tweens: &mut ContainerTweens, pass: &mut TweenPass) {
-        let direction = pass.direction();
-        let alignment = self.alignment.map(|value| value.resolve(direction));
-        visit(pass, &mut tweens.alignment, alignment.as_ref());
+        visit(pass, &mut tweens.alignment, self.alignment.as_ref());
         visit(pass, &mut tweens.padding, self.padding.as_ref());
         visit(
             pass,
@@ -595,13 +590,10 @@ impl ImplicitlyAnimated for AnimatedContainer {
         );
         visit(pass, &mut tweens.margin, self.margin.as_ref());
         visit(pass, &mut tweens.transform, self.transform.as_ref());
-        let transform_alignment = self
-            .transform_alignment
-            .map(|value| value.resolve(direction));
         visit(
             pass,
             &mut tweens.transform_alignment,
-            transform_alignment.as_ref(),
+            self.transform_alignment.as_ref(),
         );
     }
 
@@ -609,7 +601,8 @@ impl ImplicitlyAnimated for AnimatedContainer {
         let resolve = |value| resolve_animated_insets(value, context);
         let mut container = Container {
             child: self.child.clone(),
-            alignment: evaluate(&tweens.alignment, t),
+            alignment: evaluate(&tweens.alignment, t)
+                .map(|geometry| resolve_animated_alignment(geometry, context)),
             padding: evaluate(&tweens.padding, t).map(resolve),
             margin: evaluate(&tweens.margin, t).map(resolve),
             constraints: evaluate(&tweens.constraints, t),
@@ -625,7 +618,9 @@ impl ImplicitlyAnimated for AnimatedContainer {
             Some(transform) => {
                 let transformed = Transform::new(transform, container);
                 match evaluate(&tweens.transform_alignment, t) {
-                    Some(alignment) => transformed.alignment(alignment).into(),
+                    Some(alignment) => transformed
+                        .alignment(resolve_animated_alignment(alignment, context))
+                        .into(),
                     None => transformed.into(),
                 }
             }
@@ -644,6 +639,13 @@ fn resolve_animated_insets(value: EdgeInsetsGeometry, context: &BuildContext<'_>
     match value {
         EdgeInsetsGeometry::Physical(insets) => insets,
         _ => value.resolve(context.text_direction().unwrap_or(TextDirection::Ltr)),
+    }
+}
+
+fn resolve_animated_alignment(value: AlignmentGeometry, context: &BuildContext<'_>) -> Alignment {
+    match value {
+        AlignmentGeometry::Physical(alignment) => alignment,
+        logical => logical.resolve(context.text_direction().unwrap_or(TextDirection::Ltr)),
     }
 }
 
@@ -1637,7 +1639,7 @@ impl<T: Lerp + Clone + PartialEq + 'static> ImplicitlyAnimated for TweenAnimatio
         &self.timing
     }
 
-    fn init_tweens(&self, tween: &mut Self::Tweens, _direction: TextDirection) -> bool {
+    fn init_tweens(&self, tween: &mut Self::Tweens) -> bool {
         // `_currentTween = widget.tween; begin ??= end`, then forward when
         // the two differ.
         let begin = self.begin.clone().unwrap_or_else(|| self.end.clone());

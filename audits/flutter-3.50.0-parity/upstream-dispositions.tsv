@@ -3580,3 +3580,11 @@ packages/flutter/test/widgets/animated_padding_test.dart	9	AnimatedPadding.debug
 packages/flutter/test/widgets/animated_padding_test.dart	19	AnimatedPadding padding visual-to-directional animation	paired-match	upstream-animated-padding.md
 packages/flutter/test/widgets/animated_padding_test.dart	63	AnimatedPadding animated padding clamped to positive values	paired-match	upstream-animated-padding.md
 packages/flutter/test/widgets/animated_padding_test.dart	104	AnimatedPadding does not crash at zero area	paired-match	upstream-animated-padding.md
+packages/flutter/test/widgets/animated_container_test.dart	10	AnimatedContainer.debugFillProperties	paired-match	upstream-animated-container.md
+packages/flutter/test/widgets/animated_container_test.dart	101	AnimatedContainer overanimate test	paired-match	upstream-animated-container.md
+packages/flutter/test/widgets/animated_container_test.dart	141	AnimatedContainer padding visual-to-directional animation	paired-match	upstream-animated-container.md
+packages/flutter/test/widgets/animated_container_test.dart	185	AnimatedContainer alignment visual-to-directional animation	paired-match	upstream-animated-container.md
+packages/flutter/test/widgets/animated_container_test.dart	229	Animation rerun	paired-match	upstream-animated-container.md
+packages/flutter/test/widgets/animated_container_test.dart	297	AnimatedContainer sets transformAlignment	paired-match	upstream-animated-container.md
+packages/flutter/test/widgets/animated_container_test.dart	345	AnimatedContainer sets clipBehavior	paired-match	upstream-animated-container.md
+packages/flutter/test/widgets/animated_container_test.dart	363	AnimatedContainer does not crash at zero area	paired-match	upstream-animated-container.md
