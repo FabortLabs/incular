@@ -3093,3 +3093,4 @@ packages/flutter/test/widgets/actions_test.dart	856	FocusableActionDetector can 
 packages/flutter/test/widgets/actions_test.dart	892	FocusableActionDetector can prevent its descendants from being focusable	paired-match	upstream-action-dispatchers.md#detector-descendant-permissions-and-disabled-action-shadowing
 packages/flutter/test/widgets/actions_test.dart	929	FocusableActionDetector can prevent its descendants from being traversable	paired-match	upstream-action-dispatchers.md#detector-descendant-permissions-and-disabled-action-shadowing
 packages/flutter/test/widgets/actions_test.dart	990	FocusableActionDetector forwards skipTraversal to Focus	paired-match	upstream-action-dispatchers.md#detector-descendant-permissions-and-disabled-action-shadowing
+packages/flutter/test/widgets/actions_test.dart	822	FocusableActionDetector shows focus highlight appropriately when focused and disabled	paired-match	upstream-action-dispatchers.md#directional-focus-while-disabled

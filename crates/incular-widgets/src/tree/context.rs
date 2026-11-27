@@ -96,6 +96,8 @@ pub(super) struct MediaQueryTextScale(pub(super) f32);
 struct MediaQueryPlatformBrightness(Brightness);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct MediaQueryDisableAnimations(bool);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MediaQueryNavigationMode(incular_config::NavigationMode);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct MediaQueryPadding(EdgeInsets);
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -152,6 +154,7 @@ media_query_aspects! {
     MediaQueryTextScale from text_scale,
     MediaQueryPlatformBrightness from brightness,
     MediaQueryDisableAnimations from reduced_motion,
+    MediaQueryNavigationMode from navigation_mode,
     MediaQueryPadding from safe_insets,
     MediaQueryViewPadding from view_padding,
     MediaQueryViewInsets from view_insets,
@@ -603,6 +606,12 @@ impl<'a> BuildContext<'a> {
     #[must_use]
     pub fn media_query_disable_animations(&self) -> Option<bool> {
         self.inner.depend::<MediaQueryDisableAnimations>().map(|value| value.0)
+    }
+
+    /// Scoped navigation behavior, independent of other media fields.
+    #[must_use]
+    pub fn media_query_navigation_mode(&self) -> Option<incular_config::NavigationMode> {
+        self.inner.depend::<MediaQueryNavigationMode>().map(|value| value.0)
     }
 
     /// Flutter's `MediaQuery.paddingOf`, aspect-scoped.

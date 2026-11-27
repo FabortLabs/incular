@@ -102,3 +102,14 @@ root keeps its current focus; the TestWidgetsApp route uses ParentScope
 edge behavior and moves focus from the child to the route scope.
 The native runtime now preserves that distinction. All 23 focused
 native tests and both authored pinned cases passed.
+
+## Directional focus while disabled
+
+The pinned directional-navigation original passed. In traditional
+navigation a disabled detector cannot take focus or show a focus
+highlight. In directional navigation it remains a valid focus target
+and shows its traditional-mode keyboard highlight, but its disabled
+shortcuts still do not invoke actions. The native detector now reads
+the scoped navigation mode separately from its enabled state, and
+tracks that media field independently of unrelated traits. The native
+regression failed before the fix; all 58 focused tests passed after it.

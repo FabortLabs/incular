@@ -1085,6 +1085,7 @@ impl FocusHighlightManager {
 pub struct FocusBehavior {
     node: FocusNode,
     enabled: Cell<bool>,
+    focus_permitted: bool,
     hovering: Cell<bool>,
     focused: Cell<bool>,
     can_show_highlight: Cell<bool>,
@@ -1106,7 +1107,24 @@ impl FocusBehavior {
         on_show_focus_highlight: Option<Rc<dyn Fn(bool)>>,
         on_show_hover_highlight: Option<Rc<dyn Fn(bool)>>,
     ) -> Rc<Self> {
-        node.set_enabled(enabled);
+        Self::with_focus_permission(
+            node, enabled, enabled, on_focus_change, on_show_focus_highlight,
+            on_show_hover_highlight,
+        )
+    }
+
+    /// Separates focus eligibility from hover and action availability.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_focus_permission(
+        node: FocusNode,
+        enabled: bool,
+        focus_permitted: bool,
+        on_focus_change: Option<Rc<dyn Fn(bool)>>,
+        on_show_focus_highlight: Option<Rc<dyn Fn(bool)>>,
+        on_show_hover_highlight: Option<Rc<dyn Fn(bool)>>,
+    ) -> Rc<Self> {
+        node.set_enabled(focus_permitted);
         let can_show_highlight =
             FocusHighlightManager::new().mode() == FocusHighlightMode::Traditional;
         let focused = node.has_focus();
@@ -1114,9 +1132,10 @@ impl FocusBehavior {
             focused: Cell::new(focused),
             node,
             enabled: Cell::new(enabled),
+            focus_permitted,
             hovering: Cell::new(false),
             can_show_highlight: Cell::new(can_show_highlight),
-            focus_highlight_visible: Cell::new(focused && enabled && can_show_highlight),
+            focus_highlight_visible: Cell::new(focused && focus_permitted && can_show_highlight),
             hover_highlight_visible: Cell::new(false),
             on_focus_change,
             on_show_focus_highlight,
@@ -1207,7 +1226,7 @@ impl FocusBehavior {
     }
 
     fn focus_highlight_visible(&self) -> bool {
-        self.focused.get() && self.enabled.get() && self.can_show_highlight.get()
+        self.focused.get() && self.focus_permitted && self.can_show_highlight.get()
     }
 
     fn hover_highlight_visible(&self) -> bool {
