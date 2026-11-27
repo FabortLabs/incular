@@ -94,3 +94,52 @@ fn two_point_circle_morph_has_distinct_directional_counts_and_equal_rounding() {
         close(star.inner_ratio(), 0.85);
     }
 }
+
+#[test]
+fn stadium_and_rounded_rectangle_morphs_follow_every_flutter_stage() {
+    use incular_widgets::{BorderRadius, Radius, RoundedRectangleBorder, StadiumBorder};
+
+    const STADIUM_OUTER: &str = "00111000111110111111101111100011100";
+    const STADIUM_INNER: &str = "00111000111110011111001111100011100";
+    const STAR_OUTER: &str = "00001000011100011111000111000010000";
+    const STAR_INNER: &str = "00000000011100001110000111000000000";
+    let side = BorderSide::solid(Color::BLACK, 2.);
+    let stadium: Rc<dyn ShapeBorder> = Rc::new(StadiumBorder::new(side));
+    let rectangle: Rc<dyn ShapeBorder> = Rc::new(RoundedRectangleBorder::new(
+        side,
+        BorderRadius::only(
+            Radius::elliptical(18., 12.),
+            Radius::elliptical(12., 24.),
+            Radius::circular(4.),
+            Radius::ZERO,
+        ),
+    ));
+    let mut star = StarBorder::new()
+        .points(5.5)
+        .inner_radius_ratio(0.35)
+        .rotation(15.);
+    star.side = BorderSide::solid(Color::BLACK, 6.);
+    let star: Rc<dyn ShapeBorder> = Rc::new(star);
+    let rect = Rect::from_origin_size(Offset::ZERO, Size::new(120., 80.));
+
+    for (anchor, progress, width, outer, inner) in [
+        (&stadium, 0.25, 2.5, STADIUM_OUTER, STADIUM_INNER),
+        (&stadium, 0.75, 5.5, STAR_OUTER, STAR_INNER),
+        (
+            &rectangle,
+            1. / 6.,
+            7. / 3.,
+            "01111101111111111111111111111111111",
+            "01111101111111111111111111110111110",
+        ),
+        (&rectangle, 0.5, 4., STADIUM_OUTER, STADIUM_INNER),
+        (&rectangle, 5. / 6., 17. / 3., STAR_OUTER, STAR_INNER),
+    ] {
+        for (a, b, t) in [(anchor, &star, progress), (&star, anchor, 1. - progress)] {
+            let result = lerp_shape_border(Some(a), Some(b), t).unwrap();
+            close(result.dimensions(None).left, width);
+            assert_eq!(sample(&result.outer_path(rect)), outer, "outer at {t}");
+            assert_eq!(sample(&result.inner_path(rect)), inner, "inner at {t}");
+        }
+    }
+}

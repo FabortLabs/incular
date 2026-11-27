@@ -366,6 +366,7 @@ a version and date when publishing.
 ### Fixed
 
 - Star borders morph from and to circle borders instead of switching abruptly.
+  Stadium and rounded rectangle transitions use the staged circle path.
 
 - Physical touch scrolling follows the inherited multi-touch strategy and
   keeps one scroll activity until the last contributing contact leaves.

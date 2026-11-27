@@ -135,6 +135,14 @@ impl RoundedCircleOutline {
         }
     }
 
+    pub(super) fn star_transition_segments(self) -> Option<u8> {
+        match self.0 {
+            Outline::Stadium(_) => Some(2),
+            Outline::Rounded(_) => Some(3),
+            _ => None,
+        }
+    }
+
     pub(super) fn as_circle(self) -> Option<CircleBorder> {
         let Outline::Circle(circle) = self.0 else {
             return None;

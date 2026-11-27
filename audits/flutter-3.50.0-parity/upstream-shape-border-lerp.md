@@ -39,3 +39,20 @@ Two authored pinned checks and 32 focused native shape, parameter,
 paint and interpolation checks passed. These are contour samples,
 not upstream golden or GPU pixel comparisons, and add no original
 registration.
+
+### Stadium and rounded-rectangle paths through a star
+
+The authored `star_stadium_rectangle_morph_test.dart` checks the two
+stages between a stadium and a star and all three stages between a
+rounded rectangle and a star. The contour passes through circle
+geometry. A rounded rectangle first interpolates through a stadium.
+The native code retains the original endpoint stroke within its
+stage instead of applying a global lerp twice without regard to
+the active phase. For a 2-pixel outline and 6-pixel star, the
+pinned stadium phases measure 2.5 and 5.5; the rectangle phases
+measure 7/3, 4 and 17/3. Reversing the endpoints and time agrees.
+
+Both directions match the pinned 35-point inner and outer coverage
+samples for each stage, including asymmetric rectangle corners.
+Five authored Flutter cases and 29 focused native tests passed.
+The original golden registrations have not been paired.

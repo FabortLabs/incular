@@ -1605,6 +1605,54 @@ impl Hash for StarBorder {
 }
 
 impl StarBorder {
+    fn circle_phase(self, circle: CircleBorder, t: f32, from_circle: bool) -> Rc<dyn ShapeBorder> {
+        match (from_circle, t) {
+            (true, 0.) | (false, 1.) => Rc::new(circle),
+            (true, 1.) | (false, 0.) => Rc::new(self),
+            _ => Rc::new(self.interpolate_circle(circle, t, from_circle)),
+        }
+    }
+
+    fn outline_transition(
+        self,
+        other: RoundedCircleOutline,
+        t: f32,
+        from_outline: bool,
+    ) -> Option<Rc<dyn ShapeBorder>> {
+        if let Some(circle) = other.as_circle() {
+            return Some(self.circle_phase(circle, t, from_outline));
+        }
+        let segments = other.star_transition_segments()?;
+        match (from_outline, t) {
+            (true, 0.) | (false, 1.) => return Some(Rc::new(other)),
+            (true, 1.) | (false, 0.) => return Some(Rc::new(self)),
+            _ => {}
+        }
+        let side = if from_outline {
+            incular_core::Lerp::lerp(&other.side(), &self.side, t)
+        } else {
+            incular_core::Lerp::lerp(&self.side, &other.side(), t)
+        };
+        let circle = CircleBorder::new(side);
+        let stadium = RoundedCircleOutline::from(StadiumBorder::new(side));
+        let progress = f64::from(t) * f64::from(segments);
+        let step = (progress.floor() as u8).min(segments - 1);
+        let local = progress - f64::from(step);
+        // Between stadium and star use a circle. Between rounded rectangle
+        // and star, pass through stadium first as well. Original endpoint
+        // sides are retained on the pieces that still touch those endpoints.
+        Some(match (from_outline, segments, step) {
+            (true, 2, 0) => Rc::new(other.interpolate(circle.into(), local)),
+            (true, 3, 0) => Rc::new(other.interpolate(stadium, local)),
+            (true, 3, 1) => Rc::new(stadium.interpolate(circle.into(), local)),
+            (true, _, _) => self.circle_phase(circle, local as f32, true),
+            (false, _, 0) => self.circle_phase(circle, local as f32, false),
+            (false, 2, _) => Rc::new(RoundedCircleOutline::from(circle).interpolate(other, local)),
+            (false, 3, 1) => Rc::new(RoundedCircleOutline::from(circle).interpolate(stadium, local)),
+            (false, _, _) => Rc::new(stadium.interpolate(other, local)),
+        })
+    }
+
     fn interpolate_circle(self, circle: CircleBorder, t: f32, from_circle: bool) -> Self {
         let star_progress = if from_circle { t } else { 1. - t };
         let mix = |start: f32, end: f32, at| start + (end - start) * at;
@@ -1644,12 +1692,7 @@ impl ShapeBorder for StarBorder {
         if let Some(star) = other.star_geometry() {
             return Some(Rc::new(incular_core::Lerp::lerp(&star, self, t)));
         }
-        let circle = other.rounded_circle_outline()?.as_circle()?;
-        match t {
-            0. => Some(Rc::new(circle)),
-            1. => Some(Rc::new(*self)),
-            _ => Some(Rc::new(self.interpolate_circle(circle, t, true))),
-        }
+        self.outline_transition(other.rounded_circle_outline()?, t, true)
     }
 
     fn lerp_to(&self, other: Option<&dyn ShapeBorder>, t: f32) -> Option<Rc<dyn ShapeBorder>> {
@@ -1659,12 +1702,7 @@ impl ShapeBorder for StarBorder {
         if let Some(star) = other.star_geometry() {
             return Some(Rc::new(incular_core::Lerp::lerp(self, &star, t)));
         }
-        let circle = other.rounded_circle_outline()?.as_circle()?;
-        match t {
-            0. => Some(Rc::new(*self)),
-            1. => Some(Rc::new(circle)),
-            _ => Some(Rc::new(self.interpolate_circle(circle, t, false))),
-        }
+        self.outline_transition(other.rounded_circle_outline()?, t, false)
     }
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
         Some(Rc::new(self.scale(factor)))
