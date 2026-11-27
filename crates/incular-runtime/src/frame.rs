@@ -3171,7 +3171,7 @@ impl Runtime {
         match self.tree.resolve_sequential_focus(self.focused, reverse) {
             SequentialFocusResolution::Move(next) => {
                 let previous = self.focused;
-                self.set_focus(Some(next));
+                self.set_traversal_focus(next, reverse, false);
                 self.focused != previous
             }
             SequentialFocusResolution::LeaveView => {
@@ -3181,6 +3181,26 @@ impl Runtime {
             SequentialFocusResolution::Unchanged => false,
         }
     }
+    fn set_traversal_focus(&mut self, target: ElementId, toward_start: bool, directional: bool) {
+        use incular_widgets::{EnsureVisible, ScrollPositionAlignmentPolicy, Scrollable};
+
+        self.set_focus_inner(Some(target), true, directional);
+        if self.focused != Some(target) {
+            return;
+        }
+        let policy = if toward_start {
+            ScrollPositionAlignmentPolicy::KeepVisibleAtStart
+        } else {
+            ScrollPositionAlignmentPolicy::KeepVisibleAtEnd
+        };
+        let moved = Scrollable::ensure_visible(
+            &self.tree,
+            target,
+            EnsureVisible::new().alignment_policy(policy),
+        );
+        self.frame_requested |= moved != 0;
+    }
+
     /// Flutter's native `WidgetsApp` defaults: unmodified arrows traverse
     /// focus, the platform's modifier with an arrow scrolls by a line, and
     /// unmodified PageUp/PageDown scroll by a page.
@@ -3219,6 +3239,7 @@ impl Runtime {
 
     fn move_directional_focus(&mut self, direction: Code) -> bool {
         let previous = self.focused;
+        let toward_start = matches!(direction, Code::ArrowUp | Code::ArrowLeft);
         // Opposite input walks the actual visited stops; a new axis or
         // invalidated predecessor starts a fresh geometry search.
         let mut history = self.directional_focus_history.take();
@@ -3232,7 +3253,7 @@ impl Runtime {
                 && self.tree.can_retrace_directional_focus(current, stop)
             {
                 self.directional_focus_history = history.filter(|run| !run.stops.is_empty());
-                self.set_focus_inner(Some(stop), true, true);
+                self.set_traversal_focus(stop, toward_start, true);
                 return self.focused == Some(stop);
             }
             history = None;
@@ -3261,7 +3282,7 @@ impl Runtime {
                 .push((stop, self.tree.focus_node_at(stop)));
             self.directional_focus_history = history;
         }
-        self.set_focus_inner(Some(next), true, true);
+        self.set_traversal_focus(next, toward_start, true);
         self.focused == Some(next)
     }
 
