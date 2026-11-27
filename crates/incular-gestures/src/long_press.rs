@@ -264,6 +264,39 @@ impl LongPressGestureRecognizer {
     }
 }
 
+impl crate::ArenaRecognizer for LongPressGestureRecognizer {
+    fn set_external_arena(&mut self, resolver: crate::ArenaResolver) {
+        self.arena.set_external(resolver);
+    }
+
+    fn add_pointer(&mut self, event: RawPointerEvent) {
+        if !LongPressGestureRecognizer::add_pointer(self, event) {
+            let _ = self.arena.resolve(event.pointer, GestureDisposition::Rejected);
+        }
+    }
+
+    fn handle_event(&mut self, event: RawPointerEvent) {
+        LongPressGestureRecognizer::handle_event(self, event);
+    }
+
+    fn accept_gesture(&mut self, pointer: u64) {
+        LongPressGestureRecognizer::accept_gesture(self, pointer);
+    }
+
+    fn reject_gesture(&mut self, pointer: u64) {
+        // Flutter's routed long press emits cancel when it withdraws its
+        // own contact (release, motion or pointer cancellation), not when
+        // a different arena member wins. That loss only stops tracking.
+        if self.contact.as_ref().is_some_and(|contact| contact.pointer == pointer) {
+            self.contact = None;
+        }
+    }
+
+    fn poll(&mut self, now: Instant) {
+        LongPressGestureRecognizer::poll(self, now);
+    }
+}
+
 fn start_awarded_hold(contact: &mut Contact, details: LongPressStartDetails) {
     contact.started = true;
     let action = contact.engine.begin_long_press(details);

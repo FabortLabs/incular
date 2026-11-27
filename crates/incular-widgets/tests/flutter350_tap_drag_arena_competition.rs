@@ -6,7 +6,8 @@ use incular_config::Constraints;
 use incular_core::{Color, DragStartBehavior, Offset, PointerPhase, Size, time::Instant};
 use incular_gestures::{
     ArenaGestureRecognizer, GestureCallbacks, GestureRecognizerFactoryWithHandlers,
-    PointerDeviceKind, PointerGestureRecognizer, RawPointerEvent, TapAndDragGestureRecognizer,
+    LongPressGestureRecognizer, PointerDeviceKind, PointerGestureRecognizer, RawPointerEvent,
+    TapAndDragGestureRecognizer,
 };
 use incular_widgets::{RawGestureDetector, Widget, internal::WidgetTree};
 
@@ -17,6 +18,7 @@ enum Other {
     Tap,
     Pan,
     Vertical,
+    Horizontal,
 }
 
 fn competitor(trace: &Trace, other: Other) -> PointerGestureRecognizer {
@@ -43,6 +45,20 @@ fn competitor(trace: &Trace, other: Other) -> PointerGestureRecognizer {
             callbacks.on_pan_end = Some(Rc::new(move |_| end.borrow_mut().push("panend".into())));
             callbacks.on_pan_cancel = Some(Rc::new(move || {
                 cancel.borrow_mut().push("pancancel".into())
+            }));
+        }
+        Other::Horizontal => {
+            callbacks.on_horizontal_drag_start = Some(Rc::new(move |_| {
+                start.borrow_mut().push("basichorizontalstart".into())
+            }));
+            callbacks.on_horizontal_drag_update = Some(Rc::new(move |_| {
+                update.borrow_mut().push("basichorizontalupdate".into())
+            }));
+            callbacks.on_horizontal_drag_end = Some(Rc::new(move |_| {
+                end.borrow_mut().push("basichorizontalend".into())
+            }));
+            callbacks.on_horizontal_drag_cancel = Some(Rc::new(move || {
+                cancel.borrow_mut().push("basichorizontalcancel".into())
             }));
         }
         Other::Vertical => {
@@ -481,4 +497,97 @@ fn the_raw_default_does_not_win_before_an_ordinary_vertical_drag_joins() {
         tree.settle_uncontested_raw_arena(0, event);
     }
     assert_eq!(trace.take(), ["ordinary start", "ordinary end"]);
+}
+
+fn long_press_factory(
+    trace: &Trace,
+) -> GestureRecognizerFactoryWithHandlers<ArenaGestureRecognizer<LongPressGestureRecognizer>> {
+    let trace = trace.clone();
+    GestureRecognizerFactoryWithHandlers::new(
+        move || {
+            let start = trace.clone();
+            let update = trace.clone();
+            let end = trace.clone();
+            let cancel = trace.clone();
+            ArenaGestureRecognizer::new(LongPressGestureRecognizer::new(GestureCallbacks {
+                on_long_press_start: Some(Rc::new(move |_| {
+                    start.borrow_mut().push("longpressstart".into())
+                })),
+                on_long_press_move_update: Some(Rc::new(move |_| {
+                    update.borrow_mut().push("longpressmoveupdate".into())
+                })),
+                on_long_press_end: Some(Rc::new(move |_| {
+                    end.borrow_mut().push("longpressend".into())
+                })),
+                on_long_press_cancel: Some(Rc::new(move || {
+                    cancel.borrow_mut().push("longpresscancel".into())
+                })),
+                ..Default::default()
+            }))
+        },
+        |_| {},
+    )
+}
+
+#[test]
+fn losing_a_drag_releases_state_before_the_same_pointer_is_used_again() {
+    // Pinned :682: the later press uses the same physical pointer and mounted factories.
+    let trace = Trace::default();
+    let widget = competition_detector(&trace, true, false, Some(Other::Horizontal), true)
+        .gesture(long_press_factory(&trace));
+    let mut tree = WidgetTree::new();
+    tree.mount(widget.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(200., 200.)))
+        .unwrap();
+    let now = Instant::now();
+    route(&mut tree, now, 5, PointerDeviceKind::Touch, &[(28.1, 10.)]);
+    assert_eq!(trace.take(), ["basichorizontalstart", "basichorizontalend"]);
+
+    route(
+        &mut tree,
+        now + Duration::from_millis(40),
+        5,
+        PointerDeviceKind::Touch,
+        &[],
+    );
+}
+
+#[test]
+fn a_second_consecutive_tap_claims_before_the_hold_deadline_and_can_drag() {
+    // Pinned :744.
+    let trace = Trace::default();
+    let widget =
+        competition_detector(&trace, false, true, None, true).gesture(long_press_factory(&trace));
+    let mut tree = WidgetTree::new();
+    tree.mount(widget.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(200., 200.)))
+        .unwrap();
+    let now = Instant::now();
+    route(&mut tree, now, 5, PointerDeviceKind::Touch, &[]);
+    let mut send = |ms, phase, x, y| {
+        tree.dispatch_raw_pointer(RawPointerEvent::new(
+            5,
+            0,
+            PointerDeviceKind::Touch,
+            u32::from(phase != PointerPhase::Up),
+            Offset::new(x, y),
+            phase,
+            now + Duration::from_millis(ms),
+        ));
+    };
+    send(190, PointerPhase::Down, 10., 10.);
+    send(690, PointerPhase::Move, 40., 45.);
+    send(690, PointerPhase::Up, 40., 45.);
+    assert_eq!(
+        trace.take(),
+        [
+            "longpresscancel",
+            "down#1",
+            "up#1",
+            "down#2",
+            "panstart#2",
+            "panupdate#2",
+            "panend#2"
+        ]
+    );
 }

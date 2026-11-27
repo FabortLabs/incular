@@ -1195,6 +1195,7 @@ impl WidgetTree {
                 .map(|member| (member.element, member.member, member.type_id))
                 .collect::<Vec<_>>()
         })?;
+        let mut release_winners = Vec::new();
         for (element, member, type_id) in active_members {
             let Some(disposition) = self.input.gesture_arena.disposition(key, member) else {
                 continue;
@@ -1226,14 +1227,14 @@ impl WidgetTree {
             // Otherwise a losing drag can consume its pending cancel while
             // attempting acceptance, then never report it to the app.
             match decision {
+                GestureDecision::Accept(action) if event.phase == PointerPhase::Up => {
+                    // A tap's release decision represents an arena sweep.
+                    // Allow other candidates to process the release and
+                    // withdraw before awarding the first remaining member.
+                    release_winners.push((member, action));
+                }
                 GestureDecision::Accept(action) => {
-                    let entries = self.input.gesture_arena.accept(key, member);
-                    self.apply_arena_entries(key, entries);
-                    if self.input.gesture_arena.disposition(key, member)
-                        == Some(GestureDisposition::Accepted)
-                    {
-                        self.dispatch_raw_gesture_action(key, member, action);
-                    }
+                    self.accept_raw_gesture_action(key, member, action);
                 }
                 GestureDecision::Reject | GestureDecision::Cancelled => {
                     self.input.gesture_arena.reject(key, member);
@@ -1241,6 +1242,9 @@ impl WidgetTree {
                 }
                 GestureDecision::Pending => {}
             }
+        }
+        for (member, action) in release_winners {
+            self.accept_raw_gesture_action(key, member, action);
         }
         let element = self.input.raw_gesture_streams.get(&key)?.element;
         if event.phase == PointerPhase::Cancel
@@ -1253,6 +1257,21 @@ impl WidgetTree {
             }
         }
         Some(element)
+    }
+
+    fn accept_raw_gesture_action(
+        &mut self,
+        key: GestureArenaKey,
+        member: GestureArenaMember,
+        action: GestureAction,
+    ) {
+        let entries = self.input.gesture_arena.accept(key, member);
+        self.apply_arena_entries(key, entries);
+        if self.input.gesture_arena.disposition(key, member)
+            == Some(GestureDisposition::Accepted)
+        {
+            self.dispatch_raw_gesture_action(key, member, action);
+        }
     }
 
     fn dispatch_raw_gesture_action(

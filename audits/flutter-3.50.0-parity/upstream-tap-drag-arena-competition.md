@@ -57,3 +57,22 @@ A mounted ordinary vertical drag can still join before the raw
 default is assigned and wins the mixed-route test. Explicit raw
 resolutions still take effect immediately within their route.
 Fourteen competition and four adjacent raw-widget tests passed.
+
+## Losing a drag, then tapping or holding again
+
+The pinned :682 and :744 cases passed. A standard horizontal drag
+wins the 18.1-pixel movement over the non-eager combined recognizer
+and a pending long press; the same physical pointer can then be
+pressed again safely. The standalone long-press recognizer now
+participates in the mounted raw arena. Its own withdrawal (including
+a short release) reports cancel; an external loss stops tracking
+without emitting a spurious second cancel.
+
+The release sweep waits until the other raw contenders have processed
+the release. The first tap's long-press withdrawal can therefore
+cancel before the tap is reported. After the next consecutive tap,
+the combined recognizer wins and delivers its numbered start/update/end
+instead of a long press. Sixteen mounted competition cases, four
+adjacent raw cases, and the direct long-press and tap-and-drag
+suites passed. This comparison supplies the logical timestamps with
+pointer samples; frame-driven raw deadlines are a separate check.
