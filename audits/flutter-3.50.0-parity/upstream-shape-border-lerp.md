@@ -22,3 +22,20 @@ when either symmetric pair is absent. Those two cases remain
 partial because Dart's assertions check object identity of
 individual sides; Rust stores these small border-side values by copy.
 All 17 focused border, shape interpolation and paint tests passed.
+
+## Circle and star contour interpolation
+
+The authored `star_circle_morph_test.dart` compared a 5.5-point star
+with an eccentric circle. At progress 0.25 toward the star (or 0.75
+back toward the circle), the outline has 5.875 points, a 3-pixel
+stroke and squash 0.475. The native implementation previously
+fell back to the unchanged circle. It now reproduces the inner
+radius, rounding, rotation and both 35-point inner/outer coverage
+samples; paint emits the single requested stroke. Near two points,
+the two directions instead use their original progress for the
+point count: 2.15 and 2.05. Both match.
+
+Two authored pinned checks and 32 focused native shape, parameter,
+paint and interpolation checks passed. These are contour samples,
+not upstream golden or GPU pixel comparisons, and add no original
+registration.

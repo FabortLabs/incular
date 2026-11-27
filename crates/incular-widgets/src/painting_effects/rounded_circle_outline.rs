@@ -135,6 +135,13 @@ impl RoundedCircleOutline {
         }
     }
 
+    pub(super) fn as_circle(self) -> Option<CircleBorder> {
+        let Outline::Circle(circle) = self.0 else {
+            return None;
+        };
+        Some(circle)
+    }
+
     pub(crate) fn try_interpolate(self, other: Self, t: f32) -> Option<Self> {
         self.interpolate_supported(other, f64::from(t))
     }

@@ -57,6 +57,12 @@ pub trait ShapeBorder {
         None
     }
 
+    /// Returns a star's geometric parameters when this outline is a star.
+    #[doc(hidden)]
+    fn star_geometry(&self) -> Option<StarBorder> {
+        None
+    }
+
     /// Scales this border for a transition from or to an absent decoration.
     /// Custom borders that return `None` keep their original outline.
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
@@ -1598,7 +1604,68 @@ impl Hash for StarBorder {
     }
 }
 
+impl StarBorder {
+    fn interpolate_circle(self, circle: CircleBorder, t: f32, from_circle: bool) -> Self {
+        let star_progress = if from_circle { t } else { 1. - t };
+        let mix = |start: f32, end: f32, at| start + (end - start) * at;
+        let (points, circle_inner, circle_point, circle_valley) = if self.points >= 2.5 {
+            let points = mix(self.points.round(), self.points, star_progress);
+            (points, (PI / f64::from(points)).cos() as f32, 1., 0.)
+        } else {
+            // Near two points Flutter rounds both tips and valleys equally.
+            // Its point count moves toward two in each direction.
+            (mix(self.points, 2., t), 1., 0.5, 0.5)
+        };
+        Self {
+            side: if from_circle {
+                incular_core::Lerp::lerp(&circle.side, &self.side, t)
+            } else {
+                incular_core::Lerp::lerp(&self.side, &circle.side, t)
+            },
+            points,
+            inner_radius_ratio: Some(mix(circle_inner, self.inner_ratio(), star_progress)),
+            point_rounding: mix(circle_point, self.point_rounding, star_progress),
+            valley_rounding: mix(circle_valley, self.valley_rounding, star_progress),
+            squash: mix(circle.eccentricity(), self.squash, star_progress),
+            ..self
+        }
+    }
+}
+
 impl ShapeBorder for StarBorder {
+    fn star_geometry(&self) -> Option<StarBorder> {
+        Some(*self)
+    }
+
+    fn lerp_from(&self, other: Option<&dyn ShapeBorder>, t: f32) -> Option<Rc<dyn ShapeBorder>> {
+        let Some(other) = other else {
+            return self.scaled(t);
+        };
+        if let Some(star) = other.star_geometry() {
+            return Some(Rc::new(incular_core::Lerp::lerp(&star, self, t)));
+        }
+        let circle = other.rounded_circle_outline()?.as_circle()?;
+        match t {
+            0. => Some(Rc::new(circle)),
+            1. => Some(Rc::new(*self)),
+            _ => Some(Rc::new(self.interpolate_circle(circle, t, true))),
+        }
+    }
+
+    fn lerp_to(&self, other: Option<&dyn ShapeBorder>, t: f32) -> Option<Rc<dyn ShapeBorder>> {
+        let Some(other) = other else {
+            return self.scaled(1. - t);
+        };
+        if let Some(star) = other.star_geometry() {
+            return Some(Rc::new(incular_core::Lerp::lerp(self, &star, t)));
+        }
+        let circle = other.rounded_circle_outline()?.as_circle()?;
+        match t {
+            0. => Some(Rc::new(*self)),
+            1. => Some(Rc::new(circle)),
+            _ => Some(Rc::new(self.interpolate_circle(circle, t, false))),
+        }
+    }
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
         Some(Rc::new(self.scale(factor)))
     }
