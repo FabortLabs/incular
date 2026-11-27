@@ -3269,3 +3269,8 @@ packages/flutter/test/widgets/tween_animation_builder_test.dart	321	Setting same
 packages/flutter/test/widgets/tween_animation_builder_test.dart	348	Setting same tween and direction while gapless animation is in progress works	paired-match	upstream-tween-animation-builder.md
 packages/flutter/test/widgets/tween_animation_builder_test.dart	380	Works with nullable tweens	paired-match	upstream-tween-animation-builder.md
 packages/flutter/test/widgets/tween_animation_builder_test.dart	397	TweenAnimationBuilder does not crash at zero area	paired-match	upstream-tween-animation-builder.md
+packages/flutter/test/widgets/scrollable_list_hit_testing_test.dart	12	Tap item after scroll - horizontal	paired-match	upstream-scrollable-list-hit-testing.md
+packages/flutter/test/widgets/scrollable_list_hit_testing_test.dart	56	Tap item after scroll - vertical	paired-match	upstream-scrollable-list-hit-testing.md
+packages/flutter/test/widgets/scrollable_list_hit_testing_test.dart	104	Padding scroll anchor start	paired-match	upstream-scrollable-list-hit-testing.md
+packages/flutter/test/widgets/scrollable_list_hit_testing_test.dart	138	Padding scroll anchor end	paired-match	upstream-scrollable-list-hit-testing.md
+packages/flutter/test/widgets/scrollable_list_hit_testing_test.dart	173	Tap immediately following clamped overscroll	paired-match	upstream-scrollable-list-hit-testing.md
