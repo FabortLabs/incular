@@ -7,7 +7,8 @@ use std::{
 };
 
 use incular_image::{
-    AnimatedWebpDecoder, ImageDecodeCompletion, ImageError, ImageFrameCodec, ImagePlayback,
+    AnimatedWebpDecoder, ImageConfiguration, ImageDecodeCompletion, ImageError, ImageFrameCodec,
+    ImageInfo, ImagePlayback, ImageResizeOptions,
 };
 
 use crate::tasks::{RuntimeSpawner, TaskFailure, TaskScope};
@@ -19,10 +20,25 @@ impl RuntimeSpawner {
     /// Still WebP images should use the ordinary image providers.
     #[must_use]
     pub fn load_animated_webp(&self, bytes: Arc<[u8]>) -> ImagePlayback {
+        self.load_animated_webp_in(
+            self.application_scope(),
+            bytes,
+            ImageResizeOptions::default(),
+        )
+    }
+
+    pub(crate) fn load_animated_webp_in(
+        &self,
+        scope: &TaskScope,
+        bytes: Arc<[u8]>,
+        resize: ImageResizeOptions,
+    ) -> ImagePlayback {
         let playback = ImagePlayback::scheduled();
         let weak = playback.downgrade();
         let spawner = self.clone();
-        let _initialization = self.spawn_blocking(
+        let decode_scope = scope.child();
+        let _initialization = self.spawn_blocking_in(
+            scope,
             move || AnimatedWebpDecoder::from_bytes(bytes),
             move |result, _| {
                 let Some(playback) = weak.upgrade() else {
@@ -30,7 +46,12 @@ impl RuntimeSpawner {
                 };
                 match result {
                     Ok(Ok(Some(decoder))) => {
-                        playback.attach(Rc::new(WorkerWebpCodec::new(decoder, spawner)));
+                        playback.attach(Rc::new(WorkerWebpCodec::new(
+                            decoder,
+                            spawner,
+                            decode_scope,
+                            resize,
+                        )));
                     }
                     Ok(Ok(None)) => {
                         playback.attach_error(ImageError::Decode("WebP has no animation".into()));
@@ -62,19 +83,33 @@ struct Work {
     spawner: RuntimeSpawner,
     scope: TaskScope,
     ready: RefCell<Option<AnimatedWebpDecoder>>,
+    resize: ImageResizeOptions,
     outstanding: RefCell<VecDeque<ImageDecodeCompletion>>,
     fatal: RefCell<Option<ImageError>>,
     active: Cell<bool>,
 }
 
 impl WorkerWebpCodec {
-    fn new(decoder: AnimatedWebpDecoder, spawner: RuntimeSpawner) -> Self {
+    fn new(
+        decoder: AnimatedWebpDecoder,
+        spawner: RuntimeSpawner,
+        scope: TaskScope,
+        resize: ImageResizeOptions,
+    ) -> Self {
+        let frames = decoder.frame_count();
         Self {
-            frames: decoder.frame_count(),
+            frames,
             repeats: decoder.repetition_count(),
             work: Rc::new(Work {
-                scope: spawner.scope(),
+                scope,
                 spawner,
+                // Flutter 3.50 passes target dimensions only to SingleFrameCodec.
+                // The multi-frame engine decoder renders the encoded canvas size.
+                resize: if frames.get() == 1 {
+                    resize
+                } else {
+                    ImageResizeOptions::default()
+                },
                 ready: RefCell::new(Some(decoder)),
                 outstanding: RefCell::new(VecDeque::new()),
                 fatal: RefCell::new(None),
@@ -128,10 +163,19 @@ impl Work {
             .expect("idle codec has a decoder");
         self.active.set(true);
         let weak = Rc::downgrade(self);
+        let resize = self.resize;
         let _frame_task = self.spawner.spawn_blocking_in(
             &self.scope,
             move || {
-                let result = decoder.decode_next();
+                let result = decoder.decode_next().and_then(|mut frame| {
+                    if resize.width.is_some() || resize.height.is_some() {
+                        let scale = frame.image.scale();
+                        let image = resize
+                            .resize(frame.image.into_image(), &ImageConfiguration::empty())?;
+                        frame.image = ImageInfo::new(image).with_scale(scale);
+                    }
+                    Ok(frame)
+                });
                 (decoder, result)
             },
             move |result, _| {

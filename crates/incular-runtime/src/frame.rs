@@ -463,6 +463,14 @@ impl Runtime {
         let mut tree = WidgetTree::new();
         let system_sound = incular_platform::SystemSound::default();
         tree.install_system_sound(system_sound.clone());
+        let image_spawner = window_id.map_or_else(
+            || tasks::TaskScheduler::spawner(&scheduler),
+            |window| tasks::TaskScheduler::spawner_for(&scheduler, window),
+        );
+        let image_scope = window_scope.clone();
+        tree.install_image_playback_loader(incular_widgets::internal::ImagePlaybackLoader::new(
+            move |bytes, resize| image_spawner.load_animated_webp_in(&image_scope, bytes, resize),
+        ));
         tree.enable_hosted_focus();
         let mut handlers = HashMap::new();
         root.bind_callbacks(&mut |callback| {

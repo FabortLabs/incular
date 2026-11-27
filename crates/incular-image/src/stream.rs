@@ -690,6 +690,18 @@ impl AnyImageProvider {
         }
     }
 
+    /// Returns shared bytes when this is a memory provider whose WebP
+    /// header declares animation. Decoding and validation are deferred.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn animated_memory_webp(&self) -> Option<std::sync::Arc<[u8]>> {
+        let bytes = self.provider.downcast_ref::<crate::MemoryImage>()?.bytes();
+        (bytes.get(..4) == Some(b"RIFF")
+            && bytes.get(8..16) == Some(b"WEBPVP8X")
+            && bytes.get(20).is_some_and(|flags| flags & 2 != 0))
+        .then(|| bytes.clone())
+    }
+
     /// Resolves the provider for `configuration` (Flutter
     /// `ImageProvider.resolve`).
     #[must_use]

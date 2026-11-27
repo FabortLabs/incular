@@ -294,3 +294,58 @@ fn bad_encoded_source_notifies_the_mounted_error_builder() {
     assert!(pixels(&mut runtime, now).is_empty());
     assert_eq!(errors.borrow().len(), 1);
 }
+
+#[test]
+fn standard_memory_constructor_plays_animated_webp_after_background_resolution() {
+    let log = FrameLog::default();
+    let scene = || {
+        let log = log.clone();
+        Image::memory(Arc::<[u8]>::from(TWO_FRAMES))
+            .frame_builder(move |_, widget, frame, synchronous| {
+                log.borrow_mut().push((frame, synchronous));
+                widget
+            })
+            .into()
+    };
+    let mut runtime = Runtime::new(scene()).unwrap();
+    let t0 = Instant::now();
+    assert!(pixels(&mut runtime, t0).is_empty());
+    drain_image_workers(&mut runtime);
+    assert_eq!(pixels(&mut runtime, t0), [[255, 0, 0, 255]]);
+    drain_image_workers(&mut runtime);
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, scene()).unwrap();
+    assert_eq!(pixels(&mut runtime, t0), [[255, 0, 0, 255]]);
+    assert_eq!(log.borrow().last(), Some(&(Some(0), false)));
+    assert_eq!(
+        pixels(&mut runtime, t0 + Duration::from_millis(200)),
+        [[0, 0, 255, 255]]
+    );
+    assert_eq!(log.borrow().last(), Some(&(Some(1), false)));
+}
+
+#[test]
+fn standard_memory_provider_keeps_multiframe_canvas_despite_cache_width() {
+    let source = incular_image::MemoryImage::new(Arc::<[u8]>::from(TWO_FRAMES));
+    let mut runtime = Runtime::new(Image::provider(source).cache_width(2).into()).unwrap();
+    let t0 = Instant::now();
+    assert!(pixels(&mut runtime, t0).is_empty());
+    for (millis, expected) in [(0, [255_u8, 0, 0, 255]), (200, [0, 0, 255, 255])] {
+        drain_image_workers(&mut runtime);
+        let at = t0 + Duration::from_millis(millis);
+        let (list, _) = runtime
+            .run_frame_at(Constraints::loose(Size::new(100., 100.)), at)
+            .unwrap();
+        let handles: Vec<_> = list
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::Image { image, .. } => Some(image.decoded()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(handles.len(), 1);
+        assert_eq!((handles[0].width(), handles[0].height()), (4, 4));
+        assert_eq!(&handles[0].pixels()[0..4], &expected);
+    }
+}

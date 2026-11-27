@@ -78,3 +78,20 @@ and a dropped source not being retained by an unfinished initialization.
 The stream preserves a successfully decoded frame separately from
 a later decode failure. These are authored checks and add no
 registration credit.
+
+### Standard memory provider
+
+An in-memory WebP declaring animation now uses the window's worker-backed
+playback in `Image::memory` and `Image::provider(MemoryImage)`. Still
+images continue through the existing borrowed cache path. Equal encoded
+bytes and effective cache settings preserve an existing mounted session
+through rebuilds, and the worker cannot retain an unmounted widget.
+
+The authored `Image.memory` probe initially expected `cacheWidth: 2`
+to resize a 4×4 multi-frame source. The pinned Flutter runner instead
+produced 4×4 pixels: `ImageDescriptor::instantiateCodec` passes target
+dimensions only to its single-frame codec. The native path preserves
+the encoded multi-frame canvas and the requested width still contributes
+to resolution identity. Both lanes now verify red until 199 ms and
+blue at 200 ms. Ten native animated-image cases and eight regular
+provider cases passed. This probe adds no original coverage credit.

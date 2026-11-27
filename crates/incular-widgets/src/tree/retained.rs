@@ -102,6 +102,12 @@ impl WidgetTree {
         self.dependency_root.insert(system_sound);
     }
 
+    /// Installs the host's window-scoped image decoder before mounting.
+    #[doc(hidden)]
+    pub fn install_image_playback_loader(&mut self, loader: crate::internal::ImagePlaybackLoader) {
+        self.dependency_root.insert(loader);
+    }
+
     /// Whether a value a build read (an inherited value or another tracked
     /// dependency such as a `UiFuture`) changed since the last layout: the
     /// next layout rebuilds its readers.

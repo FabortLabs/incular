@@ -363,6 +363,10 @@ pub struct RuntimeSpawner {
 }
 
 impl RuntimeSpawner {
+    pub(crate) const fn application_scope(&self) -> &TaskScope {
+        &self.application_scope
+    }
+
     pub(crate) const fn window_id(&self) -> Option<WindowId> {
         self.window_id
     }

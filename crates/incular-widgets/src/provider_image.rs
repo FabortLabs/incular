@@ -6,6 +6,7 @@
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
+    sync::Arc,
 };
 
 use incular_core::Size;
@@ -63,10 +64,27 @@ pub struct ProviderImage {
     exclude_from_semantics: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 enum ImageWidgetSource {
     Provider(AnyImageProvider),
     Playback(ImagePlayback),
+    AnimatedMemory {
+        bytes: Arc<[u8]>,
+        fallback: AnyImageProvider,
+    },
+}
+
+impl std::fmt::Debug for ImageWidgetSource {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Provider(provider) => provider.fmt(formatter),
+            Self::Playback(playback) => playback.fmt(formatter),
+            Self::AnimatedMemory { bytes, .. } => formatter
+                .debug_struct("AnimatedMemory")
+                .field("encoded_bytes", &bytes.len())
+                .finish(),
+        }
+    }
 }
 
 impl std::fmt::Debug for ProviderImage {
@@ -107,7 +125,14 @@ impl ProviderImage {
     }
 
     fn new_erased(provider: AnyImageProvider) -> Self {
-        Self::with_source(ImageWidgetSource::Provider(provider))
+        let source = match provider.animated_memory_webp() {
+            Some(bytes) => ImageWidgetSource::AnimatedMemory {
+                bytes,
+                fallback: provider,
+            },
+            None => ImageWidgetSource::Provider(provider),
+        };
+        Self::with_source(source)
     }
 
     fn with_source(source: ImageWidgetSource) -> Self {
@@ -564,6 +589,73 @@ impl PlaybackImageState {
     }
 }
 
+type LoadEncodedImage = dyn Fn(Arc<[u8]>, ImageResizeOptions) -> ImagePlayback;
+
+/// A host's window-scoped decoding capability for built-in image widgets.
+#[doc(hidden)]
+pub struct ImagePlaybackLoader(Rc<LoadEncodedImage>);
+
+impl ImagePlaybackLoader {
+    #[must_use]
+    pub fn new(load: impl Fn(Arc<[u8]>, ImageResizeOptions) -> ImagePlayback + 'static) -> Self {
+        Self(Rc::new(load))
+    }
+}
+
+struct AnimatedMemoryState {
+    key: RefCell<Option<(Arc<[u8]>, ImageResizeOptions, ImagePlayback)>>,
+    playback: Rc<PlaybackImageState>,
+    fallback: ProviderImageState,
+}
+
+impl RetainedState for AnimatedMemoryState {
+    fn rebind_revision(&self, revision: Rc<Cell<u64>>) {
+        self.playback.rebind_revision(revision);
+    }
+}
+
+impl AnimatedMemoryState {
+    fn new(revision: Rc<Cell<u64>>) -> Self {
+        Self {
+            key: RefCell::new(None),
+            playback: Rc::new(PlaybackImageState::new(revision)),
+            fallback: ProviderImageState::default(),
+        }
+    }
+
+    fn build(
+        &self,
+        config: &ProviderImage,
+        bytes: &Arc<[u8]>,
+        fallback: &AnyImageProvider,
+        context: &BuildContext<'_>,
+    ) -> Widget {
+        let Some(loader) = context.find_shared::<ImagePlaybackLoader>() else {
+            return self.fallback.build(config, fallback, context);
+        };
+        let options = if config.cache_resize.use_logical_size {
+            config.cache_resize.physical(&config.configuration(context))
+        } else {
+            config.cache_resize
+        };
+        let previous = self
+            .key
+            .borrow()
+            .as_ref()
+            .and_then(|(old_bytes, old_options, source)| {
+                (*old_options == options && (Arc::ptr_eq(old_bytes, bytes) || old_bytes == bytes))
+                    .then(|| source.clone())
+            });
+        let source = previous.unwrap_or_else(|| {
+            let source = (loader.0)(bytes.clone(), options);
+            self.key
+                .replace(Some((bytes.clone(), options, source.clone())));
+            source
+        });
+        self.playback.build(config, &source, context)
+    }
+}
+
 impl From<ProviderImage> for Widget {
     fn from(value: ProviderImage) -> Self {
         let config = Rc::new(value);
@@ -575,6 +667,13 @@ impl From<ProviderImage> for Widget {
                     move |state, context, _| state.build(&config, &provider, context),
                     false,
                 )
+            }
+            ImageWidgetSource::AnimatedMemory { bytes, fallback } => {
+                let bytes = bytes.clone();
+                let fallback = fallback.clone();
+                Widget::mount_scoped_builder(AnimatedMemoryState::new, move |state, context| {
+                    state.build(&config, &bytes, &fallback, context)
+                })
             }
             ImageWidgetSource::Playback(playback) => {
                 let playback = playback.clone();

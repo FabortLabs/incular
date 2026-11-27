@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/painting.dart' show PaintingBinding;
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const finite =
@@ -108,4 +110,63 @@ void main() {
       }
     }
   });
+  testWidgets(
+    'Image.memory retains animated WebP canvas size despite cacheWidth',
+    (tester) async {
+      final frameNumbers = <int?>[];
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Image.memory(
+            base64Decode(finite),
+            cacheWidth: 2,
+            frameBuilder: (context, child, frame, synchronous) {
+              frameNumbers.add(frame);
+              return child;
+            },
+          ),
+        ),
+      );
+      expect(frameNumbers.last, isNull);
+
+      Future<List<int>> displayed() async {
+        final image = tester.widget<RawImage>(find.byType(RawImage)).image!;
+        expect((image.width, image.height), (4, 4));
+        return (await tester.runAsync(() async {
+          final data = (await image.toByteData(
+            format: ui.ImageByteFormat.rawStraightRgba,
+          ))!;
+          return pixel(data, image.width, 0, 0);
+        }))!;
+      }
+
+      for (
+        var attempt = 0;
+        frameNumbers.last == null && attempt < 30;
+        attempt++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        await tester.pump();
+      }
+      expect(frameNumbers.last, 0);
+      expect(await displayed(), red);
+
+      // Allow the decoder's I/O thread to finish the prefetched second frame.
+      // Pumping here does not advance the framework's fake app clock.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 60)),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 199));
+      expect(frameNumbers.last, 0);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(frameNumbers.last, 1);
+      expect(await displayed(), blue);
+      await tester.pumpWidget(const SizedBox());
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+    },
+  );
 }
