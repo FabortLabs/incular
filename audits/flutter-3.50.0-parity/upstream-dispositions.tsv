@@ -3646,3 +3646,4 @@ packages/flutter/test/rendering/editable_test.dart	2035	Floating cursor position
 packages/flutter/test/rendering/editable_test.dart	2007	does not skip TextPainter.layout because of invalid cache	partial-match	upstream-editable-width-basis.md
 packages/flutter/test/rendering/editable_test.dart	779	promptRect disappears when promptRectColor is set to null	paired-match	upstream-autocorrection-prompt.md#color-removal-on-the-same-retained-renderer
 packages/flutter/test/rendering/editable_test.dart	385	Cursor with ideographic script	paired-match	upstream-floating-caret.md#ideographic-caret-position-and-scale
+packages/flutter/test/widgets/text_selection_test.dart	829	test TextSelectionGestureDetectorBuilder double tap	paired-match	upstream-editor-selection-causes.md

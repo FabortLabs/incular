@@ -7,7 +7,7 @@ use super::*;
 use crate::text_shortcuts::{TextIntent, TextShortcutPlatform};
 use incular_core::SECONDARY_POINTER_BUTTON;
 use incular_platform::{TextSelectionAction, TextSelectionActionRequest};
-use incular_text::{TextAffinity, is_layout_whitespace, word_boundary_at};
+use incular_text::{SelectionChangedCause, TextAffinity, is_layout_whitespace, word_boundary_at};
 use incular_widgets::internal::{
     TextSelectionHandleEndpoint,
     gesture_constants::{LONG_PRESS_TIMEOUT, TOUCH_SLOP},
@@ -122,6 +122,7 @@ impl Runtime {
         {
             return false;
         }
+        let previous = self.observed_editor_selection(field);
         let focused = self.focused == Some(field);
         let now = self.input_now();
         let show = match self.text_shortcut_platform {
@@ -146,6 +147,7 @@ impl Runtime {
         // Like Flutter requestKeyboard, this is internal focus: it must
         // not replace the selection made by the right-click with select-all.
         self.set_focus_with_external_selection(Some(field), false);
+        self.report_editor_selection_delta(field, previous, SelectionChangedCause::Tap);
         if let Some(menu) = self.tree.text_field_context_menu(field) {
             if show {
                 let items = self.text_field_context_menu_items(field);
@@ -851,6 +853,7 @@ impl Runtime {
         if ios_misspelling_tap {
             return;
         }
+        let previous = self.observed_editor_selection(field);
         match effective_count {
             2 => {
                 self.text_field_select_word_at(field, position, now);
@@ -879,6 +882,12 @@ impl Runtime {
                 }
             }
         }
+        let cause = if effective_count == 2 {
+            SelectionChangedCause::DoubleTap
+        } else {
+            SelectionChangedCause::Tap
+        };
+        self.report_editor_selection_delta(field, previous, cause);
     }
 
     /// `_extendSelection` (Linux, Windows) or `_expandSelection` (macOS).
@@ -929,34 +938,35 @@ impl Runtime {
         if !self.text_field_touch_drag_selects(field, kind) {
             return;
         }
+        let previous = self.observed_editor_selection(field);
         let now = self.input_now();
-        let Some(run) = self.text_taps.filter(|run| run.field == field) else {
-            self.tree.text_field_set_caret(field, position, true, now);
-            return;
-        };
-        if run.shift
-            && (self.is_desktop_text_platform()
-                || self.text_shortcut_platform == TextShortcutPlatform::Android)
-        {
-            // Shift-drag keeps the selection's base and moves its extent.
-            self.tree.text_field_set_caret(field, position, true, now);
-            return;
-        }
-        match run.effective_count {
-            2 => {
+        match self.text_taps.filter(|run| run.field == field) {
+            Some(run)
+                if run.shift
+                    && (self.is_desktop_text_platform()
+                        || self.text_shortcut_platform == TextShortcutPlatform::Android) =>
+            {
+                // Shift-drag keeps the selection's base and moves its extent.
+                self.tree.text_field_set_caret(field, position, true, now);
+            }
+            Some(run) if run.effective_count == 2 => {
                 self.text_field_select_words_in_range(field, run.down_position, position, now);
             }
-            3 => {
-                self.text_field_select_boundaries_in_range(field, run.down_position, position, now)
+            Some(run) if run.effective_count == 3 => {
+                self.text_field_select_boundaries_in_range(field, run.down_position, position, now);
             }
-            _ => {
+            Some(_) => {
                 // Android tracks a finger with a collapsed caret. A precise
                 // pointer or stylus instead extends a text selection.
                 let extend = self.text_shortcut_platform != TextShortcutPlatform::Android
                     || !matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown);
                 self.tree.text_field_set_caret(field, position, extend, now);
             }
+            None => {
+                self.tree.text_field_set_caret(field, position, true, now);
+            }
         }
+        self.report_editor_selection_delta(field, previous, SelectionChangedCause::Drag);
     }
 
     pub(super) fn text_field_primary_up(
@@ -989,7 +999,9 @@ impl Runtime {
                 return;
             };
             let previous = (controller.selection_if_set(), controller.caret_affinity());
+            let observed = self.observed_editor_selection(run.field);
             self.text_field_select_word_at(run.field, run.down_position, now);
+            self.report_editor_selection_delta(run.field, observed, SelectionChangedCause::Tap);
             let current = (controller.selection_if_set(), controller.caret_affinity());
             if previous != current {
                 let _ = self.show_spell_check_suggestions_toolbar(run.field);
@@ -1304,6 +1316,7 @@ impl Runtime {
                     self.text_taps = None;
                     self.set_focus(Some(field));
                 }
+                let previous = self.observed_editor_selection(field);
                 let ios_like = matches!(
                     self.text_shortcut_platform,
                     TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs
@@ -1317,6 +1330,7 @@ impl Runtime {
                     // Android, Fuchsia, Linux and Windows select the word.
                     self.text_field_select_word_at(field, press.down_position, now);
                 }
+                self.report_editor_selection_delta(field, previous, SelectionChangedCause::LongPress);
             }
             LongPressTarget::Label(label) => {
                 if self.captured_selectable_text != Some(label) {
@@ -1361,6 +1375,7 @@ impl Runtime {
         let now = self.input_now();
         match press.target {
             LongPressTarget::Field(field) => {
+                let previous = self.observed_editor_selection(field);
                 let ios_like = matches!(
                     self.text_shortcut_platform,
                     TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs
@@ -1376,6 +1391,7 @@ impl Runtime {
                         now,
                     );
                 }
+                self.report_editor_selection_delta(field, previous, SelectionChangedCause::LongPress);
             }
             LongPressTarget::Label(label) => {
                 if let (Some(anchor), Some(target)) = (press.anchor_word, selectable_target)
@@ -1704,7 +1720,9 @@ impl Runtime {
             }
             next
         };
+        let previous = self.observed_editor_selection(drag.field);
         self.tree.text_field_select(drag.field, next, affinity, now);
+        self.report_editor_selection_delta(drag.field, previous, SelectionChangedCause::Drag);
     }
 
     /// Ends a handle press. A tap on a collapsed handle toggles the touch
