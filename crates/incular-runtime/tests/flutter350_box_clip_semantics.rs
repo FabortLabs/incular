@@ -115,3 +115,51 @@ fn a_live_accessibility_clip_can_change_semantic_bounds_without_layout_or_hit_ch
         assert_eq!(observed(&runtime), expected);
     }
 }
+
+#[test]
+fn stack_accessibility_clip_tracks_layout_overflow_and_retained_clip_modes() {
+    use incular_widgets::{IndexedStack, Positioned, Semantics, Stack};
+
+    for indexed in [false, true] {
+        let size = Size::new(100., 100.);
+        let scene = |mode, x| {
+            let child = Positioned::new(
+                Semantics::new(SizedBox::from_size(Size::new(20., 20.)))
+                    .container(true)
+                    .label("stack child"),
+            )
+            .left(x)
+            .top(0.);
+            if indexed {
+                Widget::from(IndexedStack::new([child]).clip_behavior(mode))
+            } else {
+                Widget::from(Stack::new([child]).clip_behavior(mode))
+            }
+        };
+        let mut runtime = Runtime::new(scene(Clip::HardEdge, 90.)).unwrap();
+        let root = runtime.tree().root().unwrap();
+        let render = runtime.tree().render_id(root).unwrap();
+        for (mode, x, expected_clip, expected_width) in [
+            (Clip::HardEdge, 90., true, Some(10.)),
+            (Clip::None, 90., false, Some(20.)),
+            (Clip::AntiAlias, 90., true, Some(10.)),
+            (Clip::AntiAliasWithSaveLayer, 110., true, None),
+            (Clip::None, 110., false, Some(20.)),
+            (Clip::HardEdge, 10., false, Some(20.)),
+        ] {
+            runtime.schedule_update(root, scene(mode, x)).unwrap();
+            runtime.run_frame(Constraints::tight(size)).unwrap();
+            let tree = runtime.tree();
+            assert_eq!(tree.render_id(root), Some(render));
+            assert_eq!(
+                tree.describe_approximate_paint_clip(render),
+                expected_clip.then_some(Rect::from_origin_size(Offset::ZERO, size)),
+                "indexed={indexed}, {mode:?}, x={x}",
+            );
+            let actual = tree.semantics().iter()
+                .find(|(_, node)| node.label.as_deref() == Some("stack child"))
+                .map(|(_, node)| node.bounds.size.width);
+            assert_eq!(actual, expected_width, "indexed={indexed}, {mode:?}, x={x}");
+        }
+    }
+}

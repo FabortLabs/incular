@@ -93,3 +93,21 @@ actual paint coverage follows the setting each time; the native
 baseline had always submitted HardEdge. This adds one original pair;
 IndexedStack :307 was already paired. The unrelated default
 Directionality diagnostic remains open.
+
+### Approximate clip and accessibility
+
+Pinned `:278` now pairs. The positioned child in the retained 800 by
+600 Stack spills outside the layout, so the render object's default
+HardEdge approximate clip is the local bounds. Replacing the clip mode
+with None clears the clip without replacing the stack or losing the
+child. The Rust baseline previously returned no approximate clip even
+with HardEdge.
+
+Stack and IndexedStack now expose an approximate accessibility clip
+only when layout overflow activates clipping. A runtime control checks
+a partially clipped 20-pixel label narrowing to 10 pixels, a fully
+clipped label disappearing, both labels returning at full width under
+Clip.none, and an in-bounds child retaining its full width. This
+does not change the wgpu paint or hit-test paths. The exact upstream
+case and fifteen focused Rust checks passed; the preexisting
+missing-Directionality assertion remains a separate documented gap.

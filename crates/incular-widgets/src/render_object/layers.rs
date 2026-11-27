@@ -1379,7 +1379,13 @@ impl RenderLayers {
                     .as_ref()
                     .map_or(BoxPaintClip::LayoutBounds, BoxPaintClip::Custom),
             ),
+            RenderKind::Stack { stack }
+                if stack.clip_behavior != Clip::None && self.layout_overflow.get() =>
+            {
+                Some(BoxPaintClip::LayoutBounds)
+            }
             RenderKind::Flex { clip_behavior, .. }
+            | RenderKind::IndexedStack { clip_behavior, .. }
                 if *clip_behavior != Clip::None && self.layout_overflow.get() =>
             {
                 Some(BoxPaintClip::LayoutBounds)

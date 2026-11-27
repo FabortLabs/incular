@@ -318,3 +318,37 @@ fn none_of_the_children_force_a_nonzero_stack_at_zero_area() {
     t.layout(Constraints::tight(Size::ZERO)).unwrap();
     assert_eq!(bounds(&t, STACK).size, Size::ZERO);
 }
+
+#[test]
+fn approximate_clip_respects_none_without_replacing_the_overflowing_stack() {
+    let build = |clip: Option<Clip>| {
+        let stack = Stack::new([
+            Positioned::new(SizedBox::new().width(2000.).height(2000.))
+                .left(1000.)
+                .right(2000.),
+        ])
+        .text_direction(TextDirection::Ltr);
+        let stack = match clip {
+            Some(clip) => stack.clip_behavior(clip),
+            None => stack,
+        };
+        key(stack, STACK)
+    };
+    let mut t = mount(build(None));
+    let id = t.element_with_key(&Key::Value(STACK)).unwrap();
+    let render = t.render_id(id).unwrap();
+    assert!(matches!(
+        t.render_object_kind(render),
+        Some(RenderKind::Stack { stack }) if stack.clip_behavior == Clip::HardEdge
+    ));
+    assert_eq!(t.children(id).unwrap().len(), 1);
+    let expected = Rect::from_origin_size(Offset::ZERO, DIM);
+    assert_eq!(t.describe_approximate_paint_clip(render), Some(expected));
+    for clip in [Clip::None, Clip::AntiAlias, Clip::AntiAliasWithSaveLayer, Clip::HardEdge] {
+        update(&mut t, build(Some(clip)));
+        assert_eq!(t.element_with_key(&Key::Value(STACK)), Some(id));
+        assert_eq!(t.render_id(id), Some(render));
+        assert_eq!(t.children(id).unwrap().len(), 1);
+        assert_eq!(t.describe_approximate_paint_clip(render), (clip != Clip::None).then_some(expected));
+    }
+}
