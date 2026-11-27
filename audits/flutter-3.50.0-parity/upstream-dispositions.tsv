@@ -3730,3 +3730,4 @@ packages/flutter/test/widgets/backdrop_filter_test.dart	114	BackdropFilter does 
 packages/flutter/test/widgets/image_filter_test.dart	137	Image filter - reuses its layer	paired-match	upstream-image-filter-lifecycle.md
 packages/flutter/test/widgets/image_filter_test.dart	178	ImageFiltered does not crash at zero area	paired-match	upstream-image-filter-lifecycle.md
 packages/flutter/test/widgets/animated_image_filtered_repaint_test.dart	14	ImageFiltered avoids repainting child as it animates	paired-match	upstream-image-filter-lifecycle.md
+packages/flutter/test/painting/text_style_test.dart	433	TextStyle.debugLabel	paired-match	upstream-text-style-diagnostics.md

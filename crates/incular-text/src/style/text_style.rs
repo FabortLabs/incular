@@ -8,6 +8,7 @@ use super::text::{
 };
 use incular_config::WidgetDefaults;
 use incular_core::{ChangeImpact, Color, Lerp};
+use std::fmt;
 use std::sync::{Arc, LazyLock};
 
 /// Multiplies a specified text metric by `factor`, then adds `delta`.
@@ -79,7 +80,7 @@ fn flutter_height(height: f32) -> LineHeight {
 }
 
 /// An immutable, Flutter-style text style description.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct TextStyle {
     pub inherit: bool,
     pub has_explicit_color: bool,
@@ -115,8 +116,46 @@ pub struct TextStyle {
     pub decoration_color: Option<Color>,
     pub decoration_style: Option<TextDecorationStyle>,
     pub decoration_thickness: Option<f32>,
+    /// Diagnostic provenance only, never used to compare or invalidate style.
     pub debug_label: Option<String>,
     pub overflow: Option<TextOverflow>,
+}
+
+impl PartialEq for TextStyle {
+    fn eq(&self, other: &Self) -> bool {
+        self.inherit == other.inherit
+            && self.has_explicit_color == other.has_explicit_color
+            && self.has_explicit_size == other.has_explicit_size
+            && self.has_explicit_weight == other.has_explicit_weight
+            && self.has_explicit_style == other.has_explicit_style
+            && self.has_explicit_family == other.has_explicit_family
+            && self.has_explicit_fallback_families == other.has_explicit_fallback_families
+            && self.has_explicit_letter_spacing == other.has_explicit_letter_spacing
+            && self.has_explicit_shadows == other.has_explicit_shadows
+            && self.family == other.family
+            && self.fallback_families == other.fallback_families
+            && self.size == other.size
+            && self.weight == other.weight
+            && self.style == other.style
+            && self.color == other.color
+            && self.background_color == other.background_color
+            && self.line_height == other.line_height
+            && self.letter_spacing == other.letter_spacing
+            && self.word_spacing == other.word_spacing
+            && self.text_baseline == other.text_baseline
+            && self.leading_distribution == other.leading_distribution
+            && self.locale == other.locale
+            && self.foreground == other.foreground
+            && self.background == other.background
+            && self.shadows == other.shadows
+            && self.font_variations == other.font_variations
+            && self.font_features == other.font_features
+            && self.decoration == other.decoration
+            && self.decoration_color == other.decoration_color
+            && self.decoration_style == other.decoration_style
+            && self.decoration_thickness == other.decoration_thickness
+            && self.overflow == other.overflow
+    }
 }
 
 impl TextStyle {
@@ -466,6 +505,15 @@ impl TextStyle {
         s
     }
 
+    /// Copies the style and applies the supplied builder updates. An explicit
+    /// debug label in the update supersedes the automatically derived label.
+    #[must_use]
+    pub fn copy_with(&self, update: impl FnOnce(Self) -> Self) -> Self {
+        let mut result = self.clone();
+        result.debug_label = diagnostic_operation(&self.debug_label, "copyWith");
+        update(result)
+    }
+
     #[must_use]
     pub fn merge(&self, other: &Self) -> Self {
         if !other.inherit {
@@ -551,6 +599,15 @@ impl TextStyle {
         if other.overflow.is_some() {
             merged.overflow = other.overflow;
         }
+        merged.debug_label = (cfg!(debug_assertions)
+            && (self.debug_label.is_some() || other.debug_label.is_some()))
+        .then(|| {
+            format!(
+                "({}).merge({})",
+                self.debug_label.as_deref().unwrap_or("unknown"),
+                other.debug_label.as_deref().unwrap_or("unknown")
+            )
+        });
         merged
     }
 
@@ -661,10 +718,7 @@ impl TextStyle {
         if let Some(variations) = options.font_variations {
             result = result.font_variation_settings(variations);
         }
-        #[cfg(debug_assertions)]
-        if let Some(label) = &self.debug_label {
-            result.debug_label = Some(format!("({label}).apply"));
-        }
+        result.debug_label = diagnostic_operation(&self.debug_label, "apply");
         result
     }
 
@@ -735,6 +789,15 @@ impl Lerp for TextStyle {
         if std::ptr::eq(self, other) {
             return self.clone();
         }
+        // Use the original progress in the provenance even when the
+        // presentation side of interpolation clamps its value.
+        let debug_label = cfg!(debug_assertions).then(|| {
+            format!(
+                "lerp({} ⎯{t:.1}→ {})",
+                self.debug_label.as_deref().unwrap_or("unknown"),
+                other.debug_label.as_deref().unwrap_or("unknown")
+            )
+        });
         let font_variations = lerp_font_variation_settings(
             self.font_variations.as_ref(),
             other.font_variations.as_ref(),
@@ -916,17 +979,97 @@ impl Lerp for TextStyle {
                 self.decoration_thickness,
                 other.decoration_thickness,
             ),
-            debug_label: if t < 0.5 {
-                self.debug_label.clone()
-            } else {
-                other.debug_label.clone()
-            },
+            debug_label,
             overflow: if t < 0.5 {
                 self.overflow
             } else {
                 other.overflow
             },
         }
+    }
+}
+
+fn diagnostic_operation(label: &Option<String>, operation: &str) -> Option<String> {
+    label
+        .as_deref()
+        .filter(|_| cfg!(debug_assertions))
+        .map(|label| format!("({label}).{operation}"))
+}
+
+impl fmt::Display for TextStyle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut properties = Vec::new();
+        if self.has_explicit_color {
+            properties.push(format!("color: {:?}", self.color));
+        }
+        if let Some(color) = self.background_color {
+            properties.push(format!("backgroundColor: {color:?}"));
+        }
+        if self.has_explicit_family {
+            properties.push(format!("family: {}", self.family.name()));
+        }
+        if self.has_explicit_fallback_families || !self.fallback_families.is_empty() {
+            let names: Vec<_> = self
+                .fallback_families
+                .iter()
+                .map(FontFamily::name)
+                .collect();
+            properties.push(format!("familyFallback: {}", names.join(", ")));
+        }
+        if self.has_explicit_size {
+            properties.push(format!("size: {:?}", self.size));
+        }
+        if self.has_explicit_weight {
+            properties.push(format!("weight: {}", self.weight.0));
+        }
+        if self.has_explicit_style {
+            properties.push(format!("style: {:?}", self.style));
+        }
+        if self.has_explicit_letter_spacing {
+            properties.push(format!("letterSpacing: {:?}", self.letter_spacing));
+        }
+        if let Some(spacing) = self.word_spacing {
+            properties.push(format!("wordSpacing: {spacing:?}"));
+        }
+        if let Some(baseline) = self.text_baseline {
+            properties.push(format!("baseline: {baseline:?}"));
+        }
+        if let Some(height) = self.line_height {
+            properties.push(format!("height: {height:?}"));
+        }
+        if let Some(distribution) = self.leading_distribution {
+            properties.push(format!("leadingDistribution: {distribution:?}"));
+        }
+        if let Some(locale) = &self.locale {
+            properties.push(format!("locale: {locale}"));
+        }
+        if let Some(foreground) = self.foreground {
+            properties.push(format!("foreground: {foreground:?}"));
+        }
+        if let Some(background) = self.background {
+            properties.push(format!("background: {background:?}"));
+        }
+        if let Some(decoration) = self.decoration {
+            properties.push(format!("decoration: {decoration:?}"));
+        }
+
+        write!(f, "TextStyle(")?;
+        if let Some(label) = &self.debug_label {
+            write!(f, "debugLabel: {label}, ")?;
+        }
+        if !properties.is_empty() || !self.inherit {
+            write!(f, "inherit: {}, ", self.inherit)?;
+        }
+        if properties.is_empty() {
+            f.write_str(if self.inherit {
+                "<all styles inherited>"
+            } else {
+                "<no style specified>"
+            })?;
+        } else {
+            f.write_str(&properties.join(", "))?;
+        }
+        f.write_str(")")
     }
 }
 
