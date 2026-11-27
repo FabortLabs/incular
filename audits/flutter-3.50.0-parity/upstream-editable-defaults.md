@@ -83,11 +83,25 @@ an explicit keyboard or semantic override. With the pinned Ahem font at
 10 px, the default single-line viewport measures exactly 10 px even
 when the controller holds ten newline-terminated lines.
 
-Two nearby pinned originals passed but remain partial. For :125,
-Incular measures a uniform 100 px line as 100 px, but this raw editor
-fixture cannot supply a 100 px child span under a 10 px parent span.
-For :200, the exposed collapsed handle moves from (0, 20) to (100, 220)
+The pinned :200 comparison remains partial. The exposed collapsed
+handle moves from (0, 20) to (100, 220)
 when the editor's origin moves by (100, 200); this is actual retained
 selection geometry, not Flutter's pair of internal LeaderLayers.
 All four direct native tests and two adjacent handle-reveal tests
 passed with the pinned font, including the repository-checkout fallback.
+
+
+## Actual height of a taller styled child
+
+Pinned `rendering/editable_test.dart:125` passes. The retained native
+editor now measures the original `TALL` text, a 100 px child span
+under a 10 px outer style, to exactly 100 px with the low-level
+renderer's unforced strut and default single-line width cap.
+
+The native fixture supplies the child through the editor's real
+spell-check style path. Before the fix an unset selection was mistaken
+for a real caret at the end of the final word, and its child style was
+dropped; both the pinned authored spell-check probe and native test
+now distinguish 10 px with a real end caret from 100 px with no
+selection. Fourteen adjacent spell-check, composing, and fixed viewport
+checks also passed.

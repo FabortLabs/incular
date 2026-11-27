@@ -486,13 +486,18 @@ impl WidgetTree {
             .composing
             .is_some_and(|range| range.start <= range.end && range.end <= value.text.len());
         let out_of_range = !composing_valid || read_only || !focused;
-        let span = crate::build_text_span_with_spell_check_suggestions(
+        // An unset Flutter selection has offset -1. The controller's
+        // text value stores a safe collapsed end for editing operations,
+        // but that surrogate must not suppress styling of the last word.
+        let caret = controller.selection_if_set().map(|selection| selection.base);
+        let span = crate::spell_check::build_spell_check_text_span(
             &value,
             out_of_range,
             Some(style),
             misspelled,
             &results,
             incular_config::TargetPlatform::current(),
+            caret,
         );
         let runs = span.flatten(style);
         (revision, Some((value.text, runs)))

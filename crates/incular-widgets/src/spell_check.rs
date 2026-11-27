@@ -246,7 +246,7 @@ fn subtrees_without_composing_region(
     value: &TextEditingValue,
     style: Option<&TextStyle>,
     misspelled: &TextStyle,
-    cursor_index: usize,
+    cursor_index: Option<usize>,
 ) -> Vec<TextSpan> {
     let text = value.text.as_str();
     let joint = style.map_or_else(|| misspelled.clone(), |style| style.merge(misspelled));
@@ -260,7 +260,8 @@ fn subtrees_without_composing_region(
         if range.start > pointer {
             children.extend(piece(text, pointer..range.start, style));
         }
-        let cursor_inside = range.start <= cursor_index && current.range.end >= cursor_index;
+        let cursor_inside = cursor_index
+            .is_some_and(|cursor| range.start <= cursor && cursor <= current.range.end);
         let piece_style = if cursor_inside { style } else { Some(&joint) };
         pointer = range.end;
         children.extend(piece(text, range, piece_style));
@@ -356,6 +357,26 @@ pub fn build_text_span_with_spell_check_suggestions(
     results: &SpellCheckResults,
     platform: TargetPlatform,
 ) -> TextSpan {
+    build_spell_check_text_span(
+        value,
+        composing_within_current_text_range,
+        style,
+        misspelled_text_style,
+        results,
+        platform,
+        Some(value.selection.base),
+    )
+}
+
+pub(crate) fn build_spell_check_text_span(
+    value: &TextEditingValue,
+    composing_within_current_text_range: bool,
+    style: Option<&TextStyle>,
+    misspelled_text_style: &TextStyle,
+    results: &SpellCheckResults,
+    platform: TargetPlatform,
+    caret: Option<usize>,
+) -> TextSpan {
     let corrected;
     let spans = if results.spell_checked_text == value.text {
         results.suggestion_spans.as_slice()
@@ -381,7 +402,7 @@ pub fn build_text_span_with_spell_check_suggestions(
             value,
             style,
             misspelled_text_style,
-            value.selection.base,
+            caret,
         )
     };
     let mut root = TextSpan::new("");
