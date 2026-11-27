@@ -271,3 +271,15 @@ drops the old position instead of waiting for another event. Authored
 checks exercise deferred and synchronous rejection and the actual
 raw-gesture adapter, which reports arena decisions after routing.
 Eighty-three focused arena and recognizer tests passed.
+
+### Unfinished first double-tap arena
+
+The exact pinned `gestures/double_tap_test.dart:733` passes, and
+`flutter350_managed_tap_drag_competition` now covers the standalone
+sequence with the same plain-Tap instance in both pointer arenas.
+The double-tap contender holds only the first arena. The second
+down, stationary move and release are routed only to plain Tap,
+which fires once before the second sweep. Expiring the held first
+arena still leaves the callback count at one; a stale result cannot
+finish the newer tap. The separate mounted ancestor comparison
+remains documented above, not substituted for this direct result.
