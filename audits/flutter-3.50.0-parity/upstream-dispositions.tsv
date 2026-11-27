@@ -3067,3 +3067,8 @@ packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	598	focus-t
 packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	763	does NOT randomly trigger when cursor blinks	paired-match	upstream-editable-reveal.md#read-only-focus-and-caret-repaint
 packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	629	selection-triggered showCaretOnScreen: virtual keyboard	paired-match	upstream-editable-reveal.md#selecting-through-the-native-keyboard-and-selection-delegate
 packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	695	selection-triggered showCaretOnScreen: text selection delegate	paired-match	upstream-editable-reveal.md#selecting-through-the-native-keyboard-and-selection-delegate
+packages/flutter/test/widgets/actions_test.dart	16	ActionDispatcher invokes actions when asked.	paired-match	upstream-action-dispatchers.md
+packages/flutter/test/widgets/actions_test.dart	53	Actions widget can invoke actions with default dispatcher	paired-match	upstream-action-dispatchers.md
+packages/flutter/test/widgets/actions_test.dart	79	Actions widget can invoke actions with default dispatcher and maybeInvoke	paired-match	upstream-action-dispatchers.md
+packages/flutter/test/widgets/actions_test.dart	105	maybeInvoke returns null when no action is found	paired-match	upstream-action-dispatchers.md
+packages/flutter/test/widgets/actions_test.dart	132	invoke throws when no action is found	paired-match	upstream-action-dispatchers.md

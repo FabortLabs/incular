@@ -628,6 +628,26 @@ impl<C: CommandId> Action<C> {
     }
 }
 
+/// Invokes an action with its intent and returns the handler's result.
+///
+/// The default dispatcher uses the action's enabled check and emits its
+/// normal invocation notifications.
+#[derive(Clone, Copy, Debug, Default)]
+#[non_exhaustive]
+pub struct ActionDispatcher {}
+
+impl ActionDispatcher {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {}
+    }
+
+    #[must_use]
+    pub fn invoke_action<C: CommandId>(&self, action: &Action<C>, intent: &Intent<C>) -> ActionResult {
+        action.invoke(intent)
+    }
+}
+
 /// Result of looking up one local shortcut binding during ancestor dispatch.
 #[derive(Clone)]
 pub enum ShortcutMatch {
@@ -805,7 +825,7 @@ impl<C: CommandId> Actions<C> {
             scope
                 .actions
                 .get(intent.command())
-                .map(|action| action.invoke(intent))
+                .map(|action| ActionDispatcher::new().invoke_action(action, intent))
         })
     }
 

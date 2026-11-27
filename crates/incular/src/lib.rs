@@ -282,7 +282,8 @@ pub mod prelude {
     // Explicit animation builders, the transition controllers and Flutter's
     // `RelativeRect`.
     pub use incular_widgets::{
-        AbsorbPointer, Action, ActionInvocationPhase, ActionListener, ActionResult, Actions, Align,
+        AbsorbPointer, Action, ActionDispatcher, ActionInvocationPhase, ActionListener, ActionResult,
+        ActionScope, Actions, Align,
         AlignTransition, AnimatedAlign, AnimatedContainer, AnimatedCrossFade,
         AnimatedDefaultTextStyle, AnimatedFractionallySizedBox, AnimatedGrid,
         AnimatedGridController, AnimatedItem, AnimatedItemBuilder, AnimatedItemPhase, AnimatedList,

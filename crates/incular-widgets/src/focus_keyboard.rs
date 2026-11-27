@@ -4,7 +4,8 @@ use std::rc::Rc;
 
 use incular_core::KeyboardEvent;
 pub use incular_gestures::{
-    Action, ActionInvocationPhase, ActionResult, Actions, Command, CommandId, FocusBehavior,
+    Action, ActionDispatcher, ActionInvocationPhase, ActionResult, Actions, Command, CommandId,
+    FocusBehavior,
     FocusManager, FocusNode, FocusOrder, FocusScopeNode, FocusScopeSubscription, UnfocusDisposition,
     FocusTraversalPolicy, FocusTraversalPolicyKind, Intent, KeyEventResult, LockState,
     LogicalKeySet, LogicalShortcutKey, OrderedTraversalPolicy, ReadingOrderTraversalPolicy,
@@ -13,6 +14,40 @@ pub use incular_gestures::{
 };
 
 use crate::{Widget, WidgetKind};
+
+/// Supplies an inherited command-to-action mapping without claiming focus.
+///
+/// Commands resolved from its descendants use the nearest mapping. An
+/// absent mapping falls through to an ancestor, while a disabled action
+/// still shadows the same command in outer scopes.
+#[derive(Clone)]
+pub struct ActionScope {
+    actions: Rc<incular_gestures::ErasedActionScope>,
+    child: Widget,
+}
+
+impl ActionScope {
+    #[must_use]
+    pub fn new<C: CommandId>(actions: Rc<Actions<C>>, child: impl Into<Widget>) -> Self {
+        Self {
+            actions: incular_gestures::ErasedActionScope::from_actions(actions),
+            child: child.into(),
+        }
+    }
+}
+
+impl From<ActionScope> for Widget {
+    fn from(scope: ActionScope) -> Self {
+        Widget::from_kind(WidgetKind::Gesture {
+            behavior: crate::gestures::HitTestBehavior::DeferToChild,
+            callbacks: Box::new(incular_gestures::GestureCallbacks {
+                action_scope: Some(scope.actions),
+                ..Default::default()
+            }),
+            child: scope.child,
+        })
+    }
+}
 
 /// A widget that manages keyboard focus for a subtree.
 #[derive(Clone)]
