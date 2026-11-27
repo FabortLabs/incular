@@ -54,3 +54,16 @@ inherits pronunciation. Native storage borrows the locale while
 building the fragments. Seven native span and 28 paragraph geometry
 tests passed. Projecting independent fragments through the actual
 accessibility tree is separate from this comparison.
+
+### Mounted paragraph projection
+
+An authored pinned frame confirms a rendered paragraph publishes the
+spoken label `a🦀` with spell-out ranges `0..1` and `1..3` and locale
+es-MX on `1..3`. The retained native paragraph now exposes that same
+single text node, without altering its literal painted text `ab`.
+Changing or clearing pronunciation keeps the semantic node identity;
+a plain paragraph does not gain additional nodes or attributes.
+Three focused native mounted pronunciation tests and three existing
+inline-layout tests passed. Paragraphs requiring separate semantic
+fragments keep the existing presentation fallback until their native
+fragment nodes are implemented. This authored case adds no credit.

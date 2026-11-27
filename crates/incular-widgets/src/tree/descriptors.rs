@@ -918,7 +918,6 @@ fn rich_text_widget(
     let style = runs
         .first()
         .map_or_else(TextStyle::default, |run| run.style.clone());
-    let spoken = value.text.semantics_text();
     let spans: Option<Arc<[StyledTextRun]>> = Some(runs.into());
     let widget = Widget::text_configured(
         value.plain_text(),
@@ -936,10 +935,50 @@ fn rich_text_widget(
         inline,
         strut.map(Box::new),
     );
-    match spoken {
-        Some(label) => widget.accessibility_label(label),
-        None => widget,
+    if let Some(label) = paragraph_pronunciation(&value.text) {
+        crate::Semantics::new(widget).attributed_label(label).into()
+    } else {
+        match value.text.semantics_text() {
+            Some(label) => widget.accessibility_label(label),
+            None => widget,
+        }
     }
+}
+
+fn paragraph_pronunciation(
+    span: &incular_text::TextSpan,
+) -> Option<incular_semantics::AttributedString> {
+    use incular_semantics::{AttributedString, StringAttribute};
+    use incular_text::{InlineSpan, InlineSpanStringAttribute, combine_inline_span_semantics};
+
+    fn has_pronunciation(span: &incular_text::TextSpan) -> bool {
+        span.locale.is_some()
+            || span.spell_out == Some(true)
+            || span.children.iter().any(|child| {
+                matches!(child, InlineSpan::Text(span) if has_pronunciation(span))
+            })
+    }
+
+    if !has_pronunciation(span) {
+        return None;
+    }
+    let mut fragments = combine_inline_span_semantics(&span.semantics_information());
+    // An inline widget or named semantics span is its own fragment in
+    // Flutter. Keep the existing flat fallback until those nodes are
+    // projected separately instead of publishing incorrect shared ranges.
+    let [fragment] = fragments.as_mut_slice() else {
+        return None;
+    };
+    if fragment.string_attributes.is_empty() {
+        return None;
+    }
+    let attributes = fragment.string_attributes.drain(..).map(|attr| match attr {
+        InlineSpanStringAttribute::SpellOut(range) => StringAttribute::spell_out(range),
+        InlineSpanStringAttribute::Locale { range, locale } => {
+            StringAttribute::locale(range, locale.to_string())
+        }
+    });
+    AttributedString::try_with_attributes(std::mem::take(&mut fragment.label), attributes).ok()
 }
 
 /// Flutter's `ToolbarOptions`: which buttons a legacy text selection
