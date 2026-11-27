@@ -80,3 +80,14 @@ glyph runs. The pinned authored overshoot probe measured x coordinates
 180.5, 180.5, 155.5 and 55.5 through reversal into a 180-pixel viewport.
 The four focused Rust targets passed 17 tests; the native Apple path was
 not run in this Linux environment.
+
+## Fixed viewport offset
+
+Pinned `rendering/editable_test.dart:2035`, “Floating cursor position is
+independent of viewport offset,” passes. The retained regression starts
+with the cursor hidden and then uses the same floating prototype as the
+native input route. At a fixed drag point of `(50, 50)`, the Linux display
+list contains the exact rounded rectangle `(49.5, 51, 2, 8)` at radius 1
+before and after the text viewport scrolls by 200 pixels. The ordinary
+text caret moves by exactly 200 pixels, so the scroll assertion cannot
+pass vacuously. Both focused Rust targets passed 13 tests.

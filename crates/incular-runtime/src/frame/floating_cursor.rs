@@ -1,6 +1,5 @@
 use super::{ElementId, Runtime, TextInputClientId};
-use incular_config::TargetPlatform;
-use incular_core::{Offset, Rect, Size, time::Instant};
+use incular_core::{Offset, time::Instant};
 use incular_platform::{FloatingCursorDragState, FlutterFloatingCursorPoint};
 use incular_text::{TextAffinity, TextEditingController, TextSelection};
 use incular_widgets::FloatingCaretGeometry;
@@ -57,24 +56,6 @@ impl FloatingCaretRun {
                 .bound(point.y, geometry.minimum.y, geometry.maximum.y),
         );
     }
-
-    fn rect(&self, size: Size, inflation: f32) -> Rect {
-        // RenderEditable paints from the platform's raw prototype, not
-        // from the resolved regular caret rectangle. Inflation then adds
-        // half a pixel on each horizontal edge and one on each vertical edge.
-        let (prototype_top, prototype_height) = if TargetPlatform::current().is_apple() {
-            (0., size.height + 2.)
-        } else {
-            (2., size.height - 4.)
-        };
-        Rect::from_origin_size(
-            self.offset + Offset::new(-0.5 * inflation, prototype_top - inflation),
-            Size::new(
-                size.width + inflation,
-                (prototype_height + 2. * inflation).max(0.),
-            ),
-        )
-    }
 }
 
 impl Runtime {
@@ -121,7 +102,7 @@ impl Runtime {
                 run.bound(anchor, geometry);
                 self.tree.set_floating_caret_with_anchor(
                     field,
-                    Some(run.rect(caret.size, 1.)),
+                    Some(geometry.floating_rect_at(run.offset, 1.)),
                     Some(run.text),
                 );
                 self.floating_caret = Some(run);
@@ -163,7 +144,7 @@ impl Runtime {
                 }
                 self.tree.set_floating_caret_with_anchor(
                     field,
-                    Some(run.rect(geometry.caret.size, 1.)),
+                    Some(geometry.floating_rect_at(run.offset, 1.)),
                     Some(run.text),
                 );
                 self.floating_caret = Some(run);
@@ -228,8 +209,10 @@ impl Runtime {
         let start = run.offset;
         let delta = destination - start;
         run.offset = start + Offset::new(delta.x * amount, delta.y * amount);
-        self.tree
-            .set_floating_caret(run.field, Some(run.rect(geometry.caret.size, 1. - amount)));
+        self.tree.set_floating_caret(
+            run.field,
+            Some(geometry.floating_rect_at(run.offset, 1. - amount)),
+        );
         run.offset = start;
         self.floating_caret = Some(run);
         true

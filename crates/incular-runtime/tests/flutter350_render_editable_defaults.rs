@@ -110,10 +110,10 @@ fn translated_raw_editor_moves_its_collapsed_selection_anchor_by_the_paint_offse
 
 #[test]
 fn a_mounted_caret_can_change_color_radius_width_text_scale_and_visibility() {
-    use incular_text::TextScaler;
     use incular_core::{Color, Rect};
     use incular_rendering::{Brush, DisplayList, PaintCommand, RRect};
     use incular_text::TextAffinity;
+    use incular_text::TextScaler;
 
     let Some(style) = ahem_style(10.) else {
         return;
@@ -200,4 +200,79 @@ fn a_mounted_caret_can_change_color_radius_width_text_scale_and_visibility() {
     let hidden_again = transition(build(false, BLUE, 4., 3., 2.));
     assert!(rectangles(&hidden_again).is_empty());
     assert!(rounded(&hidden_again).is_empty());
+}
+
+#[test]
+fn the_rendered_floating_prototype_ignores_the_text_viewport_offset() {
+    use incular_config::TargetPlatform;
+    use incular_core::{Color, Rect, Size};
+    use incular_rendering::{Brush, DisplayList, PaintCommand, RRect};
+    use incular_text::TextAffinity;
+
+    const RED: Color = Color::rgba(255, 0, 0, 255);
+    let Some(style) = ahem_style(10.) else {
+        return;
+    };
+    let controller = TextEditingController::with_text("test");
+    controller.set_selection_with_affinity(TextSelection::collapsed(4), TextAffinity::Upstream);
+    let build = |show, scroll| {
+        EditableText::new(controller.clone())
+            .style(style.clone().height(Some(1.)))
+            .autofocus(true)
+            .text_direction(TextDirection::Ltr)
+            .max_lines(Some(3))
+            .fixed_scroll_offset(scroll)
+            .cursor_color(RED)
+            .cursor_width(1.)
+            .show_cursor(show)
+    };
+    let constraints = Constraints::loose(Size::new(100., 100.));
+    let mut runtime = Runtime::new(build(false, 0.).into()).unwrap();
+    runtime.set_debug_deterministic_cursor(true);
+    let (initial, _) = runtime.run_frame(constraints).unwrap();
+    assert!(
+        !initial.commands().iter().any(|command| {
+            matches!(command, PaintCommand::Rect { color, .. } if *color == RED)
+        })
+    );
+    let field = runtime.focused_element().unwrap();
+    let affinity = TextAffinity::Upstream;
+    let floating = |list: &DisplayList| {
+        list.commands().iter().find_map(|command| match command {
+            PaintCommand::RRect {
+                rrect,
+                brush: Brush::Solid(color),
+            } if *color == Color { alpha: 191, ..RED } => Some(*rrect),
+            _ => None,
+        })
+    };
+    let (y, height) = if TargetPlatform::current().is_apple() {
+        (49., 14.)
+    } else {
+        (51., 8.)
+    };
+    let expected = RRect::uniform(
+        Rect::from_origin_size(Offset::new(49.5, y), Size::new(2., height)),
+        1.,
+    );
+    let mut starting_unscrolled_ordinary_y = None;
+    for scroll in [0., 200.] {
+        runtime
+            .schedule_update(field, build(true, scroll).into())
+            .unwrap();
+        runtime.run_frame(constraints).unwrap();
+        let geometry = runtime
+            .tree()
+            .floating_caret_geometry(field, 4, affinity)
+            .unwrap();
+        let ordinary_y = geometry.caret.origin.y;
+        let starting_y = *starting_unscrolled_ordinary_y.get_or_insert(ordinary_y);
+        assert_eq!(ordinary_y, starting_y - scroll);
+        let rect = geometry.floating_rect_at(Offset::new(50., 50.), 1.);
+        runtime
+            .tree_mut()
+            .set_floating_caret_with_anchor(field, Some(rect), Some((4, affinity)));
+        let (list, _) = runtime.run_frame(constraints).unwrap();
+        assert_eq!(floating(&list), Some(expected));
+    }
 }

@@ -217,6 +217,30 @@ pub struct FloatingCaretGeometry {
     pub world: incular_core::Transform,
 }
 
+impl FloatingCaretGeometry {
+    /// Returns the floating prototype at a viewport-local drag offset.
+    /// Unlike the ordinary caret, this position is not translated by scroll.
+    #[must_use]
+    pub fn floating_rect_at(&self, offset: Offset, inflation: f32) -> Rect {
+        let size = self.caret.size;
+        // RenderEditable paints from the platform's raw prototype, not
+        // from the resolved regular caret rectangle. Inflation then adds
+        // half a pixel on each horizontal edge and one on each vertical edge.
+        let (prototype_top, prototype_height) = if incular_config::TargetPlatform::current().is_apple() {
+            (0., size.height + 2.)
+        } else {
+            (2., size.height - 4.)
+        };
+        Rect::from_origin_size(
+            offset + Offset::new(-0.5 * inflation, prototype_top - inflation),
+            Size::new(
+                size.width + inflation,
+                (prototype_height + 2. * inflation).max(0.),
+            ),
+        )
+    }
+}
+
 impl WidgetTree {
     #[doc(hidden)]
     pub fn floating_caret_geometry(
