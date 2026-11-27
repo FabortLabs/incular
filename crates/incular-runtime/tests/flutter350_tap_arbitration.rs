@@ -1,4 +1,8 @@
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    time::Duration,
+};
 
 use incular_config::Constraints;
 use incular_core::{
@@ -88,4 +92,119 @@ fn retained_tap_up_waits_for_a_double_tap_competitor_to_leave_the_arena() {
     assert_eq!(*log.borrow(), ["down"]);
     press(&mut runtime, 6, 1310);
     assert_eq!(*log.borrow(), ["down", "double"]);
+}
+
+struct TouchTapFixture {
+    runtime: Runtime,
+    trace: Rc<RefCell<Vec<&'static str>>>,
+    drag_started: Rc<Cell<bool>>,
+    base: Instant,
+}
+
+impl TouchTapFixture {
+    fn new(compete_with_drag: bool) -> Self {
+        let trace = Rc::new(RefCell::new(Vec::new()));
+        let record = |label| {
+            let trace = trace.clone();
+            move || trace.borrow_mut().push(label)
+        };
+        let down = record("down");
+        let up = record("up");
+        let mut target = GestureDetector::new(Widget::box_(Size::new(200., 200.), Color::WHITE))
+            .behavior(HitTestBehavior::Opaque)
+            .on_tap_down(move |_| down())
+            .on_tap_up(move |_| up())
+            .on_tap(record("tap"))
+            .on_tap_cancel(record("cancel"));
+        let drag_started = Rc::new(Cell::new(false));
+        if compete_with_drag {
+            let started = drag_started.clone();
+            target = target.on_horizontal_drag_start(move |_| started.set(true));
+        }
+        let base = Instant::now();
+        let mut fixture = Self {
+            runtime: Runtime::new(target.into()).unwrap(),
+            trace,
+            drag_started,
+            base,
+        };
+        fixture.pump(0);
+        fixture
+    }
+
+    fn route(&mut self, pointer: u64, phase: PointerPhase, x: f32, y: f32, ms: u64) {
+        let _ = self.runtime.handle_input_at(
+            InputEvent::PointerWithMetadata {
+                pointer,
+                device: 1,
+                kind: PointerDeviceKind::Touch,
+                buttons: if matches!(phase, PointerPhase::Down | PointerPhase::Move) {
+                    PRIMARY_POINTER_BUTTON
+                } else {
+                    0
+                },
+                button: Some(PRIMARY_POINTER_BUTTON),
+                phase,
+                position: Offset::new(x, y),
+                sample: PointerSampleMetadata::EMPTY,
+            },
+            self.base + Duration::from_millis(ms),
+        );
+    }
+
+    fn pump(&mut self, ms: u64) {
+        self.runtime
+            .run_frame_at(
+                Constraints::tight(Size::new(200., 200.)),
+                self.base + Duration::from_millis(ms),
+            )
+            .unwrap();
+    }
+}
+
+#[test]
+fn slop_rejection_before_the_deadline_does_not_emit_tap_cancel() {
+    use PointerPhase::{Down, Move, Up};
+    let mut fixture = TouchTapFixture::new(true);
+    fixture.route(3, Down, 10., 10., 0);
+    fixture.route(3, Move, 25., 25., 1);
+    fixture.route(3, Up, 25., 25., 2);
+    fixture.pump(201);
+    assert!(fixture.trace.borrow().is_empty());
+}
+
+#[test]
+fn a_secondary_contact_cannot_fire_a_stale_primary_tap_timer() {
+    use PointerPhase::{Down, Up};
+    let mut fixture = TouchTapFixture::new(false);
+    fixture.route(1, Down, 10., 10., 0);
+    fixture.route(2, Down, 30., 30., 1);
+    // A mounted detector resolves the sole candidate between input samples.
+    assert_eq!(*fixture.trace.borrow(), ["down"]);
+    fixture.route(1, Up, 11., 9., 2);
+    assert_eq!(*fixture.trace.borrow(), ["down", "up", "tap"]);
+    fixture.trace.borrow_mut().clear();
+    fixture.pump(202);
+    assert!(fixture.trace.borrow().is_empty());
+    fixture.route(2, Up, 31., 29., 203);
+    assert!(fixture.trace.borrow().is_empty());
+}
+
+#[test]
+fn a_second_finger_does_not_restart_a_tap_rejected_by_an_active_drag() {
+    use PointerPhase::{Down, Move, Up};
+    let mut fixture = TouchTapFixture::new(true);
+    fixture.route(1, Down, 0., 0., 0);
+    fixture.route(1, Move, 50., 0., 1);
+    assert!(fixture.drag_started.get());
+    fixture.route(2, Down, 10., 20., 2);
+    assert!(fixture.trace.borrow().is_empty());
+    fixture.pump(203);
+    fixture.route(2, Up, 10., 20., 204);
+    fixture.route(1, Up, 50., 0., 205);
+    assert!(fixture.trace.borrow().is_empty());
+
+    fixture.route(3, Down, 10., 20., 206);
+    fixture.route(3, Up, 10., 20., 207);
+    assert_eq!(*fixture.trace.borrow(), ["down", "up", "tap"]);
 }

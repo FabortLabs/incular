@@ -90,6 +90,67 @@ impl GestureArenaClient for SimpleTap {
 }
 
 #[test]
+fn a_held_released_tap_yields_to_an_accepting_competitor_or_wins_after_rejection() {
+    #[derive(Default)]
+    struct Contestant(Cell<bool>);
+
+    impl GestureArenaClient for Contestant {
+        fn accept_gesture(&self, _key: GestureArenaKey) {
+            self.0.set(true);
+        }
+
+        fn reject_gesture(&self, _key: GestureArenaKey) {}
+    }
+
+    for decision in [GestureDisposition::Accepted, GestureDisposition::Rejected] {
+        let recognized = Rc::new(Cell::new(0));
+        let single = Rc::new(SimpleTap::new(GestureCallbacks {
+            on_tap: Some(Rc::new({
+                let recognized = recognized.clone();
+                move || recognized.set(recognized.get() + 1)
+            })),
+            ..GestureCallbacks::default()
+        }));
+        let other = Rc::new(Contestant::default());
+        let arena = GestureArenaManager::new();
+        let key = GestureArenaKey::pointer(0, 1);
+        let single_entry = arena.add(key, single.clone());
+        let other_entry = arena.add(key, other.clone());
+        arena.hold(key);
+        arena.close(key);
+        assert_eq!(recognized.get(), 0);
+        let now = Instant::now();
+        for (phase, point) in [
+            (PointerPhase::Down, Offset::new(10., 10.)),
+            (PointerPhase::Up, Offset::new(11., 9.)),
+        ] {
+            single.route(
+                &single_entry,
+                RawPointerEvent::new(
+                    1,
+                    0,
+                    PointerDeviceKind::Touch,
+                    u32::from(phase == PointerPhase::Down),
+                    point,
+                    phase,
+                    now,
+                ),
+            );
+            assert_eq!(recognized.get(), 0);
+        }
+        arena.sweep(key);
+        assert_eq!(recognized.get(), 0, "a held sweep must not emit a tap");
+        other_entry.resolve(decision);
+        arena.flush_deferred_resolutions();
+        assert_eq!(other.0.get(), decision == GestureDisposition::Accepted);
+        assert_eq!(
+            recognized.get(),
+            usize::from(decision == GestureDisposition::Rejected)
+        );
+    }
+}
+
+#[test]
 fn the_first_combined_tap_waits_for_the_competing_double_tap_to_release_its_sweep() {
     let trace = Rc::new(RefCell::new(Vec::<String>::new()));
     let log = |label: &'static str| {
@@ -245,4 +306,67 @@ fn a_held_first_arena_does_not_prevent_the_lone_tap_on_a_second_pointer() {
     arena.flush_deferred_resolutions();
     assert_eq!(count.get(), 1);
     assert!(double.deadline().is_none());
+}
+
+#[test]
+fn two_downs_before_a_deferred_award_only_schedule_the_first_taps_deadline() {
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let record = |label| {
+        let trace = trace.clone();
+        Rc::new(move || trace.borrow_mut().push(label))
+    };
+    let down = record("down");
+    let up = record("up");
+    let tap = Rc::new(SimpleTap::new(GestureCallbacks {
+        on_tap_down: Some(Rc::new(move |_| down())),
+        on_tap_up: Some(Rc::new(move |_| up())),
+        on_tap: Some(record("tap")),
+        on_tap_cancel: Some(record("cancel")),
+        ..GestureCallbacks::default()
+    }));
+    let arena = GestureArenaManager::new();
+    let key = GestureArenaKey::pointer(0, 1);
+    let entry = arena.add(key, tap.clone());
+    let start = Instant::now();
+    let event = |pointer, phase, x, y, ms| {
+        RawPointerEvent::new(
+            pointer,
+            0,
+            PointerDeviceKind::Touch,
+            u32::from(phase == PointerPhase::Down),
+            Offset::new(x, y),
+            phase,
+            start + Duration::from_millis(ms),
+        )
+    };
+    tap.route(&entry, event(1, PointerPhase::Down, 10., 10., 0));
+    arena.close(key);
+    // The second contact reaches the recognizer before the first arena's
+    // deferred award. It cannot become the primary press or arm a deadline.
+    assert!(matches!(
+        tap.recognizer
+            .borrow_mut()
+            .observe_raw(event(2, PointerPhase::Down, 30., 30., 1)),
+        GestureDecision::Reject
+    ));
+    assert!(tap.recognizer.borrow().has_pending_deadline());
+    assert!(trace.borrow().is_empty());
+    tap.route(&entry, event(1, PointerPhase::Up, 11., 9., 2));
+    arena.sweep(key);
+    arena.flush_deferred_resolutions();
+    assert_eq!(*trace.borrow(), ["down", "up", "tap"]);
+    trace.borrow_mut().clear();
+
+    let mut recognizer = tap.recognizer.borrow_mut();
+    assert!(!recognizer.has_pending_deadline());
+    assert!(matches!(
+        recognizer.poll(start + Duration::from_millis(202)),
+        GestureDecision::Pending
+    ));
+    assert!(trace.borrow().is_empty());
+    assert!(matches!(
+        recognizer.observe_raw(event(2, PointerPhase::Up, 31., 29., 203)),
+        GestureDecision::Reject
+    ));
+    assert!(trace.borrow().is_empty());
 }

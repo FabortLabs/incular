@@ -24,3 +24,23 @@ until release. Sending the two original secondary drag sequences
 through the retained pointer path invokes none of the primary pan
 down/start/update/end/cancel callbacks and no primary tap. Four native
 tests in the focused target passed.
+
+### Held arenas, rejected taps, and overlapping deadlines
+
+The five pinned `gestures/tap_test.dart` registrations at :375, :403,
+:634, :665 and :1069 passed. The native arena verifies both decisions
+after a held sweep: an accepting competitor suppresses the tap, and a
+withdrawing competitor releases it exactly once on deferred resolution.
+A second contact cannot arm or keep a deadline when the first contact
+releases. The standalone test checks before the deferred award; the
+mounted control checks after the binding has awarded the only contestant
+between input samples. Neither produces another callback when time
+advances 200 ms or the second contact releases.
+
+Diagonal motion exceeding tap slop before the press deadline stays
+silent, including after release and a timer pump. A horizontal drag
+wins before the second contact arrives; even if that finger later lifts
+while the drag is held, it does not restart the rejected tap. A fresh
+contact after both releases still taps. Eight focused recognizer and
+mounted tests and four adjacent mounted overlap tests passed. No runtime
+change was needed for these cases.

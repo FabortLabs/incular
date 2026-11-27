@@ -3494,3 +3494,8 @@ packages/flutter/test/rendering/editable_test.dart	652	selects readonly renderEd
 packages/flutter/test/rendering/editable_test.dart	685	selects renderEditable matches native behavior for iOS case 1	paired-match	upstream-editable-position-selection.md
 packages/flutter/test/rendering/editable_test.dart	717	selects renderEditable matches native behavior for iOS case 2	paired-match	upstream-editable-position-selection.md
 packages/flutter/test/rendering/editable_test.dart	749	selects correct place when offsets are flipped	paired-match	upstream-editable-position-selection.md
+packages/flutter/test/gestures/tap_test.dart	375	Should yield to other arena members	paired-match	upstream-competing-tap-lifecycle.md#held-arenas-rejected-taps-and-overlapping-deadlines
+packages/flutter/test/gestures/tap_test.dart	403	Should trigger on release of held arena	paired-match	upstream-competing-tap-lifecycle.md#held-arenas-rejected-taps-and-overlapping-deadlines
+packages/flutter/test/gestures/tap_test.dart	634	losing tap gesture recognizer does not send onTapCancel	paired-match	upstream-competing-tap-lifecycle.md#held-arenas-rejected-taps-and-overlapping-deadlines
+packages/flutter/test/gestures/tap_test.dart	665	non-primary pointers does not trigger timeout	paired-match	upstream-competing-tap-lifecycle.md#held-arenas-rejected-taps-and-overlapping-deadlines
+packages/flutter/test/gestures/tap_test.dart	1069	A second tap after rejection is ignored	paired-match	upstream-competing-tap-lifecycle.md#held-arenas-rejected-taps-and-overlapping-deadlines
