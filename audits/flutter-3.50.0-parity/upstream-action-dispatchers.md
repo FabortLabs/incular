@@ -138,6 +138,17 @@ sequence, including moving an action to another scope. A separate
 pinned comparison confirmed that changing an action rebuilds readers
 of its owning scope, not readers unrelated to that scope. Native
 lookups observe only the matching scope and do not skip a disabled
-mapping. All 33 focused native tests passed. The original remains
-partial until the arbitrary callback return value is preserved as
-well as whether the action ran.
+mapping. All 33 focused native tests passed. The value-return batch
+below also checks the original enabled actions' exact Boolean result
+and the absence of a value while disabled, completing the pairing.
+
+## Mounted action return values
+
+The pinned original returned the same sentinel object through an
+owning custom dispatcher. The native runtime now preserves arbitrary
+typed output separately from the handled/ignored routing result. The
+native caller verifies reference identity and disabled and missing
+behavior. A dispatcher that rejects a delegated action does not leak
+its payload. Existing status-only and keyboard dispatch remain
+compatible. All 19 focused native tests passed, including the
+enabled-state lifecycle with its exact Boolean callback values.

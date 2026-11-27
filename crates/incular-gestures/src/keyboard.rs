@@ -338,6 +338,43 @@ impl From<bool> for ActionResult {
     }
 }
 
+/// The handling status and optional typed result of an action invocation.
+/// A handled action can return no value; a missing mapping remains distinct
+/// from both a disabled action and a handled action with no value.
+pub struct ActionOutput {
+    result: ActionResult,
+    value: Option<Box<dyn Any>>,
+}
+
+impl ActionOutput {
+    #[must_use]
+    pub const fn result(&self) -> ActionResult {
+        self.result
+    }
+
+    #[must_use]
+    pub fn value<T: Any>(&self) -> Option<&T> {
+        self.value.as_ref()?.downcast_ref::<T>()
+    }
+
+    #[must_use]
+    pub fn into_value<T: Any>(self) -> Option<T> {
+        self.value?.downcast::<T>().ok().map(|value| *value)
+    }
+
+    /// Returns a handled result with an application-defined payload.
+    #[must_use]
+    pub fn handled_with_value<T: Any>(value: T) -> Self {
+        Self { result: ActionResult::Handled, value: Some(Box::new(value)) }
+    }
+}
+
+impl From<ActionResult> for ActionOutput {
+    fn from(result: ActionResult) -> Self {
+        Self { result, value: None }
+    }
+}
+
 struct ActionListenerState {
     listeners: RefCell<Vec<Weak<ActionListenerEntry>>>,
 }
@@ -421,7 +458,7 @@ impl Drop for ActionListenerSubscription {
 /// Actions are values with an enabled state and a callback. They do not form
 /// a generic inheritance tree like Flutter's `Action<T>` classes; a command
 /// registry composes them by scope instead.
-type ActionCallback<C> = Rc<dyn Fn(&Intent<C>) -> ActionResult>;
+type ActionCallback<C> = Rc<dyn Fn(&Intent<C>) -> ActionOutput>;
 
 #[derive(Clone)]
 pub struct Action<C: CommandId = Command> {
@@ -463,12 +500,28 @@ impl<C: CommandId> Action<C> {
     where
         R: Into<ActionResult> + 'static,
     {
+        Self::with_output(command, move |intent| ActionOutput::from(callback(intent).into()))
+    }
+
+    /// Creates a handled action that returns an application-defined value.
+    #[must_use]
+    pub fn with_value<T: Any>(
+        command: impl Into<Intent<C>>,
+        callback: impl Fn(&Intent<C>) -> T + 'static,
+    ) -> Self {
+        Self::with_output(command, move |intent| ActionOutput::handled_with_value(callback(intent)))
+    }
+
+    fn with_output(
+        command: impl Into<Intent<C>>,
+        callback: impl Fn(&Intent<C>) -> ActionOutput + 'static,
+    ) -> Self {
         Self {
             intent: command.into(),
             enabled: Rc::new(Cell::new(true)),
             enabled_when: None,
             consumes_key: true,
-            callback: Rc::new(move |intent| callback(intent).into()),
+            callback: Rc::new(callback),
             listeners: Rc::new(ActionListenerState {
                 listeners: RefCell::new(Vec::new()),
             }),
@@ -644,13 +697,19 @@ impl<C: CommandId> Action<C> {
     /// Invokes this action for an intent.
     #[must_use]
     pub fn invoke(&self, intent: &Intent<C>) -> ActionResult {
-        if !self.is_action_enabled(intent) {
-            return ActionResult::Ignored;
-        }
-        self.invoke_enabled(intent)
+        self.invoke_output(intent).result()
     }
 
-    fn invoke_enabled(&self, intent: &Intent<C>) -> ActionResult {
+    /// Invokes this action and preserves any application-defined output.
+    #[must_use]
+    pub fn invoke_output(&self, intent: &Intent<C>) -> ActionOutput {
+        if !self.is_action_enabled(intent) {
+            return ActionResult::Ignored.into();
+        }
+        self.invoke_enabled_output(intent)
+    }
+
+    fn invoke_enabled_output(&self, intent: &Intent<C>) -> ActionOutput {
         self.notify_invocation(ActionInvocationPhase::Start);
         let result = (self.callback)(intent);
         self.notify_invocation(ActionInvocationPhase::End);
@@ -784,21 +843,30 @@ pub type ScopedActionDispatcher = dyn for<'a> Fn(ActionDispatchInvocation<'a>) -
 
 type DispatcherLookup<'a> = dyn Fn() -> Option<Rc<ScopedActionDispatcher>> + 'a;
 
-fn dispatch_bound_action<C: CommandId>(
+fn dispatch_bound_action_output<C: CommandId>(
     action: &Action<C>,
     intent: &Intent<C>,
     erased: &ErasedIntent,
     dispatcher: &DispatcherLookup<'_>,
-) -> ActionResult {
+) -> ActionOutput {
     if !action.is_action_enabled(intent) {
-        return ActionResult::Ignored;
+        return ActionResult::Ignored.into();
     }
-    let invoke = || action.invoke_enabled(intent);
-    if let Some(dispatcher) = dispatcher() {
-        dispatcher(ActionDispatchInvocation { intent: erased, action, invoke: &invoke })
-    } else {
-        invoke()
-    }
+    let Some(dispatcher) = dispatcher() else {
+        return action.invoke_enabled_output(intent);
+    };
+    let invocation_output = RefCell::new(None);
+    let invoke = || {
+        let output = action.invoke_enabled_output(intent);
+        let result = output.result();
+        *invocation_output.borrow_mut() = Some(output);
+        result
+    };
+    let dispatched = dispatcher(ActionDispatchInvocation { intent: erased, action, invoke: &invoke });
+    invocation_output
+        .into_inner()
+        .filter(|output| output.result() == dispatched)
+        .unwrap_or_else(|| dispatched.into())
 }
 
 impl ActionDispatcher {
@@ -814,7 +882,7 @@ impl ActionDispatcher {
             return self.invoke_action(action, intent);
         }
         let erased = ErasedIntent::from_intent(intent);
-        dispatch_bound_action(action, intent, &erased, &|| dispatcher.clone())
+        dispatch_bound_action_output(action, intent, &erased, &|| dispatcher.clone()).result()
     }
 }
 
@@ -824,7 +892,7 @@ trait ActionRegistry {
         changed: &incular_core::reactivity::DependencySource,
     ) -> Vec<ActionListenerSubscription>;
     fn action_for(&self, command: &dyn std::any::Any) -> Option<&dyn std::any::Any>;
-    fn invoke(&self, erased: &ErasedIntent, dispatcher: &DispatcherLookup<'_>) -> Option<ActionResult>;
+    fn invoke(&self, erased: &ErasedIntent, dispatcher: &DispatcherLookup<'_>) -> Option<ActionOutput>;
     fn invoke_shortcut(
         &self,
         erased: &ErasedIntent,
@@ -858,11 +926,11 @@ impl<C: CommandId> ActionRegistry for Actions<C> {
             .map(|action| action as &dyn std::any::Any)
     }
 
-    fn invoke(&self, erased: &ErasedIntent, dispatcher: &DispatcherLookup<'_>) -> Option<ActionResult> {
+    fn invoke(&self, erased: &ErasedIntent, dispatcher: &DispatcherLookup<'_>) -> Option<ActionOutput> {
         let command = erased.downcast_command::<C>()?;
         let action = self.action_ref(command)?;
         let intent: Intent<C> = Intent::new(command.clone());
-        Some(dispatch_bound_action(action, &intent, erased, dispatcher))
+        Some(dispatch_bound_action_output(action, &intent, erased, dispatcher))
     }
 
     fn invoke_shortcut(
@@ -873,7 +941,7 @@ impl<C: CommandId> ActionRegistry for Actions<C> {
         let command = erased.downcast_command::<C>()?;
         let action = self.action_ref(command)?;
         let intent: Intent<C> = Intent::new(command.clone());
-        let result = dispatch_bound_action(action, &intent, erased, dispatcher);
+        let result = dispatch_bound_action_output(action, &intent, erased, dispatcher).result();
         Some(match result {
             ActionResult::Handled => action.to_key_event_result(&intent),
             ActionResult::Ignored => KeyEventResult::Ignored,
@@ -945,6 +1013,17 @@ impl ErasedActionScope {
         intent: &ErasedIntent,
         find: impl Fn() -> Option<Rc<ScopedActionDispatcher>>,
     ) -> Option<ActionResult> {
+        self.invoke_output_resolving_dispatcher(intent, find)
+            .map(|output| output.result())
+    }
+
+    /// Resolves the owning dispatcher and preserves the returned output.
+    #[must_use]
+    pub fn invoke_output_resolving_dispatcher(
+        &self,
+        intent: &ErasedIntent,
+        find: impl Fn() -> Option<Rc<ScopedActionDispatcher>>,
+    ) -> Option<ActionOutput> {
         self.registry.invoke(intent, &find)
     }
 

@@ -31,7 +31,10 @@ fn retained_scopes_and_listeners_follow_action_mapping_and_unmount() {
         let hits = Rc::new(Cell::new(0));
         let observed = hits.clone();
         (
-            Action::<Edit>::new(command, move || observed.set(observed.get() + 1)),
+            Action::<Edit>::with_value(command, move |_| {
+                observed.set(observed.get() + 1);
+                true
+            }),
             hits,
         )
     };
@@ -66,17 +69,19 @@ fn retained_scopes_and_listeners_follow_action_mapping_and_unmount() {
         .unwrap();
     let intent = Intent::<Edit>::new;
     let nested = tree.children(tree.children(root).unwrap()[0]).unwrap()[0];
-    assert_eq!(
-        tree.invoke_action_at(nested, &intent(Edit::First)),
-        Some(ActionResult::Ignored)
-    );
+    let outcome = tree
+        .invoke_action_output_at(nested, &intent(Edit::First))
+        .unwrap();
+    assert_eq!(outcome.result(), ActionResult::Ignored);
+    assert_eq!(outcome.into_value::<bool>(), None);
     assert_eq!(first_hits.get(), 0);
     first.set_enabled(true);
     assert!(first_enabled.get());
-    assert_eq!(
-        tree.invoke_action_at(nested, &intent(Edit::First)),
-        Some(ActionResult::Handled)
-    );
+    let outcome = tree
+        .invoke_action_output_at(nested, &intent(Edit::First))
+        .unwrap();
+    assert_eq!(outcome.result(), ActionResult::Handled);
+    assert_eq!(outcome.into_value::<bool>(), Some(true));
     assert_eq!(first_hits.get(), 1);
 
     let seen = Rc::new(Cell::new(None));
@@ -96,19 +101,21 @@ fn retained_scopes_and_listeners_follow_action_mapping_and_unmount() {
     .unwrap();
     let scope = tree.children(tree.children(root).unwrap()[0]).unwrap()[0];
     let nested = tree.children(scope).unwrap()[0];
-    assert_eq!(
-        tree.invoke_action_at(nested, &intent(Edit::Second)),
-        Some(ActionResult::Ignored)
-    );
+    let outcome = tree
+        .invoke_action_output_at(nested, &intent(Edit::Second))
+        .unwrap();
+    assert_eq!(outcome.result(), ActionResult::Ignored);
+    assert_eq!(outcome.into_value::<bool>(), None);
     assert_eq!(seen.get(), None);
     assert_eq!(second_hits.get(), 0);
     second.set_enabled(true);
     assert_eq!(seen.get(), Some(true));
     assert!(second_enabled.get());
-    assert_eq!(
-        tree.invoke_action_at(nested, &intent(Edit::Second)),
-        Some(ActionResult::Handled)
-    );
+    let outcome = tree
+        .invoke_action_output_at(nested, &intent(Edit::Second))
+        .unwrap();
+    assert_eq!(outcome.result(), ActionResult::Handled);
+    assert_eq!(outcome.into_value::<bool>(), Some(true));
     assert_eq!(second_hits.get(), 1);
     assert_eq!(third_hits.get(), 0);
     assert_eq!(

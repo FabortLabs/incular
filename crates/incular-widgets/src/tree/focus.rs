@@ -1070,6 +1070,16 @@ impl WidgetTree {
         element: ElementId,
         intent: &incular_gestures::Intent<C>,
     ) -> Option<incular_gestures::ActionResult> {
+        self.invoke_action_output_at(element, intent).map(|output| output.result())
+    }
+
+    /// Invokes an inherited action and returns any value produced by it.
+    #[must_use]
+    pub fn invoke_action_output_at<C: incular_gestures::CommandId>(
+        &self,
+        element: ElementId,
+        intent: &incular_gestures::Intent<C>,
+    ) -> Option<incular_gestures::ActionOutput> {
         let intent = incular_gestures::ErasedIntent::from_intent(intent);
         let dismiss = intent.downcast_command::<crate::DismissIntent>().is_some();
         let scroll = intent.downcast_command::<crate::ScrollIntent>().copied();
@@ -1083,7 +1093,7 @@ impl WidgetTree {
                     .and_then(|scope| {
                         // Dispatch starts at the action's owner, not at the
                         // invoking descendant's closer unrelated dispatcher.
-                        scope.invoke_resolving_dispatcher(&intent, || self.action_dispatcher_at(id))
+                        scope.invoke_output_resolving_dispatcher(&intent, || self.action_dispatcher_at(id))
                     })
             {
                 return Some(result);
@@ -1095,13 +1105,13 @@ impl WidgetTree {
                     .and_then(|scope| scope.value.downcast_ref::<crate::raw_menu_anchor::AnchorScope>())
                     .is_some_and(crate::raw_menu_anchor::AnchorScope::dismiss_if_open)
             {
-                return Some(incular_gestures::ActionResult::Handled);
+                return Some(incular_gestures::ActionResult::Handled.into());
             }
             current = entry.parent;
         }
         scroll
             .filter(|&intent| self.apply_scroll_intent(element, intent))
-            .map(|_| incular_gestures::ActionResult::Handled)
+            .map(|_| incular_gestures::ActionResult::Handled.into())
     }
 
     fn dispatch_shortcut_action(

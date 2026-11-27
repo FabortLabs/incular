@@ -3444,11 +3444,20 @@ impl Runtime {
         element: ElementId,
         intent: &incular_widgets::Intent<C>,
     ) -> Option<incular_widgets::ActionResult> {
-        let result = self.tree.invoke_action_at(element, intent);
-        if result == Some(incular_widgets::ActionResult::Handled) {
+        self.invoke_action_output_at(element, intent).map(|output| output.result())
+    }
+
+    /// Invokes a mounted action, preserving the callback's optional output.
+    pub fn invoke_action_output_at<C: incular_widgets::CommandId>(
+        &mut self,
+        element: ElementId,
+        intent: &incular_widgets::Intent<C>,
+    ) -> Option<incular_widgets::ActionOutput> {
+        let output = self.tree.invoke_action_output_at(element, intent)?;
+        if output.result() == incular_widgets::ActionResult::Handled {
             self.frame_requested = true;
         }
-        result
+        Some(output)
     }
 
     /// Dispatches a portable key event and returns whether it was handled.
