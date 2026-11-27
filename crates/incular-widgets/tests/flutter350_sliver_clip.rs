@@ -905,3 +905,312 @@ fn nested_sliver_clips_share_layers_and_both_gate_pointer_hits() {
     assert!(hit(&tree, key, Offset::new(450., 20.)));
     assert!(!hit(&tree, key, Offset::new(0., 10.)));
 }
+
+#[test]
+fn both_default_sliver_clip_shapes_paint_their_text_child() {
+    for rounded in [false, true] {
+        let controller = ScrollController::new();
+        let key = GlobalKey::new();
+        let text = Widget::from(incular_widgets::Text::new("Hello World")).with_key(key);
+        let leaf = SliverToBoxAdapter::new(text);
+        let clip: Box<dyn Sliver> = if rounded {
+            Box::new(SliverClipRRect::new(leaf).border_radius(BorderRadiusGeometry::circular(10.)))
+        } else {
+            Box::new(SliverClipRect::new(leaf))
+        };
+        let mut tree = WidgetTree::new();
+        tree.mount(scene(&controller, clip, Axis::Vertical, false, false))
+            .unwrap();
+        layout(&mut tree);
+        let element = tree.element_with_key(&key.into()).unwrap();
+        assert!(tree.element_bounds(element).unwrap().size.height > 0.);
+        assert!(
+            tree.paint()
+                .commands()
+                .iter()
+                .any(|op| matches!(op, PaintCommand::GlyphRun { .. }))
+        );
+    }
+}
+
+fn rounded_overlap_probe(
+    controller: &ScrollController,
+    key: GlobalKey,
+    reverse: bool,
+    policy: ClipOverlapBehavior,
+    radius: f32,
+    extent: f32,
+    behavior: Clip,
+) -> Widget {
+    let child = SliverToBoxAdapter::new(Widget::box_(Size::new(800., extent), FILL).with_key(key));
+    let clip = SliverClipRRect::new(child)
+        .border_radius(BorderRadiusGeometry::circular(radius))
+        .clip_overlap(policy)
+        .clip_behavior(behavior);
+    scene(controller, Box::new(clip), Axis::Vertical, reverse, true)
+}
+
+#[test]
+fn ignored_overlap_does_not_round_a_new_corner_at_the_pinned_header_edge() {
+    let controller = ScrollController::new();
+    let key = GlobalKey::new();
+    let mut tree = WidgetTree::new();
+    tree.mount(rounded_overlap_probe(
+        &controller,
+        key,
+        false,
+        ClipOverlapBehavior::None,
+        50.,
+        200.,
+        Clip::AntiAlias,
+    ))
+    .unwrap();
+    layout(&mut tree);
+    assert!(controller.jump_to(50.));
+    layout(&mut tree);
+    let child = tree.element_with_key(&key.into()).unwrap();
+    let origin = tree.element_bounds(child).unwrap().origin;
+    assert_eq!(origin, Offset::new(0., 50.));
+    assert!(hit(&tree, key, origin + Offset::new(1., 51.)));
+}
+
+#[test]
+fn rounded_follow_edge_clips_covered_local_hit_points_after_scrolling() {
+    let controller = ScrollController::new();
+    let key = GlobalKey::new();
+    let mut tree = WidgetTree::new();
+    tree.mount(rounded_overlap_probe(
+        &controller,
+        key,
+        false,
+        ClipOverlapBehavior::FollowEdge,
+        40.,
+        100.,
+        Clip::AntiAlias,
+    ))
+    .unwrap();
+    layout(&mut tree);
+    let child = tree.element_with_key(&key.into()).unwrap();
+    let probe = |tree: &WidgetTree| {
+        let origin = tree.element_bounds(child).unwrap().origin;
+        origin + Offset::new(400., 15.)
+    };
+    assert!(hit(&tree, key, probe(&tree)));
+    assert!(controller.jump_to(50.));
+    layout(&mut tree);
+    assert!(!hit(&tree, key, probe(&tree)));
+    assert!(hit(&tree, key, probe(&tree) + Offset::new(0., 45.)));
+}
+
+#[test]
+fn rounded_overlap_cut_keeps_the_configured_corner_shape() {
+    let controller = ScrollController::new();
+    let key = GlobalKey::new();
+    let mut tree = WidgetTree::new();
+    tree.mount(rounded_overlap_probe(
+        &controller,
+        key,
+        false,
+        ClipOverlapBehavior::FollowEdge,
+        40.,
+        100.,
+        Clip::AntiAlias,
+    ))
+    .unwrap();
+    layout(&mut tree);
+    assert!(controller.jump_to(20.));
+    layout(&mut tree);
+    let child = tree.element_with_key(&key.into()).unwrap();
+    let origin = tree.element_bounds(child).unwrap().origin;
+    assert_eq!(origin, Offset::new(0., 80.));
+    assert!(!hit(&tree, key, origin + Offset::new(1., 21.)));
+    assert!(hit(&tree, key, origin + Offset::new(400., 25.)));
+}
+
+#[test]
+fn rounded_follow_edge_subtracts_overlap_on_the_correct_side() {
+    for (reverse, top, relative) in [(false, 100., 50.), (true, 450., 0.)] {
+        let controller = ScrollController::new();
+        let key = GlobalKey::new();
+        let mut tree = WidgetTree::new();
+        tree.mount(rounded_overlap_probe(
+            &controller,
+            key,
+            reverse,
+            ClipOverlapBehavior::FollowEdge,
+            40.,
+            100.,
+            Clip::AntiAlias,
+        ))
+        .unwrap();
+        layout(&mut tree);
+        assert!(controller.jump_to(50.));
+        layout(&mut tree);
+        let child = tree.element_with_key(&key.into()).unwrap();
+        let origin = tree.element_bounds(child).unwrap().origin;
+        let commands = tree.paint();
+        let rrect = commands
+            .commands()
+            .iter()
+            .find_map(|cmd| match cmd {
+                PaintCommand::PushClipRRect {
+                    rrect,
+                    coverage: ClipCoverage::AntiAlias,
+                    ..
+                } => Some(*rrect),
+                _ => None,
+            })
+            .unwrap();
+        let wanted = Rect::from_origin_size(Offset::new(0., top), Size::new(800., 50.));
+        assert_eq!(rrect, incular_rendering::RRect::uniform(wanted, 40.));
+        assert_eq!(rrect.rect.origin.y - origin.y, relative);
+    }
+}
+
+#[test]
+fn leading_rounded_clip_only_releases_after_its_inside_span_is_consumed() {
+    let controller = ScrollController::new();
+    let sliver = SliverClipRRect::new(SliverToBoxAdapter::new(Widget::box_(
+        Size::new(800., 400.),
+        FILL,
+    )))
+    .clipper(RoundedInset(30.));
+    let mut tree = WidgetTree::new();
+    tree.mount(scene(
+        &controller,
+        Box::new(sliver),
+        Axis::Vertical,
+        false,
+        false,
+    ))
+    .unwrap();
+    for (offset, top, height) in [(0., 30., 370.), (100., 0., 300.), (385., -15., 30.)] {
+        controller.jump_to(offset);
+        layout(&mut tree);
+        assert_eq!(controller.offset(), offset);
+        assert_eq!(
+            clipped_paint(&mut tree, true),
+            [Rect::from_origin_size(
+                Offset::new(0., top),
+                Size::new(800., height)
+            ),]
+        );
+    }
+}
+
+#[test]
+fn rounded_clip_none_removes_clip_commands_but_not_child_paint_or_identity() {
+    let controller = ScrollController::new();
+    let key = GlobalKey::new();
+    let scene = |mode| {
+        rounded_overlap_probe(
+            &controller,
+            key,
+            false,
+            ClipOverlapBehavior::FollowEdge,
+            20.,
+            100.,
+            mode,
+        )
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(Clip::AntiAlias)).unwrap();
+    layout(&mut tree);
+    let child = tree.element_with_key(&key.into()).unwrap();
+    assert_eq!(clipped_paint(&mut tree, true).len(), 1);
+    tree.update(root, scene(Clip::None)).unwrap();
+    layout(&mut tree);
+    assert_eq!(tree.element_with_key(&key.into()), Some(child));
+    let list = tree.paint();
+    assert!(
+        !list
+            .commands()
+            .iter()
+            .any(|c| matches!(c, PaintCommand::PushClipRRect { .. }))
+    );
+    assert!(
+        list.commands()
+            .iter()
+            .any(|c| matches!(c, PaintCommand::Rect { color, .. } if *color == FILL))
+    );
+}
+
+#[test]
+fn sliver_clip_rect_reconfigures_from_hard_edge_to_antialias_in_place() {
+    let controller = ScrollController::new();
+    let key = GlobalKey::new();
+    let build = |changed| {
+        let sliver = SliverClipRect::new(SliverToBoxAdapter::new(
+            Widget::box_(Size::new(800., 100.), FILL).with_key(key),
+        ));
+        let sliver = if changed {
+            sliver
+                .clip_overlap(ClipOverlapBehavior::None)
+                .clip_behavior(Clip::AntiAlias)
+        } else {
+            sliver
+        };
+        scene(&controller, Box::new(sliver), Axis::Vertical, false, true)
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(false)).unwrap();
+    layout(&mut tree);
+    let child = tree.element_with_key(&key.into()).unwrap();
+    assert!(controller.jump_to(50.));
+    layout(&mut tree);
+    let wanted =
+        |top, height| Rect::from_origin_size(Offset::new(0., top), Size::new(800., height));
+    assert_eq!(rect(&mut tree), [wanted(100., 50.)]);
+    tree.update(root, build(true)).unwrap();
+    layout(&mut tree);
+    assert_eq!(clipped_paint(&mut tree, true), [wanted(50., 100.)]);
+    assert_eq!(tree.element_with_key(&key.into()), Some(child));
+}
+
+#[test]
+fn sliver_clip_rrect_reconfigures_coverage_radius_and_overlap_in_place() {
+    let controller = ScrollController::new();
+    let key = GlobalKey::new();
+    let build = |changed| {
+        let (overlap, radius, behavior) = if changed {
+            (ClipOverlapBehavior::None, 20., Clip::HardEdge)
+        } else {
+            (ClipOverlapBehavior::FollowEdge, 10., Clip::AntiAlias)
+        };
+        rounded_overlap_probe(&controller, key, false, overlap, radius, 100., behavior)
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(false)).unwrap();
+    layout(&mut tree);
+    let child = tree.element_with_key(&key.into()).unwrap();
+    assert!(controller.jump_to(50.));
+    layout(&mut tree);
+    let assert_clip = |tree: &mut WidgetTree, coverage: ClipCoverage, y, h, radius| {
+        let list = tree.paint();
+        let found = list
+            .commands()
+            .iter()
+            .find_map(|c| match c {
+                PaintCommand::PushClipRRect {
+                    rrect, coverage, ..
+                } => Some((*rrect, *coverage)),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(
+            found,
+            (
+                incular_rendering::RRect::uniform(
+                    Rect::from_origin_size(Offset::new(0., y), Size::new(800., h)),
+                    radius
+                ),
+                coverage,
+            )
+        );
+    };
+    assert_clip(&mut tree, ClipCoverage::AntiAlias, 100., 50., 10.);
+    tree.update(root, build(true)).unwrap();
+    layout(&mut tree);
+    assert_clip(&mut tree, ClipCoverage::HardEdge, 50., 100., 20.);
+    assert_eq!(tree.element_with_key(&key.into()), Some(child));
+}

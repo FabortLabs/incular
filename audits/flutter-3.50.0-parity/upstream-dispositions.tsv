@@ -2931,3 +2931,15 @@ packages/flutter/test/rendering/proxy_sliver_test.dart	79	RenderSliverAnimatedOp
 packages/flutter/test/rendering/proxy_sliver_test.dart	101	RenderSliverAnimatedOpacity does composite if it is partially opaque	paired-match	upstream-sliver-opacity-layers.md
 packages/flutter/test/rendering/proxy_sliver_test.dart	123	RenderSliverAnimatedOpacity does composite if it is opaque	paired-match	upstream-sliver-opacity-layers.md
 packages/flutter/test/rendering/proxy_sliver_test.dart	145	RenderSliverAnimatedOpacity reuses its layer	paired-match	upstream-sliver-opacity-layers.md
+packages/flutter/test/widgets/sliver_clip_rect_test.dart	56	renders its child	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rect_test.dart	108	updates properties	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	56	renders its child	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	116	updates properties	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	561	creates a straight cut at overlap	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	587	uses complete extent for hit test clipping	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	617	calculates correct clip rectangle origin	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	639	preserves visual content integrity at overlap cut	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	656	handles overlap calculation with reverse scrolling	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	786	clears layer when clipBehavior is updated to Clip.none	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	800	preserveShape hit testing is received when pinned header is wrapped in SliverIgnorePointer	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/widgets/sliver_clip_rrect_test.dart	853	leading clip stays pinned until insideClipExtent is scrolled	paired-match	upstream-sliver-clip-retained-edges.md
