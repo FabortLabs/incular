@@ -12,6 +12,7 @@ pub mod debug_instrumentation;
 pub mod matrix4;
 pub mod debug_print;
 pub mod debug_timeline;
+pub mod diagnostic_property;
 mod context;
 mod fast_hash;
 mod float_color;

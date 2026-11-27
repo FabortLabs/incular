@@ -2976,3 +2976,8 @@ packages/flutter/test/rendering/box_test.dart	1359	minOf	paired-match	upstream-b
 packages/flutter/test/rendering/box_test.dart	1369	+	paired-match	upstream-box-clip-and-baseline-offset.md
 packages/flutter/test/rendering/layers_test.dart	664	OpacityLayer does not push an OffsetLayer if there are no children	partial-match	upstream-empty-opacity-layers.md
 packages/flutter/test/rendering/layers_test.dart	711	OpacityLayer dispose its engineLayer if there are no children	partial-match	upstream-empty-opacity-layers.md
+packages/flutter/test/foundation/diagnostics_test.dart	946	string property test	paired-match	upstream-diagnostic-scalar-properties.md
+packages/flutter/test/foundation/diagnostics_test.dart	999	bool property test	paired-match	upstream-diagnostic-scalar-properties.md
+packages/flutter/test/foundation/diagnostics_test.dart	1047	property with tooltip test	paired-match	upstream-diagnostic-scalar-properties.md
+packages/flutter/test/foundation/diagnostics_test.dart	1055	double property test	paired-match	upstream-diagnostic-scalar-properties.md
+packages/flutter/test/foundation/diagnostics_test.dart	1981	DiagnosticsProperty for basic types has value in json	paired-match	upstream-diagnostic-scalar-properties.md
