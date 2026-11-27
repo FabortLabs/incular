@@ -11,6 +11,16 @@ a version and date when publishing.
   `Option<Vec<u8>>` for its request. Existing method-channel implementations
   receive `Some(encoded_request)`; handle `None` as a true null message.
 
+- **Breaking (`incular-core`):** `HslColor` and `HsvColor` public
+  components now use `f64` so fractional animation steps round to the
+  same RGBA bytes as Flutter. Constructors and setters still accept
+  `f32` values. Where a caller needs an `f32` component, cast at that
+  boundary; use `lerp_ref` with an `f64` factor for exact rounding.
+
+- **Breaking (`incular-text`):** exhaustive matches on
+  `TextScalerKind` must handle `System` and `ClampedSystem`. The latter
+  retains its clamp bounds independently of the current factor.
+
 ### Added
 
 - Mounted focus scopes can choose a preferred descendant scope without

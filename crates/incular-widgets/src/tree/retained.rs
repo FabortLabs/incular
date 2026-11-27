@@ -1238,6 +1238,15 @@ impl WidgetTree {
     }
     /// Returns the retained render kind for diagnostics and framework tooling.
     #[doc(hidden)]
+    /// Reports whether a mounted render object is waiting for layout.
+    /// Returns `None` if the render object has already been detached.
+    #[must_use]
+    pub fn render_needs_layout(&self, id: RenderObjectId) -> Option<bool> {
+        self.renders
+            .get(id.0)
+            .map(|render| render.dirty.contains(DirtyFlags::LAYOUT))
+    }
+
     #[must_use]
     pub fn render_object_kind(&self, id: RenderObjectId) -> Option<&RenderKind> {
         self.renders.get(id.0).map(|render| render.object.kind())
