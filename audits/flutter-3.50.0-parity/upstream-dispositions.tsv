@@ -2943,3 +2943,9 @@ packages/flutter/test/widgets/sliver_clip_rrect_test.dart	656	handles overlap ca
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	786	clears layer when clipBehavior is updated to Clip.none	paired-match	upstream-sliver-clip-retained-edges.md
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	800	preserveShape hit testing is received when pinned header is wrapped in SliverIgnorePointer	paired-match	upstream-sliver-clip-retained-edges.md
 packages/flutter/test/widgets/sliver_clip_rrect_test.dart	853	leading clip stays pinned until insideClipExtent is scrolled	paired-match	upstream-sliver-clip-retained-edges.md
+packages/flutter/test/rendering/slivers_helpers_test.dart	9	applyGrowthDirectionToAxisDirection produces expected AxisDirection	paired-match	upstream-sliver-protocol-values.md
+packages/flutter/test/rendering/slivers_helpers_test.dart	35	SliverConstraints are the same when copied	partial-match	upstream-sliver-protocol-values.md
+packages/flutter/test/rendering/slivers_helpers_test.dart	58	SliverConstraints normalizedGrowthDirection is inferred from AxisDirection and GrowthDirection	partial-match	upstream-sliver-protocol-values.md
+packages/flutter/test/rendering/slivers_helpers_test.dart	112	SliverGeometry with no arguments is valid	paired-match	upstream-sliver-protocol-values.md
+packages/flutter/test/rendering/slivers_helpers_test.dart	116	SliverGeometry throws error when layoutExtent exceeds paintExtent	paired-match	upstream-sliver-protocol-values.md
+packages/flutter/test/rendering/slivers_helpers_test.dart	122	SliverGeometry throws error when maxPaintExtent is less than paintExtent	paired-match	upstream-sliver-protocol-values.md

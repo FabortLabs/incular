@@ -56,7 +56,7 @@ impl SliverPaintBounds {
 }
 
 pub(super) fn is_reversed(constraints: SliverConstraints) -> bool {
-    constraints.reverse ^ (constraints.growth_direction == SliverGrowthDirection::Reverse)
+    constraints.normalized_growth_direction() == SliverGrowthDirection::Reverse
 }
 
 #[cfg(test)]

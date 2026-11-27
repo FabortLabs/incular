@@ -40,7 +40,7 @@ pub mod scroll {
         ScrollAnimation, ScrollAnimationCompletion,
         ScrollController, ScrollMetrics, ScrollNotification, ScrollNotificationSubscription,
         ScrollNotificationType, ScrollPhysics, ScrollViewKeyboardDismissBehavior, Scrollability,
-        SnapPhysics,
+        SliverGeometryValidationError, SnapPhysics, apply_growth_direction_to_axis_direction,
     };
 }
 

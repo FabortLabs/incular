@@ -40,4 +40,4 @@ pub use physics::{
 pub use scrollbar::{
     ScrollbarGeometry, ScrollbarStyle, scrollbar_geometry, scrollbar_geometry_for_axis,
 };
-pub use sliver::{SliverConstraints, SliverGeometry, SliverGrowthDirection};
+pub use sliver::{SliverConstraints, SliverGeometry, SliverGeometryValidationError, SliverGrowthDirection, apply_growth_direction_to_axis_direction};

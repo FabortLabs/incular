@@ -5,16 +5,45 @@
 //! Flutter's `RenderViewport` and `RenderSliver` without making the scroll
 //! crate depend on widget or renderer types.
 
-use incular_config::{Axis, EdgeInsets, TextDirection};
+use std::hash::{Hash, Hasher};
+
+use incular_config::{Axis, AxisDirection, EdgeInsets, TextDirection};
 use incular_core::{finite_non_negative, finite_or_zero};
 
 /// Direction in which a sliver grows from its viewport center, independent
 /// of the viewport's physical axis direction.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum SliverGrowthDirection {
     #[default]
     Forward,
     Reverse,
+}
+
+impl SliverGrowthDirection {
+    #[must_use]
+    pub const fn reversed(self) -> Self {
+        match self {
+            Self::Forward => Self::Reverse,
+            Self::Reverse => Self::Forward,
+        }
+    }
+}
+
+/// Resolves logical growth into the viewport's physical axis.
+#[must_use]
+pub const fn apply_growth_direction_to_axis_direction(
+    axis: AxisDirection,
+    growth: SliverGrowthDirection,
+) -> AxisDirection {
+    match growth {
+        SliverGrowthDirection::Forward => axis,
+        SliverGrowthDirection::Reverse => match axis {
+            AxisDirection::Down => AxisDirection::Up,
+            AxisDirection::Up => AxisDirection::Down,
+            AxisDirection::Right => AxisDirection::Left,
+            AxisDirection::Left => AxisDirection::Right,
+        },
+    }
 }
 
 /// The constraints supplied by a viewport to one sliver.
@@ -35,6 +64,28 @@ pub struct SliverConstraints {
     pub viewport_main_axis_extent: f32,
     pub remaining_cache_extent: f32,
     pub cache_origin: f32,
+}
+
+impl Hash for SliverConstraints {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.axis.hash(state);
+        self.reverse.hash(state);
+        self.growth_direction.hash(state);
+        self.text_direction.hash(state);
+        self.safe_insets.hash(state);
+        for value in [
+            self.scroll_offset,
+            self.preceding_scroll_extent,
+            self.overlap,
+            self.remaining_paint_extent,
+            self.cross_axis_extent,
+            self.viewport_main_axis_extent,
+            self.remaining_cache_extent,
+            self.cache_origin,
+        ] {
+            (if value == 0. { 0 } else { value.to_bits() }).hash(state);
+        }
+    }
 }
 
 impl SliverConstraints {
@@ -70,6 +121,33 @@ impl SliverConstraints {
         }
     }
 
+    #[must_use]
+    pub const fn axis_direction(self) -> AxisDirection {
+        match (self.axis, self.reverse) {
+            (Axis::Vertical, false) => AxisDirection::Down,
+            (Axis::Vertical, true) => AxisDirection::Up,
+            (Axis::Horizontal, false) => AxisDirection::Right,
+            (Axis::Horizontal, true) => AxisDirection::Left,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_axis_direction(mut self, direction: AxisDirection) -> Self {
+        self.axis = direction.axis();
+        self.reverse = direction.is_reversed();
+        self
+    }
+
+    /// Expresses growth relative to the canonical physical down/right axes.
+    #[must_use]
+    pub const fn normalized_growth_direction(self) -> SliverGrowthDirection {
+        if self.reverse {
+            self.growth_direction.reversed()
+        } else {
+            self.growth_direction
+        }
+    }
+
     /// Returns the visible interval in this sliver's local coordinates.
     #[must_use]
     pub fn visible_interval(self, scroll_extent: f32) -> (f32, f32) {
@@ -98,6 +176,25 @@ pub struct SliverGeometry {
     /// A sliver can request a correction after a measurement changes the
     /// content before the current anchor.
     pub scroll_offset_correction: Option<f32>,
+}
+
+/// An inconsistency returned by a custom sliver's layout.
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum SliverGeometryValidationError {
+    #[error("sliver {field} must be nonnegative (got {value})")]
+    NegativeExtent { field: &'static str, value: f32 },
+    #[error("sliver layoutExtent {layout} exceeds paintExtent {paint}")]
+    LayoutExceedsPaint { layout: f32, paint: f32 },
+    #[error("sliver maxPaintExtent {maximum} is less than paintExtent {paint}")]
+    MaxPaintTooSmall { maximum: f32, paint: f32 },
+    #[error("sliver scrollOffsetCorrection must be nonzero when supplied")]
+    ZeroCorrection,
+}
+
+impl Default for SliverGeometry {
+    fn default() -> Self {
+        Self::ZERO
+    }
 }
 
 impl SliverGeometry {
@@ -143,6 +240,47 @@ impl SliverGeometry {
                 || scroll_extent > constraints.remaining_paint_extent,
             scroll_offset_correction: None,
         }
+    }
+
+    /// Checks the same extent relationships as Flutter's debug validator
+    /// without normalizing the inputs or panicking.
+    pub fn validate(self) -> Result<(), SliverGeometryValidationError> {
+        use SliverGeometryValidationError::*;
+        for (field, value) in [
+            ("scrollExtent", self.scroll_extent),
+            ("paintExtent", self.paint_extent),
+            ("layoutExtent", self.layout_extent),
+            ("cacheExtent", self.cache_extent),
+        ] {
+            if value < 0. || value.is_nan() {
+                return Err(NegativeExtent { field, value });
+            }
+        }
+        if self.layout_extent > self.paint_extent {
+            return Err(LayoutExceedsPaint {
+                layout: self.layout_extent,
+                paint: self.paint_extent,
+            });
+        }
+        const PRECISION_ERROR_TOLERANCE: f64 = 1e-10;
+        if f64::from(self.paint_extent) - f64::from(self.max_paint_extent)
+            > PRECISION_ERROR_TOLERANCE
+        {
+            return Err(MaxPaintTooSmall {
+                maximum: self.max_paint_extent,
+                paint: self.paint_extent,
+            });
+        }
+        if self.hit_test_extent < 0. || self.hit_test_extent.is_nan() {
+            return Err(NegativeExtent {
+                field: "hitTestExtent",
+                value: self.hit_test_extent,
+            });
+        }
+        if self.scroll_offset_correction == Some(0.) {
+            return Err(ZeroCorrection);
+        }
+        Ok(())
     }
 
     /// Returns a copy with bounded, internally consistent values.
