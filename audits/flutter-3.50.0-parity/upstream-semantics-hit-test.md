@@ -25,3 +25,23 @@ The native projection test proves every policy arrives on the same DOM
 node's native ID at unchanged geometry. The actual Web crate checked
 successfully for wasm32, serially. This was not a browser-driven
 pointer or assistive-technology test.
+
+## Point actions use inverse paint order, not reading order
+
+Two authored Flutter probes and the matching native
+`flutter350_semantic_point_paint_order` fixture overlap two accessible controls
+both at the root and inside an explicit semantic container. Reading order
+can put the visually front control first, but dispatching a tap by position
+must still choose the front control. If it has no handler, the control
+behind it receives the tap. Reversing the keyed paint order changes the hit
+without moving either control or changing traversal. The right edge is
+excluded at device pixel ratio 1.
+
+Before the fix Incular walked the reversed **reading** order and selected the
+back control. The runtime now retains a separate sibling order only when
+the reading sort changes the original order. It clears that order when it
+matches again or the parent/accessibility tree is retired. This checks the
+runtime's logical point dispatch; it does not imply a separate paint-order
+API in every native projection, or change special synthetic pane grouping.
+The 19 selected regressions passed. This is an authored comparison and
+adds no original registration credit.

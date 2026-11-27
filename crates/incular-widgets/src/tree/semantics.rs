@@ -335,6 +335,7 @@ impl WidgetTree {
                 }
             }
             self.semantics.set_root(None);
+            self.semantic_point_order.clear();
             // Marks recorded while the graph is released are not kept up to
             // date, so the next pass collects everything.
             self.semantics_full_pass = true;
@@ -421,6 +422,7 @@ impl WidgetTree {
         let full = std::mem::take(&mut self.semantics_full_pass);
         let Some((root, root_render)) = root else {
             self.semantics.set_root(None);
+            self.semantic_point_order.clear();
             return;
         };
         if !full
@@ -907,6 +909,7 @@ impl WidgetTree {
                     }
                 }
             }
+            self.remember_semantic_point_order(Some(id), &edges[start..cursor]);
             #[cfg(feature = "devtools")]
             if (inserted.contains(&element)
                 || self.semantics.revision() != semantic_revision_before)
@@ -951,6 +954,7 @@ impl WidgetTree {
                     .map(|(_, _, child)| semantic_id(semantic_ids, child)),
             );
         }
+        self.remember_semantic_point_order(None, top_level);
         // A detached node takes its semantic subtree with it, except for any
         // node this pass attached somewhere else.
         let mut removed_any = false;
@@ -959,6 +963,7 @@ impl WidgetTree {
                 continue;
             }
             if let Some(node) = self.semantics.remove(id) {
+                self.semantic_point_order.remove(&Some(id));
                 removed_any = true;
                 detached.extend(node.children);
             }
@@ -2879,6 +2884,43 @@ impl WidgetTree {
         None
     }
 
+    fn remember_semantic_point_order(
+        &mut self,
+        parent: Option<SemanticNodeId>,
+        traversal_edges: &[(u32, u32, ElementId)],
+    ) {
+        if !traversal_edges.windows(2).any(|pair| pair[0].1 > pair[1].1) {
+            if !self.semantic_point_order.is_empty() {
+                self.semantic_point_order.remove(&parent);
+            }
+            return;
+        }
+        let published = match parent {
+            Some(id) => self.semantics.node(id).map_or(&[][..], |node| node.children.as_slice()),
+            None => self.semantics.roots(),
+        };
+        // The viewport or table can replace collected children with
+        // synthetic groups. Never bypass one to use a flat permutation.
+        if published.len() != traversal_edges.len()
+            || published
+                .iter()
+                .zip(traversal_edges)
+                .any(|(node, edge)| self.semantic_ids.get(&edge.2) != Some(node))
+        {
+            self.semantic_point_order.remove(&parent);
+            return;
+        }
+        let order = self.semantic_point_order.entry(parent).or_default();
+        order.clear();
+        order.extend(
+            traversal_edges
+                .iter()
+                .zip(published)
+                .map(|(edge, &node)| (edge.1, node)),
+        );
+        order.sort_unstable_by_key(|&(sequence, _)| sequence);
+    }
+
     /// Selects a retained semantic action target at a logical window point.
     #[doc(hidden)]
     #[must_use]
@@ -2887,11 +2929,24 @@ impl WidgetTree {
         position: Offset,
         action: &SemanticAction,
     ) -> Option<SemanticNodeId> {
-        self.semantics
-            .roots()
-            .iter()
-            .rev()
-            .find_map(|&node| self.semantic_action_in_subtree(node, position, action))
+        self.semantic_action_in_children(None, self.semantics.roots(), position, action)
+    }
+
+    fn semantic_action_in_children(
+        &self,
+        parent: Option<SemanticNodeId>,
+        children: &[SemanticNodeId],
+        position: Offset,
+        action: &SemanticAction,
+    ) -> Option<SemanticNodeId> {
+        if let Some(paint_order) = self.semantic_point_order.get(&parent) {
+            return paint_order.iter().rev().find_map(|&(_, child)| {
+                self.semantic_action_in_subtree(child, position, action)
+            });
+        }
+        children.iter().rev().find_map(|&child| {
+            self.semantic_action_in_subtree(child, position, action)
+        })
     }
 
     fn semantic_action_in_subtree(
@@ -2924,11 +2979,8 @@ impl WidgetTree {
             return None;
         }
 
-        if let Some(child) = semantic
-            .children
-            .iter()
-            .rev()
-            .find_map(|&child| self.semantic_action_in_subtree(child, position, action))
+        if let Some(child) =
+            self.semantic_action_in_children(Some(node), &semantic.children, position, action)
         {
             return Some(child);
         }

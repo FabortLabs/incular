@@ -1484,6 +1484,9 @@ pub struct WidgetTree {
     input: InputState,
     semantics: SemanticsTree,
     semantic_ids: FastHashMap<ElementId, SemanticNodeId>,
+    /// A semantic parent (or the forest root) gets a separate point order
+    /// only when its traversal children were sorted away from paint order.
+    semantic_point_order: FastHashMap<Option<SemanticNodeId>, Vec<(u32, SemanticNodeId)>>,
     /// The optional scrolling pane below a sliver viewport's stable outer node.
     viewport_semantic_panes: FastHashMap<ElementId, SemanticNodeId>,
     /// Optional render-phase snapshots of local accessibility bounds insets.

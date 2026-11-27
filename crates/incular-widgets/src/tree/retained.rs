@@ -50,6 +50,7 @@ impl WidgetTree {
             input: InputState::default(),
             semantics: SemanticsTree::new(),
             semantic_ids: FastHashMap::default(),
+            semantic_point_order: FastHashMap::default(),
             semantic_bounds_insets: FastHashMap::default(),
             table_semantic_wrappers: FastHashMap::default(),
             viewport_semantic_panes: FastHashMap::default(),

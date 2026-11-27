@@ -2772,6 +2772,7 @@ impl WidgetTree {
                     debug_assert_eq!(indexed_element, Some(id));
                     if let Some(semantic) = self.semantic_ids.remove(&id) {
                         let _ = self.semantics.remove(semantic);
+                        self.semantic_point_order.remove(&Some(semantic));
                     }
                     if let Some(pane) = self.viewport_semantic_panes.remove(&id) {
                         let _ = self.semantics.remove(pane);
