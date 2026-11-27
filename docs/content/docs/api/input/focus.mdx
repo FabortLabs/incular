@@ -72,6 +72,14 @@ touch highlights. `FocusHighlightManager` can force either mode.
 `reading_order()`, `widget_order()`, `ordered()` — exercised in the runnable
 program above.
 
+Use `.skip_traversal(true)` to omit the scope node without omitting its
+descendants. Use `.descendants_are_traversable(false)` to skip the scope's
+descendants during keyboard traversal while still allowing explicit focus
+requests. Use `.descendants_are_focusable(false)` to deny those requests
+without disabling the scope itself. When using
+`FocusScope::with_external_focus_node`, set these options on the external
+node rather than the widget.
+
 ## Traversal and exclusion
 
 ```rust

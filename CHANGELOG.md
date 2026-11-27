@@ -13,6 +13,10 @@ a version and date when publishing.
 
 ### Added
 
+- `FocusScope` accepts independent widget settings for skipping its own
+  traversal node, excluding descendants from traversal, and allowing
+  descendant focus requests.
+
 - Window semantics queries report unknown view and node IDs separately.
   Debug allocation listeners can observe matching semantics-handle lifetimes.
 

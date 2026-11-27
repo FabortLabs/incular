@@ -324,6 +324,9 @@ pub struct FocusScope {
     node: Option<FocusScopeNode>,
     parent_node: Option<FocusNode>,
     can_request_focus: Option<bool>,
+    skip_traversal: Option<bool>,
+    descendants_are_focusable: Option<bool>,
+    descendants_are_traversable: Option<bool>,
     use_external_properties: bool,
     autofocus: bool,
     policy: FocusTraversalPolicyKind,
@@ -336,6 +339,9 @@ impl Default for FocusScope {
             node: None,
             parent_node: None,
             can_request_focus: None,
+            skip_traversal: None,
+            descendants_are_focusable: None,
+            descendants_are_traversable: None,
             use_external_properties: false,
             autofocus: false,
             policy: FocusTraversalPolicyKind::ReadingOrder,
@@ -349,13 +355,8 @@ impl FocusScope {
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
-            node: None,
-            parent_node: None,
-            can_request_focus: None,
-            use_external_properties: false,
-            autofocus: false,
-            policy: FocusTraversalPolicyKind::ReadingOrder,
             child: Some(child.into()),
+            ..Self::default()
         }
     }
 
@@ -376,7 +377,7 @@ impl FocusScope {
         None
     }
 
-    /// Binds an external scope node without changing its configuration.
+    /// Binds a scope node and applies any explicitly supplied widget settings.
     #[must_use]
     pub fn node(mut self, node: FocusScopeNode) -> Self {
         self.node = Some(node);
@@ -406,23 +407,46 @@ impl FocusScope {
 
     #[must_use]
     pub fn allows_focus_requests(&self) -> bool {
-        let authored = if self.use_external_properties { None } else { self.can_request_focus };
-        authored.unwrap_or_else(|| self.node.as_ref().is_none_or(FocusScopeNode::can_request_focus))
+        self.scope_widget_properties()
+            .and_then(|p| p.can_request_focus)
+            .unwrap_or_else(|| {
+                self.node
+                    .as_ref()
+                    .is_none_or(FocusScopeNode::can_request_focus)
+            })
     }
 
     #[must_use]
     pub fn allows_descendant_focus(&self) -> bool {
-        self.node.as_ref().is_none_or(FocusScopeNode::descendants_are_focusable)
+        self.scope_widget_properties()
+            .and_then(|p| p.descendants_are_focusable)
+            .unwrap_or_else(|| {
+                self.node
+                    .as_ref()
+                    .is_none_or(FocusScopeNode::descendants_are_focusable)
+            })
     }
 
     #[must_use]
     pub fn allows_descendant_traversal(&self) -> bool {
-        self.node.as_ref().is_none_or(FocusScopeNode::descendants_are_traversable)
+        self.scope_widget_properties()
+            .and_then(|p| p.descendants_are_traversable)
+            .unwrap_or_else(|| {
+                self.node
+                    .as_ref()
+                    .is_none_or(FocusScopeNode::descendants_are_traversable)
+            })
     }
 
     #[must_use]
     pub fn skips_traversal(&self) -> bool {
-        self.node.as_ref().is_some_and(FocusScopeNode::skip_traversal)
+        self.scope_widget_properties()
+            .and_then(|p| p.skip_traversal)
+            .unwrap_or_else(|| {
+                self.node
+                    .as_ref()
+                    .is_some_and(FocusScopeNode::skip_traversal)
+            })
     }
 
     /// Controls focus eligibility inside this scope. A disabled scope blocks
@@ -431,6 +455,37 @@ impl FocusScope {
     pub fn can_request_focus(mut self, allowed: bool) -> Self {
         self.can_request_focus = Some(allowed);
         self
+    }
+
+    /// Excludes this scope's own node from traversal, not its descendants.
+    #[must_use]
+    pub fn skip_traversal(mut self, skip: bool) -> Self {
+        self.skip_traversal = Some(skip);
+        self
+    }
+
+    /// Controls whether descendants may request focus without disabling the scope.
+    #[must_use]
+    pub fn descendants_are_focusable(mut self, allowed: bool) -> Self {
+        self.descendants_are_focusable = Some(allowed);
+        self
+    }
+
+    /// Controls traversal to descendants, not their ability to request focus.
+    #[must_use]
+    pub fn descendants_are_traversable(mut self, allowed: bool) -> Self {
+        self.descendants_are_traversable = Some(allowed);
+        self
+    }
+
+    fn scope_widget_properties(&self) -> Option<incular_gestures::FocusNodeWidgetProperties> {
+        let owned = self.node.is_none();
+        (!self.use_external_properties).then_some(incular_gestures::FocusNodeWidgetProperties {
+            can_request_focus: self.can_request_focus.or(owned.then_some(true)),
+            skip_traversal: self.skip_traversal.or(owned.then_some(false)),
+            descendants_are_focusable: self.descendants_are_focusable.or(owned.then_some(true)),
+            descendants_are_traversable: self.descendants_are_traversable.or(owned.then_some(true)),
+        })
     }
 
     /// Uses an explicit parent in the mounted focus tree. Pass
@@ -473,19 +528,18 @@ impl FocusScope {
 
 impl From<FocusScope> for Widget {
     fn from(value: FocusScope) -> Self {
+        let properties = value.scope_widget_properties();
         let child = value
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         let scope = if let Some(node) = &value.node {
-            let mut widget = Widget::from(Focus::with_external_focus_node(child, node.scope_focus_node()).parent_node(value.parent_node));
+            let mut widget = Widget::from(
+                Focus::with_external_focus_node(child, node.scope_focus_node())
+                    .parent_node(value.parent_node),
+            );
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
                 callbacks.focus_scope = Some(node.clone());
-                if !value.use_external_properties && let Some(allowed) = value.can_request_focus {
-                    callbacks.focus_node_widget_properties = Some(incular_gestures::FocusNodeWidgetProperties {
-                        can_request_focus: Some(allowed),
-                        ..incular_gestures::FocusNodeWidgetProperties::default()
-                    });
-                }
+                callbacks.focus_node_widget_properties = properties;
             }
             widget
         } else {
@@ -498,6 +552,7 @@ impl From<FocusScope> for Widget {
             let mut widget = Widget::from(focus);
             if let WidgetKind::Gesture { callbacks, .. } = widget.kind_mut() {
                 callbacks.owns_focus_scope = true;
+                callbacks.focus_node_widget_properties = properties;
             }
             widget
         };

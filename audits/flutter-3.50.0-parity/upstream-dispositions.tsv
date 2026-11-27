@@ -2746,3 +2746,6 @@ packages/flutter/test/rendering/annotated_region_test.dart	325	looks for child A
 packages/flutter/test/rendering/annotated_region_test.dart	342	looks for correct type	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
 packages/flutter/test/rendering/annotated_region_test.dart	355	does not clip Layer.find on an AnnotatedRegion with an unrelated type	paired-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
 packages/flutter/test/rendering/annotated_region_test.dart	368	handles non-invertible transforms	partial-match	upstream-layer-annotations.md#annotatedregion-search-across-retained-layers
+packages/flutter/test/widgets/focus_scope_test.dart	1382	Setting canRequestFocus on focus node causes update.	paired-match	upstream-mounted-focus-scope-nodes.md#scope-and-descendant-traversal-permissions
+packages/flutter/test/widgets/focus_scope_test.dart	1508	skipTraversal works as expected.	paired-match	upstream-mounted-focus-scope-nodes.md#scope-and-descendant-traversal-permissions
+packages/flutter/test/widgets/focus_scope_test.dart	1602	descendantsAreTraversable works as expected.	paired-match	upstream-mounted-focus-scope-nodes.md#scope-and-descendant-traversal-permissions

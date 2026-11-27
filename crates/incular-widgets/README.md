@@ -11,6 +11,11 @@
 Visibility preservation, offstage measurement, retained focus, and animation
 muting are part of the retained widget contract and are covered by widget tests.
 
+`FocusScope` separates three controls: `skip_traversal` omits the scope
+node, `descendants_are_traversable` omits descendants from traversal only,
+and `descendants_are_focusable` prevents descendant focus requests.
+`with_external_focus_node` leaves these settings under the node's control.
+
 ## Frame recursion diagnostics
 
 Build, layout, paint, semantics, and compositor traversal track their active

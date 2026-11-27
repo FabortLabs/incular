@@ -183,3 +183,24 @@ excluded the leaf from actual traversal. The permission now lives only
 on the focus node, and disabling it settles focus using scope history.
 Explicit exclusion and hidden-content regressions remain green. All 50
 focused tests passed. This authored probe adds no registration credit.
+
+### Scope and descendant traversal permissions
+
+Three exact Flutter registrations passed in `widgets/focus_scope_test.dart`
+(1382, 1508, 1602), with corresponding mounted Rust runtime assertions in
+`flutter350_focus_traversal_permissions`. The nested scope/parent/leaf
+fixture checks all five ordered descendant lists from Flutter, including
+the case where excluding the inner scope does not exclude its focus
+children. Marking a parent as non-traversable reports no traversal
+descendants on that parent, removes only its descendants from the scope's
+list, and still permits an explicitly requested focus on the leaf. The
+mounted permission update reaches a reactive builder observing focus even
+when its node is unfocused and its displayed focus state does not change.
+
+Previously the scope widget had no authored controls for skipping its own
+node or limiting descendants' focus and traversal separately; only the
+supplied node exposed the flags. The same settings now reach owned or
+provided scope nodes during retained updates. The external-node constructor
+keeps the node's settings authoritative. The focused native controls also
+verify owned scope identity remains unchanged and distinguish a denied
+request from simply omitting a descendant in traversal.
