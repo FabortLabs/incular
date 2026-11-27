@@ -568,3 +568,151 @@ fn mixed_decoration_honors_foreground_through_both_endpoints_and_midpoints() {
         );
     }
 }
+
+fn pinned_decoration_tween(controller: &AnimationController) -> TweenAnimation<BoxDecoration> {
+    use incular_core::Offset;
+    use incular_widgets::{Border, BorderRadius, BoxShadow};
+
+    TweenAnimation::new(
+        controller.clone(),
+        BoxDecoration::new()
+            .color(Color::WHITE)
+            .border(Border::new(4., Color::BLACK))
+            .border_radius(BorderRadius::ZERO)
+            .box_shadow([BoxShadow::new(
+                Color::rgba(0, 0, 0, 102),
+                Offset::ZERO,
+                10.,
+                4.,
+            )]),
+        BoxDecoration::new()
+            .color(Color::BLACK)
+            .border(Border::new(1., Color::rgba(32, 32, 32, 255)))
+            .border_radius(BorderRadius::circular(10.)),
+    )
+}
+
+#[test]
+fn mounted_decoration_tween_uses_pinned_midpoint_and_endpoint_properties() {
+    use incular_widgets::{BorderRadius, BorderStyle, BoxShape};
+
+    let controller = AnimationController::new(DURATION);
+    let tween = pinned_decoration_tween(&controller);
+    let mut tree = mount(DecoratedBoxTransition::new(
+        tween.clone(),
+        SizedBox::square(40.),
+    ));
+    let initial = tween.value();
+    let [initial_shadow] = initial.box_shadow.as_slice() else {
+        panic!("initial shadow")
+    };
+    assert_eq!(initial.color, Some(Color::WHITE));
+    assert_eq!(initial_shadow.blur_radius, 10.);
+    assert_eq!(initial_shadow.spread_radius, 4.);
+    assert_eq!(initial_shadow.color, Color::rgba(0, 0, 0, 102));
+    assert!(painted_colors(&tree.paint()).contains(&Color::WHITE));
+
+    controller.set_value(0.5);
+    layout(&mut tree);
+    let mid = tween.value();
+    // The pinned color matcher accepts the float midpoint. Its ARGB32 is 128.
+    let gray = Color::rgba(128, 128, 128, 255);
+    assert_eq!(mid.color, Some(gray));
+    let side = mid.border.unwrap().left;
+    assert_eq!(side.width, 2.5);
+    assert_eq!(side.style, BorderStyle::Solid);
+    assert_eq!(side.color, Color::rgba(16, 16, 16, 255));
+    assert_eq!(mid.border_radius, Some(BorderRadius::circular(5.)));
+    assert_eq!(mid.shape, BoxShape::Rectangle);
+    let [shadow] = mid.box_shadow.as_slice() else {
+        panic!("midpoint shadow")
+    };
+    assert_eq!(shadow.blur_radius, 5.);
+    assert_eq!(shadow.spread_radius, 2.);
+    assert_eq!(shadow.color, initial_shadow.color);
+    assert!(painted_colors(&tree.paint()).contains(&gray));
+
+    controller.set_value(1.);
+    layout(&mut tree);
+    let last = tween.value();
+    assert_eq!(last.color, Some(Color::BLACK));
+    assert!(last.box_shadow.is_empty());
+    assert!(painted_colors(&tree.paint()).contains(&Color::BLACK));
+}
+
+#[test]
+fn ease_out_updates_foreground_decoration_paint_and_geometry() {
+    use incular_widgets::{BorderStyle, BoxShape};
+
+    let controller = AnimationController::new(DURATION);
+    let tween = pinned_decoration_tween(&controller).curve(Curve::EaseOut);
+    let child = Color::rgba(40, 100, 200, 255);
+    let mut tree = mount(
+        DecoratedBoxTransition::new(tween.clone(), Widget::box_(Size::new(40., 40.), child))
+            .position(DecorationPosition::Foreground),
+    );
+    let initial = tween.value();
+    let [shadow] = initial.box_shadow.as_slice() else {
+        panic!("initial shadow")
+    };
+    assert_eq!(initial.color, Some(Color::WHITE));
+    assert_eq!(
+        (shadow.blur_radius, shadow.spread_radius, shadow.color),
+        (10., 4., Color::rgba(0, 0, 0, 102))
+    );
+    let colors = painted_colors(&tree.paint());
+    assert!(
+        colors.iter().position(|color| *color == child).unwrap()
+            < colors
+                .iter()
+                .position(|color| *color == Color::WHITE)
+                .unwrap()
+    );
+
+    controller.set_value(0.5);
+    layout(&mut tree);
+    let mid = tween.value();
+    let gray = Color::rgba(81, 81, 81, 255);
+    assert_eq!(mid.color, Some(gray));
+    let side = mid.border.unwrap().left;
+    assert!((side.width - 1.9).abs() <= 0.1);
+    assert_eq!(side.style, BorderStyle::Solid);
+    assert_eq!(side.color, Color::rgba(22, 22, 22, 255));
+    assert!((mid.border_radius.unwrap().top_left.x - 6.8).abs() <= 0.1);
+    assert_eq!(mid.shape, BoxShape::Rectangle);
+    let [shadow] = mid.box_shadow.as_slice() else {
+        panic!("curved shadow")
+    };
+    assert!((shadow.blur_radius - 3.1).abs() <= 0.1);
+    assert!((shadow.spread_radius - 1.2).abs() <= 0.1);
+    assert_eq!(shadow.color, Color::rgba(0, 0, 0, 102));
+    let colors = painted_colors(&tree.paint());
+    assert!(
+        colors.iter().position(|color| *color == child).unwrap()
+            < colors.iter().position(|color| *color == gray).unwrap()
+    );
+}
+
+#[test]
+fn completed_decoration_transition_with_placeholder_lays_out_at_zero_area() {
+    use incular_config::TextDirection;
+    use incular_widgets::{Center, Directionality, GlobalKey, Placeholder};
+
+    let controller = AnimationController::new(Duration::from_secs(2));
+    controller.set_value(1.);
+    let decoration = TweenAnimation::new(
+        controller,
+        BoxDecoration::new().color(Color::BLACK),
+        BoxDecoration::new().color(Color::WHITE),
+    );
+    let key = GlobalKey::new();
+    let transition =
+        Widget::from(DecoratedBoxTransition::new(decoration, Placeholder::new())).with_key(key);
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, Center::new(transition)).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    let target = tree.element_with_key(&key.into()).unwrap();
+    assert_eq!(tree.element_bounds(target).unwrap().size, Size::ZERO);
+    let _ = tree.try_paint().unwrap();
+}
