@@ -180,16 +180,21 @@ from pathlib import Path
 import re
 import sys
 
+expected = Counter(sys.argv[1:])
 reported = []
 for line in Path("result.log").read_text(encoding="utf-8").splitlines():
     match = re.fullmatch(r"\d+:\d+ \+\d+: (.+)", line)
     if not match:
         continue
     name = match[1]
-    if name.startswith("loading ") or name in {"All tests passed!", "(setUpAll)", "(tearDownAll)"}:
+    if name.startswith("loading ") or name == "All tests passed!":
+        continue
+    # Expanded reporting prefixes group lifecycle hooks with the group path.
+    # A requested test whose literal name ends this way still counts.
+    if name not in expected and re.fullmatch(r"(?:.* )?\((?:setUpAll|tearDownAll)\)", name):
         continue
     reported.append(name)
-if Counter(reported) != Counter(sys.argv[1:]):
+if Counter(reported) != expected:
     raise SystemExit(f"Selected test names do not match the reporter: {reported!r}")
 PY
 fi
