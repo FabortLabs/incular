@@ -131,3 +131,19 @@ reference publication restores the character fallback. Incular
 verifies that same post-frame result; publication timing itself is
 not claimed to match. The one exact original and both endpoints
 of the authored probe passed, as did the adjacent shortcut targets.
+
+## Passive shortcut focus and semantics
+
+The exact pinned `shortcuts_test.dart:716,1209,1368` registrations
+passed. An empty mounted shortcut map still handles no keys. The
+matching scope now retains a passive focus node, named `Shortcuts`
+or `Shortcuts: <label>`. It cannot claim primary focus, while its
+children retain ordinary keyboard focus. Updating the label does
+not recreate the node.
+
+The semantics option defaults to on and adds an empty, unfocusable
+annotation for a blank child. Disabling it removes that annotation
+without changing keyboard routing. Incular's retained tree uses
+an implicit semantic root, so the single produced node corresponds
+to the one child of Flutter's explicit root. Three focused native
+checks plus the adjacent focus and shortcut targets passed.

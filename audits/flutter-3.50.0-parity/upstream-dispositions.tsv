@@ -3406,3 +3406,6 @@ packages/flutter/test/widgets/shortcuts_test.dart	201	LogicalKeySet.hashCode is 
 packages/flutter/test/widgets/shortcuts_test.dart	112	handles two keys	paired-match	upstream-logical-key-set.md#mounted-chords-and-hardware-state
 packages/flutter/test/widgets/shortcuts_test.dart	238	isActivatedBy works as expected	paired-match	upstream-logical-key-set.md#mounted-chords-and-hardware-state
 packages/flutter/test/widgets/shortcuts_test.dart	1964	Works correctly with Shortcuts too	paired-match	upstream-shortcut-comparisons.md#registrar-and-typed-action-precedence
+packages/flutter/test/widgets/shortcuts_test.dart	716	Default constructed Shortcuts has empty shortcuts	paired-match	upstream-shortcut-comparisons.md#passive-shortcut-focus-and-semantics
+packages/flutter/test/widgets/shortcuts_test.dart	1209	Shortcuts pass debug label to focus node.	paired-match	upstream-shortcut-comparisons.md#passive-shortcut-focus-and-semantics
+packages/flutter/test/widgets/shortcuts_test.dart	1368	Shortcuts does not insert a semantics node when includeSemantics is false	paired-match	upstream-shortcut-comparisons.md#passive-shortcut-focus-and-semantics

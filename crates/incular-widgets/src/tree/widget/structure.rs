@@ -2016,6 +2016,7 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
             &right.action_invocation_listener,
         )
         && left.owned_focus_permission == right.owned_focus_permission
+        && left.owned_focus_debug_label == right.owned_focus_debug_label
         && (left.owned_focus_permission.is_some() || left.focus_node == right.focus_node)
         && same_rc(&left.on_focus_change, &right.on_focus_change)
         && same_rc(&left.focus_behavior, &right.focus_behavior)

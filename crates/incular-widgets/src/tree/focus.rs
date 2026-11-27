@@ -187,6 +187,11 @@ pub(super) fn instantiate_owned_focus_node(widget: &mut Widget, previous: Option
         let notify = retained.is_none();
         let node = retained.unwrap_or_default();
         node.set_can_request_focus(can_request);
+        if callbacks.owned_focus_debug_label.is_some()
+            || previous.is_some_and(|old| old.owned_focus_debug_label.is_some())
+        {
+            node.set_debug_label(callbacks.owned_focus_debug_label.clone());
+        }
         if notify && let Some(creation) = creation {
             (creation.0)(node.clone());
         }

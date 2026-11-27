@@ -70,26 +70,60 @@ impl From<ActionScope> for Widget {
 #[derive(Clone)]
 pub struct ShortcutScope {
     shortcuts: Rc<incular_gestures::ErasedShortcutScope>,
+    include_semantics: bool,
+    debug_label: Option<Rc<str>>,
     child: Widget,
 }
 
 impl ShortcutScope {
     #[must_use]
     pub fn new<C: CommandId>(shortcuts: Rc<Shortcuts<C>>, child: impl Into<Widget>) -> Self {
-        Self { shortcuts: shortcuts.erased_scope(), child: child.into() }
+        Self {
+            shortcuts: shortcuts.erased_scope(),
+            include_semantics: true,
+            debug_label: None,
+            child: child.into(),
+        }
+    }
+
+    /// Sets the diagnostic suffix for the passive focus boundary.
+    #[must_use]
+    pub fn debug_label(mut self, label: impl AsRef<str>) -> Self {
+        self.debug_label = Some(Rc::from(format!("Shortcuts: {}", label.as_ref())));
+        self
+    }
+
+    /// Controls the passive accessibility annotation, not keyboard routing.
+    #[must_use]
+    pub fn include_semantics(mut self, include: bool) -> Self {
+        self.include_semantics = include;
+        self
     }
 }
 
 impl From<ShortcutScope> for Widget {
     fn from(scope: ShortcutScope) -> Self {
-        Widget::from_kind(WidgetKind::Gesture {
+        let widget = Widget::from_kind(WidgetKind::Gesture {
             behavior: crate::gestures::HitTestBehavior::DeferToChild,
             callbacks: Box::new(incular_gestures::GestureCallbacks {
                 shortcut_scope: Some(scope.shortcuts),
+                owned_focus_permission: Some(false),
+                owned_focus_debug_label: Some(
+                    scope.debug_label.unwrap_or_else(|| Rc::from("Shortcuts")),
+                ),
+                annotates_focus: true,
+                // This boundary never requests keyboard focus. Its optional
+                // accessibility annotation explicitly declares that fact.
+                include_semantics: false,
                 ..Default::default()
             }),
             child: scope.child,
-        })
+        });
+        if scope.include_semantics {
+            crate::Semantics::new(widget).focusable(false).into()
+        } else {
+            widget
+        }
     }
 }
 

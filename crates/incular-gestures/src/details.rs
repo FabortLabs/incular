@@ -764,6 +764,9 @@ pub struct GestureCallbacks {
     /// one node for the mounted element and applies this focus permission.
     #[doc(hidden)]
     pub owned_focus_permission: Option<bool>,
+    /// Diagnostic name installed on the retained, widget-owned focus node.
+    #[doc(hidden)]
+    pub owned_focus_debug_label: Option<Rc<str>>,
     #[doc(hidden)]
     pub owns_focus_scope: bool,
     /// Combined retained focus, hover, and focus-highlight behavior.

@@ -112,6 +112,7 @@ impl std::fmt::Debug for FocusNode {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("FocusNode")
+            .field("debug_label", &self.debug_label())
             .field("has_focus", &self.has_focus())
             .field("can_request_focus", &self.can_request_focus())
             .finish()
@@ -175,6 +176,7 @@ impl<E> NodeKeyEventHandler<E> {
 }
 
 struct FocusState {
+    debug_label: RefCell<Option<Rc<str>>>,
     scope_owner: Option<Weak<FocusScopeState>>,
     host_enclosing_scope: RefCell<Option<Weak<FocusScopeState>>>,
     host_parent: RefCell<Option<Weak<FocusState>>>,
@@ -297,6 +299,7 @@ impl FocusNode {
     fn with_scope_owner(scope_owner: Option<Weak<FocusScopeState>>) -> Self {
         Self {
             state: Rc::new(FocusState {
+                debug_label: RefCell::new(None),
                 scope_owner,
                 host_enclosing_scope: RefCell::new(None),
                 host_parent: RefCell::new(None),
@@ -326,6 +329,17 @@ impl FocusNode {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A diagnostic name; it does not change focus or accessibility.
+    #[must_use]
+    pub fn debug_label(&self) -> Option<Rc<str>> {
+        self.state.debug_label.borrow().clone()
+    }
+
+    /// Replaces the diagnostic name without notifying focus observers.
+    pub fn set_debug_label(&self, label: Option<Rc<str>>) {
+        *self.state.debug_label.borrow_mut() = label;
     }
 
     /// The currently installed typed keyboard callback.
