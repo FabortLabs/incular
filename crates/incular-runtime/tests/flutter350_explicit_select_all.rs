@@ -133,3 +133,146 @@ fn toolbar_reveals_selection_at_end_except_on_apple_but_keyboard_cause_does_not(
         assert_eq!(offset, 0., "keyboard cause on {platform:?}");
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+enum ClipboardCommand {
+    Copy,
+    Cut,
+    Paste,
+}
+
+fn verify_clipboard_scroll_cause(operation: ClipboardCommand) {
+    use incular_platform::TransferReadRequest;
+    use incular_runtime::TextShortcutPlatform::*;
+
+    for platform in [Android, Linux, Windows] {
+        for cause in [
+            SelectionChangedCause::Keyboard,
+            SelectionChangedCause::Toolbar,
+        ] {
+            let text = (0..64)
+                .map(|index| index.to_string())
+                .collect::<Vec<_>>()
+                .join("\n");
+            let controller = TextEditingController::with_text(&text);
+            let focus = FocusNode::new();
+            let mut runtime = Runtime::new(
+                EditableText::new(controller.clone())
+                    .text_direction(TextDirection::Ltr)
+                    .focus_node(focus.clone())
+                    .max_lines(Some(2))
+                    .size(Size::new(300., 32.))
+                    .into(),
+            )
+            .unwrap();
+            runtime.set_text_shortcut_platform(platform);
+            let bounds = Constraints::tight(Size::new(300., 32.));
+            focus.request_focus();
+            runtime.run_frame(bounds).unwrap();
+            let field = runtime.tree().root().unwrap();
+            controller.set_selection(TextSelection::new(0, 1));
+            runtime.run_frame(bounds).unwrap();
+            let scroll =
+                |runtime: &Runtime| runtime.tree().text_field_scroll_offset(field).unwrap().y;
+            let max = runtime.tree().editable_max_scroll_extent(field).unwrap();
+            assert!(
+                runtime
+                    .tree_mut()
+                    .text_field_scroll_to_document_boundary(field, true)
+            );
+            runtime.run_frame(bounds).unwrap();
+            assert_eq!(scroll(&runtime), max, "baseline: {platform:?}, {cause:?}");
+            runtime.set_clipboard_text("Clipboard data");
+            let acted = match operation {
+                ClipboardCommand::Copy => runtime.copy_text_selection(field, cause),
+                ClipboardCommand::Cut => runtime.cut_text_selection(field, cause),
+                ClipboardCommand::Paste => runtime.paste_text_selection(field, cause),
+            };
+            assert!(acted);
+            runtime.run_frame(bounds).unwrap();
+            let expected = if cause == SelectionChangedCause::Toolbar {
+                0.
+            } else {
+                max
+            };
+            assert_eq!(
+                scroll(&runtime),
+                expected,
+                "{operation:?}, {platform:?}, {cause:?}"
+            );
+            let clipboard = runtime
+                .read_clipboard(TransferReadRequest::all())
+                .unwrap()
+                .plain_text_value()
+                .unwrap()
+                .unwrap();
+            match operation {
+                ClipboardCommand::Copy => {
+                    assert_eq!(&*clipboard, "0");
+                    assert_eq!(controller.text(), text);
+                }
+                ClipboardCommand::Cut => {
+                    assert_eq!(&*clipboard, "0");
+                    assert_eq!(controller.text(), text[1..]);
+                }
+                ClipboardCommand::Paste => {
+                    assert_eq!(&*clipboard, "Clipboard data");
+                    assert_eq!(controller.text(), format!("Clipboard data{}", &text[1..]));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn direct_copy_reveals_only_with_a_toolbar_cause() {
+    verify_clipboard_scroll_cause(ClipboardCommand::Copy);
+}
+
+#[test]
+fn direct_cut_reveals_only_with_a_toolbar_cause() {
+    verify_clipboard_scroll_cause(ClipboardCommand::Cut);
+}
+
+#[test]
+fn direct_paste_reveals_only_with_a_toolbar_cause() {
+    verify_clipboard_scroll_cause(ClipboardCommand::Paste);
+}
+
+#[test]
+fn toolbar_paste_leaves_the_viewport_at_zero_when_the_new_caret_is_visible() {
+    use incular_text::TextStyle;
+
+    let old = "Lorem ipsum please paste here: \n".to_owned() + &".\n".repeat(50);
+    let controller = TextEditingController::with_text(&old);
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(
+        EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .focus_node(focus.clone())
+            .max_lines(None)
+            .style(TextStyle::new().font_size(36.))
+            .into(),
+    )
+    .unwrap();
+    let bounds = Constraints::tight(Size::new(600., 600.));
+    runtime.run_frame(bounds).unwrap();
+    let field = runtime.tree().root().unwrap();
+    let scroll = |runtime: &Runtime| runtime.tree().text_field_scroll_offset(field).unwrap().y;
+    assert!(runtime.tree().editable_max_scroll_extent(field).unwrap() > 0.);
+    assert_eq!(scroll(&runtime), 0.);
+    runtime.set_clipboard_text("Fairly long text to be pasted");
+    focus.request_focus();
+    controller.set_selection(TextSelection::collapsed(31));
+    runtime.run_frame(bounds).unwrap();
+
+    assert!(runtime.paste_text_selection(field, SelectionChangedCause::Toolbar));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(scroll(&runtime), 0.);
+    assert_eq!(
+        controller.text(),
+        format!("{}Fairly long text to be pasted{}", &old[..31], &old[31..])
+    );
+    assert_eq!(controller.selection(), TextSelection::collapsed(60));
+    assert!(focus.has_focus());
+}

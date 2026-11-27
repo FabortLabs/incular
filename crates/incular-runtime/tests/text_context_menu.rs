@@ -665,3 +665,26 @@ fn toolbar_copy_preserves_desktop_and_ios_selection_but_collapses_android_at_the
         );
     }
 }
+
+#[test]
+fn paste_button_replaces_selection_closes_the_live_toolbar_and_keeps_focus() {
+    let (mut runtime, controller, shown) = mount("Hello world", TextShortcutPlatform::Windows);
+    runtime.set_clipboard_text("Rust");
+    prepare_adaptive_menu(&mut runtime, &controller, TextSelection::new(6, 11));
+    let field = runtime.focused_element().unwrap();
+    let toolbar = runtime.tree().text_field_toolbar_state(field).unwrap();
+    let render = runtime.tree().render_id(field);
+    assert!(toolbar.is_showing());
+    last(&shown)
+        .button_items
+        .iter()
+        .find(|item| item.button_type() == ContextMenuButtonType::Paste)
+        .expect("nonempty clipboard enables Paste")
+        .press();
+    let runtime = process(runtime);
+    assert_eq!(controller.text(), "Hello Rust");
+    assert_eq!(controller.selection(), TextSelection::collapsed(10));
+    assert!(!toolbar.is_showing());
+    assert_eq!(runtime.focused_element(), Some(field));
+    assert_eq!(runtime.tree().render_id(field), render);
+}

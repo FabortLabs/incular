@@ -155,6 +155,11 @@ impl Runtime {
         }
         self.write_editor_clipboard(field, EditorClipboardOperation::Copy, controller.selected_text());
         if cause == SelectionChangedCause::Toolbar {
+            self.tree.text_field_bring_position_into_view(
+                field,
+                controller.selection().extent,
+                controller.caret_affinity(),
+            );
             if let Some(toolbar) = self.tree.text_field_toolbar_state(field) {
                 toolbar.hide();
             }
@@ -171,7 +176,7 @@ impl Runtime {
                 controller.reset_caret(self.input_now());
                 self.hide_text_field_handles(field);
             }
-            self.caret_reveal_key = None;
+            self.preserve_selection_scroll(field, &controller);
             self.frame_requested = true;
         }
         true
@@ -181,12 +186,47 @@ impl Runtime {
     /// fields, and collapsed selections, leave text and clipboard unchanged.
     #[must_use]
     pub fn cut_text_selection(&mut self, field: ElementId, cause: SelectionChangedCause) -> bool {
+        self.edit_selection_with_clipboard(field, cause, Self::cut_text_field_selection)
+    }
+
+    /// Pastes plain text into a mounted editor at its current valid selection.
+    /// A missing or failed clipboard read leaves the editor untouched.
+    #[must_use]
+    pub fn paste_text_selection(&mut self, field: ElementId, cause: SelectionChangedCause) -> bool {
+        self.edit_selection_with_clipboard(field, cause, |runtime, field, controller| {
+            runtime.paste_from_editor_clipboard(field, controller)
+        })
+    }
+
+    fn paste_from_editor_clipboard(
+        &mut self,
+        field: ElementId,
+        controller: &TextEditingController,
+    ) -> bool {
+        if !self.tree.text_field_is_editable(field) || controller.selection_if_set().is_none() {
+            return false;
+        }
+        let Some(text) = self.read_editor_clipboard(field) else {
+            return false;
+        };
+        controller.insert(&text);
+        true
+    }
+
+    fn edit_selection_with_clipboard(
+        &mut self,
+        field: ElementId,
+        cause: SelectionChangedCause,
+        edit: impl FnOnce(&mut Self, ElementId, &TextEditingController) -> bool,
+    ) -> bool {
         let Some(controller) = self.tree.text_controller(field) else {
             return false;
         };
         let previous = self.observed_editor_selection(field);
-        let _notifications = previous.is_some().then(|| controller.batch_user_edit_notifications());
-        if !self.cut_text_field_selection(field, &controller) {
+        let _notifications = previous
+            .is_some()
+            .then(|| controller.batch_user_edit_notifications());
+        if !edit(self, field, &controller) {
             return false;
         }
         self.report_editor_selection_delta(field, previous, cause);
@@ -194,6 +234,8 @@ impl Runtime {
         if cause == SelectionChangedCause::Toolbar {
             self.hide_text_field_overlays(field);
             self.caret_reveal_key = None;
+        } else {
+            self.preserve_selection_scroll(field, &controller);
         }
         self.frame_requested = true;
         true
@@ -382,13 +424,19 @@ impl Runtime {
                 self.write_editor_clipboard(field, EditorClipboardOperation::Copy, controller.selected_text());
                 true
             }
-            Cut => self.cut_text_field_selection(field, controller),
+            Cut => {
+                if !self.cut_text_field_selection(field, controller) {
+                    return false;
+                }
+                self.preserve_selection_scroll(field, controller);
+                true
+            }
             Paste => {
                 if !editable || controller.selection_if_set().is_none() {
                     return false;
                 }
-                if let Some(text) = self.read_editor_clipboard(field) {
-                    controller.insert(&text);
+                if self.paste_from_editor_clipboard(field, controller) {
+                    self.preserve_selection_scroll(field, controller);
                 }
                 true
             }

@@ -581,6 +581,10 @@ impl Runtime {
                 let _ = self.cut_text_selection(field, cause);
                 return;
             }
+            TextIntent::Paste => {
+                let _ = self.paste_text_selection(field, cause);
+                return;
+            }
             TextIntent::SelectAll => {
                 let _ = self.select_all_text(field, cause);
                 return;

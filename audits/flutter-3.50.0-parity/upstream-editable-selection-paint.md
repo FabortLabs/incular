@@ -52,3 +52,21 @@ while an explicit keyboard cause preserves the original offset. The
 pinned Android companion also passed; its other clipboard observations
 are tracked separately. All 20 focused native editor, clipboard and
 viewport tests passed.
+
+## Clipboard actions, selection cause and scroll
+
+All four pinned non-Apple variants of :13742 passed. The native direct
+commands reproduce the 64-line, two-line editor reset: Cut, Copy and
+Paste with a keyboard cause retain the bottom offset, while toolbar
+commands reveal the resulting selection or caret at the top. Toolbar
+Select All reveals the end; its keyboard cause stays at the top.
+Android and Fuchsia share one policy in Incular. Reverse selection
+and the real retained Paste button are separate controls: the button
+inserts the text, closes the live toolbar, and retains editor focus
+and render identity.
+
+Pinned :13797 also pairs: pasting the same string at byte 31 in a
+600×600 editor moves the caret after the insertion without scrolling
+the already-visible caret. Before the fix, native toolbar Copy left
+Linux at the bottom, and keyboard Cut pulled Android back to the top.
+All 33 focused native clipboard, command and toolbar tests passed.
