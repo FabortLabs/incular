@@ -102,9 +102,29 @@ impl<T, E> AsyncSnapshot<T, E> {
     }
 }
 
+type FutureCallback<T, E> = Box<dyn FnOnce(Result<T, E>)>;
+
 struct FutureCell<T, E> {
     outcome: RefCell<Option<Result<T, E>>>,
     changes: DependencySource,
+    callbacks: RefCell<Vec<(u64, FutureCallback<T, E>)>>,
+}
+
+pub(crate) struct UiFutureSubscription<T, E> {
+    cell: Weak<FutureCell<T, E>>,
+    id: u64,
+}
+
+impl<T, E> Drop for UiFutureSubscription<T, E> {
+    fn drop(&mut self) {
+        if let Some(cell) = self.cell.upgrade() {
+            let callback = {
+                let mut entries = cell.callbacks.borrow_mut();
+                entries.iter().position(|(id, _)| *id == self.id).map(|slot| entries.remove(slot))
+            };
+            drop(callback);
+        }
+    }
 }
 
 /// A value that becomes available later on the UI thread, like Dart's
@@ -145,6 +165,7 @@ impl<T: Clone, E: Clone> UiFuture<T, E> {
             cell: Rc::new(FutureCell {
                 outcome: RefCell::new(None),
                 changes: DependencySource::default(),
+                callbacks: RefCell::default(),
             }),
         };
         let completer = UiCompleter {
@@ -175,6 +196,23 @@ impl<T: Clone, E: Clone> UiFuture<T, E> {
     pub fn outcome(&self) -> Option<Result<T, E>> {
         self.cell.changes.track();
         self.cell.outcome.borrow().clone()
+    }
+
+    /// UI-thread completion for mounted effects that must not run in build.
+    /// The returned lease cancels a still-pending callback on drop.
+    pub(crate) fn listen_once(
+        &self,
+        callback: impl FnOnce(Result<T, E>) + 'static,
+    ) -> Option<UiFutureSubscription<T, E>> {
+        let existing = self.cell.outcome.borrow().clone();
+        if let Some(outcome) = existing {
+            callback(outcome);
+            return None;
+        }
+        static NEXT_SUBSCRIPTION: incular_core::IdGenerator = incular_core::IdGenerator::new();
+        let id = NEXT_SUBSCRIPTION.next();
+        self.cell.callbacks.borrow_mut().push((id, Box::new(callback)));
+        Some(UiFutureSubscription { cell: Rc::downgrade(&self.cell), id })
     }
 
     #[must_use]
@@ -210,8 +248,15 @@ impl<T: Clone, E: Clone> UiCompleter<T, E> {
         if cell.outcome.borrow().is_some() {
             return false;
         }
+        let callbacks = cell.callbacks.take();
+        let value = if callbacks.is_empty() { None } else { Some(outcome.clone()) };
         *cell.outcome.borrow_mut() = Some(outcome);
         cell.changes.notify();
+        if let Some(value) = value {
+            for (_, callback) in callbacks {
+                callback(value.clone());
+            }
+        }
         true
     }
 }

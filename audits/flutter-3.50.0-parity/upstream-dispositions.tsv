@@ -281,9 +281,9 @@ packages/flutter/test/widgets/color_filter_test.dart	119	ColorFiltered does not 
 packages/flutter/test/widgets/dismissible_test.dart	351	drag-left with DismissDirection.endToStart triggers dismiss (LTR)	partial-match	upstream-dismissible-direction-and-confirmation.md
 packages/flutter/test/widgets/dismissible_test.dart	383	drag-right with DismissDirection.endToStart triggers dismiss (RTL)	partial-match	upstream-dismissible-direction-and-confirmation.md
 packages/flutter/test/widgets/dismissible_test.dart	551	drag-left has no effect on dismissible with a high dismiss threshold	partial-match	upstream-dismissible-direction-and-confirmation.md
-packages/flutter/test/widgets/dismissible_test.dart	781	Pending confirmDismiss does not cause errors	reference-ran-incular-open	upstream-dismissible-direction-and-confirmation.md
-packages/flutter/test/widgets/dismissible_test.dart	843	Dismissible cannot be dragged with pending confirmDismiss	reference-ran-incular-open	upstream-dismissible-direction-and-confirmation.md
-packages/flutter/test/widgets/dismissible_test.dart	869	Drag to end and release - items does not get stuck if confirmDismiss returns false	reference-ran-incular-open	upstream-dismissible-direction-and-confirmation.md
+packages/flutter/test/widgets/dismissible_test.dart	781	Pending confirmDismiss does not cause errors	paired-match	upstream-dismissible-direction-and-confirmation.md#pending-confirmation-now-matches
+packages/flutter/test/widgets/dismissible_test.dart	843	Dismissible cannot be dragged with pending confirmDismiss	paired-match	upstream-dismissible-direction-and-confirmation.md#pending-confirmation-now-matches
+packages/flutter/test/widgets/dismissible_test.dart	869	Drag to end and release - items does not get stuck if confirmDismiss returns false	paired-match	upstream-dismissible-direction-and-confirmation.md#pending-confirmation-now-matches
 packages/flutter/test/widgets/dismissible_test.dart	891	Dismissible with null resizeDuration calls onDismissed immediately	paired-match	upstream-dismissible-direction-and-confirmation.md
 packages/flutter/test/animation/curves_test.dart	45	Curve is continuous	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md
 packages/flutter/test/animation/curves_test.dart	102	Bounce stays in bounds	paired-match	upstream-curves-intrinsic-layout-and-system-overlay.md

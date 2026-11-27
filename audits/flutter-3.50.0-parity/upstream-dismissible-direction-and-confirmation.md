@@ -27,3 +27,22 @@ false result pass in Flutter (:781, :843, :869). Incular's public
 it synchronously on slide completion, with no pending Future
 or public equivalent. These are reference-only rather than tests
 that simulate asynchronous state by calling a synchronous hook.
+
+## Pending confirmation now matches
+
+Pinned `:781`, `:843`, and `:869` now pair. The native fixture uses
+the original nine fixed-height list rows, padding and cross-axis slide.
+A completed drag and a 1000-pixel-per-second fling each ask exactly
+once. Removing the row while the decision is pending makes either
+answer a no-op, even if an application still owns a copy of the
+immutable descriptor. A second drag cannot move the row or ask again
+while pending. False and null both return the child to its exact
+original position. An accepted native control collapses it and calls
+dismissal once.
+
+`confirm_dismiss_async` uses the existing UI-thread future and
+completer. The mounted subscription detaches on removal; the pending
+decision does not spin frames, and completion wakes the next
+transition. The synchronous confirmation API remains available.
+
+The three selected Flutter references and 24 focused Rust tests passed.

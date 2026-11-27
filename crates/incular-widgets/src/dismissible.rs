@@ -3,7 +3,8 @@
 //! dismissal.
 
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
+    convert::Infallible,
     rc::{Rc, Weak},
     time::Duration,
 };
@@ -12,10 +13,12 @@ use incular_animation::{AnimationController, AnimationStatus, Curve};
 use incular_config::{Alignment, Constraints, TextDirection};
 use incular_core::{DragStartBehavior, Offset, Size};
 
+use crate::async_builders::UiFutureSubscription;
 use crate::gestures::{DragEndDetails, DragStartDetails, DragUpdateDetails};
+use crate::tree::RetainedState;
 use crate::{
     Align, ClipRect, FractionalTranslation, GestureCallbacks, GestureDetector, HitTestBehavior,
-    Positioned, SizedBox, Stack, Widget,
+    Positioned, SizedBox, Stack, UiFuture, Widget,
 };
 
 /// `_kMinFlingVelocity`.
@@ -76,6 +79,14 @@ pub struct DismissUpdateDetails {
     pub progress: f32,
 }
 
+type DismissConfirmation = UiFuture<Option<bool>, Infallible>;
+
+#[derive(Clone)]
+enum ConfirmDismiss {
+    Immediate(Rc<dyn Fn(DismissDirection) -> bool>),
+    Async(Rc<dyn Fn(DismissDirection) -> DismissConfirmation>),
+}
+
 /// A child that can be dismissed by dragging it in the given direction.
 ///
 /// When the drag ends past the direction's threshold (a fraction of the
@@ -94,7 +105,7 @@ pub struct Dismissible {
     child: Widget,
     background: Option<Widget>,
     secondary_background: Option<Widget>,
-    confirm_dismiss: Option<Rc<dyn Fn(DismissDirection) -> bool>>,
+    confirm_dismiss: Option<ConfirmDismiss>,
     on_resize: Option<Rc<dyn Fn()>>,
     on_update: Option<Rc<dyn Fn(DismissUpdateDetails)>>,
     on_dismissed: Option<Rc<dyn Fn(DismissDirection)>>,
@@ -153,7 +164,19 @@ impl Dismissible {
     /// slides it back.
     #[must_use]
     pub fn confirm_dismiss(mut self, confirm: impl Fn(DismissDirection) -> bool + 'static) -> Self {
-        self.confirm_dismiss = Some(Rc::new(confirm));
+        self.confirm_dismiss = Some(ConfirmDismiss::Immediate(Rc::new(confirm)));
+        self
+    }
+
+    /// Waits for an asynchronous decision after the slide. While pending,
+    /// another drag cannot move the child or trigger another confirmation.
+    /// Only `Some(true)` dismisses; `None` and `Some(false)` slide back.
+    #[must_use]
+    pub fn confirm_dismiss_async(
+        mut self,
+        confirm: impl Fn(DismissDirection) -> UiFuture<Option<bool>, Infallible> + 'static,
+    ) -> Self {
+        self.confirm_dismiss = Some(ConfirmDismiss::Async(Rc::new(confirm)));
         self
     }
 
@@ -235,6 +258,9 @@ struct DismissState {
     text_direction: Cell<TextDirection>,
     resizing: Cell<bool>,
     dismissed: Cell<bool>,
+    mounted: Cell<bool>,
+    confirming: Cell<bool>,
+    confirmation: RefCell<Option<UiFutureSubscription<Option<bool>, Infallible>>>,
     revision: Rc<Cell<u64>>,
 }
 
@@ -287,7 +313,11 @@ impl DismissState {
 
     /// `_handleDragStart`.
     fn drag_start(&self, _details: DragStartDetails) {
-        if self.resizing.get() || self.dismissed.get() {
+        if !self.mounted.get()
+            || self.confirming.get()
+            || self.resizing.get()
+            || self.dismissed.get()
+        {
             return;
         }
         self.drag_underway.set(true);
@@ -356,7 +386,7 @@ impl DismissState {
     }
 
     /// `_handleDragEnd`.
-    fn drag_end(&self, details: DragEndDetails) {
+    fn drag_end(self: &Rc<Self>, details: DragEndDetails) {
         if !self.drag_underway.get() || self.move_controller.is_active() {
             return;
         }
@@ -401,19 +431,52 @@ impl DismissState {
     }
 
     /// `_handleMoveCompleted`.
-    fn move_completed(&self) {
+    fn move_completed(self: &Rc<Self>) {
+        if !self.mounted.get()
+            || self.confirming.get()
+            || self.resizing.get()
+            || self.dismissed.get()
+        {
+            return;
+        }
         if self.dismiss_threshold() >= 1.0 {
             self.move_controller.reverse_on_next_tick();
             return;
         }
         let direction = self.dismiss_direction();
-        let confirmed = self
-            .config
-            .confirm_dismiss
-            .as_ref()
-            .is_none_or(|confirm| confirm(direction));
+        self.confirming.set(true);
+        match self.config.confirm_dismiss.as_ref() {
+            Some(ConfirmDismiss::Async(confirm)) => {
+                let weak = Rc::downgrade(self);
+                let subscription = confirm(direction).listen_once(move |outcome| {
+                    let Ok(answer) = outcome;
+                    if let Some(state) = weak.upgrade()
+                        && state.mounted.get()
+                        && state.confirming.get()
+                    {
+                        state.confirmed(direction, answer == Some(true));
+                        incular_animation::scheduler::schedule_frame();
+                    }
+                });
+                if self.confirming.get() && self.mounted.get() {
+                    self.confirmation.replace(subscription);
+                }
+            }
+            Some(ConfirmDismiss::Immediate(confirm)) => {
+                self.confirmed(direction, confirm(direction));
+            }
+            None => self.confirmed(direction, true),
+        }
+    }
+
+    fn confirmed(&self, direction: DismissDirection, confirmed: bool) {
+        if !self.mounted.get() || !self.confirming.replace(false) {
+            return;
+        }
+        self.confirmation.take();
         if !confirmed {
             self.move_controller.reverse_on_next_tick();
+            self.rebuild();
             return;
         }
         // `_startResizeAnimation`.
@@ -428,7 +491,8 @@ impl DismissState {
     }
 
     fn finish(&self, direction: DismissDirection) {
-        if !self.dismissed.replace(true)
+        if self.mounted.get()
+            && !self.dismissed.replace(true)
             && let Some(callback) = &self.config.on_dismissed
         {
             callback(direction);
@@ -436,7 +500,10 @@ impl DismissState {
     }
 
     /// `_handleDismissUpdateValueChanged` and `_handleDismissStatusChanged`.
-    fn move_changed(&self, value: f32) {
+    fn move_changed(self: &Rc<Self>, value: f32) {
+        if !self.mounted.get() {
+            return;
+        }
         if let Some(callback) = &self.config.on_update {
             let previous = self.threshold_reached.get();
             let reached = value > self.dismiss_threshold();
@@ -459,6 +526,9 @@ impl DismissState {
 
     /// `_handleResizeProgressChanged`.
     fn resize_changed(&self) {
+        if !self.mounted.get() {
+            return;
+        }
         let Some(resize) = &self.resize_controller else {
             return;
         };
@@ -577,8 +647,75 @@ impl DismissState {
     }
 }
 
+#[derive(Default)]
+struct MountedDismissible {
+    view: RefCell<Option<(Rc<Dismissible>, Rc<DismissState>, Widget)>>,
+}
+
+impl MountedDismissible {
+    fn view(&self, config: &Rc<Dismissible>) -> Widget {
+        let mut current = self.view.borrow_mut();
+        if let Some((previous, _, view)) = current.as_ref()
+            && Rc::ptr_eq(previous, config)
+        {
+            return view.clone();
+        }
+        if let Some((_, old, _)) = current.take() {
+            old.deactivate();
+        }
+        let (state, view) = config.as_ref().clone().build_view();
+        *current = Some((config.clone(), state, view.clone()));
+        view
+    }
+}
+
+impl RetainedState for MountedDismissible {
+    const DISPOSE_ON_UNMOUNT: bool = true;
+
+    fn dispose(&self) {
+        if let Some((_, old, _)) = self.view.take() {
+            old.deactivate();
+        }
+    }
+
+    fn rebind_revision(&self, _revision: Rc<Cell<u64>>) {}
+}
+
+impl Drop for MountedDismissible {
+    fn drop(&mut self) {
+        self.dispose();
+    }
+}
+
+impl DismissState {
+    fn deactivate(&self) {
+        self.mounted.set(false);
+        self.confirming.set(false);
+        self.confirmation.take();
+        self.move_controller.stop();
+        if let Some(resize) = &self.resize_controller {
+            resize.stop();
+        }
+    }
+}
+
 impl From<Dismissible> for Widget {
     fn from(value: Dismissible) -> Self {
+        if matches!(value.confirm_dismiss, Some(ConfirmDismiss::Async(_))) {
+            let config = Rc::new(value);
+            Widget::mount_scoped_builder(
+                |_| MountedDismissible::default(),
+                move |state, _| state.view(&config),
+            )
+        } else {
+            value.build_view().1
+        }
+    }
+}
+
+impl Dismissible {
+    fn build_view(self) -> (Rc<DismissState>, Widget) {
+        let value = self;
         let revision = Rc::new(Cell::new(0_u64));
         let move_controller = AnimationController::new(value.movement_duration);
         let resize_controller = value.resize_duration.map(AnimationController::new);
@@ -597,6 +734,9 @@ impl From<Dismissible> for Widget {
             text_direction: Cell::new(TextDirection::Ltr),
             resizing: Cell::new(false),
             dismissed: Cell::new(false),
+            mounted: Cell::new(true),
+            confirming: Cell::new(false),
+            confirmation: RefCell::new(None),
             revision: revision.clone(),
         });
         let weak: Weak<DismissState> = Rc::downgrade(&state);
@@ -659,7 +799,10 @@ impl From<Dismissible> for Widget {
             let state = state.clone();
             Rc::new(move |details| state.drag_update(details))
         };
-        let end = Rc::new(move |details| state.drag_end(details));
+        let end = {
+            let state = state.clone();
+            Rc::new(move |details| state.drag_end(details))
+        };
         let mut callbacks = GestureCallbacks {
             drag_start_behavior,
             ..GestureCallbacks::default()
@@ -673,9 +816,12 @@ impl From<Dismissible> for Widget {
             callbacks.on_vertical_drag_update = Some(update);
             callbacks.on_vertical_drag_end = Some(end);
         }
-        GestureDetector::new(ticked)
-            .callbacks(callbacks)
-            .behavior(behavior)
-            .into()
+        (
+            state,
+            GestureDetector::new(ticked)
+                .callbacks(callbacks)
+                .behavior(behavior)
+                .into(),
+        )
     }
 }
