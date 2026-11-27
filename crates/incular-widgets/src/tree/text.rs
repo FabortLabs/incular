@@ -488,91 +488,25 @@ impl WidgetTree {
     /// does (to its leading edge when scrolled past it, else to its trailing
     /// edge when short of it). Flutter animates for 100 ms; this jumps.
     /// Returns whether any viewport moved.
-    pub fn text_field_show_caret_on_screen(&mut self, id: ElementId) -> bool {
+    pub fn text_field_show_caret_on_screen(&self, id: ElementId) -> bool {
         let Some(element) = self.elements.get(id.0) else {
             return false;
         };
         let WidgetKind::TextField(spec) = element.widget.kind() else {
             return false;
         };
-        let padding = spec.scroll_padding;
-        let Some(snapshot) = self.text_field_input_geometry(id) else {
+        let Some(selection) = spec.controller.selection_if_set() else {
             return false;
         };
-        let caret = snapshot.caret_rect;
-        let mut top = caret.origin.y - padding.top;
-        let mut bottom = caret.origin.y + caret.size.height + padding.bottom;
-        let mut left = caret.origin.x - padding.left;
-        let mut right = caret.origin.x + caret.size.width + padding.right;
-        let mut moved = false;
-        let Some(start) = self.parent(id) else {
+        let Some(target) = self
+            .editable_local_caret_rect(id, selection.extent, spec.controller.caret_affinity())
+            .and_then(|rect| spec.scroll_padding.inflate_rect(rect))
+        else {
             return false;
         };
-        for (viewport, controller, axis, reverse, _) in self.scrollable_viewport_chain(start) {
-            let Some(bounds) = self.element_bounds(viewport) else {
-                continue;
-            };
-            // Main-axis edges in the scroll direction: a reversed viewport's
-            // leading edge is its bottom (or right) edge.
-            let (rect_lead, rect_trail, view_lead, view_trail) = match (axis, reverse) {
-                (Axis::Vertical, false) => (
-                    top,
-                    bottom,
-                    bounds.origin.y,
-                    bounds.origin.y + bounds.size.height,
-                ),
-                (Axis::Vertical, true) => (
-                    -bottom,
-                    -top,
-                    -(bounds.origin.y + bounds.size.height),
-                    -bounds.origin.y,
-                ),
-                (Axis::Horizontal, false) => (
-                    left,
-                    right,
-                    bounds.origin.x,
-                    bounds.origin.x + bounds.size.width,
-                ),
-                (Axis::Horizontal, true) => (
-                    -right,
-                    -left,
-                    -(bounds.origin.x + bounds.size.width),
-                    -bounds.origin.x,
-                ),
-            };
-            let (view_lead, view_trail) = self
-                .sliver_reveal_geometry(viewport, id)
-                .reserve(view_lead, view_trail);
-            let current = controller.offset();
-            let leading = current + (rect_lead - view_lead);
-            let trailing = current + (rect_trail - view_trail);
-            let target = if current > leading {
-                leading
-            } else if current < trailing {
-                trailing
-            } else {
-                continue;
-            };
-            let target = target.clamp(0., controller.max_offset());
-            if !controller.jump_to(target) {
-                continue;
-            }
-            moved = true;
-            // The content, and the rect with it, moves against the scroll.
-            let delta = target - current;
-            let shift = if reverse { delta } else { -delta };
-            match axis {
-                Axis::Vertical => {
-                    top += shift;
-                    bottom += shift;
-                }
-                Axis::Horizontal => {
-                    left += shift;
-                    right += shift;
-                }
-            }
-        }
-        moved
+        // Automatic caret reveal follows the same implicit-scrolling policy
+        // and pinned sliver geometry as every other ShowOnScreen request.
+        crate::Scrollable::show_on_screen(self, id, crate::ShowOnScreen::new().rect(target)) != 0
     }
     /// Flutter's `EditableTextState._scrollToDocumentBoundary`: brings the
     /// start or end of the text into view without moving the selection.

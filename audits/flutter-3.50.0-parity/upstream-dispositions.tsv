@@ -3053,3 +3053,7 @@ packages/flutter/test/widgets/focus_traversal_test.dart	20	Find the initial focu
 packages/flutter/test/widgets/focus_traversal_test.dart	61	Find the initial focus if there is none yet and traversing backwards.	paired-match	upstream-node-sequential-focus.md
 packages/flutter/test/widgets/focus_traversal_test.dart	108	focus traversal should work case 1	paired-match	upstream-node-sequential-focus.md
 packages/flutter/test/widgets/focus_traversal_test.dart	158	focus traversal should work case 2	paired-match	upstream-node-sequential-focus.md
+packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	63	tapping on a partly visible editable brings it fully on screen	paired-match	upstream-editable-reveal.md
+packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	103	tapping on a partly visible editable brings it fully on screen with scrollInsets	paired-match	upstream-editable-reveal.md
+packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	148	editable comes back on screen when entering text while it is off-screen	paired-match	upstream-editable-reveal.md
+packages/flutter/test/widgets/editable_text_show_on_screen_test.dart	194	entering text does not scroll when scrollPhysics.allowImplicitScrolling = false	paired-match	upstream-editable-reveal.md
