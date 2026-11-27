@@ -6,7 +6,8 @@ struct Params {
   // Bilinear tap pairs after the centre tap.
   radius: u32,
   mode: u32,
-  _padding: vec2<u32>,
+  sampling_mode: u32,
+  _padding: u32,
   // [0].x: centre weight. [p], p >= 1: x = first tap k of the pair, y = the
   // pair's linear-filtered offset (k*w_k + (k+1)*w_k1) / (w_k + w_k1),
   // z = w_k, w = w_k1 (zero for a lone last tap).
@@ -24,16 +25,18 @@ struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32> 
   return out;
 }
 fn inside(px: vec2<f32>) -> bool {
-  return px.x >= 0. && px.y >= 0. && px.x < params.source_size.x && px.y < params.source_size.y;
+  return params.sampling_mode != 0u ||
+    (px.x >= 0. && px.y >= 0. && px.x < params.source_size.x && px.y < params.source_size.y);
 }
 // The source at `px` (texel units, texel k at [k, k + 1)), bilinear between
-// texel centres; transparent outside the source.
+// texel centres. The caller handles transparent edges for decal; the
+// other tile modes use the bound sampler.
 fn fetch(px: vec2<f32>) -> vec4<f32> {
   return textureSampleLevel(source, source_sampler, (px + vec2<f32>(0.5)) / params.source_size, 0.);
 }
 // Taps k and k + 1 on one side (`side` = +1 or -1) of `base`. One linear
 // fetch between them when both lie in the source; otherwise only the one
-// inside, at its own centre, so the transparent edge never blends in.
+// inside, at its own centre, so a decal edge preserves its transparent tap.
 fn pair(base: vec2<f32>, tap: vec4<f32>, side: f32) -> vec4<f32> {
   let first = base + params.direction * (side * tap.x);
   let second = base + params.direction * (side * (tap.x + 1.));

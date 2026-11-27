@@ -640,6 +640,7 @@ impl WgpuRenderer {
             input: effect,
             output: effect,
             sigma: [sigma_x_physical, sigma_y_physical],
+            tile_mode: incular_painting::TileMode::Decal,
             downsample_factor,
         };
         let mut passes = self.begin_effect_passes("incular blur passes");
@@ -728,8 +729,10 @@ impl WgpuRenderer {
             input,
             output,
             sigma,
+            tile_mode,
             downsample_factor: factor,
         } = *job;
+        let sampling_mode = sampling_code(tile_mode);
         let final_target = self.take_effect_temp(output.width, output.height);
         self.counters.blur_output_texels += output.area();
         if factor <= 1 {
@@ -749,6 +752,7 @@ impl WgpuRenderer {
                     [output.width as f32, input.height as f32],
                     [1., 0.],
                     &kernel_x,
+                    sampling_mode,
                 ),
                 true,
             )?;
@@ -763,6 +767,7 @@ impl WgpuRenderer {
                     [output.width as f32, output.height as f32],
                     [0., 1.],
                     &kernel_y,
+                    sampling_mode,
                 ),
                 true,
             )?;
@@ -789,6 +794,7 @@ impl WgpuRenderer {
                 low_size,
                 [scale, scale],
                 3,
+                sampling_mode,
             ),
             false,
         )?;
@@ -799,7 +805,14 @@ impl WgpuRenderer {
             passes,
             &downsample.color_view,
             &horizontal.color_view,
-            &blur_params([0., 0.], low_size, low_size, [1., 0.], &kernel_x),
+            &blur_params(
+                [0., 0.],
+                low_size,
+                low_size,
+                [1., 0.],
+                &kernel_x,
+                sampling_mode,
+            ),
             true,
         )?;
         self.counters.blur_horizontal_passes += 1;
@@ -807,7 +820,14 @@ impl WgpuRenderer {
             passes,
             &horizontal.color_view,
             &vertical.color_view,
-            &blur_params([0., 0.], low_size, low_size, [0., 1.], &kernel_y),
+            &blur_params(
+                [0., 0.],
+                low_size,
+                low_size,
+                [0., 1.],
+                &kernel_y,
+                sampling_mode,
+            ),
             true,
         )?;
         self.counters.blur_vertical_passes += 1;
@@ -824,6 +844,7 @@ impl WgpuRenderer {
                 [output.width as f32, output.height as f32],
                 [1. / scale, 1. / scale],
                 1,
+                sampling_mode,
             ),
             false,
         )?;
@@ -997,7 +1018,11 @@ impl WgpuRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.blur_sampler),
+                    resource: wgpu::BindingResource::Sampler(match params.sampling_mode {
+                        2 => &self.tiled_blur_samplers[0],
+                        3 => &self.tiled_blur_samplers[1],
+                        _ => &self.blur_sampler,
+                    }),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -1097,7 +1122,7 @@ pub(super) struct EffectPasses {
 
 /// One Gaussian blur, placed in a common frame of device pixels: where its
 /// source texture lies, which pixels it reads and which it produces.
-/// Outside the source the image is transparent.
+/// The chosen tile mode defines how samples outside the source are read.
 #[derive(Clone, Copy)]
 pub(super) struct BlurJob<'a> {
     pub(super) source: &'a wgpu::TextureView,
@@ -1110,7 +1135,18 @@ pub(super) struct BlurJob<'a> {
     pub(super) output: PixelRect,
     /// Physical sigma per axis.
     pub(super) sigma: [f32; 2],
+    pub(super) tile_mode: incular_painting::TileMode,
     pub(super) downsample_factor: u32,
+}
+
+fn sampling_code(mode: incular_painting::TileMode) -> u32 {
+    use incular_painting::TileMode;
+    match mode {
+        TileMode::Decal => 0,
+        TileMode::Clamp => 1,
+        TileMode::Repeated => 2,
+        TileMode::Mirror => 3,
+    }
 }
 
 fn blur_params(
@@ -1119,6 +1155,7 @@ fn blur_params(
     output_size: [f32; 2],
     direction: [f32; 2],
     kernel: &BlurKernel,
+    sampling_mode: u32,
 ) -> GpuBlurParams {
     GpuBlurParams {
         source_origin,
@@ -1127,7 +1164,8 @@ fn blur_params(
         direction,
         radius: kernel.pairs,
         mode: 0,
-        _padding: [0; 2],
+        sampling_mode,
+        _padding: 0,
         weights: kernel.weights,
     }
 }
@@ -1141,6 +1179,7 @@ fn resample_params(
     output_size: [f32; 2],
     direction: [f32; 2],
     mode: u32,
+    sampling_mode: u32,
 ) -> GpuBlurParams {
     GpuBlurParams {
         source_origin,
@@ -1149,7 +1188,8 @@ fn resample_params(
         direction,
         radius: 0,
         mode,
-        _padding: [0; 2],
+        sampling_mode,
+        _padding: 0,
         weights: [0.; BLUR_WEIGHT_SLOTS],
     }
 }

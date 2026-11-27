@@ -7,6 +7,12 @@ bounds in the resolved blur. The original filter is not rewritten for
 different bounds; composed stages resolve in inner-to-outer order.
 
 These are value and resolution contracts, not GPU sampling parity.
-A sampled blur remains explicitly unsupported at the current retained
-execution boundary rather than silently dropping its edge mode or
-bounds. The wgpu implementation and pixel tests remain open.
+
+The wgpu backdrop renderer now executes unbounded sampled blur. Two
+production-shader readbacks verify distinct RGBA samples for all four
+tile modes (decal, clamp, repeat, mirror) at a texture edge, including
+the downsample input. The run required a real wgpu adapter and used
+Mesa's software OpenGL adapter. Bounded blur and sampled blur applied
+to an isolated child remain unsupported. The readbacks do not verify
+Flutter's nominal kernel, large-sigma resampling, or platform pixel
+equality and add no upstream-case credit.

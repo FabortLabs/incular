@@ -63,7 +63,18 @@ impl WgpuRenderer {
                 let mut stages = Vec::new();
                 for stage in filter.stages() {
                     stages.push(match stage {
-                        incular_painting::ImageFilter::Blur(blur) => BackdropStage::Blur(blur),
+                        incular_painting::ImageFilter::Blur(blur) => BackdropStage::Blur {
+                            blur,
+                            tile_mode: incular_painting::TileMode::Decal,
+                        },
+                        incular_painting::ImageFilter::SampledBlur(sampled)
+                            if sampled.bounds.is_none() =>
+                        {
+                            BackdropStage::Blur {
+                                blur: sampled.blur,
+                                tile_mode: sampled.tile_mode,
+                            }
+                        }
                         incular_painting::ImageFilter::Matrix(matrix) => {
                             // A singular matrix leaves nothing to sample.
                             let Some(sampling) = incular_painting::backdrop_matrix_sampling(
@@ -261,6 +272,7 @@ impl WgpuRenderer {
                     input: region.input,
                     output: region.output,
                     sigma,
+                    tile_mode: incular_painting::TileMode::Decal,
                     downsample_factor,
                 };
                 let blurred = self.encode_blur(&mut passes, &job);
@@ -296,7 +308,7 @@ impl WgpuRenderer {
                         [covered.width as f32, covered.height as f32]
                     };
                     let next = match *stage {
-                        BackdropStage::Blur(blur) => {
+                        BackdropStage::Blur { blur, tile_mode } => {
                             let sigma = [
                                 normalize_sigma(blur.sigma_x * scale),
                                 normalize_sigma(blur.sigma_y * scale),
@@ -310,6 +322,7 @@ impl WgpuRenderer {
                                 input: region.input,
                                 output: region.output,
                                 sigma,
+                                tile_mode,
                                 downsample_factor: choose_blur_downsample_factor(
                                     sigma[0].max(sigma[1]),
                                 ),
@@ -428,7 +441,8 @@ fn matrix_params(
         direction: [1., 1.],
         radius: 0,
         mode: 2,
-        _padding: [0; 2],
+        sampling_mode: 0,
+        _padding: 0,
         weights,
     }
 }

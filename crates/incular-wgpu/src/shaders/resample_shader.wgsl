@@ -5,7 +5,8 @@ struct Params {
   direction: vec2<f32>,
   radius: u32,
   mode: u32,
-  _padding: vec2<u32>,
+  sampling_mode: u32,
+  _padding: u32,
   weights: array<vec4<f32>, 52>,
 };
 struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32> };
@@ -24,6 +25,9 @@ struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32> 
 // samples the boundary between them (a 50/50 bilinear mix); one inside
 // samples that texel's centre, so the transparent outside never blends in.
 fn box_axis(start: f32, size: f32) -> vec2<f32> {
+  if (params.sampling_mode != 0u) {
+    return vec2<f32>(start + 1., 2.);
+  }
   let first = start >= 0. && start < size;
   let second = start + 1. >= 0. && start + 1. < size;
   if (first && second) {
@@ -41,7 +45,8 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
   if (params.mode == 3u) {
     // Box downsample by `direction` (the factor): the average of the
     // factor x factor source block under this output pixel, in 2x2
-    // bilinear taps, transparent outside the source.
+    // bilinear taps. Decal samples transparent outside the source; other
+    // modes use the bound sampler.
     let factor = params.direction;
     let start = floor(input.uv * params.output_size) * factor - params.source_origin;
     let taps = max(vec2<i32>(factor * 0.5), vec2<i32>(1));
@@ -82,7 +87,8 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
       px = floor(px) + vec2<f32>(0.5);
     }
   }
-  if (px.x < 0. || px.y < 0. || px.x >= params.source_size.x || px.y >= params.source_size.y) {
+  if (params.sampling_mode == 0u &&
+      (px.x < 0. || px.y < 0. || px.x >= params.source_size.x || px.y >= params.source_size.y)) {
     return vec4<f32>(0.);
   }
   return textureSampleLevel(source, source_sampler, px / params.source_size, 0.);

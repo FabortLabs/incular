@@ -159,7 +159,10 @@ pub(crate) struct GpuBlurParams {
     pub(crate) direction: [f32; 2],
     pub(crate) radius: u32,
     pub(crate) mode: u32,
-    pub(crate) _padding: [u32; 2],
+    /// 0 samples transparent outside the source; 1, 2 and 3 select the
+    /// clamp, repeated and mirrored hardware samplers.
+    pub(crate) sampling_mode: u32,
+    pub(crate) _padding: u32,
     pub(crate) weights: [f32; BLUR_WEIGHT_SLOTS],
 }
 #[repr(C)]
@@ -273,6 +276,7 @@ pub(crate) struct SharedPipelineResources {
     pub(crate) composite_sampler: wgpu::Sampler,
     pub(crate) blur_bind_group_layout: wgpu::BindGroupLayout,
     pub(crate) blur_sampler: wgpu::Sampler,
+    pub(crate) tiled_blur_samplers: [wgpu::Sampler; 2],
     pub(crate) color_matrix_bind_group_layout: wgpu::BindGroupLayout,
     pub(crate) color_matrix_sampler: wgpu::Sampler,
     pub(crate) blend_bind_group_layout: wgpu::BindGroupLayout,
@@ -1033,6 +1037,18 @@ pub(crate) async fn create_shared_pipeline_resources(
         mipmap_filter: wgpu::MipmapFilterMode::Nearest,
         ..Default::default()
     });
+    let tiled_blur_samplers =
+        [wgpu::AddressMode::Repeat, wgpu::AddressMode::MirrorRepeat].map(|address_mode| {
+            device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("incular gaussian tiled sampler"),
+                address_mode_u: address_mode,
+                address_mode_v: address_mode,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+                ..Default::default()
+            })
+        });
     let color_matrix_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("incular color matrix sampler"),
         address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -1172,6 +1188,7 @@ pub(crate) async fn create_shared_pipeline_resources(
         composite_sampler,
         blur_bind_group_layout,
         blur_sampler,
+        tiled_blur_samplers,
         color_matrix_bind_group_layout,
         color_matrix_sampler,
         blend_bind_group_layout,

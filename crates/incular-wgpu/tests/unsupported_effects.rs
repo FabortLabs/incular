@@ -217,3 +217,35 @@ fn composed_backdrop_filters_execute_and_morphology_reports_unsupported() {
         Some(RendererError::UnsupportedBackdropFilter)
     ));
 }
+
+#[test]
+fn sampled_backdrops_accept_all_unbounded_tile_modes_but_not_bounded_sampling() {
+    use incular_rendering::{ImageFilterConfig, ImageFilterContext, TileMode};
+
+    let bounds = Rect::from_origin_size(Offset::new(5., 6.), Size::new(20., 15.));
+    let context = ImageFilterContext { bounds };
+    for mode in [
+        TileMode::Decal,
+        TileMode::Clamp,
+        TileMode::Repeated,
+        TileMode::Mirror,
+    ] {
+        for bounded in [false, true] {
+            let mut command = backdrop_command(0., true, BlendMode::SrcOver);
+            let PaintCommand::PushBackdropFilter { image_filter, .. } = &mut command else {
+                unreachable!();
+            };
+            let filter = ImageFilterConfig::blur_with_sampling(4., 2., mode, bounded);
+            *image_filter = Some(filter.resolve(context).into());
+            let result = unsupported_effect(&command);
+            if bounded {
+                assert!(matches!(
+                    result,
+                    Some(RendererError::UnsupportedBackdropFilter)
+                ));
+            } else {
+                assert!(result.is_none(), "{mode:?}: {result:?}");
+            }
+        }
+    }
+}

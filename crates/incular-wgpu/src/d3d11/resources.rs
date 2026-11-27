@@ -336,15 +336,20 @@ impl Device {
     }
     pub fn create_sampler(&self, d: &::wgpu::SamplerDescriptor<'_>) -> Sampler {
         let mut raw = None;
+        let address = |mode| match mode {
+            ::wgpu::AddressMode::Repeat => D3D11_TEXTURE_ADDRESS_WRAP,
+            ::wgpu::AddressMode::MirrorRepeat => D3D11_TEXTURE_ADDRESS_MIRROR,
+            _ => D3D11_TEXTURE_ADDRESS_CLAMP,
+        };
         let desc = D3D11_SAMPLER_DESC {
             Filter: if d.mag_filter == ::wgpu::FilterMode::Linear {
                 D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT
             } else {
                 D3D11_FILTER_MIN_MAG_MIP_POINT
             },
-            AddressU: D3D11_TEXTURE_ADDRESS_CLAMP,
-            AddressV: D3D11_TEXTURE_ADDRESS_CLAMP,
-            AddressW: D3D11_TEXTURE_ADDRESS_CLAMP,
+            AddressU: address(d.address_mode_u),
+            AddressV: address(d.address_mode_v),
+            AddressW: address(d.address_mode_w),
             MaxLOD: f32::MAX,
             MaxAnisotropy: 1,
             ComparisonFunc: D3D11_COMPARISON_NEVER,

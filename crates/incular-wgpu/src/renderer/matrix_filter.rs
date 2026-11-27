@@ -161,7 +161,8 @@ impl WgpuRenderer {
             direction: [1., 1.],
             radius: 0,
             mode,
-            _padding: [0; 2],
+            sampling_mode: 0,
+            _padding: 0,
             weights,
         };
         self.submit_effect_pass(&source_view, &target.color_view, &params, false)?;

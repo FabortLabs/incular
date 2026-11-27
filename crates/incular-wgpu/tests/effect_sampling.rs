@@ -33,6 +33,24 @@ fn identity_pass(
     params: &[u8],
     pixels: &[u8],
 ) -> Vec<u8> {
+    effect_pass_with_address(
+        device,
+        queue,
+        shader,
+        params,
+        pixels,
+        wgpu::AddressMode::ClampToEdge,
+    )
+}
+
+fn effect_pass_with_address(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    shader: &[u8],
+    params: &[u8],
+    pixels: &[u8],
+    address: wgpu::AddressMode,
+) -> Vec<u8> {
     let size = wgpu::Extent3d {
         width: 8,
         height: 8,
@@ -66,6 +84,8 @@ fn identity_pass(
     let source_view = source.create_view(&Default::default());
     let destination_view = destination.create_view(&Default::default());
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        address_mode_u: address,
+        address_mode_v: address,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
         ..Default::default()
@@ -545,6 +565,120 @@ fn affine_resampling_mode_4_samples_the_nearest_texel() {
             assert!(
                 red.abs_diff(expected) <= 1,
                 "mode {mode}, x {x}: {red} != {expected}"
+            );
+        }
+    }
+}
+
+#[test]
+fn blur_readback_distinguishes_decal_clamp_repeat_and_mirror_at_an_edge() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let row = [
+        [255, 0, 0, 255], // red at x=0
+        [0, 255, 0, 255], // green at x=1
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [255, 255, 0, 255], // yellow at x=6
+        [0, 0, 255, 255],   // blue at x=7
+    ];
+    let pixels = row.as_flattened().repeat(8);
+    let mut params = [0_u32; PARAM_WORDS];
+    for (word, value) in [
+        (2, 8_f32),
+        (3, 8.),
+        (4, 8.),
+        (5, 8.),
+        (6, 1.),
+        (12, 0.25),
+        (16, 1.),
+        (17, 4. / 3.),
+        (18, 0.25),
+        (19, 0.125),
+    ] {
+        params[word] = value.to_bits();
+    }
+    params[8] = 1;
+    // Centre = 1/4, distance one = 1/4 each side, distance two = 1/8.
+    // The opposite edge's blue/yellow distinguish repetition from mirroring.
+    for (mode, address, expected) in [
+        (0, wgpu::AddressMode::ClampToEdge, [64_u8, 64, 0, 159]),
+        (1, wgpu::AddressMode::ClampToEdge, [159, 64, 0, 255]),
+        (2, wgpu::AddressMode::Repeat, [96, 96, 64, 255]),
+        (3, wgpu::AddressMode::MirrorRepeat, [128, 96, 0, 255]),
+    ] {
+        params[10] = mode;
+        let output = effect_pass_with_address(
+            &device,
+            &queue,
+            built_in_shaders::BLUR_SHADER,
+            bytemuck::cast_slice(&params),
+            &pixels,
+            address,
+        );
+        for (&channel, expected) in output[..4].iter().zip(expected) {
+            assert!(
+                channel.abs_diff(expected) <= 1,
+                "sampling mode {mode}, first pixel {:?}",
+                &output[..4],
+            );
+        }
+    }
+}
+
+#[test]
+fn blur_downsample_obeys_the_source_edge_policy() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let row = [
+        [255, 0, 0, 255],
+        [0, 255, 0, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [255, 255, 0, 255],
+        [0, 0, 255, 255],
+    ];
+    let pixels = row.as_flattened().repeat(8);
+    let mut params = [0_u32; PARAM_WORDS];
+    // The first output pixel averages source columns -2 and -1, rows 0 and 1.
+    for (word, value) in [
+        (0, 2_f32),
+        (2, 8.),
+        (3, 8.),
+        (4, 8.),
+        (5, 8.),
+        (6, 2.),
+        (7, 2.),
+    ] {
+        params[word] = value.to_bits();
+    }
+    params[9] = 3;
+    for (mode, address, expected) in [
+        (0, wgpu::AddressMode::ClampToEdge, [0_u8, 0, 0, 0]),
+        (1, wgpu::AddressMode::ClampToEdge, [255, 0, 0, 255]),
+        (2, wgpu::AddressMode::Repeat, [128, 128, 128, 255]),
+        (3, wgpu::AddressMode::MirrorRepeat, [128, 128, 0, 255]),
+    ] {
+        params[10] = mode;
+        let output = effect_pass_with_address(
+            &device,
+            &queue,
+            built_in_shaders::RESAMPLE_SHADER,
+            bytemuck::cast_slice(&params),
+            &pixels,
+            address,
+        );
+        for (&channel, expected) in output[..4].iter().zip(expected) {
+            assert!(
+                channel.abs_diff(expected) <= 1,
+                "sampling mode {mode}, first pixel {:?}",
+                &output[..4],
             );
         }
     }

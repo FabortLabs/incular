@@ -194,7 +194,10 @@ pub(crate) enum BackdropOp {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum BackdropStage {
     /// A Gaussian blur, sigma in logical pixels.
-    Blur(GaussianBlur),
+    Blur {
+        blur: GaussianBlur,
+        tile_mode: incular_painting::TileMode,
+    },
     /// Each output device pixel shows its input at this transform of its
     /// position.
     Matrix(Transform),
