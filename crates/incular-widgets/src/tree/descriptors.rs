@@ -1208,6 +1208,8 @@ pub struct EditableText {
     min_lines: Option<usize>,
     max_lines: Option<usize>,
     expands: bool,
+    force_line: bool,
+    text_width_basis: incular_text::TextWidthBasis,
     text_align: TextAlign,
     enabled: bool,
     read_only: bool,
@@ -1286,6 +1288,8 @@ impl EditableText {
             min_lines: None,
             max_lines: Some(1),
             expands: false,
+            force_line: true,
+            text_width_basis: incular_text::TextWidthBasis::Parent,
             text_align: TextAlign::Start,
             enabled: true,
             read_only: false,
@@ -1593,6 +1597,23 @@ impl EditableText {
     #[must_use]
     pub fn expands(mut self, expands: bool) -> Self {
         self.expands = expands;
+        self
+    }
+
+    /// Fills the incoming width by default. Set this to false to size the
+    /// editor to its text and caret, within the parent's constraints.
+    #[must_use]
+    pub fn force_line(mut self, force_line: bool) -> Self {
+        self.force_line = force_line;
+        self
+    }
+
+    /// Selects how natural width is measured when `force_line` is false.
+    /// Parent uses the unwrapped intrinsic width within the constraints;
+    /// LongestLine uses the widest line after wrapping.
+    #[must_use]
+    pub fn text_width_basis(mut self, basis: incular_text::TextWidthBasis) -> Self {
+        self.text_width_basis = basis;
         self
     }
 
@@ -2123,6 +2144,8 @@ impl From<EditableText> for Widget {
             min_lines: value.min_lines,
             max_lines: value.max_lines,
             expands: value.expands,
+            force_line: value.force_line,
+            text_width_basis: value.text_width_basis,
             text_align: value.text_align,
             enabled: value.enabled,
             read_only: value.read_only,

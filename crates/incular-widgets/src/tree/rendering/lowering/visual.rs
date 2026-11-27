@@ -259,6 +259,8 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 min_lines: spec.min_lines,
                 max_lines: spec.max_lines,
                 expands: spec.expands,
+                force_line: spec.force_line,
+                text_width_basis: spec.text_width_basis,
                 text_align: spec.text_align,
                 text_direction: direction,
                 enabled: spec.enabled,

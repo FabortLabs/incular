@@ -276,3 +276,117 @@ fn the_rendered_floating_prototype_ignores_the_text_viewport_offset() {
         assert_eq!(floating(&list), Some(expected));
     }
 }
+
+#[test]
+fn disabling_force_line_shrinks_the_mounted_editor_and_respects_parent_constraints() {
+    use incular_text::TextAlign;
+
+    let Some(style) = ahem_style(10.) else {
+        return;
+    };
+    let controller = TextEditingController::with_text("A");
+    controller.set_selection(TextSelection::collapsed(0));
+    let build = |force_line: Option<bool>, align| {
+        let editor = EditableText::new(controller.clone())
+            .style(style.clone().height(Some(1.)))
+            .text_direction(TextDirection::Ltr)
+            .cursor_width(2.)
+            .fixed_scroll_offset(10.)
+            .text_align(align);
+        match force_line {
+            Some(force) => editor.force_line(force),
+            None => editor,
+        }
+    };
+    let mut runtime = Runtime::new(build(None, TextAlign::Start).into()).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let constrained = Constraints::new(100., 500., 0., 100.);
+    let frame = |runtime: &mut Runtime, constraints| {
+        runtime.run_frame(constraints).unwrap();
+        runtime.tree().root_layout_size().unwrap()
+    };
+    assert_eq!(frame(&mut runtime, constrained), Size::new(500., 10.));
+    runtime
+        .schedule_update(root, build(Some(false), TextAlign::Start).into())
+        .unwrap();
+    assert_eq!(frame(&mut runtime, constrained), Size::new(103., 10.));
+    assert_eq!(
+        frame(&mut runtime, Constraints::loose(Size::new(500., 100.))),
+        Size::new(13., 10.),
+    );
+    assert_eq!(
+        frame(&mut runtime, Constraints::unbounded()),
+        Size::new(13., 10.),
+    );
+    assert_eq!(
+        frame(&mut runtime, Constraints::tight(Size::new(130., 10.))),
+        Size::new(130., 10.),
+    );
+    assert_eq!(controller.selection(), TextSelection::collapsed(0));
+    runtime
+        .schedule_update(root, build(Some(false), TextAlign::Center).into())
+        .unwrap();
+    let loose = Constraints::loose(Size::new(500., 100.));
+    assert_eq!(frame(&mut runtime, loose), Size::new(13., 10.));
+    let caret = runtime
+        .tree()
+        .floating_caret_geometry(root, 0, incular_text::TextAffinity::Downstream)
+        .unwrap()
+        .caret;
+    // Layout uses the shrunk width for alignment before applying the
+    // fixed ten-pixel viewport offset.
+    assert_eq!(caret.origin.x, -10.);
+    runtime
+        .schedule_update(root, build(Some(true), TextAlign::Start).into())
+        .unwrap();
+    assert_eq!(frame(&mut runtime, constrained), Size::new(500., 10.));
+}
+
+#[test]
+fn force_line_and_width_basis_keep_distinct_widths_after_soft_wraps() {
+    use incular_text::TextWidthBasis;
+
+    let Some(style) = ahem_style(10.) else {
+        return;
+    };
+    let controller = TextEditingController::with_text("AA BB CC");
+    let constraints = Constraints::loose(Size::new(50., 100.));
+    for paragraphs in [false, true] {
+        let editor = || {
+            EditableText::new(controller.clone())
+                .style(style.clone().height(Some(1.)))
+                .text_direction(TextDirection::Ltr)
+                .cursor_width(2.)
+                .max_lines(None)
+                .paragraph_layout(paragraphs)
+                .force_line(false)
+        };
+        let mut runtime = Runtime::new(editor().into()).unwrap();
+        let root = runtime.tree().root().unwrap();
+        let frame = |runtime: &mut Runtime| {
+            runtime.run_frame(constraints).unwrap();
+            runtime.tree().root_layout_size().unwrap()
+        };
+        assert_eq!(frame(&mut runtime), Size::new(50., 30.));
+        runtime
+            .schedule_update(
+                root,
+                editor()
+                    .text_width_basis(TextWidthBasis::LongestLine)
+                    .into(),
+            )
+            .unwrap();
+        assert_eq!(frame(&mut runtime), Size::new(23., 30.));
+        runtime
+            .schedule_update(
+                root,
+                editor()
+                    .text_width_basis(TextWidthBasis::LongestLine)
+                    .force_line(true)
+                    .into(),
+            )
+            .unwrap();
+        assert_eq!(frame(&mut runtime), Size::new(50., 30.));
+        assert_eq!(controller.text(), "AA BB CC");
+    }
+}

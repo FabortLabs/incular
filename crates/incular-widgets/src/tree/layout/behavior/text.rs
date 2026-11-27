@@ -305,6 +305,8 @@ impl WidgetTree {
                     min_lines,
                     max_lines,
                     expands,
+                    force_line,
+                    text_width_basis,
                     obscure_text,
                     obscuring_character,
                     paragraph_layout,
@@ -322,50 +324,76 @@ impl WidgetTree {
                     }
                     _ => (0, None),
                 };
-                let intrinsic_width = if desired.width > 0.0 {
+                let shrink_width = !force_line && desired.width == 0.;
+                let requested_width = if desired.width > 0. {
                     desired.width
-                } else if constraints.is_width_bounded() {
+                } else if constraints.is_width_bounded() || shrink_width {
                     constraints.max_width()
                 } else {
-                    260.0
+                    260.
                 };
-                // RenderEditable subtracts the cursor width
-                // and one-pixel caret gap for alignment and wrapping in both
-                // text directions and line modes.
-                let width =
-                    intrinsic_width.clamp(constraints.min_width(), constraints.max_width());
-                let margin = crate::tree::text::editable_caret_margin(field);
-                let width_for_text = (width - content_padding.horizontal() - margin).max(0.);
-                // A multiline height cap restricts the viewport, not the
-                // paragraph: all lines below it remain scrollable.
-                let options = self.editable_measurement_options(field, Some(width_for_text));
+                // RenderEditable subtracts the cursor width and one-pixel
+                // gap for alignment and wrapping in both line modes.
+                let available_width =
+                    requested_width.clamp(constraints.min_width(), constraints.max_width());
+                let padding_width = content_padding.horizontal();
+                let horizontal_inset = padding_width + crate::tree::text::editable_caret_margin(field);
                 let mask = obscure_text.then_some(obscuring_character);
-                let (metrics, layout, document) =
+                let shape = |tree: &mut Self, width: f32| {
+                    // A multiline cap restricts the viewport, not the
+                    // paragraph: later lines remain scrollable.
+                    let text_width = width.is_finite().then(|| (width - horizontal_inset).max(0.));
+                    let options = tree.editable_measurement_options(field, text_width);
                     with_text_field_display(controller, placeholder, mask, |display| {
-                        let _external_call = self
+                        let _external_call = tree
                             .recursion_diagnostics
                             .external_text_call("TextEngine::layout_with_options", display);
                         if paragraphs {
                             let document =
-                                self.text_engine.layout_paragraphs(display, style, options);
+                                tree.text_engine.layout_paragraphs(display, style, options);
                             (document.metrics, None, Some(document))
                         } else {
-                            // Spell check runs style the field's own text,
-                            // never a preedit or the placeholder.
+                            // Spell check styling belongs to committed text,
+                            // not preedit or the placeholder.
                             let layout = match spell_runs
                                 .as_ref()
                                 .filter(|(text, _)| text.as_str() == display)
                             {
-                                Some((_, runs)) => self
+                                Some((_, runs)) => tree
                                     .text_engine
                                     .layout_runs_with_options(display, runs, options),
-                                None => self
+                                None => tree
                                     .text_engine
                                     .layout_with_options(display, style, options),
                             };
                             (layout.metrics, Some(layout), None)
                         }
-                    });
+                    })
+                };
+                let measure_width =
+                    if shrink_width && text_width_basis == incular_text::TextWidthBasis::Parent {
+                        f32::INFINITY
+                    } else {
+                        available_width
+                    };
+                let (mut metrics, mut layout, mut document) = shape(self, measure_width);
+                let width = if shrink_width {
+                    // Flutter's paragraph minimum does not subtract the
+                    // caret gutter. Only the maximum reserves the gutter
+                    // before shaping, so a 100 px minimum can become 103 px.
+                    let minimum_text_width = (constraints.min_width() - padding_width)
+                        .max(0.)
+                        .min((available_width - horizontal_inset).max(0.));
+                    (metrics.size.width.max(minimum_text_width) + horizontal_inset)
+                        .clamp(constraints.min_width(), constraints.max_width())
+                } else {
+                    available_width
+                };
+                if shrink_width && width != measure_width {
+                    // Align inside the retained width, not inside the original
+                    // measurement bound that was just discarded.
+                    (metrics, layout, document) = shape(self, width);
+                }
                 let decorations = text_field_decorations(
                     controller,
                     placeholder,
@@ -396,7 +424,7 @@ impl WidgetTree {
                     preferred_height + content_padding.vertical()
                 };
                 let size = constraints.constrain(Size::new(
-                    intrinsic_width,
+                    width,
                     intrinsic_height.max(minimum_height),
                 ));
                 let (revision, visual_revision) = controller.revisions();

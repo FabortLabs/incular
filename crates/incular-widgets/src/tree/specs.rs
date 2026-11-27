@@ -570,6 +570,8 @@ pub struct TextFieldSpec {
     pub(crate) min_lines: Option<usize>,
     pub(crate) max_lines: Option<usize>,
     pub(crate) expands: bool,
+    pub(crate) force_line: bool,
+    pub(crate) text_width_basis: incular_text::TextWidthBasis,
     pub(crate) text_align: TextAlign,
     pub(crate) enabled: bool,
     pub(crate) read_only: bool,

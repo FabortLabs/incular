@@ -772,6 +772,8 @@ impl PartialEq for TextFieldSpec {
             && self.min_lines == other.min_lines
             && self.max_lines == other.max_lines
             && self.expands == other.expands
+            && self.force_line == other.force_line
+            && self.text_width_basis == other.text_width_basis
             && self.text_align == other.text_align
             && self.enabled == other.enabled
             && self.read_only == other.read_only

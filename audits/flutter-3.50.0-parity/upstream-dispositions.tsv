@@ -3643,3 +3643,4 @@ packages/flutter/test/gestures/locking_test.dart	42	Pointer events are locked du
 packages/flutter/test/widgets/editable_text_test.dart	13306	EditableText does not leak animation controllers	paired-match	upstream-floating-caret.md#editor-unmount
 packages/flutter/test/rendering/editable_test.dart	261	Can change cursor color, radius, visibility	paired-match	upstream-floating-caret.md#live-caret-configuration
 packages/flutter/test/rendering/editable_test.dart	2035	Floating cursor position is independent of viewport offset	paired-match	upstream-floating-caret.md#fixed-viewport-offset
+packages/flutter/test/rendering/editable_test.dart	2007	does not skip TextPainter.layout because of invalid cache	partial-match	upstream-editable-width-basis.md
