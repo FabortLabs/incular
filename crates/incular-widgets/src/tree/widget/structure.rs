@@ -1991,6 +1991,7 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
         && same_rc(&left.on_trackpad_gesture, &right.on_trackpad_gesture)
         && same_rc(&left.on_cancel, &right.on_cancel)
         && same_rc(&left.on_key, &right.on_key)
+        && same_rc(&left.on_raw_key_observer, &right.on_raw_key_observer)
         && same_rc(&left.on_key_down, &right.on_key_down)
         && same_rc(&left.on_focus_key_event, &right.on_focus_key_event)
         && same_rc(&left.on_focus_raw_key, &right.on_focus_raw_key)

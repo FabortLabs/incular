@@ -3552,3 +3552,5 @@ packages/flutter/test/widgets/directionality_test.dart	9	Directionality	paired-m
 packages/flutter/test/widgets/directionality_test.dart	29	Directionality default	paired-match	upstream-directionality-lookup.md
 packages/flutter/test/widgets/directionality_test.dart	43	Directionality.maybeOf	paired-match	upstream-directionality-lookup.md
 packages/flutter/test/widgets/directionality_test.dart	59	Directionality.of	paired-match	upstream-directionality-lookup.md
+packages/flutter/test/widgets/raw_keyboard_listener_test.dart	10	Can dispose without keyboard	paired-match	upstream-raw-keyboard-listener-lifetimes.md
+packages/flutter/test/widgets/raw_keyboard_listener_test.dart	73	Defunct listeners do not receive events	partial-match	upstream-raw-keyboard-listener-lifetimes.md

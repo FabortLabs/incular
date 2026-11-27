@@ -103,6 +103,7 @@ impl GestureCallbacks {
     #[must_use]
     pub fn has_keyboard_listener(&self) -> bool {
         self.on_key.is_some()
+            || self.on_raw_key_observer.is_some()
             || self.on_focus_key_event.is_some()
             || self.on_key_down.is_some()
             || self.on_key_repeat.is_some()
@@ -218,6 +219,11 @@ impl GestureCallbacks {
             .is_some_and(|callback| callback(event.clone()))
         {
             return KeyEventResult::Handled;
+        }
+        if let Some(observer) = &self.on_raw_key_observer
+            && let Some(raw) = raw_delivery.payload(&event)
+        {
+            observer(raw);
         }
         // Phase observers never consume the event: Flutter's KeyboardListener
         // reports KeyEventResult.ignored, so outer scopes still see the key.

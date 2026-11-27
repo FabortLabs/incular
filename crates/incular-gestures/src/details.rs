@@ -713,6 +713,7 @@ pub struct GestureCallbacks {
     /// focused element. Returning `true` consumes the event and prevents
     /// outer keyboard scopes and text editing from seeing it.
     pub on_key: Option<Rc<dyn Fn(KeyboardEvent) -> bool>>,
+    pub on_raw_key_observer: Option<Rc<dyn Fn(crate::RawKeyEvent)>>,
     /// A mounted Focus widget's typed keyboard handler.
     pub on_focus_key_event: Option<FocusKeyEventHandler>,
     /// A mounted Focus widget's deprecated raw keyboard callback.

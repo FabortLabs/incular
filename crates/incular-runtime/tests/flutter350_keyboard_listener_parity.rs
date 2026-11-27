@@ -224,3 +224,73 @@ fn a_node_less_keyboard_routing_wrapper_does_not_add_a_focus_stop() {
     assert_eq!(tree.focus_node_at(targets[0]), Some(child));
     assert_eq!(tree.semantics().len(), 1);
 }
+
+#[test]
+fn raw_listener_rebuilds_and_disposes_without_any_keyboard_messages() {
+    use incular_widgets::RawKeyboardListener;
+    let node = FocusNode::new();
+    let listener = || RawKeyboardListener::new(SizedBox::shrink()).focus_node(node.clone());
+    let mut runtime = Runtime::new(shell(listener())).unwrap();
+    frame(&mut runtime);
+    update(&mut runtime, listener());
+    update(&mut runtime, SizedBox::shrink());
+    assert!(runtime.focused_element().is_none());
+    assert!(!node.has_focus());
+}
+
+#[test]
+fn raw_listener_only_observes_real_or_mirrored_raw_messages_until_unmounted() {
+    use incular_runtime::KeyMessage;
+    use incular_widgets::RawKeyboardListener;
+
+    let node = FocusNode::new();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let listener = RawKeyboardListener::new(SizedBox::shrink())
+        .focus_node(node.clone())
+        .on_raw_key({
+            let log = log.clone();
+            move |raw| log.borrow_mut().push(raw.portable().clone())
+        });
+    let mut runtime = Runtime::new(shell(listener)).unwrap();
+    frame(&mut runtime);
+    node.request_focus();
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+
+    let pair = || {
+        [KeyState::Down, KeyState::Up].map(|state| {
+            let mut key =
+                KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Meta), Code::MetaLeft);
+            key.state = state;
+            key.location = Location::Left;
+            key
+        })
+    };
+    for typed in pair() {
+        assert!(!runtime.dispatch_key_message(KeyMessage::Typed(typed)));
+    }
+    assert!(log.borrow().is_empty());
+    for raw in pair() {
+        assert!(!runtime.dispatch_key_message(KeyMessage::Raw(raw.into())));
+    }
+    assert_eq!(
+        log.borrow()
+            .iter()
+            .map(|key| (key.code, key.state))
+            .collect::<Vec<_>>(),
+        [
+            (Code::MetaLeft, KeyState::Down),
+            (Code::MetaLeft, KeyState::Up)
+        ]
+    );
+    log.borrow_mut().clear();
+
+    update(&mut runtime, SizedBox::shrink());
+    assert!(runtime.focused_element().is_none());
+    for typed in pair() {
+        let raw = typed.clone().into();
+        assert!(!runtime.dispatch_key_message(KeyMessage::TypedAndRaw { typed, raw }));
+    }
+    send_meta_left(&mut runtime);
+    assert!(log.borrow().is_empty());
+}

@@ -1431,49 +1431,60 @@ impl KeyboardListener {
     }
 }
 
-/// A focus-bound keyboard observer (Flutter's legacy RawKeyboardListener).
-///
-/// Rust receives the normalized platform event here; observing it never
-/// consumes it, and semantics can be disabled without disabling focus.
+/// A focus-bound observer of the raw stream, not typed-only key messages.
+/// Portable hardware input may supply its mirrored raw counterpart.
 #[derive(Clone)]
-pub struct RawKeyboardListener(KeyboardListener);
+pub struct RawKeyboardListener {
+    listener: KeyboardListener,
+    observer: Option<Rc<dyn Fn(crate::RawKeyEvent)>>,
+}
 
 impl RawKeyboardListener {
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
-        Self(KeyboardListener::new(child))
+        Self { listener: KeyboardListener::new(child), observer: None }
     }
 
     #[must_use]
-    pub fn focus_node(self, node: FocusNode) -> Self {
-        Self(self.0.focus_node(node))
+    pub fn focus_node(mut self, node: FocusNode) -> Self {
+        self.listener = self.listener.focus_node(node);
+        self
     }
 
     #[must_use]
-    pub fn autofocus(self, autofocus: bool) -> Self {
-        Self(self.0.autofocus(autofocus))
+    pub fn autofocus(mut self, autofocus: bool) -> Self {
+        self.listener = self.listener.autofocus(autofocus);
+        self
     }
 
     #[must_use]
-    pub fn include_semantics(self, include: bool) -> Self {
-        Self(self.0.include_semantics(include))
+    pub fn include_semantics(mut self, include: bool) -> Self {
+        self.listener = self.listener.include_semantics(include);
+        self
     }
 
+    /// Observe the portable fields of the raw message without consuming it.
     #[must_use]
     pub fn on_key(self, callback: impl Fn(KeyboardEvent) + 'static) -> Self {
-        Self(self.0.on_key_event(move |event| {
-            callback(event);
-            false
-        }))
+        self.on_raw_key(move |event| callback(event.portable().clone()))
+    }
+
+    /// Observe the raw message itself. A typed-only or semantic event does
+    /// not invoke this listener.
+    #[must_use]
+    pub fn on_raw_key(mut self, callback: impl Fn(crate::RawKeyEvent) + 'static) -> Self {
+        self.observer = Some(Rc::new(callback));
+        self
     }
 }
 
 impl From<RawKeyboardListener> for Widget {
     fn from(value: RawKeyboardListener) -> Self {
-        let mut callbacks = value.0.to_callbacks();
+        let mut callbacks = value.listener.to_callbacks();
+        callbacks.on_raw_key_observer = value.observer;
         callbacks.annotates_focus = true;
         callbacks.owned_focus_permission = callbacks.focus_node.is_none().then_some(true);
-        let child = value.0.child.unwrap_or_else(|| crate::SizedBox::shrink().into());
+        let child = value.listener.child.unwrap_or_else(|| crate::SizedBox::shrink().into());
         Widget::from_kind(WidgetKind::Gesture {
             behavior: crate::gestures::HitTestBehavior::DeferToChild,
             callbacks: Box::new(callbacks),
