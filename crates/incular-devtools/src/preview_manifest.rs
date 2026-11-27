@@ -13,7 +13,8 @@ use serde_json::{Value, json};
 use crate::preview_changes::PreviewChangeRouter;
 
 /// Filesystem-backed metadata for an existing or future preview scaffold.
-/// This manages invalidation only; it does not generate or launch a host.
+/// Tracks invalidation and writes the generated host's local dependencies;
+/// it does not launch a preview process.
 #[derive(Clone, Debug)]
 pub struct PreviewManifest {
     scaffold: PathBuf,
@@ -107,6 +108,25 @@ impl PreviewManifest {
     pub fn workspace_members(mut self, members: impl IntoIterator<Item = PathBuf>) -> Self {
         self.members = members.into_iter().collect();
         self
+    }
+
+    /// Populates the scaffold's Cargo.toml from an unmodified host template.
+    /// Workspace packages are path dependencies and local patches in that file.
+    ///
+    /// # Errors
+    /// Returns an error if an input manifest or the output cannot be used.
+    pub fn write_scaffold_dependencies(
+        &self,
+        host_template: &str,
+    ) -> Result<(), crate::preview_dependencies::PreviewDependenciesError> {
+        let projects = std::iter::once(self.root_manifest.as_path()).chain(
+            self.members.iter().map(PathBuf::as_path).filter(|member| member.is_file()),
+        );
+        crate::preview_dependencies::write_from_template(
+            &self.scaffold.join("Cargo.toml"),
+            host_template,
+            projects,
+        )
     }
 
     /// Creates a change router using the same workspace manifests and

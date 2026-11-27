@@ -223,3 +223,19 @@ on an unrelated file rename. The focused Linux native tests exercise
 both move directions without notifications left over from the previous
 move, alongside existing manifest, source and reload checks. This is
 an authored comparison, not another original registration.
+
+## Local package dependencies in the generated preview scaffold
+
+For `regress_176018_test.dart:46`, pinned Flutter wrote both expected
+local path entries under dependencies and dependency_overrides.
+The full test timed out while fetching the rest of the scaffold's
+tooling dependencies, so the original remains partial.
+
+The native writer builds the scaffold's Cargo.toml from its host
+template. Workspace packages appear as direct paths and crates.io
+patches. A real offline Cargo metadata run resolves a workspace
+example's version-only reference to its local sibling. Regenerating
+without a member removes its dependency and patch, without losing
+host metadata. An ambiguous duplicate name leaves the existing
+manifest untouched. Two direct and five adjacent native checks
+passed. This does not claim to launch a browser preview.
