@@ -2924,3 +2924,10 @@ packages/flutter/test/rendering/proxy_box_test.dart	365	RenderOpacity does compo
 packages/flutter/test/rendering/proxy_box_test.dart	386	RenderAnimatedOpacity does not composite if it is transparent	paired-match	upstream-render-proxies.md#opacity-layer-bytes-and-composition-gates
 packages/flutter/test/rendering/proxy_box_test.dart	399	RenderAnimatedOpacity does composite if it is opaque	paired-match	upstream-render-proxies.md#opacity-layer-bytes-and-composition-gates
 packages/flutter/test/rendering/proxy_box_test.dart	412	RenderAnimatedOpacity does composite if it is partially opaque	paired-match	upstream-render-proxies.md#opacity-layer-bytes-and-composition-gates
+packages/flutter/test/rendering/proxy_sliver_test.dart	14	RenderSliverOpacity does not composite if it is transparent	paired-match	upstream-sliver-opacity-layers.md
+packages/flutter/test/rendering/proxy_sliver_test.dart	33	RenderSliverOpacity does composite if it is opaque	paired-match	upstream-sliver-opacity-layers.md
+packages/flutter/test/rendering/proxy_sliver_test.dart	51	RenderSliverOpacity reuses its layer	paired-match	upstream-sliver-opacity-layers.md
+packages/flutter/test/rendering/proxy_sliver_test.dart	79	RenderSliverAnimatedOpacity does not composite if it is transparent	paired-match	upstream-sliver-opacity-layers.md
+packages/flutter/test/rendering/proxy_sliver_test.dart	101	RenderSliverAnimatedOpacity does composite if it is partially opaque	paired-match	upstream-sliver-opacity-layers.md
+packages/flutter/test/rendering/proxy_sliver_test.dart	123	RenderSliverAnimatedOpacity does composite if it is opaque	paired-match	upstream-sliver-opacity-layers.md
+packages/flutter/test/rendering/proxy_sliver_test.dart	145	RenderSliverAnimatedOpacity reuses its layer	paired-match	upstream-sliver-opacity-layers.md
