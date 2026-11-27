@@ -381,6 +381,17 @@ enum ListViewStrategy {
     },
 }
 
+fn automatic_keep_alive_builder(
+    build: Rc<dyn Fn(usize) -> Widget>,
+    enabled: bool,
+) -> Rc<dyn Fn(usize) -> Widget> {
+    if enabled {
+        Rc::new(move |index| build(index).with_implicit_keep_alive_scope())
+    } else {
+        build
+    }
+}
+
 /// A first-class list descriptor supporting static children and lazy virtualized item builders.
 #[derive(Clone, TypedBuilder)]
 #[builder(builder_method(name = typed_builder))]
@@ -405,6 +416,8 @@ pub struct ListView {
     reverse: bool,
     #[builder(default = false)]
     shrink_wrap: bool,
+    #[builder(default = true)]
+    add_automatic_keep_alives: bool,
     #[builder(default, setter(strip_option))]
     controller: Option<ScrollController>,
     #[builder(default, setter(strip_option))]
@@ -453,6 +466,7 @@ impl ListView {
             scroll_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             shrink_wrap: false,
+            add_automatic_keep_alives: true,
             controller: None,
             padding: None,
             cache_extent: None,
@@ -485,6 +499,7 @@ impl ListView {
             scroll_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             shrink_wrap: false,
+            add_automatic_keep_alives: true,
             controller: None,
             padding: None,
             cache_extent: None,
@@ -535,6 +550,7 @@ impl ListView {
             scroll_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             shrink_wrap: false,
+            add_automatic_keep_alives: true,
             controller: None,
             padding: None,
             cache_extent: None,
@@ -571,6 +587,14 @@ impl ListView {
             1
         };
         self.find_child_index = Some(Rc::new(move |key| callback(key)?.checked_mul(stride)));
+        self
+    }
+
+    /// Whether the delegate installs an automatic keep-alive listener
+    /// around each materialized item. Defaults to true.
+    #[must_use]
+    pub fn add_automatic_keep_alives(mut self, enabled: bool) -> Self {
+        self.add_automatic_keep_alives = enabled;
         self
     }
 
@@ -719,6 +743,7 @@ impl From<ListView> for Widget {
 }
 fn list_view_widget(value: ListView) -> Widget {
     let controller = value.controller.unwrap_or_default();
+    let automatic = value.add_automatic_keep_alives;
     let item_extent = value.item_extent;
     let item_extent_builder = value.item_extent_builder;
     let prototype_item = value.prototype_item;
@@ -768,7 +793,7 @@ fn list_view_widget(value: ListView) -> Widget {
             };
             build_list_render_sliver(
                 children.len(),
-                Rc::new(move |index| children[index].clone()),
+                automatic_keep_alive_builder(Rc::new(move |index| children[index].clone()), automatic),
                 value.scroll_direction,
                 item_extent,
                 item_extent_builder,
@@ -785,7 +810,7 @@ fn list_view_widget(value: ListView) -> Widget {
             ..
         } => build_list_render_sliver(
             item_count,
-            builder,
+            automatic_keep_alive_builder(builder, automatic),
             value.scroll_direction,
             item_extent,
             item_extent_builder,
@@ -913,6 +938,8 @@ pub struct GridView {
     reverse: bool,
     #[builder(default = false)]
     shrink_wrap: bool,
+    #[builder(default = true)]
+    add_automatic_keep_alives: bool,
     #[builder(default, setter(strip_option))]
     controller: Option<ScrollController>,
     #[builder(default, setter(strip_option))]
@@ -957,6 +984,7 @@ impl GridView {
             scroll_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             shrink_wrap: false,
+            add_automatic_keep_alives: true,
             controller: None,
             padding: None,
             cache_extent: None,
@@ -1015,6 +1043,7 @@ impl GridView {
             scroll_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             shrink_wrap: false,
+            add_automatic_keep_alives: true,
             controller: None,
             padding: None,
             cache_extent: None,
@@ -1030,6 +1059,14 @@ impl GridView {
     #[must_use]
     pub fn controller(mut self, controller: ScrollController) -> Self {
         self.controller = Some(controller);
+        self
+    }
+
+    /// Whether the delegate installs an automatic keep-alive listener
+    /// around each materialized item. Defaults to true.
+    #[must_use]
+    pub fn add_automatic_keep_alives(mut self, enabled: bool) -> Self {
+        self.add_automatic_keep_alives = enabled;
         self
     }
 
@@ -1143,6 +1180,7 @@ impl From<GridView> for Widget {
 }
 fn grid_view_widget(value: GridView) -> Widget {
     let controller = value.controller.unwrap_or_default();
+    let automatic = value.add_automatic_keep_alives;
     let mut sliver: Box<dyn RenderSliver> =
         match value.strategy.unwrap_or_else(|| GridViewStrategy::Count {
             delegate: value.grid_delegate,
@@ -1153,7 +1191,7 @@ fn grid_view_widget(value: GridView) -> Widget {
                 Box::new(GridRenderSliver::new(
                     children.len(),
                     delegate,
-                    Rc::new(move |index| children[index].clone()),
+                    automatic_keep_alive_builder(Rc::new(move |index| children[index].clone()), automatic),
                     value.scroll_direction,
                 ))
             }
@@ -1164,7 +1202,7 @@ fn grid_view_widget(value: GridView) -> Widget {
             } => Box::new(GridRenderSliver::new(
                 item_count,
                 delegate,
-                builder,
+                automatic_keep_alive_builder(builder, automatic),
                 value.scroll_direction,
             )),
         };

@@ -305,6 +305,7 @@ pub(crate) struct SemanticProperties {
     pub(super) focus_keep_alive: bool,
     pub(super) automatic_keep_alive: bool,
     pub(super) automatic_keep_alive_scope: bool,
+    pub(super) implicit_keep_alive_scope: bool,
     /// Keep this sliver child in accessibility outside its viewport cache.
     pub(super) ensures_sliver_semantics: bool,
     /// A rendered sliver child's current geometry keeps it outside the

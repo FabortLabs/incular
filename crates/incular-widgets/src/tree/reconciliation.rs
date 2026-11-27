@@ -6,6 +6,7 @@ use super::context::VisibilityObservation;
 use super::focus::{instantiate_owned_focus_node, owned_focus_permission};
 use super::rendering::{carry_replaced_transition, render_kind};
 use super::widget::WidgetChildren;
+use crate::advanced_slivers::ImplicitAutomaticKeepAlive;
 use crate::overscroll_indicator::ScrollOverscrollIndicator;
 use crate::scroll_behavior::OverscrollStyle;
 use crate::scrolling::SliverKeepAliveSource;
@@ -453,7 +454,7 @@ impl WidgetTree {
                 .as_ref()
                 .and_then(|aux| aux.indexed_visibility.as_ref())
                 .is_some_and(|binding| Some(binding.stack) == parent && binding.visible);
-            let (build_context, render_context, indexed_visibility) = self
+            let (mut build_context, render_context, indexed_visibility) = self
                 .inherited_contexts_for_consumers(
                     parent,
                     boundary,
@@ -461,6 +462,16 @@ impl WidgetTree {
                     (build_consumer, render_consumer),
                     indexed_visible,
                 );
+            let old_implicit = element.auxiliary_state.as_ref()
+                .and_then(|aux| aux.implicit_keep_alive.as_ref());
+            let wants_implicit = widget.has_implicit_keep_alive_scope();
+            let new_implicit = (wants_implicit && old_implicit.is_none())
+                .then(|| ImplicitAutomaticKeepAlive::new(&self.automatic_keep_alives, build_consumer));
+            if wants_implicit
+                && let Some(scope) = old_implicit.or(new_implicit.as_ref())
+            {
+                build_context = scope.inherit(&build_context);
+            }
             let (new_kind, insets) =
                 render_context.build(|context| render_configuration(&widget, context));
             self.update_semantic_bounds_insets(render, insets);
@@ -471,6 +482,13 @@ impl WidgetTree {
             if let Some(element) = self.elements.get_mut(id.0) {
                 element.build_context = build_context;
                 element.render_context = render_context;
+                if let Some(scope) = new_implicit {
+                    element.auxiliary_state_mut().implicit_keep_alive = Some(scope);
+                } else if !wants_implicit
+                    && let Some(aux) = element.auxiliary_state.as_mut()
+                {
+                    aux.implicit_keep_alive = None;
+                }
                 if let Some(binding) = indexed_visibility {
                     element.auxiliary_state_mut().indexed_visibility = Some(binding);
                 } else if let Some(aux) = element.auxiliary_state.as_mut() {
@@ -508,10 +526,15 @@ impl WidgetTree {
         // remain best-effort partial as before — just a single upfront
         // pass over what reconciliation would check level by level anyway.
         self.validate_widget_subtree(&widget, self.parent(id))?;
-        let old_request = self
-            .element_live(id, "updated child")
-            .widget
-            .explicit_keep_alive_request();
+        let previous = &self.element_live(id, "updated child").widget;
+        let old_request = previous.explicit_keep_alive_request();
+        // The implicit scope belongs to the delegate slot, not the local
+        // configuration a caller is replacing within that slot.
+        let widget = if previous.has_implicit_keep_alive_scope() {
+            widget.with_implicit_keep_alive_scope()
+        } else {
+            widget
+        };
         let new_request = widget.explicit_keep_alive_request();
         let changed = self.with_global_key_transaction(|tree| tree.update_existing(id, &widget))?;
         // A skipped root retains its complete subtree and existing listener
@@ -726,11 +749,24 @@ impl WidgetTree {
                     .downcast_ref::<crate::platform_widgets::PlatformMenuRetainedMarker>()
             })
             .map(|marker| marker.binding.clone());
-        let (build_context, render_context, indexed_visibility) = self.inherited_contexts_for(
+        let (mut build_context, render_context, indexed_visibility) = self.inherited_contexts_for(
             parent,
             environment_boundary,
             environment_override.as_ref(),
         );
+        let implicit_keep_alive = widget.has_implicit_keep_alive_scope().then(|| {
+            ImplicitAutomaticKeepAlive::new(
+                &self.automatic_keep_alives, build_context.consumer_id())
+        });
+        if let Some(scope) = &implicit_keep_alive {
+            build_context = scope.inherit(&build_context);
+        }
+        let auxiliary_state = (indexed_visibility.is_some() || implicit_keep_alive.is_some())
+            .then(|| Box::new(ElementAuxiliaryState {
+                indexed_visibility,
+                implicit_keep_alive,
+                ..Default::default()
+            }));
         self.check_keys_borrowed(None, widget.children_refs())?;
         let layers = RenderLayers::create(&mut self.compositor, widget.kind());
         let (kind, insets) =
@@ -762,12 +798,7 @@ impl WidgetTree {
             render: RenderObjectId(render),
             dirty: DirtyFlags::NONE,
             scrolling_state: None,
-            auxiliary_state: indexed_visibility.map(|binding| {
-                Box::new(ElementAuxiliaryState {
-                    indexed_visibility: Some(binding),
-                    ..Default::default()
-                })
-            }),
+            auxiliary_state,
             build_context: build_context.clone(),
             render_context: render_context.clone(),
             environment_override,
@@ -1059,7 +1090,10 @@ impl WidgetTree {
         let (new_override, new_boundary) = element_environment(widget, old_override.as_ref());
         let old_type = old_override.as_ref().map(|scope| scope.value_type());
         let new_type = new_override.as_ref().map(|scope| scope.value_type());
-        let environment_topology_changed = old_boundary != new_boundary || old_type != new_type;
+        let implicit_scope_changed = old.has_implicit_keep_alive_scope()
+            != widget.has_implicit_keep_alive_scope();
+        let environment_topology_changed =
+            old_boundary != new_boundary || old_type != new_type || implicit_scope_changed;
         let environment_value_changed = !environment_topology_changed
             && match (&old_override, &new_override) {
                 (Some(old), Some(new)) => !Rc::ptr_eq(&old.value, &new.value),
@@ -1309,8 +1343,11 @@ impl WidgetTree {
         if layer_structure_changed || visibility_changed {
             self.sync_render_children(id);
         }
-        if environment_topology_changed {
+        if environment_topology_changed || (environment_value_changed && widget.has_implicit_keep_alive_scope()) {
             self.rebind_inherited_subtree(id);
+            if implicit_scope_changed && !widget.has_automatic_keep_alive_scope() {
+                self.apply_materialized_keep_alive(id, false, SliverKeepAliveSource::Automatic);
+            }
         } else if environment_value_changed {
             let (build_context, render_context, scope) = {
                 let element = self.element_live(id, "retained element must remain live");

@@ -134,7 +134,8 @@ struct KeepAliveRegistryState {
 impl KeepAliveRegistryState {
     fn active_changed(&mut self, previously_keeping_alive: bool) -> Vec<KeepAliveChange> {
         self.revision = self.revision.checked_add(1).expect("revision exhausted");
-        if previously_keeping_alive == self.clients.is_empty() {
+        let keeping_alive = !self.clients.is_empty();
+        if previously_keeping_alive != keeping_alive {
             self.watchers.values().cloned().collect()
         } else {
             Vec::new()
@@ -422,7 +423,10 @@ impl AutomaticKeepAliveQueue {
     }
 
     fn listener(&self, id: ConsumerId) -> KeepAliveChange {
-        let pending = Rc::downgrade(&self.0);
+        Self::listener_for(Rc::downgrade(&self.0), id)
+    }
+
+    fn listener_for(pending: Weak<PendingKeepAlives>, id: ConsumerId) -> KeepAliveChange {
         Rc::new(move |keep_alive| {
             if let Some(pending) = pending.upgrade() {
                 let was_empty = {
@@ -436,6 +440,53 @@ impl AutomaticKeepAliveQueue {
                 }
             }
         })
+    }
+}
+
+/// An implied delegate wrapper uses the child's existing element and key.
+pub(crate) struct ImplicitAutomaticKeepAlive {
+    scope: ListenerState,
+    handlers: Rc<[NotificationHandler]>,
+    // Only rows that actually request retention create a registry and a
+    // watcher. A dispatcher retained past unmount holds just a weak pointer.
+    _registry: Rc<OnceCell<(KeepAliveRegistry, KeepAliveWatch)>>,
+}
+
+impl ImplicitAutomaticKeepAlive {
+    pub(crate) fn new(queue: &AutomaticKeepAliveQueue, id: ConsumerId) -> Self {
+        let registry = Rc::new(OnceCell::new());
+        let weak = Rc::downgrade(&registry);
+        let pending = Rc::downgrade(&queue.0);
+        let handler = NotificationHandler::new(move |notification: &KeepAliveNotification| {
+            if let Some(registration) = weak.upgrade() {
+                let (registry, _) = registration.get_or_init(|| {
+                    let registry = KeepAliveRegistry::new();
+                    let watch =
+                        registry.watch(AutomaticKeepAliveQueue::listener_for(pending.clone(), id));
+                    (registry, watch)
+                });
+                registry.dispatch(notification.clone());
+            }
+            false
+        });
+        Self {
+            scope: ListenerState::new(),
+            handlers: Rc::from([handler]),
+            _registry: registry,
+        }
+    }
+
+    pub(crate) fn inherit(
+        &self,
+        context: &incular_core::BuildContext,
+    ) -> incular_core::BuildContext {
+        self.scope.inherit(context, self.handlers.clone())
+    }
+}
+
+impl Drop for ImplicitAutomaticKeepAlive {
+    fn drop(&mut self) {
+        self.scope.detach();
     }
 }
 

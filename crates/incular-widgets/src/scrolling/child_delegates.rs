@@ -3,7 +3,7 @@
 
 use std::rc::Rc;
 
-use crate::{AutomaticKeepAlive, IndexedSemantics, RepaintBoundary, Widget};
+use crate::{IndexedSemantics, RepaintBoundary, Widget};
 
 /// Maps a child and its index to its semantic index, or `None` to leave it
 /// out of the semantic indexing (Flutter's `SemanticIndexCallback`).
@@ -60,7 +60,7 @@ impl ChildWrapping {
                 IndexedSemantics::new(semantic_index + self.semantic_index_offset, child).into();
         }
         if self.add_automatic_keep_alives {
-            child = AutomaticKeepAlive::new(child).into();
+            child = child.with_implicit_keep_alive_scope();
         }
         match key {
             Some(key) => child.with_key(key),

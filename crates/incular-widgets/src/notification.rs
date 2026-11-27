@@ -148,6 +148,21 @@ impl ListenerState {
         Widget::shared_environment_scope(Rc::new(ListenerScope(self.0.clone())), child)
     }
 
+    /// A listener which is parent data on an existing element has no
+    /// declarative wrapper. Keep its BuildContext chain just like a widget
+    /// listener, including when the element is moved under a new parent.
+    pub(crate) fn inherit(
+        &self,
+        context: &incular_core::BuildContext,
+        handlers: Rc<[NotificationHandler]>,
+    ) -> incular_core::BuildContext {
+        *self.0.handlers.borrow_mut() = handlers;
+        *self.0.parent.borrow_mut() = context
+            .read_shared::<ListenerScope>()
+            .map(|scope| scope.0.clone());
+        context.provide(ListenerScope(self.0.clone()))
+    }
+
     pub(crate) fn detach(&self) {
         self.0.handlers.replace(Rc::from([]));
         self.0.parent.borrow_mut().take();

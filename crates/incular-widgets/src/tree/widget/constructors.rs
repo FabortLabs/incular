@@ -361,7 +361,20 @@ impl Widget {
 
     #[must_use]
     pub(crate) fn has_automatic_keep_alive_scope(&self) -> bool {
-        self.semantic_properties().automatic_keep_alive_scope
+        self.semantic_properties().automatic_keep_alive_scope || self.has_implicit_keep_alive_scope()
+    }
+
+    /// Attaches the delegate's listener without replacing the descriptor's
+    /// kind, dimensions or key (especially a descendant GlobalKey).
+    pub(crate) fn with_implicit_keep_alive_scope(mut self) -> Self {
+        if !self.semantic_properties().automatic_keep_alive_scope {
+            self.semantic_properties_mut().implicit_keep_alive_scope = true;
+        }
+        self
+    }
+
+    pub(crate) fn has_implicit_keep_alive_scope(&self) -> bool {
+        self.semantic_properties().implicit_keep_alive_scope
     }
 
     pub(crate) fn with_automatic_keep_alive_request(mut self, keep_alive: bool) -> Self {

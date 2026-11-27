@@ -3627,3 +3627,9 @@ packages/flutter/test/widgets/context_menu_button_item_test.dart	53	switches on 
 packages/flutter/test/widgets/selectable_region_test.dart	5698	Selection behavior when clicking the `Share` button on Android	paired-match	upstream-selectable-region-share.md
 packages/flutter/test/widgets/selectable_region_test.dart	5761	builds the correct button items	partial-match	upstream-selectable-region-share.md
 packages/flutter/test/widgets/automatic_keep_alive_test.dart	219	AutomaticKeepAlive double	paired-match	upstream-automatic-keep-alive.md
+packages/flutter/test/widgets/automatic_keep_alive_test.dart	63	AutomaticKeepAlive with ListView with itemExtent	paired-match	upstream-automatic-keep-alive.md#default-listview-and-gridview-delegates
+packages/flutter/test/widgets/automatic_keep_alive_test.dart	111	AutomaticKeepAlive with ListView without itemExtent	paired-match	upstream-automatic-keep-alive.md#default-listview-and-gridview-delegates
+packages/flutter/test/widgets/automatic_keep_alive_test.dart	161	AutomaticKeepAlive with GridView	paired-match	upstream-automatic-keep-alive.md#default-listview-and-gridview-delegates
+packages/flutter/test/widgets/automatic_keep_alive_test.dart	478	AutomaticKeepAlive with keepAlive set to true before initState	paired-match	upstream-automatic-keep-alive.md#default-listview-and-gridview-delegates
+packages/flutter/test/widgets/automatic_keep_alive_test.dart	515	AutomaticKeepAlive with keepAlive set to true before initState and widget goes out of scope	paired-match	upstream-automatic-keep-alive.md#default-listview-and-gridview-delegates
+packages/flutter/test/widgets/automatic_keep_alive_test.dart	570	Keep alive Listenable has its listener removed once called	paired-match	upstream-automatic-keep-alive.md#default-listview-and-gridview-delegates

@@ -431,6 +431,7 @@ struct ElementAuxiliaryState {
     layout_builder_constraints: Option<Constraints>,
     layout_builder_revision: u64,
     indexed_visibility: Option<Box<IndexedVisibilityBinding>>,
+    implicit_keep_alive: Option<crate::advanced_slivers::ImplicitAutomaticKeepAlive>,
 }
 
 impl Element {

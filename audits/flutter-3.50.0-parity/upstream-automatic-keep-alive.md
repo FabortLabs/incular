@@ -30,3 +30,32 @@ The default list/grid wrappers, keyed child remapping, and the grouped
 explicit-and-implicit reference registrations are not claimed by this
 batch. Five originally registered Flutter tests were run as controls;
 only the exact double-request case is added to the paired ledger here.
+
+## Default ListView and GridView delegates
+
+The explicit and implied registrations at lines 63, 111 and 161 now
+both pair for fixed lists, naturally sized lists and the two-lane grid.
+They use the original 100 items, 600-pixel viewport, zero cache,
+12.3-pixel list rows or 24.6-pixel grid rows, and 300-pixel touch drags
+out and back. Row or tile 60 keeps the original keyed element, is not
+exposed by accessibility while parked, and is removed on release.
+Neither immediate neighbor is retained. Opting out of automatic
+wrapping still allows an explicit ancestor to receive the notification.
+
+The default builder installs a listener without additional widget
+or render nodes and without copying a child's GlobalKey. A registry
+and viewport subscription are allocated only on the first actual
+request in that row. Single explicit keep-alive requests, active editor
+requests, and implicit notifications stay independent.
+
+The listener detach test at line 570 now passes through the actual
+default builder chain. Lines 478 and 515 pair for requests made from
+the first build. The latter checks the seven visible even rows before
+the jump, the original first row's identity, exactly 23 mounted even
+rows after jumping to 3025 pixels, and the presence of row 73 rather
+than rows 1 and 3 in the viewport. Visible geometry is distinguished
+from mounted cache children; this is not an accessibility assertion
+for every cache edge. Keyed moves between different parked rows and
+the standalone sliver mixin fixture remain open.
+
+Forty-two focused Rust regressions passed for this delegate batch.
