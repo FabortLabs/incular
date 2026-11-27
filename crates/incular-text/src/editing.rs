@@ -1111,6 +1111,12 @@ impl TextEditingController {
             .expect("visual revision exhausted");
     }
 
+    /// Restarts only the presentation clock; the caller owns paint invalidation.
+    #[doc(hidden)]
+    pub fn restart_caret_clock(&self, now: Instant) {
+        self.inner.borrow_mut().caret_reset = Some(now);
+    }
+
     /// Returns whether the caret should be painted at `now`.
     #[doc(hidden)]
     #[must_use]
@@ -1125,38 +1131,47 @@ impl TextEditingController {
     /// (`EditableText.cursorOpacityAnimates`).
     #[must_use]
     pub fn caret_opacity(&self, now: Instant, animates: bool) -> f32 {
-        // (time in seconds, opacity) key frames, held until the next one.
-        const IOS_BLINKING_CARET: [(f32, f32); 11] = [
-            (0.0, 1.0),
-            (0.5, 1.0),
-            (0.5375, 0.75),
-            (0.575, 0.5),
-            (0.6125, 0.25),
-            (0.65, 0.0),
-            (0.85, 0.0),
-            (0.8875, 0.25),
-            (0.925, 0.5),
-            (0.9625, 0.75),
-            (1.0, 1.0),
+        self.caret_blink_sample(now, animates).0
+    }
+
+    /// Samples the current phase and the next opacity change on one clock.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn caret_blink_sample(&self, now: Instant, animates: bool) -> (f32, Option<Instant>) {
+        use std::time::Duration;
+
+        // Times are integral microseconds; omit keyframes that hold opacity.
+        const IOS_PHASES: [(u128, f32); 8] = [
+            (0, 1.0),
+            (537_500, 0.75),
+            (575_000, 0.5),
+            (612_500, 0.25),
+            (650_000, 0.0),
+            (887_500, 0.25),
+            (925_000, 0.5),
+            (962_500, 0.75),
         ];
+        const PERIOD: u128 = 1_000_000;
+        const HALF_PERIOD: u128 = PERIOD / 2;
         let Some(start) = self.inner.borrow().caret_reset else {
-            return 0.0;
+            return (0.0, None);
         };
-        let elapsed = now.checked_duration_since(start).unwrap_or_default();
-        if !animates {
-            return if (elapsed.as_millis() / 500).is_multiple_of(2) {
-                1.0
-            } else {
-                0.0
-            };
-        }
-        // The simulation restarts when it completes, every second.
-        let time = (elapsed.as_micros() % 1_000_000) as f32 / 1_000_000.0;
-        IOS_BLINKING_CARET
-            .iter()
-            .rev()
-            .find(|(at, _)| *at <= time)
-            .map_or(1.0, |(_, opacity)| *opacity)
+        let elapsed = now.checked_duration_since(start).unwrap_or_default().as_micros();
+        let (opacity, next) = if animates {
+            let phase = elapsed % PERIOD;
+            let next = IOS_PHASES.partition_point(|(at, _)| *at <= phase);
+            let opacity = IOS_PHASES[next - 1].1;
+            let boundary = IOS_PHASES.get(next).map_or(PERIOD, |(time, _)| *time);
+            (opacity, elapsed - phase + boundary)
+        } else {
+            let half_cycle = elapsed / HALF_PERIOD;
+            let opacity = if half_cycle.is_multiple_of(2) { 1.0 } else { 0.0 };
+            (opacity, (half_cycle + 1) * HALF_PERIOD)
+        };
+        let deadline = u64::try_from(next)
+            .ok()
+            .and_then(|micros| start.checked_add(Duration::from_micros(micros)));
+        (opacity, deadline)
     }
 
     #[doc(hidden)]

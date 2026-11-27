@@ -3478,7 +3478,7 @@ impl WidgetTree {
             .is_some_and(|registration| registration.indicator.is_animating())
     }
 
-    fn animation_muted(&self, mut id: ElementId) -> bool {
+    pub(super) fn animation_muted(&self, mut id: ElementId) -> bool {
         while let Some(element) = self.elements.get(id.0) {
             if matches!(element.widget.kind(),
                 WidgetKind::Visibility { visible: false, hidden, .. } if !hidden.animation)

@@ -17,3 +17,24 @@ passed. The renderer-neutral runtime checks:
 All 10 focused runtime caret and focus tests passed. The rounded paint
 assertion is not a rendered-pixel golden. Exact repeated blink phase
 timing is a separate audit slice.
+
+## Caret blink cadence and timestamped keyboard input
+
+Three exact originals ran, including both desktop key-transit
+expansions. The runtime now samples the focused cursor on the frame
+clock and schedules the next alpha change on its existing deadline
+channel. Previously a wall-clock sample occurred only during an
+unrelated repaint; the retained cursor could freeze while idle.
+
+The native tests inspect the actual paint stream before each of
+Flutter's discrete opacity keyframes, including the return to full
+opacity after 1 s. Non-animated opacity toggles every 500 ms, but
+40 successive checkpoints request no continuous animation frames and
+perform no new layout. Timestamped left/right presses on the macOS
+shortcut path keep the cursor on for another 500 ms; it switches off
+on the final edge. Native input normalizes the upstream transport
+variants to one key event. An authored case verifies hiding or blur
+disarms the timer and showing again restarts the visible phase without
+losing focus. All 15 focused runtime and text tests passed. This
+validates runtime deadlines and paint commands, not a compositor
+screenshot or a separate mobile/web host wake test.

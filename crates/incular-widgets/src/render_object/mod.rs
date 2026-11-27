@@ -122,6 +122,25 @@ impl TextGeometry for FieldLayout {
     }
 }
 
+/// Runtime cursor sample stored separately from paragraph layout.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum CursorFrame {
+    #[default]
+    Unmanaged,
+    Hidden,
+    Blinking(u8),
+}
+
+impl CursorFrame {
+    pub(crate) const fn sampled_alpha(self) -> Option<u8> {
+        match self {
+            Self::Unmanaged => None,
+            Self::Hidden => Some(0),
+            Self::Blinking(alpha) => Some(alpha),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RenderTextFieldState {
     pub(crate) text: RenderTextState,
@@ -135,6 +154,7 @@ pub(crate) struct RenderTextFieldState {
     pub(crate) clip_picture_generation: u64,
     pub(crate) scroll_y: f32,
     pub(crate) focused: bool,
+    pub(crate) cursor_frame: CursorFrame,
     /// The editing value (content revision and selection), focus and size
     /// whose caret the scroll offsets last revealed. Like Flutter's
     /// `_scheduleShowCaretOnScreen`, the caret is brought into view only

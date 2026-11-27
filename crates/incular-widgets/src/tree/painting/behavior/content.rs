@@ -1,6 +1,6 @@
 use super::super::*;
 use crate::tree::text::{
-    editable_content_clip, editable_cursor_rect, editable_horizontal_max_scroll,
+    editable_content_clip, editable_cursor_alpha, editable_cursor_rect, editable_horizontal_max_scroll,
     editable_vertical_max_scroll, reveal_horizontal_caret,
 };
 use incular_rendering::{ClipCoverage, ClipIsolation};
@@ -173,7 +173,7 @@ impl WidgetTree {
                     spell_check_selection_color,
                     ..
                 } = **field;
-                let (layout, focused, scroll_x, scroll_y, revealed, decorations) = {
+                let (layout, focused, scroll_x, scroll_y, revealed, decorations, cursor_frame) = {
                     let node = self.render_live(id, "retained render must remain live");
                     let state = self.text_field_state_live(id);
                     (
@@ -183,6 +183,7 @@ impl WidgetTree {
                         state.scroll_y,
                         state.revealed,
                         state.decorations.clone(),
+                        state.cursor_frame,
                     )
                 };
                 let alternate_selection_color = spell_check_selection_color.filter(|_| {
@@ -331,18 +332,21 @@ impl WidgetTree {
                     }
                     // Flutter's cursor painter only paints a valid, collapsed
                     // selection, below the glyphs by default.
-                    let caret_opacity =
-                        controller.caret_opacity(Instant::now(), cursor_opacity_animates);
+                    let caret_alpha = cursor_frame.sampled_alpha().unwrap_or_else(|| {
+                        editable_cursor_alpha(
+                            cursor_color.alpha,
+                            controller.caret_opacity(Instant::now(), cursor_opacity_animates),
+                        )
+                    });
                     let mut caret_command = None;
                     if focused
                         && show_cursor
                         && selection.is_empty()
                         && controller.selection_if_set().is_some()
-                        && caret_opacity > 0.0
+                        && caret_alpha > 0
                     {
-                        let alpha = f32::from(cursor_color.alpha).min(caret_opacity * 255.0);
                         let cursor_color = Color {
-                            alpha: alpha.round() as u8,
+                            alpha: caret_alpha,
                             ..cursor_color
                         };
                         let rect = editable_cursor_rect(

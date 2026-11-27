@@ -250,6 +250,8 @@ pub struct Runtime {
     /// The time stamped on input events, when a test drives the clock
     /// (Flutter's `TestPointer` time stamps); the wall clock otherwise.
     input_clock: Option<Instant>,
+    /// The focused cursor can arm a timer without keeping the frame loop hot.
+    cursor_blink_deadline: Option<Instant>,
     pub(crate) pending: HashMap<ElementId, Widget>,
     pub(crate) order: VecDeque<ElementId>,
     pub(crate) reactive: Rc<RefCell<ReactiveQueue>>,
@@ -502,6 +504,7 @@ impl Runtime {
         let mut runtime = Self {
             pending_event_processing_us: 0,
             input_clock: None,
+            cursor_blink_deadline: None,
             tree,
             system_sound,
             pending: HashMap::new(),
@@ -1778,6 +1781,7 @@ impl Runtime {
             .values()
             .filter_map(UndoHistoryController::next_deadline)
             .chain(self.touch_resampling.deadline)
+            .chain(self.cursor_blink_deadline)
             .chain(incular_animation::scheduler::next_scheduled_frame_deadline())
             .min()
     }
@@ -4321,6 +4325,9 @@ impl Runtime {
             self.refresh_hover_after_layout();
         }
         self.sync_text_selection_handles();
+        self.cursor_blink_deadline = self
+            .focused
+            .and_then(|editor| self.tree.sample_focused_cursor(editor, now));
         let _semantics_guard = tracing::info_span!("incular.semantics").entered();
         let semantics_span = profiling::PhaseSpan::start();
         self.sync_semantics_activation();

@@ -3041,3 +3041,6 @@ packages/flutter/test/widgets/editable_text_cursor_test.dart	402	Cursor does not
 packages/flutter/test/widgets/editable_text_cursor_test.dart	423	Cursor does not show when not focused	paired-match	upstream-editable-cursor-visibility.md
 packages/flutter/test/widgets/editable_text_cursor_test.dart	738	Turning showCursor off stops the cursor	paired-match	upstream-editable-cursor-visibility.md
 packages/flutter/test/widgets/editable_text_cursor_test.dart	860	autofocus sets cursor to the end of text	paired-match	upstream-editable-cursor-visibility.md
+packages/flutter/test/widgets/editable_text_cursor_test.dart	214	Cursor can animate	paired-match	upstream-editable-cursor-visibility.md#caret-blink-cadence-and-timestamped-keyboard-input
+packages/flutter/test/widgets/editable_text_cursor_test.dart	259	Cursor is static when cursorOpacityAnimates is false	paired-match	upstream-editable-cursor-visibility.md#caret-blink-cadence-and-timestamped-keyboard-input
+packages/flutter/test/widgets/editable_text_cursor_test.dart	322	Cursor animation restarts when it is moved using keys on desktop	paired-match	upstream-editable-cursor-visibility.md#caret-blink-cadence-and-timestamped-keyboard-input

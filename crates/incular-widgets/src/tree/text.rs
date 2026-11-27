@@ -110,7 +110,52 @@ pub(super) fn editable_content_clip(
         .then(|| Rect::from_origin_size(Offset::new(padding.left, 0.), Size::new(width, size.height)))
 }
 
+pub(super) fn editable_cursor_alpha(base_alpha: u8, opacity: f32) -> u8 {
+    f32::from(base_alpha).min(opacity * 255.0).round() as u8
+}
+
 impl WidgetTree {
+    /// Samples the focused editor's caret before paint, returning the next
+    /// deadline only while blinking. No paragraph layout is invalidated.
+    #[doc(hidden)]
+    pub fn sample_focused_cursor(&mut self, id: ElementId, now: Instant) -> Option<Instant> {
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let state = node.text_field_state()?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let previous = state.cursor_frame;
+        let eligible = state.focused
+            && field.show_cursor
+            && field
+                .controller
+                .selection_if_set()
+                .is_some_and(TextSelection::is_collapsed)
+            && !self.animation_muted(id);
+        let (frame, deadline) = if eligible {
+            if !matches!(previous, CursorFrame::Blinking(_)) {
+                field.controller.restart_caret_clock(now);
+            }
+            let (opacity, deadline) = field
+                .controller
+                .caret_blink_sample(now, field.cursor_opacity_animates);
+            (
+                CursorFrame::Blinking(editable_cursor_alpha(field.cursor_color.alpha, opacity)),
+                deadline,
+            )
+        } else {
+            (CursorFrame::Hidden, None)
+        };
+        if frame != previous {
+            self.text_field_state_live_mut(render).cursor_frame = frame;
+            if frame.sampled_alpha() != previous.sampled_alpha() {
+                self.mark_render_paint(render);
+            }
+        }
+        deadline
+    }
+
     #[must_use]
     pub fn text_field_at(&self, point: Offset) -> Option<ElementId> {
         let hit = self
@@ -170,9 +215,9 @@ impl WidgetTree {
             .text_field_state()
             .is_some_and(|state| state.focused != focused)
         {
-            node.text_field_state_mut()
-                .expect("text field state")
-                .focused = focused;
+            let state = node.text_field_state_mut().expect("text field state");
+            state.focused = focused;
+            state.cursor_frame = CursorFrame::Unmanaged;
             repaint = true;
             changed_editor_focus = true;
             if focused && let RenderKind::TextField(field) = node.object.kind() {
