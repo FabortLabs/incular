@@ -1,9 +1,10 @@
 //! Plain and rich text descriptions.
 
 use crate::{
-    TextAffinity, TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow, TextPlaceholder,
-    TextScaler, TextStyle,
+    TextAffinity, TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow,
+    TextPlaceholder, TextScaler, TextStyle,
 };
+use incular_config::Locale;
 use incular_core::Size;
 use std::{fmt, ops::Range, sync::Arc};
 
@@ -118,17 +119,122 @@ pub struct PlainTextOptions {
 
 impl Default for PlainTextOptions {
     fn default() -> Self {
-        Self { include_semantics_labels: true, include_placeholders: true }
+        Self {
+            include_semantics_labels: true,
+            include_placeholders: true,
+        }
     }
 }
 
 /// Speech metadata for one literal text span or one inline widget marker.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct InlineSpanSemanticsInformation<'a> {
     pub text: &'a str,
     pub semantics_label: Option<&'a str>,
     pub semantics_identifier: Option<&'a str>,
     pub is_placeholder: bool,
+    pub locale: Option<&'a Locale>,
+    pub spell_out: bool,
+}
+
+/// A pronunciation property attached to a UTF-16 interval of spoken text.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum InlineSpanStringAttribute<'a> {
+    SpellOut(Range<usize>),
+    Locale {
+        range: Range<usize>,
+        locale: &'a Locale,
+    },
+}
+
+impl InlineSpanStringAttribute<'_> {
+    #[must_use]
+    pub fn range(&self) -> &Range<usize> {
+        match self {
+            Self::SpellOut(range) | Self::Locale { range, .. } => range,
+        }
+    }
+
+    fn shift(&mut self, units: usize) {
+        let range = match self {
+            Self::SpellOut(range) | Self::Locale { range, .. } => range,
+        };
+        range.start += units;
+        range.end += units;
+    }
+}
+
+impl<'a> InlineSpanSemanticsInformation<'a> {
+    /// Attributes in dispatch order, measured against the label if present.
+    pub fn string_attributes(self) -> impl Iterator<Item = InlineSpanStringAttribute<'a>> {
+        let width = if self.spell_out || self.locale.is_some() {
+            self.semantics_label
+                .unwrap_or(self.text)
+                .encode_utf16()
+                .count()
+        } else {
+            0
+        };
+        [
+            (width > 0 && self.spell_out).then_some(InlineSpanStringAttribute::SpellOut(0..width)),
+            self.locale
+                .filter(|_| width > 0)
+                .map(|locale| InlineSpanStringAttribute::Locale {
+                    range: 0..width,
+                    locale,
+                }),
+        ]
+        .into_iter()
+        .flatten()
+    }
+}
+
+/// One independent semantic fragment with owned text and adjusted ranges.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CombinedInlineSpanSemantics<'a> {
+    pub text: String,
+    pub label: String,
+    pub identifier: Option<&'a str>,
+    pub is_placeholder: bool,
+    pub string_attributes: Vec<InlineSpanStringAttribute<'a>>,
+}
+
+/// Concatenates neighboring speech spans and shifts attributes by the
+/// preceding label's UTF-16 length. A placeholder or named span keeps
+/// its own fragment and restarts range accounting for the next fragment.
+#[must_use]
+pub fn combine_inline_span_semantics<'a>(
+    spans: &[InlineSpanSemanticsInformation<'a>],
+) -> Vec<CombinedInlineSpanSemantics<'a>> {
+    let mut result = Vec::new();
+    let mut working = CombinedInlineSpanSemantics::default();
+    let mut label_units = 0;
+    for &span in spans {
+        let label = span.semantics_label.unwrap_or(span.text);
+        if span.is_placeholder || span.semantics_identifier.is_some() {
+            result.push(std::mem::take(&mut working));
+            result.push(CombinedInlineSpanSemantics {
+                text: span.text.to_owned(),
+                label: label.to_owned(),
+                identifier: span.semantics_identifier,
+                is_placeholder: span.is_placeholder,
+                string_attributes: span.string_attributes().collect(),
+            });
+            label_units = 0;
+            continue;
+        }
+        working.text.push_str(span.text);
+        working.label.push_str(label);
+        working
+            .string_attributes
+            .extend(span.string_attributes().map(|mut attribute| {
+                attribute.shift(label_units);
+                attribute
+            }));
+        label_units += label.encode_utf16().count();
+    }
+    result.push(working);
+    result
 }
 
 /// A recursively nestable text node. Styles are inherited by descendants;
@@ -142,6 +248,8 @@ pub struct TextSpan {
     /// when the paragraph is announced.
     pub semantics_label: Option<String>,
     pub semantics_identifier: Option<String>,
+    pub locale: Option<Locale>,
+    pub spell_out: Option<bool>,
 }
 
 impl TextSpan {
@@ -153,6 +261,8 @@ impl TextSpan {
             children: Vec::new(),
             semantics_label: None,
             semantics_identifier: None,
+            locale: None,
+            spell_out: None,
         }
     }
 
@@ -172,6 +282,20 @@ impl TextSpan {
     #[must_use]
     pub fn semantics_identifier(mut self, identifier: impl Into<String>) -> Self {
         self.semantics_identifier = Some(identifier.into());
+        self
+    }
+
+    /// Overrides the inherited pronunciation locale for this subtree.
+    #[must_use]
+    pub fn locale(mut self, locale: Locale) -> Self {
+        self.locale = Some(locale);
+        self
+    }
+
+    /// Overrides inherited character-by-character pronunciation.
+    #[must_use]
+    pub fn spell_out(mut self, spell_out: bool) -> Self {
+        self.spell_out = Some(spell_out);
         self
     }
 
@@ -223,6 +347,8 @@ impl TextSpan {
         }
         let mut result = if self.semantics_label != other.semantics_label
             || self.semantics_identifier != other.semantics_identifier
+            || self.locale != other.locale
+            || self.spell_out != other.spell_out
         {
             Metadata
         } else {
@@ -266,7 +392,10 @@ impl TextSpan {
     }
 
     /// Visits just the immediate children in order, stopping on false.
-    pub fn visit_direct_children<'a>(&'a self, visitor: impl FnMut(&'a InlineSpan) -> bool) -> bool {
+    pub fn visit_direct_children<'a>(
+        &'a self,
+        visitor: impl FnMut(&'a InlineSpan) -> bool,
+    ) -> bool {
         self.children.iter().all(visitor)
     }
 
@@ -274,7 +403,11 @@ impl TextSpan {
     /// ordinary boundary, upstream selects the preceding text and
     /// downstream selects the following text. A widget occupies one unit.
     #[must_use]
-    pub fn span_for_utf16_position(&self, offset: usize, affinity: TextAffinity) -> Option<InlineSpanRef<'_>> {
+    pub fn span_for_utf16_position(
+        &self,
+        offset: usize,
+        affinity: TextAffinity,
+    ) -> Option<InlineSpanRef<'_>> {
         self.find_utf16_position(offset, affinity, &mut 0)
     }
 
@@ -317,27 +450,43 @@ impl TextSpan {
     #[must_use]
     pub fn semantics_information(&self) -> Vec<InlineSpanSemanticsInformation<'_>> {
         let mut result = Vec::new();
-        self.collect_semantics_information(&mut result);
+        self.collect_semantics_information(None, false, &mut result);
         result
     }
 
-    fn collect_semantics_information<'a>(&'a self, output: &mut Vec<InlineSpanSemanticsInformation<'a>>) {
-        if !self.text.is_empty() || self.semantics_label.is_some() || self.semantics_identifier.is_some() {
+    fn collect_semantics_information<'a>(
+        &'a self,
+        inherited_locale: Option<&'a Locale>,
+        inherited_spell_out: bool,
+        output: &mut Vec<InlineSpanSemanticsInformation<'a>>,
+    ) {
+        let locale = self.locale.as_ref().or(inherited_locale);
+        let spell_out = self.spell_out.unwrap_or(inherited_spell_out);
+        if !self.text.is_empty()
+            || self.semantics_label.is_some()
+            || self.semantics_identifier.is_some()
+        {
             output.push(InlineSpanSemanticsInformation {
                 text: &self.text,
                 semantics_label: self.semantics_label.as_deref(),
                 semantics_identifier: self.semantics_identifier.as_deref(),
                 is_placeholder: false,
+                locale,
+                spell_out,
             });
         }
         for child in &self.children {
             match child {
-                InlineSpan::Text(span) => span.collect_semantics_information(output),
+                InlineSpan::Text(span) => {
+                    span.collect_semantics_information(locale, spell_out, output)
+                }
                 InlineSpan::Widget(_) => output.push(InlineSpanSemanticsInformation {
                     text: "\u{fffc}",
                     semantics_label: None,
                     semantics_identifier: None,
                     is_placeholder: true,
+                    locale: None,
+                    spell_out: false,
                 }),
             }
         }

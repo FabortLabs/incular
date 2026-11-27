@@ -113,6 +113,8 @@ fn semantics_records_preserve_literal_text_label_identifier_and_placeholder_orde
         semantics_label: Some("bbb"),
         semantics_identifier: Some("ccc"),
         is_placeholder: false,
+        locale: None,
+        spell_out: false,
     };
     assert_eq!(span.semantics_information(), [item]);
     let combined = TextSpan::empty()
@@ -128,12 +130,16 @@ fn semantics_records_preserve_literal_text_label_identifier_and_placeholder_orde
                 semantics_label: None,
                 semantics_identifier: None,
                 is_placeholder: true,
+                locale: None,
+                spell_out: false,
             },
             InlineSpanSemanticsInformation {
                 text: "d",
                 semantics_label: None,
                 semantics_identifier: None,
                 is_placeholder: false,
+                locale: None,
+                spell_out: false,
             },
         ]
     );
@@ -190,4 +196,104 @@ fn direct_visitation_preserves_order_and_can_stop_a_recursive_walk() {
         [Some(0), Some(1), Some(2), Some(3), Some(4)]
     );
     assert_eq!(find(&TextSpan::new("foobar")), None);
+}
+
+#[test]
+fn pronunciation_properties_inherit_and_combining_offsets_follow_utf16_order() {
+    use incular_config::Locale;
+    use incular_text::{InlineSpanStringAttribute as Attribute, combine_inline_span_semantics};
+
+    let spanish: Locale = "es-MX".parse().unwrap();
+    let span = TextSpan::new("aaaaa")
+        .spell_out(true)
+        .child(TextSpan::new("yyyyy").locale(spanish.clone()))
+        .child(
+            TextSpan::new("xxxxx")
+                .spell_out(false)
+                .child(TextSpan::new("zzzzz"))
+                .child(TextSpan::new("bbbbb").spell_out(true)),
+        );
+    let records = span.semantics_information();
+    assert_eq!(records.len(), 5);
+    let collect = |index: usize| records[index].string_attributes().collect::<Vec<_>>();
+    assert_eq!(collect(0), [Attribute::SpellOut(0..5)]);
+    assert_eq!(
+        collect(1),
+        [
+            Attribute::SpellOut(0..5),
+            Attribute::Locale {
+                range: 0..5,
+                locale: &spanish
+            },
+        ]
+    );
+    assert!(collect(2).is_empty());
+    assert!(collect(3).is_empty());
+    assert_eq!(collect(4), [Attribute::SpellOut(0..5)]);
+    let combined = combine_inline_span_semantics(&records);
+    let [single] = combined.as_slice() else {
+        panic!("five adjacent spans should combine")
+    };
+    assert_eq!(single.text, "aaaaayyyyyxxxxxzzzzzbbbbb");
+    assert_eq!(single.label, single.text);
+    assert_eq!(
+        single.string_attributes,
+        [
+            Attribute::SpellOut(0..5),
+            Attribute::SpellOut(5..10),
+            Attribute::Locale {
+                range: 5..10,
+                locale: &spanish
+            },
+            Attribute::SpellOut(20..25),
+        ]
+    );
+}
+
+#[test]
+fn spoken_replacement_width_controls_ranges_and_isolated_fragments_reset_them() {
+    use incular_config::Locale;
+    use incular_text::{InlineSpanStringAttribute as Attribute, combine_inline_span_semantics};
+
+    let english: Locale = "en".parse().unwrap();
+    let span = TextSpan::new("a")
+        .locale(english.clone())
+        .spell_out(true)
+        .child(TextSpan::new("b").semantics_label("🦀"))
+        .child(WidgetSpan::new(2))
+        .child(TextSpan::new("c").semantics_identifier("separate"))
+        .child(TextSpan::new("d").spell_out(false));
+    let records = span.semantics_information();
+    let combined = combine_inline_span_semantics(&records);
+    assert_eq!(combined.len(), 5);
+    assert_eq!(combined[0].text, "ab");
+    assert_eq!(combined[0].label, "a🦀");
+    assert_eq!(
+        combined[0].string_attributes,
+        [
+            Attribute::SpellOut(0..1),
+            Attribute::Locale {
+                range: 0..1,
+                locale: &english
+            },
+            Attribute::SpellOut(1..3),
+            Attribute::Locale {
+                range: 1..3,
+                locale: &english
+            },
+        ]
+    );
+    assert!(combined[1].is_placeholder);
+    assert!(combined[1].string_attributes.is_empty());
+    assert!(combined[2].text.is_empty());
+    assert_eq!(combined[3].identifier, Some("separate"));
+    assert_eq!(combined[3].string_attributes[0].range(), &(0..1));
+    assert_eq!(combined[4].label, "d");
+    assert_eq!(
+        combined[4].string_attributes,
+        [Attribute::Locale {
+            range: 0..1,
+            locale: &english
+        }]
+    );
 }

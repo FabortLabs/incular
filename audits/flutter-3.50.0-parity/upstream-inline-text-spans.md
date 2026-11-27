@@ -20,7 +20,7 @@ The extracted span records preserve the exact literal string, semantics
 label and identifier. Direct-child visitation preserves order, supports
 short-circuiting and allows the test's original preorder index walk.
 Five focused native span tests and 28 paragraph geometry controls passed.
-Native screen-reader delivery, string attributes, empty-vs-null Dart
+Native screen-reader delivery, empty-vs-null Dart
 object representations, and mouse callbacks are
 separate cases not credited here.
 
@@ -37,3 +37,20 @@ semantic-ID-only changes in a separate metadata category. The latter is
 an Incular extension to this comparison, not an assertion of Dart's
 semantics-ID invalidation rules. Three dedicated native tests and
 three mounted rich-paragraph controls passed.
+
+## Inherited pronunciation and combined UTF-16 ranges
+
+The exact pinned `TextSpan can compute StringAttributes` case passed.
+Its five spans produce per-span spell-out and es-MX ranges in the
+original order, including explicit opt-out and a descendant opt-in.
+The combined run has exactly four annotations over `0..5`, `5..10`,
+`5..10`, and `20..25`.
+
+An authored reference and native control combine literal `ab` with
+the spoken label `a🦀`, which has three UTF-16 units, then split around
+an inline widget and a span with a semantics identifier. Pronunciation
+offsets restart for each independent fragment, and a placeholder never
+inherits pronunciation. Native storage borrows the locale while
+building the fragments. Seven native span and 28 paragraph geometry
+tests passed. Projecting independent fragments through the actual
+accessibility tree is separate from this comparison.

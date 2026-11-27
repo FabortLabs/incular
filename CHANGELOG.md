@@ -23,6 +23,7 @@ a version and date when publishing.
 - Inline text spans expose speech metadata and UTF-16 position lookup,
   keeping presentation labels separate from literal layout text. Rich paragraph
   comparisons distinguish nested inline child changes from paint-only edits.
+  Inherited locale and spell-out ranges follow the spoken UTF-16 text.
 
 - Gesture hit-test results can share a live target path and transform stack
   without adding reference counting to ordinary owned hit tests.
