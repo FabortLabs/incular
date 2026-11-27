@@ -37,6 +37,7 @@ mod persistent_hash_map;
 pub mod reactivity;
 mod restoration;
 pub mod serialization;
+mod stack_diagnostics;
 mod stack_frame;
 pub mod standard_message_codec;
 mod synchronous_future;
@@ -93,6 +94,10 @@ pub use merged_listenable::{MergedListenable, MergedSubscription};
 pub use observer_list::{HashedObserverList, ObserverList};
 pub use persistent_hash_map::PersistentHashMap;
 pub use restoration::{RestorationBackend, RestorationKey, RestorationKeyError, RestorationScope};
+pub use stack_diagnostics::{
+    DiagnosticStack, RepetitiveStackFrameFilter, StackFilter, StackFrameOrigin, StackFramePattern,
+    StackPackagePattern,
+};
 pub use stack_frame::{StackFrame, StackFrameFormat};
 pub use synchronous_future::SynchronousFuture;
 pub use value_notifier::ValueNotifier;

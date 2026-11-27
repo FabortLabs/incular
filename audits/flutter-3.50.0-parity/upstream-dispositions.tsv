@@ -3571,3 +3571,8 @@ packages/flutter/test/foundation/stack_frame_test.dart	78	Async-gap marker parse
 packages/flutter/test/foundation/stack_frame_test.dart	85	Near-miss async-gap markers are not parsed as asynchronousSuspension	paired-match	upstream-stack-frame.md
 packages/flutter/test/foundation/stack_frame_test.dart	132	Can parse web constructor invocation with unknown class name	paired-match	upstream-stack-frame.md
 packages/flutter/test/foundation/stack_frame_test.dart	151	Parses to null for wrong format.	paired-match	upstream-stack-frame.md
+packages/flutter/test/foundation/stack_frame_test.dart	100	debugPrintStack does not throw on a stack carrying an async-gap marker	paired-match	upstream-stack-diagnostics.md
+packages/flutter/test/foundation/stack_frame_test.dart	111	debugPrintStack does not throw on a ParallelWaitError stack	partial-match	upstream-stack-diagnostics.md
+packages/flutter/test/foundation/assertions_test.dart	413	RepetitiveStackFrameFilter does not go out of range	paired-match	upstream-stack-diagnostics.md
+packages/flutter/test/foundation/stack_trace_test.dart	14	FlutterError.defaultStackFilter	partial-match	upstream-stack-diagnostics.md
+packages/flutter/test/foundation/stack_trace_test.dart	32	FlutterError.defaultStackFilter (async test body)	partial-match	upstream-stack-diagnostics.md

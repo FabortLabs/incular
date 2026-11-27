@@ -118,18 +118,7 @@ fn package_stack_trace_chains_keep_one_canonical_gap() {
     // path and anonymous callback spelling. Unknown surrounding lines skip.
     let trace = concat!(
         "Error: header, not a frame\n",
-        "dart:async/future_impl.dart 23:44                              _Completer.completeError\n",
-        "test\\bindings_async_gap_test.dart 42:17                        main.<fn>.<fn>\n",
-        "package:flutter_test/src/binding.dart 744:19                   TestWidgetsFlutterBinding._runTestBody\n",
-        "===== asynchronous gap ===========================\n",
-        "dart:async/zone.dart 1121:19                                   _CustomZone.registerUnaryCallback\n",
-        "dart:async-patch/async_patch.dart 83:23                        _asyncThenWrapperHelper\n",
-        "dart:async/zone.dart 1222:13                                   _rootRunBinary\n",
-        "dart:async/zone.dart 1107:19                                   _CustomZone.runBinary\n",
-        "package:flutter_test/src/binding.dart 724:14                   TestWidgetsFlutterBinding._runTest\n",
-        "package:flutter_test/src/binding.dart 1124:24                  AutomatedTestWidgetsFlutterBinding.runTest.<fn>\n",
-        "package:fake_async/fake_async.dart 177:54                      FakeAsync.run.<fn>.<fn>\n",
-        "dart:async/zone.dart 1190:13                                   _rootRun\n"
+        include_str!("fixtures/flutter350_mangled_stack.txt")
     );
     let frames = StackFrame::from_stack_string(trace);
     assert_eq!(frames.len(), 12);
