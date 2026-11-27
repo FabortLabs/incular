@@ -22,6 +22,10 @@ alpha clamp independently.
 Use `with_hue`, `with_saturation`, `with_alpha`, and either
 `with_lightness` or `with_value` to copy a model with one changed channel.
 
+Use `Color::from_ahsl` or `Color::from_ahsv` to encode double-precision
+inputs directly to sRGBA8. This preserves which side of a half-byte
+boundary the original input was on, without changing the compact output.
+
 Swatches with a linear round-trip — copy, paste, and run:
 
 ```rust

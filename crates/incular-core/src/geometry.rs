@@ -200,6 +200,26 @@ impl Color {
         )
     }
 
+    /// Encodes HSL directly to sRGBA8 without first narrowing its channels
+    /// to f32. Hue is in degrees; alpha, saturation and lightness are unit
+    /// components, with the same sanitization as the HSL model.
+    #[must_use]
+    pub fn from_ahsl(alpha: f64, hue: f64, saturation: f64, lightness: f64) -> Self {
+        let lightness = unit_f64(lightness);
+        let chroma = (1.0 - (2.0 * lightness - 1.0).abs()) * unit_f64(saturation);
+        color_from_precise_hue(alpha, hue, chroma, lightness - chroma / 2.0)
+    }
+
+    /// Encodes HSV directly to sRGBA8 without first narrowing its channels
+    /// to f32. Hue is in degrees; alpha, saturation and value are unit
+    /// components, with the same sanitization as the HSV model.
+    #[must_use]
+    pub fn from_ahsv(alpha: f64, hue: f64, saturation: f64, value: f64) -> Self {
+        let value = unit_f64(value);
+        let chroma = unit_f64(saturation) * value;
+        color_from_precise_hue(alpha, hue, chroma, value - chroma)
+    }
+
     /// Converts this sRGB color to the HSL representation used by style and
     /// theme code. Hue is expressed in degrees and alpha in `0.0..=1.0`.
     #[must_use]
@@ -407,6 +427,45 @@ fn normalize_hue(hue: f32) -> f32 {
     } else {
         0.0
     }
+}
+
+fn unit_f64(value: f64) -> f64 {
+    if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
+fn color_from_precise_hue(alpha: f64, hue: f64, chroma: f64, base: f64) -> Color {
+    let hue = if (0.0..=360.0).contains(&hue) {
+        hue
+    } else if hue.is_finite() {
+        hue.rem_euclid(360.0)
+    } else {
+        0.0
+    };
+    let secondary = chroma * (1.0 - ((hue / 60.0).rem_euclid(2.0) - 1.0).abs());
+    let (red, green, blue) = if hue < 60.0 {
+        (chroma, secondary, 0.0)
+    } else if hue < 120.0 {
+        (secondary, chroma, 0.0)
+    } else if hue < 180.0 {
+        (0.0, chroma, secondary)
+    } else if hue < 240.0 {
+        (0.0, secondary, chroma)
+    } else if hue < 300.0 {
+        (secondary, 0.0, chroma)
+    } else {
+        (chroma, 0.0, secondary)
+    };
+    let byte = |channel: f64| (unit_f64(channel) * 255.0).round() as u8;
+    Color::rgba(
+        byte(red + base),
+        byte(green + base),
+        byte(blue + base),
+        byte(alpha),
+    )
 }
 
 fn palette_color(color: Color) -> Srgba {

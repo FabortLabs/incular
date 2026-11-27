@@ -158,3 +158,20 @@ packed colors and four interpolated components agree at their
 specified tolerances. Equal values also hash equally and format
 on one line, without equating the Rust hash number to Dart's.
 A signed-zero control protects the Rust equality/hash contract.
+
+## Single-channel sweep precision
+
+Pinned `painting/colors_test.dart:69,97,316,344` passed. All 44
+saturation, value, and lightness pixels match through the new explicit
+double-precision HSL and HSV encoders, and their inverse colors pass
+the original max-component tolerance. The renderer still receives
+the same compact sRGBA8 type.
+
+The existing f32 models also match every HSV saturation and HSL
+lightness sample. They differ by one byte at two boundary cases:
+HSV near 0.9 yields red 230 instead of 229, and HSL saturation near
+0.8 yields (230,25,25) instead of (229,26,26). Those two registrations
+remain partial for the default f32 models. Callers that need the
+pinned double-input rounding can use `Color::from_ahsv` or
+`Color::from_ahsl` without changing renderer or color storage.
+All 30 selected native checks passed.

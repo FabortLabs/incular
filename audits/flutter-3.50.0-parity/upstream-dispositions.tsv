@@ -2846,3 +2846,7 @@ packages/flutter/test/painting/colors_test.dart	394	Black	paired-match	color-cla
 packages/flutter/test/painting/colors_test.dart	403	Gray	paired-match	color-clamp-comparisons.md#hsl-and-hsv-conversion-vectors
 packages/flutter/test/painting/colors_test.dart	14	HSVColor control test	paired-match	color-clamp-comparisons.md#independent-color-channel-replacement
 packages/flutter/test/painting/colors_test.dart	261	HSLColor control test	paired-match	color-clamp-comparisons.md#independent-color-channel-replacement
+packages/flutter/test/painting/colors_test.dart	69	HSVColor saturation sweep test	paired-match	color-clamp-comparisons.md#single-channel-sweep-precision
+packages/flutter/test/painting/colors_test.dart	97	HSVColor value sweep test	partial-match	color-clamp-comparisons.md#single-channel-sweep-precision
+packages/flutter/test/painting/colors_test.dart	316	HSLColor saturation sweep test	partial-match	color-clamp-comparisons.md#single-channel-sweep-precision
+packages/flutter/test/painting/colors_test.dart	344	HSLColor lightness sweep test	paired-match	color-clamp-comparisons.md#single-channel-sweep-precision

@@ -24,6 +24,7 @@ fn hsv_hue_sweep_matches_every_argb_pixel_and_its_reverse_conversion() {
         let model = HsvColor::new(hue, 1., 1., 1.);
         let encoded = model.to_color();
         assert_eq!(encoded, argb(packed), "{hue} degrees");
+        assert_eq!(Color::from_ahsv(1., f64::from(hue), 1., 1.), argb(packed));
         if hue != 360. {
             let decoded = HsvColor::from_color(encoded);
             require_close(
@@ -50,6 +51,7 @@ fn hsl_hue_sweep_matches_every_argb_pixel_and_its_reverse_conversion() {
         let model = HslColor::new(hue, 0.5, 0.5, 1.);
         let encoded = model.to_color();
         assert_eq!(encoded, argb(packed), "{hue} degrees");
+        assert_eq!(Color::from_ahsl(1., f64::from(hue), 0.5, 0.5), argb(packed));
         if hue != 360. {
             let decoded = HslColor::from_color(encoded);
             require_close(
@@ -83,4 +85,94 @@ fn white_black_and_gray_have_no_saturation_and_zero_hue() {
     let gray = HslColor::from_color(argb(0xff808080));
     assert_eq!((gray.hue, gray.saturation, gray.alpha), (0., 0., 1.));
     assert!((gray.lightness - 0.5).abs() <= 0.01);
+}
+
+#[test]
+fn precise_hsv_saturation_and_value_sweeps_match_the_pinned_bytes() {
+    let mut narrowed_rounding = Vec::new();
+    let channels = [
+        (
+            false,
+            [
+                0xffffffff, 0xffffe6e6, 0xffffcccc, 0xffffb3b3, 0xffff9999, 0xffff8080, 0xffff6666,
+                0xffff4d4d, 0xffff3333, 0xffff1a1a, 0xffff0000,
+            ],
+        ),
+        (
+            true,
+            [
+                0xff000000, 0xff1a0000, 0xff330000, 0xff4d0000, 0xff660000, 0xff800000, 0xff990000,
+                0xffb30000, 0xffcc0000, 0xffe50000, 0xffff0000,
+            ],
+        ),
+    ];
+    for (varies_value, expected) in channels {
+        let mut t = 0f64;
+        for (sample, packed) in expected.into_iter().enumerate() {
+            let (s, v) = if varies_value { (1., t) } else { (t, 1.) };
+            let encoded = Color::from_ahsv(1., 0., s, v);
+            assert_eq!(encoded, argb(packed), "sample {sample} at {t}");
+            let narrowed = HsvColor::new(0., s as f32, v as f32, 1.).to_color();
+            if narrowed != encoded {
+                narrowed_rounding.push((varies_value, sample, narrowed, encoded));
+            }
+            if !varies_value || (0.01..=0.99).contains(&t) {
+                let back = HsvColor::from_color(encoded);
+                require_close(
+                    [0., s as f32, v as f32, 1.],
+                    [back.hue / 360., back.saturation, back.value, back.alpha],
+                );
+            }
+            t += 0.1;
+        }
+    }
+    assert_eq!(
+        narrowed_rounding,
+        [(true, 9, argb(0xffe60000), argb(0xffe50000))]
+    );
+}
+
+#[test]
+fn precise_hsl_saturation_and_lightness_sweeps_match_the_pinned_bytes() {
+    let mut narrowed_rounding = Vec::new();
+    let channels = [
+        (
+            false,
+            [
+                0xff808080, 0xff8c7373, 0xff996666, 0xffa65959, 0xffb34d4d, 0xffbf4040, 0xffcc3333,
+                0xffd92626, 0xffe51a1a, 0xfff20d0d, 0xffff0000,
+            ],
+        ),
+        (
+            true,
+            [
+                0xff000000, 0xff260d0d, 0xff4d1a1a, 0xff732626, 0xff993333, 0xffbf4040, 0xffcc6666,
+                0xffd98c8c, 0xffe6b3b3, 0xfff2d9d9, 0xffffffff,
+            ],
+        ),
+    ];
+    for (varies_lightness, expected) in channels {
+        let mut t = 0f64;
+        for (sample, packed) in expected.into_iter().enumerate() {
+            let (s, l) = if varies_lightness { (0.5, t) } else { (t, 0.5) };
+            let encoded = Color::from_ahsl(1., 0., s, l);
+            assert_eq!(encoded, argb(packed), "sample {sample} at {t}");
+            let narrowed = HslColor::new(0., s as f32, l as f32, 1.).to_color();
+            if narrowed != encoded {
+                narrowed_rounding.push((varies_lightness, sample, narrowed, encoded));
+            }
+            if !varies_lightness || (0.01..=0.99).contains(&t) {
+                let back = HslColor::from_color(encoded);
+                require_close(
+                    [0., s as f32, l as f32, 1.],
+                    [back.hue / 360., back.saturation, back.lightness, back.alpha],
+                );
+            }
+            t += 0.1;
+        }
+    }
+    assert_eq!(
+        narrowed_rounding,
+        [(false, 8, argb(0xffe61919), argb(0xffe51a1a))]
+    );
 }
