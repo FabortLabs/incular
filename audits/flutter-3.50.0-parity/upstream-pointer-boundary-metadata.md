@@ -1,0 +1,23 @@
+# Pointer pressure at mouse annotations
+
+The pinned `gestures/events_test.dart` registrations at :116, :143,
+:170 and :197 passed. Flutter's enter/exit constructors synthesize no
+contact pressure, even when made from a pressed move. They retain
+the pointer and device IDs, motion, buttons, contact state, and other
+applicable metadata. The native constructors now do the same for
+the modeled portable fields.
+
+The authored `pressed_pointer_boundary_metadata_test.dart` sends an
+actual stylus contact from outside to inside and back outside a
+rendered mouse region. It preserves pointer 34, device 10, the
+primary button and down state. Local positions are (30,50) and
+(120,50); local deltas are (70,0) and (90,0). Flutter reports zero
+pressure, while the native baseline leaked 0.55 on entry. Incular
+now reports zero for both transitions and keeps the pen orientation
+packet. The hover and pressed constructor controls also keep the
+original synthesized flag and transformed coordinates.
+
+Both focused and sixteen neighboring native tests passed. The four
+original cases remain partial: portable samples do not model
+Flutter's obscured flag, pressure ranges, size, radii, or distance
+fields. The authored end-to-end case adds no original credit.

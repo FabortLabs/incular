@@ -6,7 +6,7 @@ use std::{
 use incular_core::time::Instant;
 
 use incular_core::{
-    DragStartBehavior, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
+    DragStartBehavior, KeyboardEvent, NormalizedPressure, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
     PointerSampleMetadata, SECONDARY_POINTER_BUTTON, TERTIARY_POINTER_BUTTON, TrackpadGesture,
     Transform,
 };
@@ -157,6 +157,33 @@ impl RawPointerEvent {
             (0, self.pointer)
         } else {
             (self.device, 0)
+        }
+    }
+
+    /// Creates a hover annotation's enter event from a pointer sample.
+    /// Contact state and motion are preserved, but a boundary is not a
+    /// hardware pressure reading or a change to any individual button.
+    #[must_use]
+    pub fn as_mouse_enter(self) -> Self {
+        self.as_mouse_boundary(PointerPhase::Enter)
+    }
+
+    /// Creates the corresponding exit event, with the same field policy.
+    #[must_use]
+    pub fn as_mouse_exit(self) -> Self {
+        self.as_mouse_boundary(PointerPhase::Exit)
+    }
+
+    fn as_mouse_boundary(self, phase: PointerPhase) -> Self {
+        Self {
+            phase,
+            sample: PointerSampleMetadata {
+                pressure: Some(NormalizedPressure::default()),
+                ..self.sample
+            },
+            button: None,
+            scroll_delta: Offset::ZERO,
+            ..self
         }
     }
 

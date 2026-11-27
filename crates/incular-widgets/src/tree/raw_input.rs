@@ -880,25 +880,13 @@ impl WidgetTree {
             .filter_map(|entry| self.focus_behavior_for(entry.element))
             .collect::<Vec<_>>();
         for (callback, transform) in exit_callbacks {
-            callback.call(localize_with_transform(
-                transform,
-                RawPointerEvent {
-                    phase: PointerPhase::Exit,
-                    ..event
-                },
-            ));
+            callback.call(localize_with_transform(transform, event.as_mouse_exit()));
         }
         for behavior in exit_behaviors {
             behavior.mouse_exit();
         }
         for (callback, transform) in enter_callbacks {
-            callback.call(localize_with_transform(
-                transform,
-                RawPointerEvent {
-                    phase: PointerPhase::Enter,
-                    ..event
-                },
-            ));
+            callback.call(localize_with_transform(transform, event.as_mouse_enter()));
         }
         for behavior in enter_behaviors {
             behavior.mouse_enter();
