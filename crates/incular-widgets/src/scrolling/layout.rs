@@ -2101,7 +2101,6 @@ impl RenderSliver for ResizingHeaderRenderSliver {
         rect: Rect,
         options: &ShowOnScreen,
     ) -> Option<Rect> {
-        let config = self.reveal_configuration?;
         let frame = self.reveal_frame?;
         if child != SliverChildId(0) {
             return None;
@@ -2122,15 +2121,17 @@ impl RenderSliver for ResizingHeaderRenderSliver {
         } else {
             (start.max(0.), end, end)
         };
-        let extent = config
-            .limit(requested)
-            .clamp(frame.extent, self.max_extent.max(frame.extent));
-        let target_offset = self.max_extent - extent;
-        if extent > frame.extent && self.scroll_state.request_reveal(target_offset, options) {
-            // An activity notification already queued before this request
-            // must not overwrite the newer reveal.
-            let _ = self.snap_activity.take();
-            incular_animation::schedule_frame();
+        if let Some(config) = self.reveal_configuration {
+            let extent = config
+                .limit(requested)
+                .clamp(frame.extent, self.max_extent.max(frame.extent));
+            let target_offset = self.max_extent - extent;
+            if extent > frame.extent && self.scroll_state.request_reveal(target_offset, options) {
+                // An activity notification already queued before this request
+                // must not overwrite the newer reveal.
+                let _ = self.snap_activity.take();
+                incular_animation::schedule_frame();
+            }
         }
         Some(Rect::from_origin_size(
             frame.axis.offset(start, cross),
@@ -2197,7 +2198,11 @@ impl RenderSliver for ResizingHeaderRenderSliver {
             .clamp(self.min_extent, self.max_extent)
             + stretch)
             .min(f32::MAX);
-        if self.reveal_configuration.is_some() {
+        // Pinned persistent headers trim their leading edge even without
+        // a floating expansion configuration or an animation provider.
+        if self.reveal_configuration.is_some()
+            || self.scroll_behavior == SliverHeaderScrollBehavior::Pinned
+        {
             self.reveal_frame = Some(HeaderRevealFrame {
                 axis: constraints.axis,
                 reverse: constraints.reverse

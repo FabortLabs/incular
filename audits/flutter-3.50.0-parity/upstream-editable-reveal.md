@@ -26,3 +26,20 @@ at the off-screen end reveals its caret. Replacing that old caret
 with the selection 26→27 there scrolls to exactly 28 px, not back to
 the end or to a later line. The three focused native runtime tests
 use real input events and the retained layouts.
+
+## Large insets and pinned header editors
+
+Three exact originals passed. The bottom inset can be as tall as the
+300 px viewport; opening the keyboard then moves the preceding
+200 px row completely out of view. Focusing a field in a 50 px
+persistent header pinned at scroll offset 1500 no longer rewinds the
+outer viewport to 1480 to accommodate the caret's 20 px padding.
+The pinned header trims the requested rectangle at its growth-leading
+edge, independently of the floating-header expansion option.
+
+The Rust cases retain focus and leave offset 1500 unchanged for both
+timed and immediate ShowOnScreen paths, with no running viewport
+animation. The two upstream cases differ in whether the delegate
+supplies vsync; the Rust layout uses explicit request durations
+instead of an external ticker provider. All 14 focused native
+reveal and pinned-sliver checks passed.
