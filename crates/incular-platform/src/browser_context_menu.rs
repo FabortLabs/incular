@@ -133,12 +133,14 @@ mod dom {
         fn handle(
             &mut self,
             channel: &'static str,
-            payload: &[u8],
+            payload: Option<&[u8]>,
         ) -> Result<Option<Vec<u8>>, DomContextMenuError> {
             if channel != BrowserContextMenu::<Self>::CHANNEL {
                 return Ok(None);
             }
-            let call = JsonMethodCodec::decode_method_call(payload)?;
+            let call = JsonMethodCodec::decode_method_call(
+                payload.ok_or(JsonMethodCodecError::InvalidMethodCall)?,
+            )?;
             let enabled = match call.method.as_str() {
                 "disableContextMenu" => false,
                 "enableContextMenu" => true,
@@ -163,9 +165,9 @@ mod dom {
         fn send_platform_message(
             &mut self,
             channel: &'static str,
-            payload: Vec<u8>,
+            payload: Option<Vec<u8>>,
         ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
-            ready(self.handle(channel, &payload))
+            ready(self.handle(channel, payload.as_deref()))
         }
     }
 }

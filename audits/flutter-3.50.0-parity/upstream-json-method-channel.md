@@ -34,3 +34,19 @@ Seven focused native channel tests and twenty nearby receiver, menu, and
 optional-channel regression tests passed. The standard binary method
 codec is unchanged. No credit is claimed for test messenger mock-handler
 identity or for EventChannel subscription and cancellation.
+
+## Basic request/reply messages
+
+The exact pinned :14 and :24 `BasicMessageChannel` registrations passed.
+The native sender puts unwrapped UTF-8 `hello` on channel `ch` and decodes
+`hello world` from its reply. The receiver decodes those raw input bytes
+and issues the same unwrapped UTF-8 reply in a later microtask, exactly
+once. No method name or envelope is introduced.
+
+Native controls also distinguish no bytes from an empty byte buffer
+in both directions, reject invalid UTF-8, and round-trip nested JSON and
+standard binary values through the same channel interface. The transport
+hands the codec a nullable payload unchanged; older method callers wrap
+their encoded request in `Some`. Three new native channel tests and 36
+nearby platform tests passed; the browser platform crate was checked for
+Wasm and the mounted editor integration was re-run.

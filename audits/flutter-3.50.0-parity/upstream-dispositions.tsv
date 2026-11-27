@@ -2685,3 +2685,5 @@ packages/flutter/test/services/platform_channel_test.dart	221	can handle method 
 packages/flutter/test/services/platform_channel_test.dart	237	can handle method call with successful result	paired-match	upstream-json-method-channel.md#inbound-handler-replies
 packages/flutter/test/services/platform_channel_test.dart	251	can handle method call with expressive error result	paired-match	upstream-json-method-channel.md#inbound-handler-replies
 packages/flutter/test/services/platform_channel_test.dart	274	can handle method call with other error result	paired-match	upstream-json-method-channel.md#inbound-handler-replies
+packages/flutter/test/services/platform_channel_test.dart	14	can send string message and get reply	paired-match	upstream-json-method-channel.md#basic-requestreply-messages
+packages/flutter/test/services/platform_channel_test.dart	24	can receive string message and send reply	paired-match	upstream-json-method-channel.md#basic-requestreply-messages

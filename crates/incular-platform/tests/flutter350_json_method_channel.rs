@@ -60,11 +60,11 @@ impl FlutterPlatformMessenger for Wire {
     fn send_platform_message(
         &mut self,
         channel: &'static str,
-        payload: Vec<u8>,
+        payload: Option<Vec<u8>>,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
         self.calls.push((
             channel,
-            JsonMethodCodec::decode_method_call(&payload).unwrap(),
+            JsonMethodCodec::decode_method_call(&payload.expect("method call bytes")).unwrap(),
         ));
         ready(Ok(self.response.clone()))
     }

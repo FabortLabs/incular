@@ -5,7 +5,16 @@ a version and date when publishing.
 
 ## Unreleased
 
+### Changed
+
+- `FlutterPlatformMessenger::send_platform_message` now takes
+  `Option<Vec<u8>>` for its request. Existing method-channel implementations
+  receive `Some(encoded_request)`; handle `None` as a true null message.
+
 ### Added
+
+- Basic platform message channels send and receive unwrapped binary, UTF-8,
+  JSON, and standard-codec values. Null stays distinct from empty bytes.
 
 - JSON platform method channels support required or optional replies, typed
   list and map results, and inbound success and error envelopes.

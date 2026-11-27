@@ -25,9 +25,9 @@ impl FlutterPlatformMessenger for Messenger {
     fn send_platform_message(
         &mut self,
         channel: &'static str,
-        payload: Vec<u8>,
+        payload: Option<Vec<u8>>,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
-        self.calls.borrow_mut().push((channel, payload));
+        self.calls.borrow_mut().push((channel, payload.expect("method call bytes")));
         ready(self.reply.clone())
     }
 }

@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use crate::{
     FlutterInboundMessenger,
+    flutter_inbound_messenger::encode_reply,
     message_codecs::{
         JsonMethodCodec, JsonMethodCodecError, MethodCall, MissingPluginException,
         PlatformException,
@@ -15,13 +16,14 @@ use crate::{
 
 /// Transport for Flutter-compatible channels. A missing handler returns
 /// `Ok(None)`; registered handlers return bytes for the selected codec.
+/// The request also distinguishes null from an empty byte buffer.
 pub trait FlutterPlatformMessenger {
     type Error;
 
     fn send_platform_message(
         &mut self,
         channel: &'static str,
-        payload: Vec<u8>,
+        payload: Option<Vec<u8>>,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>>;
 }
 
@@ -75,7 +77,7 @@ impl FlutterJsonMethodChannel {
             arguments,
         })?;
         let reply = messenger
-            .send_platform_message(self.name, payload)
+            .send_platform_message(self.name, Some(payload))
             .await
             .map_err(FlutterPlatformChannelError::Transport)?;
         match reply {
@@ -130,16 +132,7 @@ impl FlutterJsonMethodChannel {
             match call {
                 Ok(call) => handler(
                     call,
-                    Box::new(move |result| match result.encode() {
-                        Ok(bytes) => {
-                            reply(bytes);
-                            Ok(())
-                        }
-                        Err(error) => {
-                            reply(None);
-                            Err(error)
-                        }
-                    }),
+                    Box::new(encode_reply(reply, FlutterJsonMethodResult::encode)),
                 ),
                 Err(_) => reply(None),
             }

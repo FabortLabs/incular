@@ -18,7 +18,7 @@ impl FlutterPlatformMessenger for Host {
     fn send_platform_message(
         &mut self,
         _: &'static str,
-        _: Vec<u8>,
+        _: Option<Vec<u8>>,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
         self.0.set(self.0.get() + 1);
         ready(Ok(None))

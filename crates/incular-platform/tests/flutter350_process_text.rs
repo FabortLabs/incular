@@ -23,9 +23,9 @@ impl FlutterPlatformMessenger for Host {
     fn send_platform_message(
         &mut self,
         channel: &'static str,
-        payload: Vec<u8>,
+        payload: Option<Vec<u8>>,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
-        let call = Codec::decode_method_call(&payload).unwrap();
+        let call = Codec::decode_method_call(&payload.expect("method call bytes")).unwrap();
         let result =
             (self.reply)(&call).map(|value| Codec::encode_success_envelope(&value).unwrap());
         self.calls.borrow_mut().push((channel, call));

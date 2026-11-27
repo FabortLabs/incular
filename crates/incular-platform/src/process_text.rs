@@ -64,7 +64,7 @@ impl<M: FlutterPlatformMessenger> DefaultProcessTextService<M> {
         })?;
         let reply = self
             .messenger
-            .send_platform_message(Self::CHANNEL, payload)
+            .send_platform_message(Self::CHANNEL, Some(payload))
             .await
             .map_err(ProcessTextError::Transport)?;
         match reply {

@@ -13,6 +13,22 @@ pub type FlutterBinaryReply = Box<dyn FnOnce(FlutterBinaryPayload)>;
 /// A task scheduled after the current call stack has returned.
 pub type FlutterChannelMicrotask = Box<dyn FnOnce()>;
 
+pub(crate) fn encode_reply<T, E>(
+    reply: FlutterBinaryReply,
+    encode: impl FnOnce(T) -> Result<FlutterBinaryPayload, E>,
+) -> impl FnOnce(T) -> Result<(), E> {
+    move |message| match encode(message) {
+        Ok(bytes) => {
+            reply(bytes);
+            Ok(())
+        }
+        Err(error) => {
+            reply(None);
+            Err(error)
+        }
+    }
+}
+
 type Handler = Rc<dyn Fn(FlutterBinaryPayload, FlutterBinaryReply)>;
 
 struct Message {
