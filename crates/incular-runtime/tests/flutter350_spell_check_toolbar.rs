@@ -62,6 +62,7 @@ fn input_with_suggestion_selection(
     collapse_suggestion_selection: bool,
 ) -> Widget {
     EditableText::new(controller.clone())
+        .platform_tap_selection(true)
         .size(Size::new(260.0, 30.0))
         .text_direction(TextDirection::Ltr)
         .focus_node(focus.clone())

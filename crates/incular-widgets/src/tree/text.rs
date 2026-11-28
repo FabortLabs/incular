@@ -3674,6 +3674,15 @@ impl WidgetTree {
         })
     }
 
+    /// Whether the caller opts this editor into higher-level platform taps.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_uses_platform_tap_selection(&self, target: ElementId) -> bool {
+        self.elements.get(target.0).is_some_and(|element| {
+            matches!(element.widget.kind(), WidgetKind::TextField(spec) if spec.platform_tap_selection)
+        })
+    }
+
     /// Whether a mounted editor listens to user selection changes.
     #[doc(hidden)]
     #[must_use]

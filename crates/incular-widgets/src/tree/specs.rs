@@ -586,6 +586,7 @@ pub struct TextFieldSpec {
     pub(crate) enabled: bool,
     pub(crate) read_only: bool,
     pub(crate) renderer_ignores_pointer: bool,
+    pub(crate) platform_tap_selection: bool,
     pub(crate) obscure_text: bool,
     pub(crate) obscuring_character: char,
     pub(crate) keyboard_selection_enabled: bool,

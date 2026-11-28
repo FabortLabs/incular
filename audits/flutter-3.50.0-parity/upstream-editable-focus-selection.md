@@ -165,3 +165,20 @@ reproduced identically on the last published revision, so it was
 isolated from the focused run for this change. The remaining seven
 focus-selection, five hosted focus and thirteen input lifecycle
 checks passed. The caret regression needs its own follow-up.
+
+
+## Raw iOS taps keep an exact caret
+
+All six pinned target variants of `editable_text_test.dart:17330`
+passed. Before the fix, the native test passed a point that mapped
+to caret 4, but its iOS touch event selected the nearest word edge at
+5. This was not geometry rounding or a missing frame: the same
+result reproduced on the previous published revision after layout.
+
+A bare EditableText now uses the renderer's precise selection for
+an ordinary iOS touch tap. Styled input wrappers explicitly keep
+their existing platform touch policy, including word-edge selection,
+retaining a selected range, and spelling toolbar interactions.
+The raw field, pointer-selection and spell-check regressions all
+passed (8, 7 and 7 respectively). This change does not audit the
+styled wrappers' visual design.

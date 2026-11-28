@@ -925,6 +925,7 @@ impl Runtime {
             PointerDeviceKind::Touch | PointerDeviceKind::Stylus | PointerDeviceKind::InvertedStylus
         );
         let ios_touch_tap = self.text_shortcut_platform == TextShortcutPlatform::Ios
+            && self.tree.text_field_uses_platform_tap_selection(field)
             && matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown)
             && effective_count == 1
             && !shift;
@@ -1137,7 +1138,9 @@ impl Runtime {
             return;
         }
         if single_tap && ios {
-            if matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown) {
+            if matches!(kind, PointerDeviceKind::Touch | PointerDeviceKind::Unknown)
+                && self.tree.text_field_uses_platform_tap_selection(run.field)
+            {
                 self.finish_ios_touch_selection(run, position);
             } else {
                 let previous = self.observed_editor_selection(run.field);

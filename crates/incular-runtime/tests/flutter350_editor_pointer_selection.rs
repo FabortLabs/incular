@@ -281,6 +281,7 @@ fn ios_touch_taps_keep_a_selected_range_or_place_the_caret_at_a_word_edge() {
     controller.set_selection(selected);
     let causes = Rc::new(RefCell::new(Vec::new()));
     let editor = EditableText::new(controller.clone())
+        .platform_tap_selection(true)
         .text_direction(TextDirection::Ltr)
         .autofocus(true)
         .style(style)
