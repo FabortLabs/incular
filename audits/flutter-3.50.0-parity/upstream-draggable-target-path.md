@@ -160,3 +160,13 @@ of a default primary-plus-secondary chord. The native callback sees
 the entire normalized mask once per press. This changes only the
 Draggable member's admission, not sibling tap policies. All 19
 focused native tests passed.
+
+## Delayed drag activation
+
+Pinned :730, :3120, :3161 and :3201 passed. The native long-press
+fixture has no feedback at down, at the midpoint, or one
+millisecond before the deadline. The default starts exactly at
+500 ms; a configured two-second hold starts at exactly 2,000 ms.
+Release removes feedback. A short tap or movement past slop before
+the deadline sends no start or drop, even after waiting longer.
+All nine focused native delay, hit, button and feedback tests passed.

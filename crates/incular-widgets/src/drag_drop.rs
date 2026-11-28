@@ -858,6 +858,12 @@ impl<T: Clone + 'static> LongPressDraggable<T> {
                 .start_delay(incular_gestures::PointerGestureRecognizer::LONG_PRESS_TIMEOUT),
         }
     }
+    /// The hold required before dragging, defaulting to 500 milliseconds.
+    #[must_use]
+    pub fn delay(mut self, delay: Duration) -> Self {
+        self.draggable = self.draggable.start_delay(delay);
+        self
+    }
     /// See [`Draggable::feedback`].
     #[must_use]
     pub fn feedback(mut self, builder: impl Fn(T) -> Widget + 'static) -> Self {
