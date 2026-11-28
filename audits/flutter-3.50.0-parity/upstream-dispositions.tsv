@@ -4365,3 +4365,13 @@ packages/flutter/test/widgets/scrollbar_test.dart	4076	RawScrollbar.mouseCursor 
 packages/flutter/test/widgets/scrollbar_test.dart	4145	RawScrollbar.mouseCursor is released when the scrollbar stops being interactive	paired-match	upstream-scrollbar-cursor.md
 packages/flutter/test/widgets/scrollbar_test.dart	4232	RawScrollbar.mouseCursor is released when the child stops being scrollable	paired-match	upstream-scrollbar-cursor.md
 packages/flutter/test/widgets/scrollbar_test.dart	4303	RawScrollbar.mouseCursor clears dragged state when thumb drag is cancelled	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	173	mainAxisMargin is respected	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	211	crossAxisMargin & text direction are respected	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	355	down	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	379	up	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	411	left	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	443	right	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	476	thumb resizes gradually on overscroll	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	2602	Track offset respects MediaQuery padding	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	2633	RawScrollbar.padding replaces MediaQueryData.padding	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	3626	with EdgeInsetsDirectional	paired-match	upstream-scrollbar-padding.md

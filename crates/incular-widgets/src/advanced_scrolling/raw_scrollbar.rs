@@ -9,9 +9,9 @@ use incular_core::time::Instant;
 use std::{fmt, rc::Rc, time::Duration};
 
 use incular_animation::Curve;
-use incular_config::{Axis, TextDirection};
-use incular_core::finite_non_negative;
+use incular_config::{Axis, EdgeInsets, EdgeInsetsGeometry, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
+use incular_core::{finite_non_negative, finite_or_zero};
 use incular_scroll::{ActivityOrigin, OwnedActivity, ScrollController};
 use smart_default::SmartDefault;
 
@@ -248,6 +248,9 @@ pub struct RawScrollbarStyle {
     pub main_axis_margin: f32,
     /// Empty space inset from the overlay edge in the cross axis.
     pub cross_axis_margin: f32,
+    /// Insets around the track. When absent, mounted bars inherit the
+    /// nearest MediaQuery's safe-area padding.
+    pub padding: Option<EdgeInsetsGeometry>,
     /// Track paint color. A transparent track is the default overlay style.
     pub track_color: Color,
     /// Thumb paint color.
@@ -278,7 +281,7 @@ impl RawScrollbarStyle {
             thickness: finite_positive(self.thickness, 1.0),
             min_thumb_extent: finite_positive(self.min_thumb_extent, 1.0),
             min_overscroll_thumb_extent: finite_positive(self.min_overscroll_thumb_extent, 1.0),
-            main_axis_margin: finite_non_negative(self.main_axis_margin),
+            main_axis_margin: finite_or_zero(self.main_axis_margin),
             cross_axis_margin: finite_non_negative(self.cross_axis_margin),
             ..self
         }
@@ -488,6 +491,13 @@ impl RawScrollbar {
         self.style.interactive && self.scrollable_geometry(size).is_some()
     }
 
+    /// Overrides the inherited inset. Directional edges follow reading order.
+    #[must_use]
+    pub fn padding(mut self, padding: impl Into<EdgeInsetsGeometry>) -> Self {
+        self.style.padding = Some(padding.into());
+        self
+    }
+
     /// `RawScrollbar.thumbVisibility ?? false`.
     fn show_scrollbar(&self) -> bool {
         self.style.thumb_visibility.unwrap_or(false)
@@ -647,24 +657,36 @@ impl RawScrollbar {
         let max_scroll_extent = self.controller.max_offset().max(0.0);
         let scroll_range = max_scroll_extent - min_scroll_extent;
         let cross_extent = axis.cross_extent(viewport_size);
-        let travel_extent = (viewport_extent - style.main_axis_margin * 2.0).max(0.0);
-        let track_cross = style.thickness + style.cross_axis_margin * 2.0;
+        let padding = style.padding.map_or(EdgeInsets::ZERO, |padding| {
+            padding.resolve(self.text_direction)
+        });
+        let (track_start, main_padding) = if axis.is_horizontal() {
+            (padding.left, padding.horizontal())
+        } else {
+            (padding.top, padding.vertical())
+        };
+        let track_extent = (viewport_extent - main_padding).max(0.);
+        let travel_extent = (track_extent - style.main_axis_margin * 2.).max(0.);
+        let track_cross = style.thickness + style.cross_axis_margin * 2.;
         let cross_start = match orientation {
-            RawScrollbarOrientation::Left | RawScrollbarOrientation::Top => style.cross_axis_margin,
-            RawScrollbarOrientation::Auto
-            | RawScrollbarOrientation::Right
-            | RawScrollbarOrientation::Bottom => {
-                cross_extent - style.cross_axis_margin - style.thickness
+            RawScrollbarOrientation::Left => padding.left + style.cross_axis_margin,
+            RawScrollbarOrientation::Top => padding.top + style.cross_axis_margin,
+            RawScrollbarOrientation::Bottom => {
+                cross_extent - padding.bottom - style.cross_axis_margin - style.thickness
+            }
+            RawScrollbarOrientation::Auto | RawScrollbarOrientation::Right => {
+                cross_extent - padding.right - style.cross_axis_margin - style.thickness
             }
         };
-        // As in Flutter, the track has the scroll metrics' viewport length,
-        // not the canvas length. Main-axis margins inset the thumb only.
-        let track_origin = axis.offset(0., cross_start - style.cross_axis_margin);
-        let track = Rect::from_origin_size(track_origin, axis.size(viewport_extent, track_cross));
+        // Padding offsets the track and the thumb; the main-axis margin
+        // additionally insets the thumb without shortening track paint.
+        let track_origin = axis.offset(track_start, cross_start - style.cross_axis_margin);
+        let track = Rect::from_origin_size(track_origin, axis.size(track_extent, track_cross));
 
         if cross_extent <= 0.0
             || content_extent <= viewport_extent
             || viewport_extent <= 0.0
+            || track_extent <= 0.0
             || travel_extent <= 0.0
         {
             return RawScrollbarGeometry {
@@ -687,7 +709,8 @@ impl RawScrollbar {
             - (metrics.min_scroll_extent - metrics.pixels).clamp(0.0, viewport_extent)
             - (metrics.pixels - metrics.max_scroll_extent).clamp(0.0, viewport_extent);
         let fraction_overscrolled = 1.0 - extent_inside / viewport_extent;
-        let fraction = (extent_inside / content_extent).clamp(0.0, 1.0);
+        let fraction =
+            ((extent_inside - main_padding) / (content_extent - main_padding)).clamp(0.0, 1.0);
         let min_extent = style.min_thumb_extent.min(travel_extent)
             * (1.0 - fraction_overscrolled.clamp(0.0, 0.2) / 0.2);
         let thumb_main = (travel_extent * fraction)
@@ -705,7 +728,7 @@ impl RawScrollbar {
             offset_fraction
         };
         let thumb_origin = axis.offset(
-            style.main_axis_margin + thumb_travel * offset_fraction,
+            track_start + style.main_axis_margin + thumb_travel * offset_fraction,
             cross_start,
         );
         RawScrollbarGeometry {
@@ -830,7 +853,7 @@ impl RawScrollbar {
             return false;
         }
         let axis = self.resolved_axis();
-        let track_start = self.style.main_axis_margin;
+        let track_start = axis.main_extent_of(geometry.track.origin) + self.style.main_axis_margin;
         let point_main = axis.main_extent_of(point);
         let desired_thumb =
             (point_main - drag.grab_offset - track_start).clamp(0.0, geometry.thumb_travel);
@@ -870,7 +893,7 @@ impl RawScrollbar {
             return false;
         }
         let axis = self.resolved_axis();
-        let track_start = self.style.main_axis_margin;
+        let track_start = axis.main_extent_of(geometry.track.origin) + self.style.main_axis_margin;
         let mut fraction =
             (main_position - track_start - axis.main_extent_of(geometry.thumb.size) / 2.0)
                 .clamp(0.0, geometry.thumb_travel)
