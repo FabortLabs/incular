@@ -224,3 +224,13 @@ retains focus. Native uses separate focus nodes, as does the authored
 reference, so :1772 is partial rather than claiming equivalent
 behavior for the original's shared FocusNode attachment. The eight
 focused native tests used the matching embedded FlutterTest font.
+
+### Paste replaces the selection and lands after the inserted text
+
+Pinned :14881 passed. The two native paths use the keyboard and the
+neutral toolbar action. Starting from typed `12345`, five Shift-Left
+events form the reversed (5,0) range, then Copy and Paste restore
+the same text with the caret at 5. Replacing forward range (4,5)
+yields `123412345` with the caret at 9. Selecting all and pasting
+the shorter value returns `12345` and caret 5. The test compares
+the retained editing action, not Material toolbar styling.
