@@ -82,3 +82,13 @@ receives full overlay constraints, even when it returns a smaller
 SizedBox directly. The native case matches this default; a builder can
 position its own content inside that full viewport. Nine focused editor
 tests and 14 existing context menu tests passed.
+
+## Cut and paste may remove their editor
+
+Pinned `widgets/editable_text_test.dart:15069,15120` both passed.
+The native tests exercise the real Cut and Paste toolbar callbacks
+with an in-memory clipboard. The edit fires the editor's change
+listener, whose retained state update removes the editor. Both
+operations complete, close the text client, and leave the replacement
+mounted with no stale focus. Reusing the old toolbar callback does
+nothing. Both native tests passed.
