@@ -256,3 +256,140 @@ fn changing_the_foreground_source_keeps_the_old_background_subscription() {
     assert_eq!(commands(&mut tree), [BACK, INK, FRONT]);
     assert_eq!(calls.get(), 2);
 }
+
+#[test]
+fn painter_notification_updates_only_its_pass_and_does_not_paint_editor_text() {
+    let source_bg = DependencySource::default();
+    let source_fg = DependencySource::default();
+    let editor = editor();
+    let mut tree = WidgetTree::new();
+    let bg = painter(BACK, true, Some(source_bg.clone()));
+    let fg = painter(FRONT, true, Some(source_fg.clone()));
+    let bg_calls = bg.calls.clone();
+    let fg_calls = fg.calls.clone();
+    let root = tree
+        .mount(field(
+            &editor,
+            Some(Delegate::new(bg)),
+            Some(Delegate::new(fg)),
+            None,
+        ))
+        .unwrap();
+    tree.layout(Constraints::tight(VIEW)).unwrap();
+    assert_eq!(commands(&mut tree), [BACK, INK, FRONT]);
+
+    let baseline = tree.diagnostics();
+    source_bg.notify();
+    assert_eq!(commands(&mut tree), [BACK, INK, FRONT]);
+    assert_eq!((bg_calls.get(), fg_calls.get()), (2, 1));
+    assert_eq!(tree.diagnostics().paints, baseline.paints);
+    assert_eq!(tree.diagnostics().layouts, baseline.layouts);
+
+    source_fg.notify();
+    assert_eq!(commands(&mut tree), [BACK, INK, FRONT]);
+    assert_eq!((bg_calls.get(), fg_calls.get()), (2, 2));
+    assert_eq!(tree.diagnostics().paints, baseline.paints);
+
+    // A normal editor repaint in the same frame has priority and records each
+    // pass once, against the new editor picture.
+    source_fg.notify();
+    tree.mark_paint(root).unwrap();
+    assert_eq!(commands(&mut tree), [BACK, INK, FRONT]);
+    assert_eq!((bg_calls.get(), fg_calls.get()), (3, 3));
+    assert_eq!(tree.diagnostics().paints, baseline.paints + 1);
+    assert_eq!(commands(&mut tree), [BACK, INK, FRONT]);
+    assert_eq!((bg_calls.get(), fg_calls.get()), (3, 3));
+}
+
+#[test]
+fn aux_changes_advance_the_isolated_clip_generation_and_preserve_its_layer() {
+    let source = DependencySource::default();
+    let editor = editor();
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            EditableText::new(editor)
+                .fixed_scroll_offset(1000.)
+                .text_direction(TextDirection::Ltr)
+                .clip_behavior(incular_config::Clip::AntiAliasWithSaveLayer)
+                .show_cursor(false)
+                .painter(painter(BACK, true, Some(source.clone())))
+                .into(),
+        )
+        .unwrap();
+    tree.layout(Constraints::tight(VIEW)).unwrap();
+    let clip = |tree: &mut WidgetTree| {
+        tree.paint()
+            .commands()
+            .iter()
+            .find_map(|command| match command {
+                PaintCommand::PushClipRRect {
+                    isolation: Some(isolation),
+                    ..
+                } => Some(*isolation),
+                _ => None,
+            })
+            .expect("overflow has an isolated editor clip")
+    };
+    let first = clip(&mut tree);
+    let previous = tree.diagnostics().paints;
+    source.notify();
+    let next = clip(&mut tree);
+    assert_eq!(next.layer, first.layer);
+    assert_eq!(next.generation, first.generation + 1);
+    assert_eq!(tree.diagnostics().paints, previous);
+    tree.mark_paint(root).unwrap();
+    assert_eq!(clip(&mut tree).generation, next.generation + 1);
+}
+
+#[test]
+fn changing_one_pass_command_count_does_not_shift_the_other_pass() {
+    struct Variable {
+        count: Rc<Cell<usize>>,
+        source: DependencySource,
+        color: Color,
+    }
+    impl EditableTextPainter for Variable {
+        fn paint(&self, _context: EditableTextPaintContext, canvas: &mut DisplayList) {
+            for x in 0..self.count.get() {
+                canvas.push(PaintCommand::Rect {
+                    rect: Rect::from_origin_size(Offset::new(x as f32, 1.), Size::new(1., 1.)),
+                    color: self.color,
+                });
+            }
+        }
+        fn repaint_source(&self) -> Option<DependencySource> {
+            Some(self.source.clone())
+        }
+    }
+    let editor = editor();
+    let mut tree = WidgetTree::new();
+    let bg_count = Rc::new(Cell::new(1));
+    let fg_count = Rc::new(Cell::new(1));
+    let bg_source = DependencySource::default();
+    let fg_source = DependencySource::default();
+    let bg = Delegate::new(Variable {
+        count: bg_count.clone(),
+        source: bg_source.clone(),
+        color: BACK,
+    });
+    let fg = Delegate::new(Variable {
+        count: fg_count.clone(),
+        source: fg_source.clone(),
+        color: FRONT,
+    });
+    tree.mount(field(&editor, Some(bg), Some(fg), None))
+        .unwrap();
+    tree.layout(Constraints::tight(VIEW)).unwrap();
+    assert_eq!(commands(&mut tree), [BACK, INK, FRONT]);
+
+    bg_count.set(2);
+    bg_source.notify();
+    assert_eq!(commands(&mut tree), [BACK, BACK, INK, FRONT]);
+    fg_count.set(2);
+    fg_source.notify();
+    assert_eq!(commands(&mut tree), [BACK, BACK, INK, FRONT, FRONT]);
+    bg_count.set(0);
+    bg_source.notify();
+    assert_eq!(commands(&mut tree), [INK, FRONT, FRONT]);
+}

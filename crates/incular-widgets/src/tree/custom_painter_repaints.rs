@@ -10,7 +10,7 @@ struct PainterSubscriptions {
 
 #[derive(Default)]
 pub(super) struct CustomPainterRepaints {
-    pending: Rc<RefCell<FastHashSet<RenderObjectId>>>,
+    pending: Rc<RefCell<FastHashMap<RenderObjectId, u8>>>,
     listeners: FastHashMap<RenderObjectId, PainterSubscriptions>,
 }
 
@@ -56,18 +56,26 @@ impl WidgetTree {
         {
             return;
         }
-        if ids[0] == ids[1] {
-            // A source shared by both delegates only needs one frame request.
+        let shared = ids[0].is_some() && ids[0] == ids[1];
+        if shared {
+            // One source can drive both logical passes.
             sources[1] = None;
         }
-        let subscriptions = sources.map(|source| {
+        let mut sources = sources.into_iter().enumerate();
+        let subscriptions = std::array::from_fn(|_| {
+            let (slot, source) = sources.next().expect("two supported painter slots");
             source.map(|source| {
                 let pending = Rc::downgrade(&state.pending);
+                let changed = if shared { 0b11 } else { 1 << slot };
                 source.subscribe(render, move || {
-                    if let Some(pending) = pending.upgrade()
-                        && pending.borrow_mut().insert(render)
-                    {
-                        incular_animation::schedule_frame();
+                    if let Some(pending) = pending.upgrade() {
+                        let mut pending = pending.borrow_mut();
+                        let first = !pending.contains_key(&render);
+                        *pending.entry(render).or_insert(0) |= changed;
+                        drop(pending);
+                        if first {
+                            incular_animation::schedule_frame();
+                        }
                     }
                 })
             })
@@ -97,15 +105,22 @@ impl WidgetTree {
         }
         let pending = std::mem::take(&mut *state.pending.borrow_mut());
         let mut any = false;
-        for render in pending {
+        for (render, slots) in pending {
             if let Some(node) = self.renders.get_mut(render.0)
                 && matches!(
                     node.object.kind(),
                     RenderKind::CustomPaint { .. } | RenderKind::TextField(_)
                 )
             {
-                // The notification requests paint, not a layout or semantic change.
-                node.dirty.insert(DirtyFlags::PAINT);
+                if let Some(recording) = node
+                    .text_field_state_mut()
+                    .and_then(|state| state.editable_paint.as_mut())
+                {
+                    recording.pending |= slots;
+                } else {
+                    // An unpainted editor or ordinary CustomPaint needs its initial picture.
+                    node.dirty.insert(DirtyFlags::PAINT);
+                }
                 self.propagate_subtree_paint(render);
                 any = true;
             }

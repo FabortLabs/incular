@@ -199,6 +199,7 @@ pub(crate) struct RenderTextFieldState {
     pub(crate) scroll_x: f32,
     /// Revision of the optional isolated clip inside the editor picture.
     pub(crate) clip_picture_generation: u64,
+    pub(crate) editable_paint: Option<Box<crate::editable_paint::EditorPaintRecording>>,
     pub(crate) scroll_y: f32,
     pub(crate) focused: bool,
     pub(crate) cursor_frame: CursorFrame,

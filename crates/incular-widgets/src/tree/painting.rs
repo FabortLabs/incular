@@ -1011,6 +1011,8 @@ impl WidgetTree {
             self.repaint_pictures(id);
             #[cfg(feature = "devtools")]
             self.devtools_trace_end(trace);
+        } else if self.editable_paint_pending(id) {
+            self.repaint_editable_painter_parts(id);
         } else {
             self.diagnostics.display_lists_reused += 1;
         }
@@ -1041,6 +1043,7 @@ impl WidgetTree {
         // callbacks may request paint on a sibling that was already visited.
         let node = self.render_live(id, "retained render must remain live");
         let pending = node.dirty.contains(DirtyFlags::PAINT)
+            || self.editable_paint_pending(id)
             || visible_paint_children(node).iter().any(|child| {
                 self.renders
                     .get(child.0)
@@ -1073,6 +1076,71 @@ impl WidgetTree {
                 color: Color::rgba(72, 120, 220, 150),
             });
         }
+    }
+
+    fn editable_paint_pending(&self, id: RenderObjectId) -> bool {
+        let node = self.render_live(id, "retained render must remain live");
+        node.text_field_state()
+            .and_then(|state| state.editable_paint.as_ref())
+            .is_some_and(|record| record.pending != 0)
+    }
+
+    fn repaint_editable_painter_parts(&mut self, id: RenderObjectId) {
+        use incular_rendering::LayerKind;
+        let node = self.render_live(id, "retained editor must remain live");
+        let kind = node.object.shared_kind();
+        let size = node.size;
+        let layer = node.object.layers.picture.expect("editor picture layer");
+        let Some((LayerKind::Picture { display_list, .. }, _)) = self.compositor.layer(layer) else {
+            self.repaint_pictures(id);
+            return;
+        };
+        let source = display_list.clone();
+        let RenderKind::TextField(field) = &*kind else { unreachable!() };
+        let Some(painters) = &field.painters else {
+            self.repaint_pictures(id);
+            return;
+        };
+        let state = self.text_field_state_live_mut(id);
+        let mut recording = state.editable_paint.take().expect("recorded editor painter passes");
+        let generation = recording.isolated_clip.map(|_| {
+            state.clip_picture_generation = state.clip_picture_generation.wrapping_add(1);
+            state.clip_picture_generation
+        });
+        let mut picture = std::mem::take(&mut self.paint_scratch);
+        picture.clear();
+        let copy = |target: &mut DisplayList, range: std::ops::Range<usize>| {
+            for i in range {
+                let mut command = source.commands()[i].clone();
+                if recording.isolated_clip == Some(i)
+                    && let Some(generation) = generation
+                    && let PaintCommand::PushClipRRect { isolation: Some(ref mut clip), .. } = command
+                {
+                    clip.generation = generation;
+                }
+                target.push(command);
+            }
+        };
+        let old = recording.slots.clone();
+        copy(&mut picture, 0..old[0].start);
+        for (slot, delegate) in [painters.background.as_ref(), painters.foreground.as_ref()]
+            .into_iter().enumerate()
+        {
+            let start = picture.commands().len();
+            if recording.pending & (1 << slot) == 0 {
+                copy(&mut picture, old[slot].clone());
+            } else if let Some(delegate) = delegate {
+                delegate.record(recording.context, &mut picture);
+            }
+            recording.slots[slot] = start..picture.commands().len();
+            let next = if slot == 0 { old[1].start } else { source.commands().len() };
+            copy(&mut picture, old[slot].end..next);
+        }
+        recording.pending = 0;
+        self.text_field_state_live_mut(id).editable_paint = Some(recording);
+        let bounds = painted_bounds(picture.commands(), size);
+        self.compositor.update_picture_if_changed(layer, &picture, bounds);
+        self.paint_scratch = picture;
     }
 
     fn repaint_pictures(&mut self, id: RenderObjectId) {

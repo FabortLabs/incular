@@ -4626,6 +4626,6 @@ packages/flutter/test/rendering/editable_test.dart	1026	changing foreground pain
 packages/flutter/test/rendering/editable_test.dart	1045	changing background painter	paired-match	upstream-editable-custom-painters.md
 packages/flutter/test/rendering/editable_test.dart	1064	swapping painters	paired-match	upstream-editable-custom-painters.md
 packages/flutter/test/rendering/editable_test.dart	1091	reusing the same painter	paired-match	upstream-editable-custom-painters.md
-packages/flutter/test/rendering/editable_test.dart	1116	does not repaint the render editable when custom painters need repaint	partial-match	upstream-editable-custom-painters.md
+packages/flutter/test/rendering/editable_test.dart	1116	does not repaint the render editable when custom painters need repaint	paired-match	upstream-editable-custom-painters.md
 packages/flutter/test/rendering/editable_test.dart	1132	repaints when its RenderEditable repaints	paired-match	upstream-editable-custom-painters.md
 packages/flutter/test/rendering/editable_test.dart	1148	correct coordinate space	paired-match	upstream-editable-custom-painters.md

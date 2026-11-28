@@ -212,7 +212,9 @@ impl WidgetTree {
                 let initial_scroll = field.scroll_offset(scroll_x, scroll_y);
                 let mut active_scroll_x = initial_scroll.x;
                 let mut active_scroll_y = initial_scroll.y;
+                let mut painter_recording = None;
                 if let Some(layout) = layout {
+                    let mut isolated_clip = None;
                     let (caret, caret_y, caret_height) = text_field_caret_geometry(
                         &layout,
                         value_selection.extent,
@@ -306,6 +308,7 @@ impl WidgetTree {
                                 let state = self.text_field_state_live_mut(id);
                                 state.clip_picture_generation =
                                     state.clip_picture_generation.wrapping_add(1);
+                                isolated_clip = Some(cache.commands().len());
                                 cache.push(PaintCommand::PushClipRRect {
                                     rrect: RRect::uniform(rect, 0.0),
                                     coverage: ClipCoverage::AntiAliasWithSaveLayer,
@@ -458,12 +461,14 @@ impl WidgetTree {
                         selection: controller.selection_if_set(),
                         focused,
                     });
+                    let background_start = cache.commands().len();
                     if let (Some(painter), Some(context)) = (
                         field.painters.as_ref().and_then(|p| p.background.as_ref()),
                         painter_context,
                     ) {
                         painter.record(context, cache);
                     }
+                    let background_end = cache.commands().len();
                     cache.push(PaintCommand::PushTransform {
                         transform: CoreTransform::translation(text_origin),
                     });
@@ -511,12 +516,22 @@ impl WidgetTree {
                     if let Some(command) = caret_command {
                         cache.push(command);
                     }
+                    let foreground_start = cache.commands().len();
                     if let (Some(painter), Some(context)) = (
                         field.painters.as_ref().and_then(|p| p.foreground.as_ref()),
                         painter_context,
                     ) {
                         painter.record(context, cache);
                     }
+                    painter_recording = painter_context.map(|context| {
+                        crate::editable_paint::EditorPaintRecording {
+                            context,
+                            slots: [background_start..background_end,
+                                    foreground_start..cache.commands().len()],
+                            isolated_clip,
+                            pending: 0,
+                        }
+                    });
                     if clip.is_some() {
                         cache.push(PaintCommand::PopClip);
                     }
@@ -536,6 +551,11 @@ impl WidgetTree {
                     });
                 }
                 let state = self.text_field_state_live_mut(id);
+                match (state.editable_paint.as_deref_mut(), painter_recording) {
+                    (Some(slot), Some(recording)) => *slot = recording,
+                    (None, Some(recording)) => state.editable_paint = Some(Box::new(recording)),
+                    (_, None) => state.editable_paint = None,
+                }
                 state.spell_selection_visible = alternate_selection_color.is_some();
                 if field.fixed_scroll_offset.is_none() {
                     state.scroll_x = active_scroll_x;

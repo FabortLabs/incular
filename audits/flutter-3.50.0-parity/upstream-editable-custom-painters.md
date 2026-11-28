@@ -21,8 +21,16 @@ follow the currently installed delegates, and both slots sharing one
 source request at most one repaint per notification. The existing
 CustomPaint notification test also passes.
 
+## Painter-only notifications
+
 The original :1116 verifies that notifying a custom painter does not
-call the parent editor's paint at all. Incular currently updates the
-shared editor picture on this path without rebuilding or laying out.
-It does not yet keep independent painter pictures for this case, so
-that original is partial, not paired.
+call the parent editor's paint. The retained editor now replaces the
+signaled auxiliary pass without invoking the editor paint, recording
+glyphs again, or calling the other painter. If a full editor repaint
+is independently pending, both painters run once in the new picture.
+The native test verifies the editor paint counter and both painter
+counters, and checks that adding or removing commands in either slot
+keeps the other slot and real glyphs in order. Inside an isolated
+antialias clip, a painter-only refresh preserves the clip layer ID and
+advances its source generation so the renderer cannot reuse stale
+pixels. The wgpu backend does not change.

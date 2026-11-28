@@ -121,3 +121,13 @@ pub(crate) fn painters_changed(old: Option<&EditorPainters>, new: Option<&Editor
         new.and_then(|p| p.foreground.as_ref()),
     )
 }
+
+/// Ranges occupied by the two auxiliary passes in the last local picture.
+/// A signal can replace one pass without invoking the editor's own paint.
+#[derive(Clone, Debug)]
+pub(crate) struct EditorPaintRecording {
+    pub(crate) context: EditableTextPaintContext,
+    pub(crate) slots: [std::ops::Range<usize>; 2],
+    pub(crate) isolated_clip: Option<usize>,
+    pub(crate) pending: u8,
+}
