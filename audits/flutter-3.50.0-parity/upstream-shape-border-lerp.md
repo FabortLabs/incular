@@ -56,3 +56,18 @@ Both directions match the pinned 35-point inner and outer coverage
 samples for each stage, including asymmetric rectangle corners.
 Five authored Flutter cases and 29 focused native tests passed.
 The original golden registrations have not been paired.
+
+## Borrowed border and radius identity
+
+Six exact pinned registrations passed: physical Border, BoxBorder, and
+OutlinedBorder in `painting/shape_border_test.dart:9,15,27`; physical,
+directional, and mixed-capable border radius values in
+`painting/border_radius_test.dart:159,417,475`.
+
+Incular's typed borrowed interpolation returns the original reference for
+the same shared endpoint and no value for two absent endpoints. Equal but
+independently stored inputs still interpolate as owned values. The existing
+by-value calls are unchanged. An outlined shape preserves its shared
+handle through Incular's general ShapeBorder dispatcher. Tests also
+verify scaling from absence and unresolving a mixed radius until LTR or
+RTL is supplied. All eight focused native tests passed.

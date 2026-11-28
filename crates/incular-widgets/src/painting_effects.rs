@@ -48,6 +48,22 @@ pub use shape_borders::{
 pub use shape_decoration::{AlignedShapeGradient, DecoratedShapeBox, ShapeBorderClipper, ShapeDecoration};
 
 
+// Retain the input allocation when static nullable interpolation was
+// called with two references to the same value.
+fn lerp_borrowed<'a, T: Copy>(
+    begin: Option<&'a T>,
+    end: Option<&'a T>,
+    t: f32,
+    interpolate: impl FnOnce(Option<T>, Option<T>, f32) -> Option<T>,
+) -> Option<std::borrow::Cow<'a, T>> {
+    if let (Some(a), Some(b)) = (begin, end)
+        && std::ptr::eq(a, b)
+    {
+        return Some(std::borrow::Cow::Borrowed(a));
+    }
+    interpolate(begin.copied(), end.copied(), t).map(std::borrow::Cow::Owned)
+}
+
 // IEEE positive and negative zero compare equal in painting value types.
 fn hash_paint_float(value: f32, state: &mut impl std::hash::Hasher) {
     let bits = if value == 0.0 { 0 } else { value.to_bits() };

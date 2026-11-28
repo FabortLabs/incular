@@ -1,6 +1,7 @@
 //! Corner-radius geometry shared by painting and decoration descriptors.
 
 use std::{
+    borrow::Cow,
     fmt,
     hash::{Hash, Hasher},
     ops::{Add, Div, Mul, Neg, Rem, Sub},
@@ -588,6 +589,16 @@ macro_rules! impl_corner_arithmetic {
             pub fn lerp_optional(begin: Option<Self>, end: Option<Self>, t: f32) -> Option<Self> {
                 lerp_optional(begin, end, t)
             }
+
+            /// Nullable interpolation that borrows a shared endpoint unchanged.
+            #[must_use]
+            pub fn lerp_ref<'a>(
+                begin: Option<&'a Self>,
+                end: Option<&'a Self>,
+                t: f32,
+            ) -> Option<Cow<'a, Self>> {
+                super::lerp_borrowed(begin, end, t, Self::lerp_optional)
+            }
         }
 
         impl Lerp for $type {
@@ -825,6 +836,17 @@ impl BorderRadiusGeometry {
                 Some(begin.lerp(&end, t))
             }
         }
+    }
+
+    /// Nullable interpolation without resolving direction or replacing a
+    /// borrowed endpoint shared by both ends of the interpolation.
+    #[must_use]
+    pub fn lerp_ref<'a>(
+        begin: Option<&'a Self>,
+        end: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        super::lerp_borrowed(begin, end, t, Self::lerp_optional)
     }
 
     fn parts(self) -> (BorderRadius, BorderRadiusDirectional) {

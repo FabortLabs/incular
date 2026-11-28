@@ -3918,3 +3918,9 @@ packages/flutter/test/widgets/shape_decoration_test.dart	132	ShapeDecoration equ
 packages/flutter/test/painting/text_span_test.dart	13	TextSpan equals	paired-match	upstream-text-span-diagnostics.md
 packages/flutter/test/painting/text_span_test.dart	49	TextSpan toStringDeep	paired-match	upstream-text-span-diagnostics.md
 packages/flutter/test/painting/text_span_test.dart	75	TextSpan toStringDeep for mouse	paired-match	upstream-text-span-diagnostics.md
+packages/flutter/test/painting/shape_border_test.dart	9	Border.lerp identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity
+packages/flutter/test/painting/shape_border_test.dart	15	BoxBorder.lerp identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity
+packages/flutter/test/painting/shape_border_test.dart	27	OutlinedBorder.lep identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity
+packages/flutter/test/painting/border_radius_test.dart	159	BorderRadius.lerp identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity
+packages/flutter/test/painting/border_radius_test.dart	417	BorderRadiusDirectional.lerp identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity
+packages/flutter/test/painting/border_radius_test.dart	475	BorderRadiusGeometry.lerp identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity

@@ -398,6 +398,16 @@ impl Border {
         }
     }
 
+    /// Nullable interpolation that borrows a shared endpoint unchanged.
+    #[must_use]
+    pub fn lerp_ref<'a>(
+        begin: Option<&'a Self>,
+        end: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        super::lerp_borrowed(begin, end, t, Self::lerp_optional)
+    }
+
     /// Flutter `Border.isUniform`: every side has the same color, width,
     /// style and stroke alignment.
     #[must_use]
@@ -507,6 +517,16 @@ impl BorderDirectional {
             (None, Some(b)) => Some(b.scale(t)),
             (None, None) => None,
         }
+    }
+
+    /// Nullable interpolation that borrows a shared endpoint unchanged.
+    #[must_use]
+    pub fn lerp_ref<'a>(
+        begin: Option<&'a Self>,
+        end: Option<&'a Self>,
+        t: f32,
+    ) -> Option<Cow<'a, Self>> {
+        super::lerp_borrowed(begin, end, t, Self::lerp_optional)
     }
 
     /// Whether color, width, style and stroke alignment agree on every side.
