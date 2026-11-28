@@ -38,3 +38,14 @@ can still start a real replacement activity without the stale wheel
 claiming or closing it. Tests cover takeover both before changing
 pixels and from the position callback. All 42 focused native
 activity, wheel, position and keyboard-dismissal tests passed.
+
+## Reentrant programmatic jumps
+
+An authored pinned test jumps from 0 to 100, then jumps to 200 from
+the position listener. Each position is delivered once. The nested
+update reports +100 at offset 200; the outer update reports +200
+at offset 200, not a second stale +100. Incular now computes the
+bubbling delta from the original offset after synchronous callbacks.
+The native baseline failed the second delta; all ten focused native
+checks passed after the repair. The authored case adds no upstream
+registration.

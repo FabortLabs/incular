@@ -708,7 +708,7 @@ impl ScrollController {
             state.pending_ballistic = None;
             (state.activity_active, replaced)
         };
-        let (moved, value, delta, persistence, spring_back) = {
+        let (moved, value, previous, persistence, spring_back) = {
             let mut state = self.state.borrow_mut();
             let attached = state.metric_attachment.is_some();
             let value = if attached {
@@ -730,16 +730,23 @@ impl ScrollController {
             let spring_back = attached && !in_range;
             state.pending_settle = spring_back;
             state.springing_back = spring_back;
-            (moved, value, value - previous, persistence, spring_back)
+            (moved, value, previous, persistence, spring_back)
         };
         if moved {
-            self.imply_velocity(delta);
+            self.imply_velocity(value - previous);
             persist_scroll_offset(persistence, value);
             self.notify_position_changed();
             if !bracket_open {
                 self.dispatch_notification(ScrollNotificationType::Start, 0., 0.);
             }
-            self.dispatch_scroll_notification(ScrollNotificationType::Update, delta, 0.);
+            // The position and Start callbacks can synchronously move us
+            // again. Report the current position relative to the original
+            // offset, not to the aborted intermediate target.
+            self.dispatch_scroll_notification(
+                ScrollNotificationType::Update,
+                self.offset() - previous,
+                0.,
+            );
             if !bracket_open {
                 self.dispatch_notification(ScrollNotificationType::End, 0., 0.);
             }
