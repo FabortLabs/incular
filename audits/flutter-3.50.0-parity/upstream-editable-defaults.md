@@ -157,3 +157,12 @@ keyboard on the unlimited editor and Phone on the three-line editor
 both use Done. The untouched one-line editor uses Text and Done.
 All 17 focused tests passed. This compares real runtime keyboard
 requests and wire payloads, not rendering of the host keyboard.
+
+### Keyboard appearance on the attached input client
+
+Pinned `widgets/editable_text_test.dart:6137,6809` and the native
+attached client carry `Brightness.light` by default and
+`Brightness.dark` when explicitly requested. Native also checks
+that the corresponding Show and subsequent editing-state update
+use the attachment's same client ID. This compares the platform
+configuration payload, not the operating system's rendered theme.

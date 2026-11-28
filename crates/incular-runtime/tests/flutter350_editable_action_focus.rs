@@ -559,3 +559,13 @@ fn max_lines_and_explicit_type_choose_the_keyboard_after_a_real_editable_tap() {
         )));
     }
 }
+
+#[test]
+fn default_and_overridden_keyboard_appearance_reach_the_attached_client() {
+    use incular_config::Brightness;
+
+    let default = mounted_keyboard_wire(|field| field);
+    assert_eq!(default["keyboardAppearance"], "Brightness.light");
+    let dark = mounted_keyboard_wire(|field| field.keyboard_appearance(Brightness::Dark));
+    assert_eq!(dark["keyboardAppearance"], "Brightness.dark");
+}
