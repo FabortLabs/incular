@@ -41,6 +41,7 @@ mod back_gesture;
 mod box_fit;
 mod compositing;
 mod content_insertion;
+mod clipboard_status;
 mod context_menu;
 mod custom_layout;
 #[cfg(feature = "devtools")]
@@ -190,6 +191,7 @@ pub use content_insertion::{
     ContentInsertionConfiguration, DEFAULT_CONTENT_INSERTION_MIME_TYPES,
     EmptyContentInsertionMimeTypes,
 };
+pub use clipboard_status::{ClipboardStatus, ClipboardStatusNotifier, ClipboardStatusTask};
 pub use context_menu::TextContextMenuState;
 pub use context_menu::{
     ContextMenuButtonItem, ContextMenuButtonItemUpdate, ContextMenuButtonKind, ContextMenuButtonType,

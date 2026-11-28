@@ -4667,3 +4667,5 @@ packages/flutter/test/widgets/text_selection_test.dart	896	Mouse drag selects an
 packages/flutter/test/widgets/text_selection_test.dart	1015	Stylus drag selects text	paired-match	upstream-text-selection-gestures.md#drag-device-and-competing-renderer
 packages/flutter/test/widgets/text_selection_test.dart	1086	Drag of unknown type moves the cursor	paired-match	upstream-text-selection-gestures.md#drag-device-and-competing-renderer
 packages/flutter/test/widgets/text_selection_test.dart	1145	test TextSelectionGestureDetectorBuilder drag with RenderEditable viewport offset change	paired-match	upstream-text-selection-gestures.md#drag-anchor-during-editor-scroll
+packages/flutter/test/widgets/text_selection_test.dart	1801	Clipboard API failure is gracefully recovered from	paired-match	upstream-clipboard-status-notifier.md
+packages/flutter/test/widgets/text_selection_test.dart	1827	update sets value based on clipboard contents	paired-match	upstream-clipboard-status-notifier.md
