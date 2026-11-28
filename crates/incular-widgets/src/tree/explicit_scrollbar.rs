@@ -297,14 +297,17 @@ impl WidgetTree {
             bar.over_scrollbar(size, local, kind, true).then_some(())
         });
         let next = found.map(|(id, _, ())| id);
-        if self.input.explicit_scrollbar_hover == next {
-            return next.is_some();
-        }
-        let changed = self.exit_explicit_scrollbar_hover();
-        if let Some((render, local, ())) = found
-            && let Some((scrollbar, size)) = self.explicit_scrollbar_mut(render)
+        let changed = if self.input.explicit_scrollbar_hover == next {
+            false
+        } else {
+            self.exit_explicit_scrollbar_hover()
+        };
+        if let Some(render) = next
+            && let Some((scrollbar, _)) = self.explicit_scrollbar_mut(render)
         {
-            scrollbar.pointer_hover(size, local, kind);
+            // Scroll end can arm a new timer while the mouse stays inside
+            // this scrollbar. Every real hover sample must cancel it.
+            scrollbar.hold_hover();
             self.input.explicit_scrollbar_hover = Some(render);
             return true;
         }

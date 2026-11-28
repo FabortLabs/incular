@@ -239,3 +239,75 @@ fn a_real_overscroll_drag_uses_an_inherited_or_explicit_thumb_floor() {
         scene.pointer(360, PointerPhase::Up, PointerDeviceKind::Touch, 400., 1300.);
     }
 }
+
+fn fading_thumb(list: &DisplayList) -> Option<(Rect, u8)> {
+    list.commands()
+        .iter()
+        .rev()
+        .find_map(|command| match command {
+            PaintCommand::Rect { rect, color }
+                if (color.red, color.green, color.blue) == (188, 188, 188) =>
+            {
+                Some((*rect, color.alpha))
+            }
+            _ => None,
+        })
+}
+
+fn drag_the_viewport(scene: &mut Scene) {
+    scene.pointer(10, PointerPhase::Down, PointerDeviceKind::Touch, 400., 300.);
+    scene.pointer(40, PointerPhase::Move, PointerDeviceKind::Touch, 400., 280.);
+    scene.frame(40);
+    assert_eq!(fading_thumb(&scene.frame(540)), Some((rect(3., 90.), 102)));
+}
+
+#[test]
+fn a_held_content_drag_stays_opaque_then_fades_at_the_exact_release_delay() {
+    let mut scene = Scene::new(4000., false);
+    drag_the_viewport(&mut scene);
+    assert_eq!(fading_thumb(&scene.frame(3540)), Some((rect(3., 90.), 102)));
+    assert_eq!(fading_thumb(&scene.frame(6540)), Some((rect(3., 90.), 102)));
+
+    scene.pointer(6540, PointerPhase::Up, PointerDeviceKind::Touch, 400., 280.);
+    scene.frame(6540);
+    assert_eq!(fading_thumb(&scene.frame(7140)), Some((rect(3., 90.), 102)));
+    assert_eq!(fading_thumb(&scene.frame(7290)), Some((rect(3., 90.), 79)));
+    assert_eq!(fading_thumb(&scene.frame(7440)), None);
+}
+
+#[test]
+fn reentering_the_track_reverses_an_in_progress_fade_without_moving_the_thumb() {
+    let mut scene = Scene::new(4000., false);
+    drag_the_viewport(&mut scene);
+    scene.pointer(540, PointerPhase::Up, PointerDeviceKind::Touch, 400., 280.);
+    scene.frame(540);
+    scene.frame(1140);
+    assert_eq!(fading_thumb(&scene.frame(1290)), Some((rect(3., 90.), 79)));
+
+    scene.pointer(1290, PointerPhase::Move, PointerDeviceKind::Mouse, 794., 5.);
+    assert_eq!(fading_thumb(&scene.frame(1290)), Some((rect(3., 90.), 79)));
+    assert_eq!(fading_thumb(&scene.frame(1440)), Some((rect(3., 90.), 102)));
+    assert_eq!(fading_thumb(&scene.frame(3540)), Some((rect(3., 90.), 102)));
+}
+
+#[test]
+fn another_hover_event_in_the_same_scrollbar_cancels_a_restarted_timer() {
+    let mut scene = Scene::new(4000., false);
+    scene.pointer(10, PointerPhase::Move, PointerDeviceKind::Mouse, 795., 5.);
+    scene.frame(10);
+    assert_eq!(fading_thumb(&scene.frame(310)), Some((rect(0., 90.), 102)));
+
+    // A scroll update/end arms a new fade timer. An actual subsequent hover
+    // in the same hit region is still supposed to cancel that timer.
+    scene.controller.jump_to(20.);
+    assert_eq!(fading_thumb(&scene.frame(400)), Some((rect(3., 90.), 102)));
+    scene.pointer(690, PointerPhase::Move, PointerDeviceKind::Mouse, 796., 6.);
+    scene.frame(690);
+    assert_eq!(fading_thumb(&scene.frame(2000)), Some((rect(3., 90.), 102)));
+
+    scene.pointer(2100, PointerPhase::Move, PointerDeviceKind::Mouse, 750., 5.);
+    scene.frame(2100);
+    assert_eq!(fading_thumb(&scene.frame(2699)), Some((rect(3., 90.), 102)));
+    assert_eq!(fading_thumb(&scene.frame(2850)), Some((rect(3., 90.), 79)));
+    assert_eq!(fading_thumb(&scene.frame(3000)), None);
+}

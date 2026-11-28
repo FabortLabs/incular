@@ -699,13 +699,17 @@ impl RawScrollbar {
     /// brings it into view and holds it; leaving restarts the fade-out timer.
     pub fn pointer_hover(&mut self, viewport_size: Size, point: Offset, kind: PointerDeviceKind) {
         if self.over_scrollbar(viewport_size, point, kind, true) {
-            self.hover_active = true;
-            self.fade.queue(ScrollbarFadeCommand::Forward);
-            self.fade.queue(ScrollbarFadeCommand::CancelTimer);
+            self.hold_hover();
         } else if self.hover_active {
             self.hover_active = false;
             self.fade.queue(ScrollbarFadeCommand::StartTimer);
         }
+    }
+
+    pub(crate) fn hold_hover(&mut self) {
+        self.hover_active = true;
+        self.fade.queue(ScrollbarFadeCommand::Forward);
+        self.fade.queue(ScrollbarFadeCommand::CancelTimer);
     }
 
     /// `RawScrollbarState.handleHoverExit`.
