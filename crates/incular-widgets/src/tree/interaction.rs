@@ -954,6 +954,54 @@ impl WidgetTree {
             };
             let mut force_press_decisions = Vec::new();
             let mut eager_drags = Vec::new();
+            // Renderer taps are still handled by the runtime. Register the
+            // optional pressure recognizer here so it competes with ordinary
+            // scroll, raw force and application gestures in the same arena.
+            if primary
+                && incular_gestures::ForcePressGestureRecognizer::supports_pressure_sample(sample)
+                && let Some(field) = self.text_field_ancestor(hit)
+                && self.text_field_has_force_selection(field)
+            {
+                let settings = self.gesture_settings_at(field);
+                let notices = self.input.editor_force_selections.get_or_insert_default();
+                let record = |starting| {
+                    let notices = notices.clone();
+                    move |details: incular_gestures::ForcePressDetails| {
+                        notices.borrow_mut().push(EditorForceSelection {
+                            field,
+                            position: details.global_position,
+                            starting,
+                        });
+                    }
+                };
+                let recognizer = incular_gestures::ForcePressGestureRecognizer::new()
+                    .gesture_settings(settings)
+                    .on_start(record(true))
+                    .on_end(record(false));
+                let member = self.input.gesture_arena.add(key, false);
+                let local = self.render_id(field)
+                    .and_then(|render| self.render_world_transform(render).inverse());
+                let mut force_press = ForcePressMember {
+                    recognizer: incular_gestures::ArenaGestureRecognizer::new(recognizer),
+                    local,
+                    pointer: event.pointer,
+                    editor: true,
+                };
+                let decision = force_press.observe(force_press_event(
+                    event, device, kind, buttons, sample, local,
+                ));
+                force_press_decisions.push((member, decision));
+                active.yields_taps = true;
+                active.members.push(ActiveGestureMember {
+                    element: field,
+                    member,
+                    kind: RetainedGestureKind::ForcePress,
+                    recognizer: None,
+                    force_press: Some(Box::new(force_press)),
+                    live_tap_buttons: None,
+                    on_cancel: None,
+                });
+            }
             for candidate in elements {
                 let Some(callbacks) = self.gesture_callbacks(candidate) else {
                     continue;
@@ -1165,6 +1213,7 @@ impl WidgetTree {
                         ),
                         local,
                         pointer: event.pointer,
+                        editor: false,
                     };
                     let decision = force_press.observe(force_press_event(
                         event, device, kind, buttons, sample, local,
@@ -1680,7 +1729,15 @@ impl WidgetTree {
         // Scroll-claimed streams consume only while actually driving:
         // a pending press still belongs to buttons and hover, while a
         // live bracket suppresses them like any active gesture.
-        let claimed = match self.input.scroll_brackets.get(&key) {
+        let editor_force_won = self.input.editor_force_selections.is_some()
+            && self.input.active_gestures.get(&key).is_some_and(|active| {
+                active.members.iter().any(|candidate| {
+                    candidate.force_press.as_ref().is_some_and(|force| force.editor)
+                        && self.input.gesture_arena.disposition(key, candidate.member)
+                            == Some(GestureDisposition::Accepted)
+                })
+            });
+        let claimed = editor_force_won || match self.input.scroll_brackets.get(&key) {
             Some(bracket) => self.scroll_contact_is_driving(key, bracket),
             None => handled,
         };
@@ -1714,6 +1771,36 @@ impl WidgetTree {
             self.remove_scale_recognizers_when_idle();
         }
         claimed.then_some(element)
+    }
+
+    /// Pressure-selection results, delivered after physical gesture routing.
+    #[doc(hidden)]
+    pub fn take_editor_force_selections(&mut self) -> Vec<EditorForceSelection> {
+        self.input.editor_force_selections.as_ref()
+            .map_or_else(Vec::new, |notices| std::mem::take(&mut *notices.borrow_mut()))
+    }
+
+    /// A held editor press settled as a long press. Pressure can no longer
+    /// steal this same contact after the long-press deadline.
+    #[doc(hidden)]
+    pub fn withdraw_pending_editor_force(&mut self, field: ElementId) {
+        if self.input.editor_force_selections.is_none() {
+            return;
+        }
+        let pending = self.input.active_gestures.iter().filter_map(|(&key, active)| {
+            active.members.iter().find_map(|candidate| {
+                (candidate.element == field
+                    && candidate.force_press.as_ref().is_some_and(|force| force.editor)
+                    && self.input.gesture_arena.disposition(key, candidate.member)
+                        == Some(GestureDisposition::Pending))
+                    .then_some((key, candidate.member))
+            })
+        }).collect::<Vec<_>>();
+        for (key, member) in pending {
+            self.input.gesture_arena.reject(key, member);
+            let entries = self.input.gesture_arena.entries(key);
+            self.apply_arena_entries(key, entries);
+        }
     }
 
     /// Lets the scroll physics decide whether a live drag settles or rests.

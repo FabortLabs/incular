@@ -48,12 +48,24 @@ pub struct TextSelectionGestureCallbacks {
 /// node or layout pass. Use [TextSelectionGestureDetector] to supply custom
 /// gesture handlers instead of the standard policy.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct TextSelectionGestureDetectorBuilder;
+pub struct TextSelectionGestureDetectorBuilder {
+    force_press_enabled: bool,
+}
 
 impl TextSelectionGestureDetectorBuilder {
     #[must_use]
     pub const fn new() -> Self {
-        Self
+        Self {
+            force_press_enabled: false,
+        }
+    }
+
+    /// Whether pressure-capable contacts may select words and show a
+    /// toolbar. Ordinary touch and mouse selection remain available.
+    #[must_use]
+    pub const fn force_press_enabled(mut self, enabled: bool) -> Self {
+        self.force_press_enabled = enabled;
+        self
     }
 
     /// Uses the editor's renderer pointer policy to arbitrate between the
@@ -61,7 +73,7 @@ impl TextSelectionGestureDetectorBuilder {
     /// `renderer_ignores_pointer(true)` gives the builder sole ownership.
     #[must_use]
     pub fn build_gesture_detector(self, editor: EditableText) -> EditableText {
-        editor.with_selection_gesture_builder()
+        editor.with_selection_gesture_builder(self.force_press_enabled)
     }
 }
 

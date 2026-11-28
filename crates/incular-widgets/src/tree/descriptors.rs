@@ -1262,6 +1262,7 @@ pub struct EditableText {
     renderer_ignores_pointer: bool,
     platform_tap_selection: bool,
     has_selection_gesture_builder: bool,
+    selection_force_press_enabled: bool,
     context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
     selection_handles_builder: Option<crate::TextSelectionHandlesBuilder>,
     on_selection_handle_tapped: Option<Rc<dyn Fn()>>,
@@ -1356,6 +1357,7 @@ impl EditableText {
             renderer_ignores_pointer: false,
             platform_tap_selection: false,
             has_selection_gesture_builder: false,
+            selection_force_press_enabled: false,
             context_menu_builder: None,
             selection_handles_builder: None,
             on_selection_handle_tapped: None,
@@ -2007,8 +2009,9 @@ impl EditableText {
         self
     }
 
-    pub(crate) fn with_selection_gesture_builder(mut self) -> Self {
+    pub(crate) fn with_selection_gesture_builder(mut self, force_press_enabled: bool) -> Self {
         self.has_selection_gesture_builder = true;
+        self.selection_force_press_enabled = force_press_enabled;
         self
     }
 
@@ -2370,6 +2373,7 @@ impl From<EditableText> for Widget {
             renderer_ignores_pointer: value.renderer_ignores_pointer,
             platform_tap_selection: value.platform_tap_selection,
             has_selection_gesture_builder: value.has_selection_gesture_builder,
+            selection_force_press_enabled: value.selection_force_press_enabled,
             obscure_text: value.obscure_text,
             obscuring_character: value.obscuring_character,
             keyboard_selection_enabled,

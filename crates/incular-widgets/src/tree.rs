@@ -1204,6 +1204,15 @@ enum RetainedGestureKind {
     ForcePress,
 }
 
+/// A force selection dispatched by the standard editor gesture builder.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct EditorForceSelection {
+    pub field: ElementId,
+    pub position: Offset,
+    pub starting: bool,
+}
+
 /// A force-press arena member: the recognizer and the transform from
 /// window to the detector's local coordinates.
 struct ForcePressMember {
@@ -1212,6 +1221,7 @@ struct ForcePressMember {
     local: Option<CoreTransform>,
     /// The pointer whose stream this member belongs to.
     pointer: u64,
+    editor: bool,
 }
 
 struct ActiveGestureMember {
@@ -1514,6 +1524,7 @@ impl MouseHoverEntry {
 struct InputState {
     gesture_arena: GestureArena,
     active_gestures: HashMap<GestureArenaKey, ActiveGesture>,
+    editor_force_selections: Option<Rc<RefCell<Vec<EditorForceSelection>>>>,
     active_trackpad_gestures: HashMap<GestureArenaKey, ActiveTrackpadGesture>,
     active_pan_zoom: HashMap<GestureArenaKey, pan_zoom::ActivePanZoom>,
     shared_drags: HashMap<

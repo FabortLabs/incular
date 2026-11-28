@@ -953,3 +953,121 @@ fn mouse_selection_reaches_document_end_and_reveals_outer_and_private_viewports(
         assert_eq!(private > 0., capped, "capped={capped}");
     }
 }
+
+#[test]
+fn editor_force_selection_is_opt_in_and_release_uses_the_last_pressure_sample() {
+    use SelectionChangedCause::{ForcePress, LongPress, Tap};
+    use incular_core::{PointerContactMetadata, PointerSampleMetadata};
+    use incular_widgets::TextSelectionGestureDetectorBuilder;
+
+    let Some(style) = ahem_style() else {
+        return;
+    };
+    let constraints = Constraints::tight(Size::new(400., 50.));
+    for (enabled, raw_maximum, press, hold_before_pressure, raise_before_timeout) in [
+        (true, 6., 3., false, false),
+        (false, 6., 3., false, false),
+        (true, 1., 0.8, false, false),
+        (true, 6., 1., false, false),
+        (true, 6., 1., false, true),
+        (true, 6., 0.2, true, false),
+    ] {
+        let controller = TextEditingController::with_text("alpha beta gamma");
+        let causes = Rc::new(RefCell::new(Vec::new()));
+        let editor = EditableText::new(controller.clone())
+            .renderer_ignores_pointer(true)
+            .text_direction(TextDirection::Ltr)
+            .style(style.clone())
+            .context_menu_builder(|_, _| SizedBox::square(12.).into())
+            .on_selection_changed({
+                let causes = causes.clone();
+                move |selection, cause| causes.borrow_mut().push((selection, cause))
+            });
+        let editor = TextSelectionGestureDetectorBuilder::new()
+            .force_press_enabled(enabled)
+            .build_gesture_detector(editor);
+        let mut runtime = Runtime::new(editor.into()).unwrap();
+        runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+        let start = Instant::now();
+        let tick = |runtime: &mut Runtime, ms| {
+            runtime
+                .run_frame_at(constraints, start + Duration::from_millis(ms))
+                .unwrap();
+        };
+        tick(&mut runtime, 0);
+        let first = Offset::new(28., 7.);
+        let second = Offset::new(112., 7.);
+        let third = Offset::new(182., 7.);
+        let field = runtime.tree().text_field_at(first).unwrap();
+        let menu = runtime.tree().text_field_context_menu(field).unwrap();
+        let send = |runtime: &mut Runtime, phase, point, raw_pressure, ms| {
+            let _ = runtime.handle_raw_pointer_event(
+                RawPointerEvent::new(
+                    1,
+                    1,
+                    PointerDeviceKind::Touch,
+                    if phase == PointerPhase::Up {
+                        0
+                    } else {
+                        PRIMARY_POINTER_BUTTON
+                    },
+                    point,
+                    phase,
+                    start + Duration::from_millis(ms),
+                )
+                .with_button((phase != PointerPhase::Move).then_some(PRIMARY_POINTER_BUTTON))
+                .with_sample(PointerSampleMetadata {
+                    contact: PointerContactMetadata {
+                        raw_pressure: Some(raw_pressure),
+                        pressure_min: 0.,
+                        pressure_max: raw_maximum,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }),
+            );
+            tick(runtime, ms);
+        };
+        send(&mut runtime, PointerPhase::Down, first, press, 1);
+        if hold_before_pressure {
+            tick(&mut runtime, 502);
+            assert_eq!(*causes.borrow(), [(TextSelection::new(0, 5), LongPress)]);
+            send(&mut runtime, PointerPhase::Move, second, 3.4, 520);
+            send(&mut runtime, PointerPhase::Up, second, 0., 540);
+            assert!(
+                !causes
+                    .borrow()
+                    .iter()
+                    .any(|(_, cause)| *cause == ForcePress)
+            );
+        } else if enabled && raw_maximum > 1. && (press / raw_maximum > 0.4 || raise_before_timeout)
+        {
+            if raise_before_timeout {
+                assert!(causes.borrow().is_empty());
+                assert!(runtime.focused_element().is_none());
+                send(&mut runtime, PointerPhase::Move, first, 3., 15);
+            }
+            assert_eq!(runtime.focused_element(), Some(field));
+            assert_eq!(*causes.borrow(), [(TextSelection::new(0, 5), ForcePress)]);
+            assert!(menu.is_showing());
+            send(&mut runtime, PointerPhase::Move, second, 3.4, 25);
+            assert_eq!(controller.selection(), TextSelection::new(0, 5));
+            send(&mut runtime, PointerPhase::Up, third, 0., 50);
+            assert_eq!(controller.selection(), TextSelection::new(6, 10));
+            assert_eq!(
+                *causes.borrow(),
+                [
+                    (TextSelection::new(0, 5), ForcePress),
+                    (TextSelection::new(6, 10), ForcePress),
+                ]
+            );
+            assert!(menu.is_showing());
+        } else {
+            assert!(causes.borrow().is_empty());
+            assert!(!menu.is_showing());
+            send(&mut runtime, PointerPhase::Up, first, 0., 50);
+            assert_eq!(*causes.borrow(), [(TextSelection::collapsed(2), Tap)]);
+            assert!(!menu.is_showing());
+        }
+    }
+}

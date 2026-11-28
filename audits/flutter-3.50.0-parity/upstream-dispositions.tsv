@@ -4682,3 +4682,5 @@ packages/flutter/test/painting/text_painter_rtl_test.dart	513	TextPainter - mult
 packages/flutter/test/painting/text_painter_rtl_test.dart	541	TextPainter - getPositionForOffset - RTL in LTR	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
 packages/flutter/test/painting/text_painter_rtl_test.dart	625	TextPainter - getPositionForOffset - LTR in RTL	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
 packages/flutter/test/painting/text_painter_rtl_test.dart	671	TextPainter - Spaces	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
+packages/flutter/test/widgets/text_selection_test.dart	846	test TextSelectionGestureDetectorBuilder forcePress enabled	paired-match	upstream-text-selection-gestures.md#editor-force-selection-and-release
+packages/flutter/test/widgets/text_selection_test.dart	1222	test TextSelectionGestureDetectorBuilder forcePress disabled	paired-match	upstream-text-selection-gestures.md#editor-force-selection-and-release

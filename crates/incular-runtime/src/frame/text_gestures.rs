@@ -1518,6 +1518,32 @@ impl Runtime {
         }
     }
 
+    pub(super) fn apply_editor_force_selections(&mut self) -> Option<ElementId> {
+        let mut target = None;
+        for event in self.tree.take_editor_force_selections() {
+            let field = event.field;
+            if !self.tree.is_text_field(field) || !self.tree.can_request_focus(field) {
+                continue;
+            }
+            if event.starting {
+                self.cancel_pending_mobile_text_touch();
+                self.cancel_text_long_press();
+                self.captured_text_field = None;
+                self.text_taps = None;
+                self.editable_scroll_drag = None;
+            }
+            self.set_focus_with_external_selection(Some(field), false);
+            let previous = self.observed_editor_selection(field);
+            let now = self.input_now();
+            self.text_field_select_words_in_range(field, event.position, event.position, now);
+            self.report_editor_selection_delta(field, previous, SelectionChangedCause::ForcePress);
+            self.show_text_field_touch_menu(field, event.position);
+            self.frame_requested = true;
+            target = Some(field);
+        }
+        target
+    }
+
     /// Records a primary press on a text target as a possible long press.
     pub(super) fn text_long_press_begin(
         &mut self,
@@ -1571,6 +1597,7 @@ impl Runtime {
                     self.text_taps = None;
                     self.set_focus(Some(field));
                 }
+                self.tree.withdraw_pending_editor_force(field);
                 let previous = self.observed_editor_selection(field);
                 let ios_like = matches!(
                     self.text_shortcut_platform,

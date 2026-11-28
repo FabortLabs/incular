@@ -71,9 +71,8 @@ editor, without adding a new retained layout node or changing callers
 that install no builder. Without it the rapid Android finger drag
 incorrectly selected 2 to 14 when the expected value was a caret at 10.
 
-Builder-level force press remains a separate comparison. The generic
-detector's pressure recognition does not establish the builder's editor
-selection and toolbar behavior.
+The separate builder-level pressure comparison below exercises editor
+selection and toolbar behavior, not just the generic detector callbacks.
 
 ## Drag anchor during editor scroll
 
@@ -122,3 +121,20 @@ never received its confirmed tap and stayed unfocused. The retained
 scroll recognizer now keeps competing when a hit editor also has a
 runtime tap, rather than treating itself as the only contender. A drag
 can still take ownership after its normal movement threshold.
+
+## Editor force selection and release
+
+Pinned :846 and :1222 verify the builder's enabled and disabled
+force-press modes. Incular's opt-in builder reuses the shared pressure
+recognizer and pointer arena to select the hit word and open the toolbar.
+Disabled pressure and unsupported hardware retain ordinary tap behavior.
+Low pressure alone also permits a normal tap; a force that crosses the
+threshold before the long-press deadline claims the contact, while a
+long press that already won cannot be displaced by later pressure.
+
+The two authored pinned variants use a real editor. Force starts on
+`alpha`, moves to `beta` and lifts over `gamma`. The editor selects
+`alpha` and then `beta`, both with the ForcePress cause; Move by itself
+does not change the value, and the toolbar stays available. The native
+test reproduces this sequence to distinguish the last pressure position
+from the coordinate of Up. The authored variants add no original count.

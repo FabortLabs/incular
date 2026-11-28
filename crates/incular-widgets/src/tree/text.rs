@@ -3732,6 +3732,14 @@ impl WidgetTree {
         })
     }
 
+    pub(super) fn text_field_has_force_selection(&self, target: ElementId) -> bool {
+        self.elements.get(target.0).is_some_and(|element| {
+            matches!(element.widget.kind(), WidgetKind::TextField(spec)
+                if spec.selection_force_press_enabled && spec.traits.enable_interactive_selection
+                    && !(spec.read_only && spec.obscure_text))
+        }) && self.can_request_focus(target)
+    }
+
     /// Whether the standard editor selection builder is installed.
     #[doc(hidden)]
     #[must_use]

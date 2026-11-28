@@ -2990,7 +2990,8 @@ impl Runtime {
             None
         };
         self.tree.settle_uncontested_raw_arena(gesture_window, raw_event);
-        if let Some(element) = ordinary_target {
+        let editor_force_target = self.apply_editor_force_selections();
+        if let Some(element) = editor_force_target.or(ordinary_target) {
             self.frame_requested = true;
             if active_primary && phase != PointerPhase::Down {
                 self.cancel_pending_mobile_text_touch();
