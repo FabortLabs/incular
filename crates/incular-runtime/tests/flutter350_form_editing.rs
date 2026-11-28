@@ -180,27 +180,12 @@ impl BlurForm {
     }
 
     fn focus(&mut self, key: &str) {
-        let node = self
-            .runtime
-            .tree()
-            .element_with_key(&Key::from(key))
-            .unwrap();
-        let position =
-            self.runtime.tree().element_bounds(node).unwrap().origin + Offset::new(8., 8.);
-        for phase in [PointerPhase::Down, PointerPhase::Up] {
-            let _ = self
-                .runtime
-                .handle_input(InputEvent::Pointer { phase, position });
-        }
+        focus_form_input(&mut self.runtime, key);
         self.frame();
-        assert_eq!(self.runtime.focused_element(), Some(node));
     }
 
     fn replace_text(&mut self, value: &str) {
-        let mut ctrl_a = KeyboardEvent::key_down(KeyboardKey::Character("a".into()), Code::KeyA);
-        ctrl_a.modifiers = Modifiers::CONTROL;
-        let _ = self.runtime.handle_input(InputEvent::Key(ctrl_a));
-        let _ = self.runtime.handle_input(InputEvent::Text(value.into()));
+        replace_form_input(&mut self.runtime, value);
         self.frame();
     }
 
@@ -275,4 +260,170 @@ fn platform_next_action_moves_to_the_second_editor_and_blurs_the_first() {
     assert_eq!(ui.runtime.focused_element(), Some(next));
     assert!(ui.shows("foo/error"));
     assert!(!ui.shows("bar/error"));
+}
+
+fn required_field(state: &incular_widgets::FormFieldState<String>) -> GenericFormField<String> {
+    GenericFormField::new({
+        let state = state.clone();
+        move |_: Option<&String>| {
+            state.error_text().map_or_else(
+                || incular_widgets::SizedBox::shrink().into(),
+                |error| Widget::from(Text::new(error.clone())).with_key(error.as_str()),
+            )
+        }
+    })
+    .state(state.clone())
+    .validator(|value| {
+        value
+            .is_none_or(String::is_empty)
+            .then(|| "Required".into())
+    })
+}
+
+fn form_frame(runtime: &mut Runtime) {
+    runtime
+        .run_frame(Constraints::tight(Size::new(400., 300.)))
+        .unwrap();
+}
+
+fn focus_form_input(runtime: &mut Runtime, key: &str) {
+    let node = runtime.tree().element_with_key(&Key::from(key)).unwrap();
+    let position = runtime.tree().element_bounds(node).unwrap().origin + Offset::new(8., 8.);
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        let _ = runtime.handle_input(InputEvent::Pointer { phase, position });
+    }
+    assert_eq!(runtime.focused_element(), Some(node));
+}
+
+fn replace_form_input(runtime: &mut Runtime, value: &str) {
+    let mut ctrl_a = KeyboardEvent::key_down(KeyboardKey::Character("a".into()), Code::KeyA);
+    ctrl_a.modifiers = Modifiers::CONTROL;
+    let _ = runtime.handle_input(InputEvent::Key(ctrl_a));
+    if value.is_empty() {
+        let _ = runtime.handle_input(InputEvent::Key(KeyboardEvent::key_down(
+            KeyboardKey::Named(NamedKey::Backspace),
+            Code::Backspace,
+        )));
+    } else {
+        let _ = runtime.handle_input(InputEvent::Text(value.into()));
+    }
+}
+
+fn runtime_shows(runtime: &Runtime, key: &str) -> bool {
+    runtime.tree().element_with_key(&Key::from(key)).is_some()
+}
+
+#[test]
+fn if_error_mode_does_not_validate_initially_with_a_valid_value() {
+    let state = incular_widgets::FormFieldState::new(Some("foo".to_owned()));
+    let calls = Rc::new(std::cell::Cell::new(0));
+    let field = required_field(&state)
+        .autovalidate_mode(AutovalidateMode::OnUserInteractionIfError)
+        .validator({
+            let calls = calls.clone();
+            move |_| {
+                calls.set(calls.get() + 1);
+                None
+            }
+        });
+    let mut runtime = Runtime::new(field.into()).unwrap();
+    form_frame(&mut runtime);
+    assert_eq!(calls.get(), 0);
+    assert!(!state.has_error());
+    assert!(!runtime_shows(&runtime, "Required"));
+}
+
+#[test]
+fn if_error_mode_starts_silent_even_if_empty_and_explicit_validate_shows_the_error() {
+    let state = incular_widgets::FormFieldState::new(None);
+    let widget = Directionality::new(
+        TextDirection::Ltr,
+        required_field(&state).autovalidate_mode(AutovalidateMode::OnUserInteractionIfError),
+    );
+    let mut runtime = Runtime::new(widget.into()).unwrap();
+    form_frame(&mut runtime);
+    assert!(!state.has_error());
+    assert!(!runtime_shows(&runtime, "Required"));
+    assert!(!state.validate());
+    form_frame(&mut runtime);
+    assert!(state.has_error());
+    assert!(runtime_shows(&runtime, "Required"));
+}
+
+#[test]
+fn form_if_error_starts_silent_then_revalidates_after_an_error_exists() {
+    let form = Form::new().autovalidate_mode(AutovalidateMode::OnUserInteractionIfError);
+    let state = form.register_value(Some("foo".to_owned()));
+    let controller = TextEditingController::with_text("foo");
+    let editor = Widget::from(EditableText::new(controller.clone()).on_changed({
+        let state = state.clone();
+        move |text| state.did_change(text.to_owned())
+    }))
+    .with_key("conditional input");
+    let form_body = Column::new([editor, Widget::from(required_field(&state))]);
+    let widget = Directionality::new(TextDirection::Ltr, form.clone().child(form_body));
+    let mut runtime = Runtime::new(widget.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Windows);
+    form_frame(&mut runtime);
+    focus_form_input(&mut runtime, "conditional input");
+    assert!(!runtime_shows(&runtime, "Required"));
+
+    replace_form_input(&mut runtime, "bar");
+    form_frame(&mut runtime);
+    assert!(!runtime_shows(&runtime, "Required"));
+    replace_form_input(&mut runtime, "");
+    form_frame(&mut runtime);
+    assert!(!runtime_shows(&runtime, "Required"));
+
+    assert!(controller.text().is_empty());
+    assert!(!form.validate());
+    assert!(!runtime_shows(&runtime, "Required"));
+    form_frame(&mut runtime);
+    assert!(runtime_shows(&runtime, "Required"));
+
+    replace_form_input(&mut runtime, "baz");
+    form_frame(&mut runtime);
+    assert!(!runtime_shows(&runtime, "Required"));
+    assert!(form.validate());
+    form_frame(&mut runtime);
+    assert!(!runtime_shows(&runtime, "Required"));
+
+    replace_form_input(&mut runtime, "");
+    form_frame(&mut runtime);
+    assert!(
+        !runtime_shows(&runtime, "Required"),
+        "gate closes when no error remains"
+    );
+}
+
+#[test]
+fn inherited_always_mode_shows_initial_errors_on_the_second_frame() {
+    let form = Form::new().autovalidate_mode(AutovalidateMode::Always);
+    let fields = ["foo", "bar"].map(|value| {
+        let state = form.register_value(Some(value.to_owned()));
+        let field = GenericFormField::new({
+            let state = state.clone();
+            move |_: Option<&String>| {
+                state.error_text().map_or_else(
+                    || incular_widgets::SizedBox::shrink().into(),
+                    |error| Widget::from(Text::new(error.clone())).with_key(error.as_str()),
+                )
+            }
+        });
+        field
+            .state(state)
+            .validator(|value| value.map(|text: &String| format!("{text}/error")))
+    });
+    let widget = Directionality::new(TextDirection::Ltr, form.child(Column::new(fields)));
+    let mut runtime = Runtime::new(widget.into()).unwrap();
+    form_frame(&mut runtime);
+    assert!(!runtime_shows(&runtime, "foo/error"));
+    assert!(!runtime_shows(&runtime, "bar/error"));
+    assert!(
+        runtime.frame_requested(),
+        "post-frame validation requests a follow-up"
+    );
+    form_frame(&mut runtime);
+    assert!(runtime_shows(&runtime, "foo/error"));
+    assert!(runtime_shows(&runtime, "bar/error"));
 }

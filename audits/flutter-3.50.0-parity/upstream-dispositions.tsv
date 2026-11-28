@@ -3843,3 +3843,7 @@ packages/flutter/test/widgets/form_test.dart	1597	AutovalidateMode.onUnfocus	pai
 packages/flutter/test/widgets/form_test.dart	1657	Validate conflicting AutovalidateModes	paired-match	upstream-form-state.md#validation-on-focus-loss
 packages/flutter/test/widgets/form_test.dart	1719	FocusNode should move to next field when TextInputAction.next is received	paired-match	upstream-form-state.md#validation-on-focus-loss
 packages/flutter/test/widgets/form_test.dart	1803	AutovalidateMode.onUnfocus should validate all fields manually with FormState	paired-match	upstream-form-state.md#validation-on-focus-loss
+packages/flutter/test/widgets/form_test.dart	929	Does not auto-validate before value changes when autovalidateMode is set to onUserInteractionIfError	paired-match	upstream-form-state.md#conditional-and-deferred-automatic-validation
+packages/flutter/test/widgets/form_test.dart	969	Does not auto-validate before value changes even when initialValue is empty and autovalidateMode is set to onUserInteractionIfError	paired-match	upstream-form-state.md#conditional-and-deferred-automatic-validation
+packages/flutter/test/widgets/form_test.dart	1180	Form with AutovalidateMode.onUserInteractionIfError only revalidates when user interacts after an error exists	paired-match	upstream-form-state.md#conditional-and-deferred-automatic-validation
+packages/flutter/test/widgets/form_test.dart	1767	AutovalidateMode.always should validate on second build	paired-match	upstream-form-state.md#conditional-and-deferred-automatic-validation

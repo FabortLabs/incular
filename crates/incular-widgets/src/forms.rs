@@ -34,11 +34,17 @@ pub enum AutovalidateMode {
     Always,
     /// Validate a mounted field when keyboard focus leaves its subtree.
     OnUnfocus,
+    /// Revalidate after an edit only while an error is already displayed.
+    OnUserInteractionIfError,
 }
 
 impl AutovalidateMode {
-    const fn validates_on_edit(self) -> bool {
-        matches!(self, Self::Always | Self::OnUserInteraction)
+    const fn validates_on_edit(self, has_error: bool) -> bool {
+        match self {
+            Self::Always | Self::OnUserInteraction => true,
+            Self::OnUserInteractionIfError => has_error,
+            Self::Disabled | Self::OnUnfocus => false,
+        }
     }
 }
 
@@ -112,6 +118,8 @@ struct FormRegistry {
     changes: incular_core::reactivity::DependencySource,
     next_id: u64,
     fields: HashMap<FormFieldId, Weak<dyn FormEntry>>,
+    autovalidate_mode: AutovalidateMode,
+    auto_validating: bool,
     /// Ordered by token, so listeners run in registration order.
     listeners: BTreeMap<usize, Rc<dyn Fn()>>,
     /// Rebuilt when listeners change, so notifications do not copy the set.
@@ -205,7 +213,9 @@ impl Form {
         let form_weak = Rc::downgrade(&self.state);
         let listener = controller.observe(move |_| {
             if let Some(field) = field_weak.upgrade()
-                && field.autovalidate.get().validates_on_edit()
+                // Conditional auto-validation is for user edits, not
+                // arbitrary programmatic changes to the text controller.
+                && field.autovalidate.get().validates_on_edit(false)
             {
                 let _ = validate_field(&field);
             }
@@ -398,16 +408,52 @@ impl Form {
 
     /// Live fields in registration order, matching Flutter's save order.
     fn live_fields(&self) -> Vec<LiveField> {
-        let mut state = self.state.borrow_mut();
-        state.fields.retain(|_, field| field.strong_count() > 0);
-        let mut fields: Vec<LiveField> = state
-            .fields
-            .iter()
-            .filter_map(|(id, field)| field.upgrade().map(|field| (*id, field)))
-            .collect();
-        fields.sort_unstable_by_key(|(id, _)| *id);
-        fields
+        live_form_fields(&self.state)
     }
+}
+
+fn live_form_fields(registry: &RefCell<FormRegistry>) -> Vec<LiveField> {
+    let mut registry = registry.borrow_mut();
+    registry.fields.retain(|_, field| field.strong_count() > 0);
+    let mut fields: Vec<LiveField> = registry
+        .fields
+        .iter()
+        .filter_map(|(id, field)| field.upgrade().map(|field| (*id, field)))
+        .collect();
+    fields.sort_unstable_by_key(|(id, _)| *id);
+    fields
+}
+
+/// Form-wide automatic validation is derived from an actual user edit.
+/// Invoke validators outside the registry borrow; its guard prevents a
+/// validator that edits another field from recursively validating the form.
+fn auto_validate_form_after_edit(registry: &RefCell<FormRegistry>) -> bool {
+    let mode = {
+        let state = registry.borrow();
+        if state.auto_validating {
+            return false;
+        }
+        state.autovalidate_mode
+    };
+    if matches!(mode, AutovalidateMode::Disabled | AutovalidateMode::OnUnfocus) {
+        return false;
+    }
+    let fields = live_form_fields(registry);
+    if !mode.validates_on_edit(fields.iter().any(|(_, field)| field.has_error_entry())) {
+        return false;
+    }
+
+    struct AutoValidationGuard<'a>(&'a RefCell<FormRegistry>);
+    impl Drop for AutoValidationGuard<'_> {
+        fn drop(&mut self) {
+            self.0.borrow_mut().auto_validating = false;
+        }
+    }
+
+    registry.borrow_mut().auto_validating = true;
+    let _guard = AutoValidationGuard(registry);
+    let _ = validate_fields(&fields);
+    true
 }
 
 /// Registration and configuration handle for one text-backed form field.
@@ -472,10 +518,21 @@ impl FormField {
     /// Records an edit made through an externally-owned editor.
     pub fn notify_user_interaction(&self) {
         let first = !self.field.interacted.replace(true);
-        if self.field.autovalidate.get().validates_on_edit() {
-            let _ = self.validate();
-        } else if first {
-            self.notify_form();
+        let form = self.form.upgrade();
+        let form_validated = form.as_ref().is_some_and(|form| auto_validate_form_after_edit(form));
+        let local_validation = !form_validated
+            && self
+                .field
+                .autovalidate
+                .get()
+                .validates_on_edit(self.field.has_error_entry());
+        if local_validation {
+            let _ = validate_field(&self.field);
+        }
+        if let Some(form) = form
+            && (local_validation || first || form_validated)
+        {
+            notify_form_listeners(&form);
         }
     }
 
@@ -617,6 +674,7 @@ fn notify_form_listeners(form: &Rc<RefCell<FormRegistry>>) {
 
 impl From<Form> for Widget {
     fn from(value: Form) -> Self {
+        value.state.borrow_mut().autovalidate_mode = value.autovalidate_mode;
         Widget::environment_scope(
             FormValidationScope(value.autovalidate_mode),
             value
@@ -650,7 +708,7 @@ pub struct GenericFormField<T: Clone + 'static> {
     force_error_text: Option<String>,
     on_saved: Option<Rc<dyn Fn(T)>>,
     on_reset: Option<Rc<dyn Fn()>>,
-    autovalidate_mode: AutovalidateMode,
+    autovalidate_mode: Option<AutovalidateMode>,
     enabled: bool,
     restoration_id: Option<String>,
     state: Option<FormFieldState<T>>,
@@ -669,7 +727,7 @@ impl<T: Clone + 'static> GenericFormField<T> {
             force_error_text: None,
             on_saved: None,
             on_reset: None,
-            autovalidate_mode: AutovalidateMode::Disabled,
+            autovalidate_mode: None,
             enabled: true,
             restoration_id: None,
             state: None,
@@ -722,7 +780,7 @@ impl<T: Clone + 'static> GenericFormField<T> {
 
     #[must_use]
     pub fn autovalidate_mode(mut self, mode: AutovalidateMode) -> Self {
-        self.autovalidate_mode = mode;
+        self.autovalidate_mode = Some(mode);
         self
     }
 
@@ -752,17 +810,39 @@ impl<T: Clone + 'static> From<GenericFormField<T>> for Widget {
             state.inner.on_saved.replace(Some(on_saved));
         }
         state.inner.on_reset.replace(value.on_reset);
-        if value.autovalidate_mode != AutovalidateMode::Disabled {
-            // Installs after the validator so `Always` validates against it.
-            state.set_autovalidate_mode(value.autovalidate_mode);
+        state.inner.widget_autovalidate.set(value.autovalidate_mode);
+        if value.enabled && value.autovalidate_mode == Some(AutovalidateMode::Always) {
+            // Install the validator before the first validation pass.
+            let _ = state.validate();
         }
+        let mounted = Rc::new(());
+        let last_inherited_mode = Cell::new(None);
         Widget::stateful_builder(state.inner.view_revision.clone(), move |context| {
             let current = state.value();
             let child = (value.builder)(current.as_ref());
-            let mode = state.inner.autovalidate.get();
-            let inherited_blur = context
-                .depend_on::<FormValidationScope>()
-                .is_some_and(|scope| scope.0 == AutovalidateMode::OnUnfocus);
+            let mode = state.inner.autovalidate_mode();
+            let inherited_mode = context.depend_on::<FormValidationScope>().map(|scope| scope.0);
+            if last_inherited_mode.replace(inherited_mode) != inherited_mode
+                && inherited_mode == Some(AutovalidateMode::Always)
+                && value.enabled
+            {
+                // Newly registered fields are not in the Form's initial
+                // validation pass, so check them after their first paint.
+                let mounted = Rc::downgrade(&mounted);
+                let inner = Rc::downgrade(&state.inner);
+                incular_animation::scheduler::add_post_frame_callback(move |_| {
+                    if mounted.upgrade().is_some()
+                        && let Some(inner) = inner.upgrade()
+                        && !inner.has_error_entry()
+                        && !inner.query_validity(false)
+                    {
+                        let _ = inner.validate_value();
+                        inner.notify_form();
+                        incular_animation::scheduler::schedule_frame();
+                    }
+                });
+            }
+            let inherited_blur = inherited_mode == Some(AutovalidateMode::OnUnfocus);
             if mode == AutovalidateMode::OnUnfocus
                 || (inherited_blur && mode != AutovalidateMode::Always)
             {
@@ -1341,6 +1421,7 @@ struct GenericFieldState<T> {
     on_saved: RefCell<Option<GenericSaveCallback<T>>>,
     on_reset: RefCell<Option<Rc<dyn Fn()>>>,
     autovalidate: Cell<AutovalidateMode>,
+    widget_autovalidate: Cell<Option<AutovalidateMode>>,
     interacted: Cell<bool>,
     registration: Cell<Option<FormFieldId>>,
     validating: Cell<bool>,
@@ -1350,6 +1431,10 @@ struct GenericFieldState<T> {
 }
 
 impl<T: Clone + 'static> GenericFieldState<T> {
+    fn autovalidate_mode(&self) -> AutovalidateMode {
+        self.widget_autovalidate.get().unwrap_or_else(|| self.autovalidate.get())
+    }
+
     fn invalidate_view(&self) {
         self.view_revision.set(
             self.view_revision
@@ -1452,6 +1537,7 @@ impl<T: Clone + 'static> FormFieldState<T> {
                 on_saved: RefCell::new(None),
                 on_reset: RefCell::new(None),
                 autovalidate: Cell::new(AutovalidateMode::Disabled),
+                widget_autovalidate: Cell::new(None),
                 interacted: Cell::new(false),
                 registration: Cell::new(None),
                 validating: Cell::new(false),
@@ -1527,12 +1613,18 @@ impl<T: Clone + 'static> FormFieldState<T> {
     pub fn did_change(&self, value: T) {
         self.inner.value.replace(Some(value));
         self.inner.interacted.set(true);
-        if self.inner.autovalidate.get().validates_on_edit() {
-            let _ = self.inner.validate_value();
-        } else {
-            self.inner.invalidate_view();
+        let form = self.inner.form.borrow().as_ref().and_then(Weak::upgrade);
+        let form_validated = form.as_ref().is_some_and(|form| auto_validate_form_after_edit(form));
+        if !form_validated {
+            if self.inner.autovalidate_mode().validates_on_edit(self.has_error()) {
+                let _ = self.inner.validate_value();
+            } else {
+                self.inner.invalidate_view();
+            }
         }
-        self.inner.notify_form();
+        if let Some(form) = form {
+            notify_form_listeners(&form);
+        }
     }
 
     /// Validates the current value, records any error and returns validity.

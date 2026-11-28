@@ -475,3 +475,41 @@ fn form_save_callback_can_replace_itself_for_the_next_pass() {
     assert!(form.save());
     assert_eq!(calls.get(), 11);
 }
+
+#[test]
+fn a_retained_widget_can_override_and_release_its_controllers_edit_policy() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_widgets::{SizedBox, internal::WidgetTree};
+
+    let state = FormFieldState::new(Some(String::new()));
+    state.set_autovalidate_mode(AutovalidateMode::OnUserInteraction);
+    let build = |mode| {
+        let mut field = GenericFormField::new(|_: Option<&String>| SizedBox::shrink())
+            .state(state.clone())
+            .validator(|value| value.is_none_or(String::is_empty).then(|| "Required".to_owned()));
+        if let Some(mode) = mode {
+            field = field.autovalidate_mode(mode);
+        }
+        field.into()
+    };
+    let size = Constraints::tight(Size::new(100., 100.));
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(Some(AutovalidateMode::OnUserInteractionIfError))).unwrap();
+    tree.layout(size).unwrap();
+    state.did_change(String::new());
+    assert_eq!(state.error_text(), None);
+    assert!(!state.validate());
+    state.did_change("ok".into());
+    assert_eq!(state.error_text(), None);
+
+    tree.update(root, build(Some(AutovalidateMode::Disabled))).unwrap();
+    tree.layout(size).unwrap();
+    state.did_change(String::new());
+    assert_eq!(state.error_text(), None);
+
+    tree.update(root, build(None)).unwrap();
+    tree.layout(size).unwrap();
+    state.did_change(String::new());
+    assert_eq!(state.error_text().as_deref(), Some("Required"));
+}

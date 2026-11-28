@@ -58,3 +58,21 @@ field builders now update from their own value and error revisions,
 without reconstructing the whole form. All 37 focused native form
 and editor-focus tests passed. This does not cover form-wide
 Always scheduling or assistive announcements.
+
+## Conditional and deferred automatic validation
+
+Four exact pinned registrations passed. At :929 and :969,
+`OnUserInteractionIfError` does not validate an initially valid
+or empty field just because it built. Explicit validation of the
+empty field shows the mounted error. The :1180 neutral fixture
+types, clears, and retypes using the actual focused editor.
+The form is silent while no error exists, manual validation shows
+the error, and the next valid edit clears it. Becoming invalid
+again after the previous error clears stays silent.
+
+At :1767, form-wide Always schedules validation after the first
+paint: neither error is shown on frame one, both are mounted on
+frame two, and the runtime requests that follow-up frame. The
+native control also reconfigures an existing field from conditional
+validation to Disabled and then back to the controller's policy.
+All 42 focused native cases passed.
