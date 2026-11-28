@@ -322,3 +322,72 @@ fn unbaselined_flex_child_reserves_height_but_does_not_move_the_baseline() {
         assert_eq!(tree.baseline(render), Some(baseline));
     }
 }
+
+#[test]
+fn overflowing_flex_gives_later_flexible_child_zero_budget_in_both_axes() {
+    use incular_widgets::Flexible;
+    for (axis, spacing, expected_main) in [
+        (Axis::Horizontal, 0., 200.),
+        (Axis::Horizontal, 12., 212.),
+        (Axis::Vertical, 0., 200.),
+        (Axis::Vertical, 16., 216.),
+    ] {
+        let mut tree = WidgetTree::new();
+        let fixed = if axis.is_horizontal() {
+            SizedBox::new().width(200.)
+        } else {
+            SizedBox::new().height(200.)
+        };
+        let loose = Widget::from(Flexible::new(SizedBox::expand())).with_key(751_u64);
+        let root = tree
+            .mount(flex(axis, [fixed.into(), loose]).spacing(spacing).into())
+            .unwrap();
+        let id = tree.render_id(root).unwrap();
+        let cross_and_main = if axis.is_horizontal() {
+            (
+                tree.min_intrinsic_width(id, 100.),
+                tree.max_intrinsic_width(id, 100.),
+                tree.min_intrinsic_height(id, 100.),
+                tree.max_intrinsic_height(id, 100.),
+            )
+        } else {
+            (
+                tree.min_intrinsic_height(id, 100.),
+                tree.max_intrinsic_height(id, 100.),
+                tree.min_intrinsic_width(id, 100.),
+                tree.max_intrinsic_width(id, 100.),
+            )
+        };
+        assert_eq!(
+            cross_and_main,
+            (Some(expected_main), Some(expected_main), Some(0.), Some(0.))
+        );
+        let viewport = Constraints::at_most(100., 100.);
+        assert_eq!(
+            tree.dry_layout_size(id, viewport),
+            Some(Size::new(100., 100.))
+        );
+        tree.layout(viewport).unwrap();
+        let flexible = tree.element_with_key(&751_u64.into()).unwrap();
+        assert_eq!(
+            axis.main_extent(tree.element_layout_size(flexible).unwrap()),
+            0.
+        );
+        assert_eq!(tree.element_layout_size(root), Some(Size::new(100., 100.)));
+    }
+}
+
+#[test]
+fn vertical_flex_aspect_ratio_cross_intrinsic_uses_child_height_not_view_height() {
+    let mut tree = WidgetTree::new();
+    let widget = flex(
+        Axis::Vertical,
+        [Widget::from(AspectRatio::new(1., SizedBox::shrink()))],
+    );
+    let root = tree.mount(widget.into()).unwrap();
+    tree.layout(Constraints::at_most(1000., 200.)).unwrap();
+    assert_eq!(
+        tree.max_intrinsic_width(tree.render_id(root).unwrap(), 200.),
+        Some(0.)
+    );
+}

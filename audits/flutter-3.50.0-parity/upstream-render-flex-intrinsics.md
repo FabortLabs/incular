@@ -38,3 +38,15 @@ At 200px and 300px, the tests compare Flutter's exact dry sizes
 and baselines, cross intrinsic heights, and the corresponding
 native retained-layout measurements. A child with no baseline
 reserves its height but cannot move its siblings' common baseline.
+
+## Overflow and flipped constraints
+
+Five original registrations at :99, :119, :140, :160 and :181
+passed. In a 100×100 viewport, a 200px non-flex child leaves
+zero main-axis space for the following flexible child. Gaps of
+12px and 16px remain part of the respective main-axis intrinsic
+width or height, without inflating cross-axis contributions.
+Native checks include the same min/max values, dry/actual
+viewport size, and zero child allocation. A vertical flex with
+an unbounded-main-axis aspect-ratio child uses that child's
+intrinsic height, not the outer 200px limit, in its width query.

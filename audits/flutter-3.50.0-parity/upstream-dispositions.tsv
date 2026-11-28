@@ -4290,3 +4290,8 @@ packages/flutter/test/rendering/flex_test.dart	1095	cross axis intrinsics, with 
 packages/flutter/test/rendering/flex_test.dart	1133	baseline aligned flex flow computeDryLayout	paired-match	upstream-render-flex-intrinsics.md#reflowing-baseline-aligned-children
 packages/flutter/test/rendering/flex_test.dart	1167	baseline aligned children cross intrinsic size	paired-match	upstream-render-flex-intrinsics.md#reflowing-baseline-aligned-children
 packages/flutter/test/rendering/flex_test.dart	1200	children with no baselines do not affect the baseline location	paired-match	upstream-render-flex-intrinsics.md#reflowing-baseline-aligned-children
+packages/flutter/test/rendering/flex_test.dart	99	Vertical Overflow	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
+packages/flutter/test/rendering/flex_test.dart	119	Vertical Overflow with RenderFlex.spacing	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
+packages/flutter/test/rendering/flex_test.dart	140	Horizontal Overflow	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
+packages/flutter/test/rendering/flex_test.dart	160	Horizontal Overflow with RenderFlex.spacing	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
+packages/flutter/test/rendering/flex_test.dart	181	Vertical Flipped Constraints	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
