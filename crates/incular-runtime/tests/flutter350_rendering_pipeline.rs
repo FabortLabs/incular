@@ -204,3 +204,72 @@ fn changed_host_metrics_force_a_frame_even_without_environment_subscribers() {
     assert!(app.frame_requested(live));
     assert!(!app.frame_requested(neighbor));
 }
+
+#[test]
+fn semantics_diagnostics_explain_missing_trees_once_and_report_collected_labels() {
+    use incular_widgets::Semantics;
+
+    let mut app = Application::new(|_| {
+        Semantics::new(SizedBox::expand())
+            .label("primary label")
+            .into()
+    })
+    .unwrap();
+    let primary = app.primary_window();
+    let secondary = app
+        .open_window(
+            WindowOptions::default(),
+            Semantics::new(SizedBox::expand())
+                .label("secondary label")
+                .into(),
+        )
+        .unwrap()
+        .id();
+    let bounds = Constraints::tight(Size::new(400., 300.));
+    let missing = "Semantics not generated";
+    let help = "assistive technology such as a screen reader";
+    for window in [primary, secondary] {
+        app.set_semantics_enabled(window, false);
+        app.run_window_frame_at(window, bounds, Instant::now())
+            .unwrap();
+    }
+
+    let dump = app.debug_dump_semantics();
+    assert!(dump.starts_with(missing), "{dump}");
+    assert_eq!(dump.matches(missing).count(), 2);
+    assert_eq!(dump.matches(help).count(), 1);
+    assert!(dump.contains("application semantics handle"));
+    assert!(!dump.contains("primary label"));
+    assert!(!app.frame_requested(primary));
+    assert!(!app.frame_requested(secondary));
+
+    let request = app.ensure_semantics(primary).unwrap();
+    app.run_window_frame_at(primary, bounds, Instant::now())
+        .unwrap();
+    let partial = app.debug_dump_semantics();
+    assert_eq!(partial.matches(missing).count(), 1);
+    assert_eq!(partial.matches(help).count(), 1);
+    assert!(partial.contains("primary label"));
+    assert!(!partial.contains("secondary label"));
+
+    app.set_semantics_enabled(secondary, true);
+    app.run_window_frame_at(secondary, bounds, Instant::now())
+        .unwrap();
+    let collected = app.debug_dump_semantics();
+    assert!(collected.contains("primary label") && collected.contains("secondary label"));
+    assert!(!collected.contains(missing));
+    assert!(!collected.contains(help));
+
+    drop(request);
+    app.run_window_frame_at(primary, bounds, Instant::now())
+        .unwrap();
+    let released = app.debug_dump_semantics();
+    assert_eq!(released.matches(missing).count(), 1);
+    assert_eq!(released.matches(help).count(), 1);
+    assert!(app.close_window(secondary));
+    assert!(app.close_window(primary));
+    assert_eq!(
+        app.debug_dump_semantics(),
+        "No render tree root is registered."
+    );
+}

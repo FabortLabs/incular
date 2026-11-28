@@ -1964,6 +1964,39 @@ impl Application {
             .ok_or(SemanticViewLookupError::UnknownNode { view, node })
     }
 
+    /// Describes the most recently collected semantics for each window. If
+    /// a view has no semantic tree, explains how to enable collection once,
+    /// even when several views have not produced nodes.
+    #[must_use]
+    pub fn debug_dump_semantics(&self) -> String {
+        let registry = self.registry.borrow();
+        let mut explained = false;
+        let trees = registry
+            .ids()
+            .into_iter()
+            .filter_map(|id| {
+                let record = registry.get(id)?;
+                let tree = record.runtime.tree().semantics();
+                if !tree.roots().is_empty() {
+                    return Some(format!("Window {id}:\n{}", tree.debug_dump()));
+                }
+                let mut notice = format!("Semantics not generated for window {id}.");
+                if !explained {
+                    notice.push_str(
+                        "\nSemantic trees are collected on demand. To inspect the tree, turn on an assistive technology such as a screen reader, or acquire an application semantics handle, then draw a frame.",
+                    );
+                    explained = true;
+                }
+                Some(notice)
+            })
+            .collect::<Vec<_>>();
+        if trees.is_empty() {
+            "No render tree root is registered.".to_owned()
+        } else {
+            trees.join("\n\n")
+        }
+    }
+
     /// Turns one window's per-frame semantics pass on or off. Native hosts
     /// enable it when an assistive technology requests the tree; enabling
     /// schedules a frame so the first native update is complete.

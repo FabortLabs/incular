@@ -87,3 +87,22 @@ can register a RenderView without a child and forces a frame for a
 global metrics callback with a mounted child even if the new values
 are identical. Incular registers mounted roots and coalesces duplicate
 per-window metric payloads.
+
+## Diagnostic for unavailable semantics
+
+Pinned `rendering/binding_test.dart:29` passed. The Flutter binding
+prints a single dump explaining how to turn on semantics when no
+tree was produced. Incular returns the assembled report from
+`Application::debug_dump_semantics`, so a debugger can display it
+without intercepting console output. The native test checks two
+unavailable views with a single explanation, one available view with
+only its actual label, both rendered views with no missing-tree
+notice, restored diagnostics on release, and the separate case of no
+registered roots. Reading the diagnostic never schedules a frame.
+All three focused native pipeline tests passed.
+
+Pinned `rendering/binding_test.dart:49` also passed. It checks that a
+Flutter binding's synthetic root PipelineOwner cannot manage a render
+root. Incular's application registry has no synthetic render owner or
+root setter; every registered window owns its real render tree. This
+specific Flutter exception has no native scenario and is not credited.
