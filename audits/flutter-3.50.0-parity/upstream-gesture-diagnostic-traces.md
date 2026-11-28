@@ -33,3 +33,19 @@ The formatted preview leaves out Dart object address hashes.
 The pinned `gestures/events_test.dart:14` and
 `gestures/debug_test.dart:207` originals passed, as did seven focused
 native tests covering these descriptions and neighboring callbacks.
+
+## Callback detail properties
+
+The callback detail types now expose ordered inspector properties generated
+from their actual positions, device, movement, velocity, force, and count.
+Scale details now have Flutter-style identity defaults with zero contacts;
+the explicit two-contact native constructor still behaves as before.
+Seven focused native scenarios verify the property order, null values,
+one-decimal diagnostic rounding, and real nonzero fields. Four adjacent
+scale and pointer regressions also passed.
+
+The pinned `gestures/debug_test.dart:223` passed. This comparison remains
+partial: Flutter can construct some serial-tap and tap-drag details
+without a device kind, whereas those public native callback values always
+carry an explicit kind, including Unknown. The diagnostic output preserves
+that distinction rather than printing a present Unknown device as null.

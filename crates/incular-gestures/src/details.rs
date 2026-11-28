@@ -1135,5 +1135,7 @@ impl GestureCallbacks {
     }
 }
 
+mod callback_diagnostics;
+pub use callback_diagnostics::GestureDetailDiagnostics;
 pub(crate) mod drag_diagnostics;
 mod pointer_diagnostics;

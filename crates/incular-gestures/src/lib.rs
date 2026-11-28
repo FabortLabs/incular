@@ -47,6 +47,7 @@ pub use arena::{
 };
 #[doc(hidden)]
 pub use details::{ActionListenerRegistrations, MountActionListener};
+pub use details::GestureDetailDiagnostics;
 pub use details::{
     ButtonGestureCallbacks, DragCallbacks, DragDownDetails, DragEndDetails, DragStartDetails, FocusKeyHandlerOwner,
     DragUpdateDetails, GestureAction, GestureCallbacks, GestureDecision, LongPressDownDetails,

@@ -4562,3 +4562,4 @@ packages/flutter/test/painting/image_provider_test.dart	34	obtainKey errors will
 packages/flutter/test/painting/image_provider_test.dart	54	obtainKey errors will be caught - check location	partial-match	upstream-asset-image-cache-status.md
 packages/flutter/test/gestures/debug_test.dart	207	TapGestureRecognizer _sentTapDown toString	paired-match	upstream-gesture-diagnostic-traces.md#pointer-descriptions-and-tap-down-state
 packages/flutter/test/gestures/events_test.dart	14	toString control tests	paired-match	upstream-gesture-diagnostic-traces.md#pointer-descriptions-and-tap-down-state
+packages/flutter/test/gestures/debug_test.dart	223	Gesture details debugFillProperties	partial-match	upstream-gesture-diagnostic-traces.md#callback-detail-properties
