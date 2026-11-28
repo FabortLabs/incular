@@ -140,3 +140,23 @@ fn a_list_and_its_item_keep_distinct_role_nodes() {
     assert_eq!(list.children.len(), 1);
     assert_eq!(tree.node(list.children[0]).unwrap().role, Role::ListItem);
 }
+
+#[test]
+fn dialog_and_route_scope_keep_distinct_nodes() {
+    dialog_keeps_child_annotation(
+        Semantics::new(Placeholder::new())
+            .scopes_route(true)
+            .explicit_child_nodes(true),
+        SemanticAnnotationFlag::ScopesRoute,
+        None,
+    );
+}
+
+#[test]
+fn dialog_and_slider_keep_distinct_nodes() {
+    dialog_keeps_child_annotation(
+        Semantics::new(Placeholder::new()).slider(true),
+        SemanticAnnotationFlag::Slider,
+        Some(Role::Slider),
+    );
+}

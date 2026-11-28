@@ -13,3 +13,17 @@ Five exact pinned `widgets/basic_test.dart` registrations passed:
 Native: `flutter350_semantics_role_boundaries` and
 `flutter350_attributed_semantics` (six passed). No production changes
 were needed; other semantic roles and metadata are separate comparisons.
+
+The pinned route-scope and slider cases at `:446,506,540` also
+pass. The two originals titled "scopes route" are distinct:
+`:446` applies scopesRoute with explicit child nodes; `:540` uses
+the same slider arrangement as `:506`. The runtime checks both
+physical node identities and the parent-to-child relationship while
+preserving the child's independent flag. All 11 focused role tests
+passed.
+
+The Linux branch of `:468` also ran. Flutter's native runtime treats
+a legacy header flag as a trait, allowing it to merge into the
+Dialog; Flutter Web treats it as a distinct role. Incular's
+heading projection is not yet verified against both branches;
+this registration is not counted as paired.

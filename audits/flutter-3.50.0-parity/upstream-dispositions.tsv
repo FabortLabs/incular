@@ -4034,3 +4034,7 @@ packages/flutter/test/widgets/basic_test.dart	756	Semantics with attributedDecre
 packages/flutter/test/widgets/basic_test.dart	772	Semantics with attributedIncreasedValue should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
 packages/flutter/test/widgets/basic_test.dart	616	Semantics can merge attributed strings	paired-match	upstream-attributed-semantics.md
 packages/flutter/test/widgets/basic_test.dart	701	Semantics can merge attributed strings with non attributed string	paired-match	upstream-attributed-semantics.md
+packages/flutter/test/widgets/basic_test.dart	446	Semantics does not merge role - scopes route	paired-match	upstream-basic-semantic-boundaries.md
+packages/flutter/test/widgets/basic_test.dart	506	Semantics does not merge role - slider	paired-match	upstream-basic-semantic-boundaries.md
+packages/flutter/test/widgets/basic_test.dart	540	Semantics does not merge role - scopes route	paired-match	upstream-basic-semantic-boundaries.md
+packages/flutter/test/widgets/basic_test.dart	468	Semantics does not merge role - header on web	reference-ran-incular-open	upstream-basic-semantic-boundaries.md
