@@ -371,3 +371,13 @@ export INCULAR_FLUTTER_BIDI_HIT_FONT_PATH="$PWD/.tmp/FlutterTest-bidi-hit.ttf"
 cargo test --locked --offline -j1 -p incular-text \
   --test flutter350_text_painter_bidi point_hits_follow -- --test-threads=1
 ```
+
+## Pinned bidi cases disabled by Flutter
+
+The exact selections at :34, :189, :388, :422, :478, :513, :541, :625
+and :671 in `painting/text_painter_rtl_test.dart` report all nine tests
+skipped. The pin sets `skipTestsWithKnownBugs` to true for these cases
+and cites Flutter issue #87536. Neither the fixture nor its skip gate
+was modified. These are inventoried but do not add paired coverage.
+The three enabled registrations in this file retain their independent
+behavior comparisons, including real line boxes and caret affinities.

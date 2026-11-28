@@ -4673,3 +4673,12 @@ packages/flutter/test/widgets/text_selection_test.dart	1246	selection handle's G
 packages/flutter/test/widgets/text_selection_test.dart	2051	Context menus	paired-match	upstream-text-selection-gestures.md#selection-overlay-hit-area-and-menu
 packages/flutter/test/widgets/text_selection_test.dart	1843	Mouse edge scrolling works in an outer scrollable	paired-match	upstream-text-selection-gestures.md#mouse-selection-scrolls-to-the-document-edge
 packages/flutter/test/widgets/text_selection_test.dart	1917	Mouse edge scrolling works with both an outer scrollable and scrolling in the EditableText	paired-match	upstream-text-selection-gestures.md#mouse-selection-scrolls-to-the-document-edge
+packages/flutter/test/painting/text_painter_rtl_test.dart	34	TextPainter - bidi overrides in LTR	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
+packages/flutter/test/painting/text_painter_rtl_test.dart	189	TextPainter - bidi overrides in RTL	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
+packages/flutter/test/painting/text_painter_rtl_test.dart	388	TextPainter - line wrap mid-word	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
+packages/flutter/test/painting/text_painter_rtl_test.dart	422	TextPainter - line wrap mid-word, bidi - LTR base	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
+packages/flutter/test/painting/text_painter_rtl_test.dart	478	TextPainter - line wrap mid-word, bidi - RTL base	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
+packages/flutter/test/painting/text_painter_rtl_test.dart	513	TextPainter - multiple levels	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
+packages/flutter/test/painting/text_painter_rtl_test.dart	541	TextPainter - getPositionForOffset - RTL in LTR	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
+packages/flutter/test/painting/text_painter_rtl_test.dart	625	TextPainter - getPositionForOffset - LTR in RTL	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
+packages/flutter/test/painting/text_painter_rtl_test.dart	671	TextPainter - Spaces	reference-skipped	upstream-text-painter.md#pinned-bidi-cases-disabled-by-flutter
