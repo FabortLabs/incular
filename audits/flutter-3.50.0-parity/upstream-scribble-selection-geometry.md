@@ -18,3 +18,23 @@ Flutter input channel targets passed (20 native tests). This comparison
 does not exercise a physical Apple Pencil, native UIKit delivery,
 Scribble focus discovery, handwriting placeholders, or the user-driven
 scroll gesture lifecycle.
+
+## Visibility, platform gates, and geometry changes
+
+Pinned iOS cases :496, :654, and :700 all passed. Of these, two are
+paired: disabling handwriting sends no rectangle on show or a later
+frame, and a 13 px viewport with 0.5 px scroll still sends all five
+14 px boxes crossing both vertical edges. The mounted host also stays
+silent for its browser protocol and non-iOS platforms while ordinary
+keyboard show still succeeds.
+
+The native :496 comparison retains the same client and tests exact
+bounds after wrapping to 20 px, clipping to 45 px, aligning to x = 5,
+and changing an idle scroll offset by 14 px. The rectangle ending exactly
+at the top edge is included. An unchanged rebuild emits nothing. This
+case is partial: the family emoji yields one grapheme at the same
+UTF-16 index, x/y, and height, but the native fallback lays it out as
+one joined glyph 17.43164 px wide on this test host, while Flutter's
+test-font environment produces a 42 px box. The host sends its own
+laid-out bounds rather than imposing Flutter's test-font width.
+All four focused native tests passed.

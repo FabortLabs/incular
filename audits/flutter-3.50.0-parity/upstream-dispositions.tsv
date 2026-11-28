@@ -4162,3 +4162,6 @@ packages/flutter/test/widgets/editable_text_test.dart	14881	pasting with the key
 packages/flutter/test/widgets/editable_text_test.dart	14154	Cursor does not jump after undo	paired-match	undo-history-comparisons.md#immediate-undo-after-the-first-insertion
 packages/flutter/test/widgets/editable_text_test.dart	16888	replacing puts cursor at the end of the word	paired-match	upstream-spell-check-toolbar.md#replacement-caret-policy
 packages/flutter/test/widgets/editable_text_scribble_test.dart	34	selection rects re-sent when refocused	paired-match	upstream-scribble-selection-geometry.md#focus-and-connection-lifetime
+packages/flutter/test/widgets/editable_text_scribble_test.dart	496	selection rects are sent when they change	partial-match	upstream-scribble-selection-geometry.md#visibility-platform-gates-and-geometry-changes
+packages/flutter/test/widgets/editable_text_scribble_test.dart	654	selection rects are not sent if stylusHandwritingEnabled is false	paired-match	upstream-scribble-selection-geometry.md#visibility-platform-gates-and-geometry-changes
+packages/flutter/test/widgets/editable_text_scribble_test.dart	700	selection rects sent even when character corners are outside of paintBounds	paired-match	upstream-scribble-selection-geometry.md#visibility-platform-gates-and-geometry-changes
