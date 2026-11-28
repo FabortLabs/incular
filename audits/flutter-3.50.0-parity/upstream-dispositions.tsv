@@ -4629,3 +4629,5 @@ packages/flutter/test/rendering/editable_test.dart	1091	reusing the same painter
 packages/flutter/test/rendering/editable_test.dart	1116	does not repaint the render editable when custom painters need repaint	paired-match	upstream-editable-custom-painters.md
 packages/flutter/test/rendering/editable_test.dart	1132	repaints when its RenderEditable repaints	paired-match	upstream-editable-custom-painters.md
 packages/flutter/test/rendering/editable_test.dart	1148	correct coordinate space	paired-match	upstream-editable-custom-painters.md
+packages/flutter/test/widgets/focus_manager_test.dart	2093	'$FocusManager dispatches object creation in constructor'	paired-match	upstream-allocation-events.md#focus-allocation-identities
+packages/flutter/test/widgets/focus_manager_test.dart	2100	'$FocusNode dispatches object creation in constructor'	paired-match	upstream-allocation-events.md#focus-allocation-identities

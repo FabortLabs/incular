@@ -60,3 +60,14 @@ The creation case (:69) is partial: the event records the stable
 identity and class but preserves the Rust caller's qualified
 library label verbatim. Flutter inserts a Dart package URI prefix.
 Both original Flutter and 17 focused native checks passed.
+
+## Focus allocation identities
+
+Pinned `widgets/focus_manager_test.dart:2093,2100` passed. The native
+`flutter350_focus_allocation_events` checks actual debug registry
+delivery during construction and at final disposal. Manager and node
+pairs carry the same identity, cloning a node does not publish a new
+object, and a scope's internal manager and lazy focus handle do not
+duplicate the public scope's lifecycle. Release structures omit these
+debug-only fields. All three focused tests and the 12 focus-highlight
+controls passed.

@@ -183,6 +183,8 @@ impl<E> NodeKeyEventHandler<E> {
 }
 
 struct FocusState {
+    #[cfg(debug_assertions)]
+    _allocation: Option<incular_core::memory::allocations::ObjectLifetime>,
     debug_label: RefCell<Option<Rc<str>>>,
     scope_owner: Option<Weak<FocusScopeState>>,
     host_enclosing_scope: RefCell<Option<Weak<FocusScopeState>>>,
@@ -306,6 +308,10 @@ impl FocusNode {
     fn with_scope_owner(scope_owner: Option<Weak<FocusScopeState>>) -> Self {
         Self {
             state: Rc::new(FocusState {
+                #[cfg(debug_assertions)]
+                _allocation: scope_owner.is_none().then(|| {
+                    incular_core::memory::allocations::ObjectLifetime::new("widgets", "FocusNode")
+                }),
                 debug_label: RefCell::new(None),
                 scope_owner,
                 host_enclosing_scope: RefCell::new(None),
@@ -1877,10 +1883,17 @@ impl FocusTraversalPolicy for OrderedTraversalPolicy {
 /// Owns a single focus scope.  Register nodes in visual traversal order, then
 /// use [`Self::focus_next`] for Tab or Shift+Tab semantics.  The manager is
 /// weakly registered, so unmounted/rebuilt controls cannot leak focus entries.
-#[derive(Default)]
 pub struct FocusManager {
     nodes: Vec<Weak<FocusState>>,
     policy: FocusTraversalPolicyKind,
+    #[cfg(debug_assertions)]
+    _allocation: Option<incular_core::memory::allocations::ObjectLifetime>,
+}
+
+impl Default for FocusManager {
+    fn default() -> Self {
+        Self::with_policy(FocusTraversalPolicyKind::default())
+    }
 }
 
 #[derive(Default)]
@@ -1911,9 +1924,20 @@ impl FocusManager {
 
     #[must_use]
     pub fn with_policy(policy: FocusTraversalPolicyKind) -> Self {
+        Self::create(policy, true)
+    }
+
+    /// A scope's storage is not a second public manager.
+    fn create(policy: FocusTraversalPolicyKind, tracked: bool) -> Self {
+        #[cfg(not(debug_assertions))]
+        let _ = tracked;
         Self {
             nodes: Vec::new(),
             policy,
+            #[cfg(debug_assertions)]
+            _allocation: tracked.then(|| {
+                incular_core::memory::allocations::ObjectLifetime::new("widgets", "FocusManager")
+            }),
         }
     }
 
@@ -2083,6 +2107,8 @@ struct ScopeFocusAnchor {
 }
 
 struct FocusScopeState {
+    #[cfg(debug_assertions)]
+    _allocation: incular_core::memory::allocations::ObjectLifetime,
     traversal_edge_behavior: Cell<TraversalEdgeBehavior>,
     directional_traversal_edge_behavior: Cell<TraversalEdgeBehavior>,
     anchor: OnceCell<ScopeFocusAnchor>,
@@ -2129,11 +2155,13 @@ impl FocusScopeNode {
     pub fn new() -> Self {
         Self {
             state: Rc::new(FocusScopeState {
+                #[cfg(debug_assertions)]
+                _allocation: incular_core::memory::allocations::ObjectLifetime::new("widgets", "FocusScopeNode"),
                 traversal_edge_behavior: Cell::new(TraversalEdgeBehavior::ClosedLoop),
                 directional_traversal_edge_behavior: Cell::new(TraversalEdgeBehavior::Stop),
                 anchor: OnceCell::new(),
                 hosted_history: RefCell::new(Vec::new()),
-                manager: RefCell::new(FocusManager::new()),
+                manager: RefCell::new(FocusManager::create(FocusTraversalPolicyKind::default(), false)),
                 last_focused: RefCell::new(None),
                 parent: RefCell::new(None),
                 changes: incular_core::reactivity::DependencySource::default(),
