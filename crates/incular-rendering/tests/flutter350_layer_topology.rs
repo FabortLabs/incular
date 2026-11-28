@@ -127,3 +127,153 @@ fn clip_bounds_describe_each_local_shape_not_the_parent_transform() {
         20.
     );
 }
+
+#[test]
+fn replacing_an_attached_leaders_link_then_removing_it_releases_both_publications() {
+    use incular_rendering::LayerLink;
+
+    let [original, changed] = std::array::from_fn(|_| LayerLink::new());
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let size = Size::new(24., 18.);
+    let leader = tree.create_leader(original.clone(), size);
+    tree.set_children(root, vec![leader]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    assert_eq!(original.leader_size(), Some(size));
+    assert!(!changed.is_linked());
+
+    assert!(tree.update_leader(leader, changed.clone(), size));
+    assert!(!original.is_linked());
+    let _ = tree.flatten();
+    assert_eq!(changed.leader_size(), Some(size));
+    tree.remove(leader);
+    let _ = tree.flatten();
+    assert!(!original.is_linked() && !changed.is_linked());
+    assert!(tree.layer(leader).is_none());
+}
+
+#[test]
+fn attaching_two_leaders_then_removing_the_second_before_the_first_clears_the_link() {
+    use incular_rendering::LayerLink;
+
+    let link = LayerLink::new();
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let first = tree.create_leader(link.clone(), Size::new(24., 18.));
+    let second = tree.create_leader(link.clone(), Size::new(11., 12.));
+    tree.set_children(root, vec![first]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    assert!(link.is_linked());
+
+    tree.set_children(root, vec![first, second]);
+    let _ = tree.flatten();
+    assert!(link.is_linked());
+    tree.remove(second);
+    let _ = tree.flatten();
+    assert_eq!(link.leader_size(), Some(Size::new(24., 18.)));
+    tree.remove(first);
+    let _ = tree.flatten();
+    assert!(!link.is_linked());
+}
+
+#[test]
+fn connecting_and_disconnecting_followers_does_not_invalidate_the_leader_picture() {
+    use incular_rendering::{FollowerLayer, LayerAnchor, LayerLink};
+
+    let mut tree = LayerTree::new();
+    let link = LayerLink::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let offset = Offset::new(31., 17.);
+    let leader = tree.create_leader_at(link.clone(), unit().size, offset);
+    let paint = picture(&mut tree);
+    tree.set_children(leader, vec![paint]);
+    tree.set_children(root, vec![leader]);
+    tree.set_root(root);
+    let _ = tree.flatten();
+    let generation = link.leader_generation();
+    let prior_repaints = tree.diagnostics().picture_layers_repainted;
+    assert_ne!(generation, 0);
+    let follower = |tree: &mut LayerTree, x| {
+        let layer = tree.create_follower(FollowerLayer {
+            link: link.clone(),
+            show_when_unlinked: false,
+            offset: Offset::new(x, 0.),
+            target_anchor: LayerAnchor::TOP_LEFT,
+            follower_anchor: LayerAnchor::TOP_LEFT,
+            size: unit().size,
+        });
+        let paint = picture(tree);
+        tree.set_children(layer, vec![paint]);
+        layer
+    };
+    let a = follower(&mut tree, 10.);
+    let b = follower(&mut tree, 20.);
+    for (children, origins) in [
+        (vec![leader, a], vec![offset, Offset::new(41., 17.)]),
+        (
+            vec![leader, a, b],
+            vec![offset, Offset::new(41., 17.), Offset::new(51., 17.)],
+        ),
+        (vec![leader, a], vec![offset, Offset::new(41., 17.)]),
+        (vec![leader], vec![offset]),
+    ] {
+        tree.set_children(root, children);
+        let _ = tree.flatten();
+        assert_eq!(link.leader_generation(), generation);
+        assert_eq!(tree.diagnostics().picture_layers_repainted, prior_repaints);
+        assert_eq!(
+            tree.flattened_pictures()
+                .iter()
+                .map(|picture| picture.world_bounds.origin)
+                .collect::<Vec<_>>(),
+            origins
+        );
+        assert_eq!(tree.layer(leader).unwrap().1, [paint]);
+    }
+}
+
+#[test]
+fn a_retained_leader_still_projects_its_offset_after_its_parent_repaints() {
+    use incular_rendering::LayerLink;
+
+    let mut tree = LayerTree::new();
+    let link = LayerLink::new();
+    let [outer, inner] = std::array::from_fn(|_| tree.create_transform(Transform::IDENTITY));
+    let offset = Offset::new(12., 23.);
+    let leader = tree.create_leader_at(link.clone(), unit().size, offset);
+    let leader_picture = picture(&mut tree);
+    let outer_picture = picture(&mut tree);
+    tree.set_children(outer, vec![outer_picture, inner]);
+    tree.set_children(inner, vec![leader]);
+    tree.set_children(leader, vec![leader_picture]);
+    tree.set_root(outer);
+    let _ = tree.flatten();
+    let before = link.leader_generation();
+    let expected = Transform::translation(offset);
+    assert_eq!(link.leader_transform(), Some(expected));
+
+    let mut rebuilt = DisplayList::new();
+    rebuilt.push(PaintCommand::Rect {
+        rect: unit(),
+        color: Color::BLACK,
+    });
+    tree.update_picture(outer_picture, rebuilt, unit());
+    let display = tree.flatten();
+    assert!(display.commands().iter().any(|op| matches!(
+        op,
+        PaintCommand::Rect {
+            color: Color::BLACK,
+            ..
+        }
+    )));
+    assert_eq!(link.leader_transform(), Some(expected));
+    assert_eq!(link.leader_generation(), before);
+    let retained = tree
+        .flattened_pictures()
+        .iter()
+        .find(|picture| picture.layer == leader_picture)
+        .unwrap();
+    assert_eq!(retained.world_bounds.origin, offset);
+}

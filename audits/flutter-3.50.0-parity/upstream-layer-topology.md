@@ -19,3 +19,20 @@ All 39 focused native layer, compositor, sliver, keep-alive and proxy
 cases passed. The authored reparenting comparison adds no original
 registration credit. Only Flutter's raster was run; Incular's native
 test validates the render stream and placements.
+
+## Leader links and retained transforms
+
+Five pinned `rendering/layers_test.dart` cases passed. Replacing an
+attached leader's link retires its old publication; removal clears
+the new one as well. Two attached owners can detach second-before-first
+with no stale publication. After repainting an ancestor's independent
+picture, the retained leader's own transform and generation persist
+and its picture still lands at the intended offset. The native check
+also exercises a nonzero local translation.
+
+Connecting and disconnecting followers changes their actual picture
+placements without replacing the leader's picture or advancing its
+published generation. These two registrations remain partial: there
+is no equivalent engine dirty bit, and number of link resolution
+passes is separate from picture reuse. All 16 focused compositor
+topology and mutation tests passed.
