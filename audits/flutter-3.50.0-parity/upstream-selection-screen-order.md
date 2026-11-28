@@ -21,3 +21,18 @@ runtime/widget tests passed. The authored control does not count
 toward the 8,856 original registrations. The distinct inline WidgetSpan
 original at `selectable_region_test.dart:6603` needs its own matching
 fixture and is not credited by this change.
+
+## Inline WidgetSpan copy
+
+The exact original at line 6603 is now paired. The focused native
+Runtime fixture mounts the same single line with a real middle-aligned
+inline Text child, clicks the paragraph, selects all, and copies
+through the clipboard bridge. Before the fix it copied the U+FFFC
+layout marker instead of the child. It now returns
+`Hello my name is Dash.` and reports the corresponding UTF-16 content
+range. Only actual, laid-out, selectable inline content contributes
+plain text. This does not claim Web selection or independently
+dragging a caret within the inline child.
+
+The pinned original and 24 focused native selection/runtime tests
+passed. Added one original to the paired ledger.

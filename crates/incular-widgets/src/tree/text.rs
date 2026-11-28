@@ -2195,6 +2195,72 @@ impl WidgetTree {
             _ => None,
         }
     }
+    /// Clipboard text for one selected byte range. A laid-out WidgetSpan
+    /// contributes its registered child text, not the U+FFFC layout marker.
+    /// Ordinary paragraphs keep a borrowed slice.
+    fn selection_fragment(&self, id: ElementId, range: TextRange) -> Option<Cow<'_, str>> {
+        let text = self.selectable_text_value(id)?;
+        let plain = text.get(range.start..range.end)?;
+        let Some(element) = self.elements.get(id.0) else {
+            return Some(Cow::Borrowed(plain));
+        };
+        let Some(render) = self.renders.get(element.render.0) else {
+            return Some(Cow::Borrowed(plain));
+        };
+        let RenderKind::Text { inline: Some(inline), .. } = render.object.kind() else {
+            return Some(Cow::Borrowed(plain));
+        };
+        let first = inline.placeholders.partition_point(|span| span.index < range.start);
+        let tail = inline.placeholders.get(first..)?;
+        if tail.first().is_none_or(|span| span.index >= range.end) {
+            return Some(Cow::Borrowed(plain));
+        }
+
+        let owner = self.selection_area_ancestor(id);
+        let mut result = String::with_capacity(plain.len());
+        let mut cursor = range.start;
+        for (offset, span) in tail.iter().enumerate().take_while(|(_, span)| span.index < range.end) {
+            let after = span.index + '\u{fffc}'.len_utf8();
+            if after > range.end {
+                break;
+            }
+            result.push_str(text.get(cursor..span.index)?);
+            cursor = after;
+            let placed = render.text_layout().is_some_and(|layout| {
+                layout.placeholders.iter().any(|box_| box_.index == span.index)
+            });
+            if placed
+                && let Some(owner) = owner
+                && let Some(child) = inline.slots.iter().position(|&slot| slot == first + offset)
+                && let Some(&child) = element.children.get(child)
+            {
+                self.append_inline_selection_content(child, owner, &mut result);
+            }
+        }
+        result.push_str(text.get(cursor..range.end)?);
+        Some(Cow::Owned(result))
+    }
+
+    fn append_inline_selection_content(&self, child: ElementId, owner: ElementId, out: &mut String) {
+        let mut work = vec![child];
+        while let Some(current) = work.pop() {
+            let Some(element) = self.elements.get(current.0) else {
+                continue;
+            };
+            if let Some(text) = self.selectable_text_value(current) {
+                if self.selection_area_ancestor(current) == Some(owner)
+                    && let Some(content) = self.selection_fragment(current, TextRange::new(0, text.len()))
+                {
+                    out.push_str(&content);
+                }
+            } else if self.selection_boundary_policy(current).is_none_or(|policy| {
+                policy.accepts_children() && self.selection_command_owner(current) == owner
+            }) {
+                work.extend(element.children.iter().rev().copied());
+            }
+        }
+    }
+
     pub(super) fn selectable_texts_in_area(&self, area: ElementId) -> Vec<ElementId> {
         self.selection_command_members(area, false, true).0
     }
@@ -2362,8 +2428,7 @@ impl WidgetTree {
             custom.then(|| {
                 entries.iter().map(|&element| {
                     let range = static_selection_range(self, &entries, selection, element)?;
-                    let text = self.selectable_text_value(element)?;
-                    Some(Cow::Borrowed(&text[range.start..range.end]))
+                    self.selection_fragment(element, range)
                 }).collect::<Vec<_>>()
             })
         });
@@ -4297,18 +4362,21 @@ pub(super) fn selection_content_range(
     for &entry in entries {
         let text = tree.selectable_text_value(entry)?;
         let content_offset = |point: StaticSelectionPoint| {
-            offset.saturating_add(utf16_len(&text[..valid_boundary(text, point.byte)]))
+            let range = TextRange::new(0, valid_boundary(text, point.byte));
+            let content = tree.selection_fragment(entry, range)?;
+            Some(offset.saturating_add(utf16_len(&content)))
         };
         if entry == selection.anchor.element {
-            anchor = Some(content_offset(selection.anchor));
+            anchor = content_offset(selection.anchor);
         }
         if entry == selection.extent.element {
-            extent = Some(content_offset(selection.extent));
+            extent = content_offset(selection.extent);
         }
         if let (Some(anchor), Some(extent)) = (anchor, extent) {
             return Some(SelectedContentRange::new(anchor, extent));
         }
-        offset = offset.saturating_add(utf16_len(text));
+        let content = tree.selection_fragment(entry, TextRange::new(0, text.len()))?;
+        offset = offset.saturating_add(utf16_len(&content));
     }
     None
 }
@@ -4325,10 +4393,10 @@ pub(super) fn static_selection_text(
         let Some(range) = static_selection_range(tree, entries, selection, *element) else {
             continue;
         };
-        let Some(text) = tree.selectable_text_value(*element) else {
+        let Some(text) = tree.selection_fragment(*element, range) else {
             continue;
         };
-        out.push_str(&text[range.start..range.end]);
+        out.push_str(&text);
     }
     out
 }

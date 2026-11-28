@@ -4501,3 +4501,4 @@ packages/flutter/test/widgets/semantics_role_checks_test.dart	521	failure case, 
 packages/flutter/test/widgets/semantics_role_checks_test.dart	537	failure case, no menu or menuBar as its ancestor	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
 packages/flutter/test/widgets/semantics_role_checks_test.dart	554	Success case with menu as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
 packages/flutter/test/widgets/semantics_role_checks_test.dart	573	Success case with menuBar as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/selectable_region_test.dart	6603	Multiple selectables on a single line should be in screen order	paired-match	upstream-selection-screen-order.md#inline-widgetspan-copy
