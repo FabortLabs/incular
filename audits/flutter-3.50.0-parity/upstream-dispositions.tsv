@@ -4145,3 +4145,6 @@ packages/flutter/test/widgets/draggable_test.dart	3161	Custom long press delay f
 packages/flutter/test/widgets/draggable_test.dart	3201	Default long press delay for LongPressDraggable	paired-match	upstream-draggable-target-path.md#delayed-drag-activation
 packages/flutter/test/widgets/draggable_test.dart	3240	long-press draggable calls Haptic Feedback onStart	paired-match	upstream-draggable-target-path.md#haptic-request-at-long-press-start
 packages/flutter/test/widgets/draggable_test.dart	3248	long-press draggable can disable Haptic Feedback	paired-match	upstream-draggable-target-path.md#haptic-request-at-long-press-start
+packages/flutter/test/widgets/editable_text_test.dart	3815	Sends "updateConfig" when keyboardType is changed	paired-match	upstream-editable-defaults.md#live-keyboard-configuration-and-initial-style-wire-fields
+packages/flutter/test/widgets/editable_text_test.dart	6396	text styling info is sent on show keyboard	paired-match	upstream-editable-defaults.md#live-keyboard-configuration-and-initial-style-wire-fields
+packages/flutter/test/widgets/editable_text_test.dart	6439	text styling info is sent on show keyboard (bold override)	paired-match	upstream-editable-defaults.md#live-keyboard-configuration-and-initial-style-wire-fields

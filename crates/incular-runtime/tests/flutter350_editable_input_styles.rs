@@ -15,12 +15,21 @@ fn style_updates(
     base: RuntimeEnvironment,
     changed: RuntimeEnvironment,
 ) -> (FlutterTextInputStyle, FlutterTextInputStyle) {
+    style_updates_for_direction(style, base, changed, TextDirection::Ltr)
+}
+
+fn style_updates_for_direction(
+    style: TextStyle,
+    base: RuntimeEnvironment,
+    changed: RuntimeEnvironment,
+    direction: TextDirection,
+) -> (FlutterTextInputStyle, FlutterTextInputStyle) {
     let controller = TextEditingController::new();
     let build = |environment| -> Widget {
         MediaQuery::new(
             environment,
             EditableText::new(controller.clone())
-                .text_direction(TextDirection::Ltr)
+                .text_direction(direction)
                 .style(style.clone())
                 .autofocus(true),
         )
@@ -149,4 +158,120 @@ fn platform_style_reports_laid_out_line_height_after_the_media_override() {
     assert_eq!(after.font_size, Some(20.));
     assert_eq!(before.line_height, Some(20.));
     assert_eq!(after.line_height, Some(40.));
+}
+
+#[test]
+fn initial_style_wire_preserves_rtl_font_fields_and_media_bold_override() {
+    use incular_text::FontWeight;
+    let Some(font) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    incular_text::register_application_font_as("Roboto", std::fs::read(font).unwrap());
+    let (before, after) = style_updates_for_direction(
+        TextStyle::new()
+            .font_size(20.)
+            .font_family("Roboto")
+            .font_weight(FontWeight(600)),
+        RuntimeEnvironment::default(),
+        RuntimeEnvironment {
+            bold_text: true,
+            ..RuntimeEnvironment::default()
+        },
+        TextDirection::Rtl,
+    );
+    let expected = |index| {
+        serde_json::json!({
+            "fontSize": 20.0,
+            "fontFamily": "Roboto",
+            "fontWeightIndex": index,
+            "textAlignIndex": 4,
+            "textDirectionIndex": 0,
+            "letterSpacing": null,
+            "wordSpacing": null,
+            "lineHeight": 20.0,
+        })
+    };
+    assert_eq!(before.to_json().unwrap(), expected(5));
+    assert_eq!(after.to_json().unwrap(), expected(6));
+}
+
+#[test]
+fn changing_keyboard_type_updates_the_existing_client_without_another_show() {
+    use incular_core::{InputEvent, Offset, PointerPhase};
+    use incular_platform::{TextInputCommand, TextInputType};
+    use incular_widgets::FocusNode;
+    use std::time::{Duration, Instant};
+
+    let controller = TextEditingController::with_text("Lorem");
+    let focus = FocusNode::new();
+    let editor = |input_kind| {
+        Widget::from(
+            EditableText::new(controller.clone())
+                .focus_node(focus.clone())
+                .text_direction(TextDirection::Ltr)
+                .input_type(input_kind),
+        )
+    };
+    let mut runtime = Runtime::new(editor(TextInputType::Text)).unwrap();
+    let viewport = Constraints::tight(Size::new(260., 160.));
+    let start = Instant::now();
+    runtime.run_frame_at(viewport, start).unwrap();
+    for (index, phase) in [PointerPhase::Down, PointerPhase::Up]
+        .into_iter()
+        .enumerate()
+    {
+        let _ = runtime.handle_input_at(
+            InputEvent::Pointer {
+                phase,
+                position: Offset::new(2., 5.),
+            },
+            start + Duration::from_millis(index as u64 + 16),
+        );
+    }
+    runtime
+        .run_frame_at(viewport, start + Duration::from_millis(32))
+        .unwrap();
+    let (client, prior) = runtime.flutter_text_input_configuration().unwrap();
+    assert_eq!(prior.to_json()["inputType"]["name"], "TextInputType.text");
+    let mut controls = FlutterTextInputControls::new(false);
+    assert!(controls.attach_existing(client, prior, |_| {}));
+    controls.take_platform_calls();
+    runtime.take_text_input_commands();
+
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(
+            root,
+            editor(TextInputType::Number {
+                signed: false,
+                decimal: false,
+            }),
+        )
+        .unwrap();
+    runtime
+        .run_frame_at(viewport, start + Duration::from_millis(48))
+        .unwrap();
+    let (retained, next) = runtime.flutter_text_input_configuration().unwrap();
+    assert_eq!(client, retained);
+    assert!(focus.has_primary_focus());
+    assert_eq!(controller.text(), "Lorem");
+    assert!(
+        !runtime
+            .take_text_input_commands()
+            .iter()
+            .any(|command| matches!(
+                command,
+                TextInputCommand::Show { .. } | TextInputCommand::Clear { .. }
+            ))
+    );
+    controls
+        .update(client, FlutterTextInputControlUpdate::Configuration(next))
+        .unwrap();
+    let log = controls.take_platform_calls();
+    assert_eq!(log.len(), 1);
+    assert_eq!(log[0].method, "TextInput.updateConfig");
+    assert_eq!(
+        log[0].arguments["inputType"]["name"],
+        "TextInputType.number"
+    );
 }

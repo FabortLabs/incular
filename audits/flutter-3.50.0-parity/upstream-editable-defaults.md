@@ -181,3 +181,20 @@ additional explicit Defer case correctly exposes the parent's cursor.
 All 74 focused cursor, hover, text-span, tap-outside and editable
 interaction tests passed. Physical mouse handling was represented
 with normalized platform events.
+
+### Live keyboard configuration and initial style wire fields
+
+Pinned `widgets/editable_text_test.dart:3815,6396,6439` passed.
+Changing the type from Text to Number while editing `Lorem` keeps
+the same focus and client. Its host control publishes exactly one
+`TextInput.updateConfig`, without clearing or showing the keyboard
+again.
+
+The right-to-left, 20 px, weight-600 style reports the expected
+Roboto family, index 5, start alignment, RTL direction and null
+spacing. Bold accessibility changes only the weight to index 6.
+Flutter's test host falls back to the embedded FlutterTest face,
+so native uses that exact face under the advertised family name.
+With the same face the line height is 20; the runner's unrelated
+system fallback has different metrics and is not counted.
+All six focused native style and client-update tests passed.
