@@ -84,7 +84,7 @@ pub use frame::{
     PointerPacketDispatchError, Runtime,
 };
 pub use incular_widgets::RawKeyboardListenerError;
-pub use raw_keyboard::RawKeyboardSubscription;
+pub use raw_keyboard::{LegacyRawKeyboardState, RawKeyboardSubscription};
 pub use global_shortcuts::{
     GlobalShortcutCompletionStatus, GlobalShortcutRegistration, GlobalShortcutRegistrationRequest,
     GlobalShortcutRequestId, GlobalShortcutService, GlobalShortcutUnregistrationRequest,

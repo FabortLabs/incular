@@ -355,6 +355,7 @@ pub struct Runtime {
     hardware_key_handlers: incular_core::HardwareKeyHandlers,
     hardware_key_error_handler: Option<Box<dyn Fn(HardwareKeyHandlerError)>>,
     raw_keyboard_listeners: crate::raw_keyboard::RawKeyboardListeners,
+    legacy_raw_keyboard: crate::LegacyRawKeyboardState,
     raw_keyboard_error_handler: Option<Box<dyn Fn(crate::RawKeyboardListenerError)>>,
     key_message_route: KeyMessageRoute,
     key_message_error_handler: Option<Box<dyn Fn(KeyMessageHandlerError)>>,
@@ -638,6 +639,7 @@ impl Runtime {
             hardware_key_handlers: incular_core::HardwareKeyHandlers::default(),
             hardware_key_error_handler: None,
             raw_keyboard_listeners: crate::raw_keyboard::RawKeyboardListeners::default(),
+            legacy_raw_keyboard: crate::LegacyRawKeyboardState::default(),
             raw_keyboard_error_handler: None,
             key_message_route: KeyMessageRoute::default(),
             key_message_error_handler: None,
@@ -4163,6 +4165,17 @@ impl Runtime {
         &self.hardware_keyboard
     }
 
+    /// Pressed state of supported, explicitly supplied raw platform packets.
+    #[must_use]
+    pub const fn legacy_raw_keyboard(&self) -> &crate::LegacyRawKeyboardState {
+        &self.legacy_raw_keyboard
+    }
+
+    /// Clears only the legacy raw state, without dispatching releases.
+    pub fn clear_legacy_raw_keyboard(&mut self) {
+        self.legacy_raw_keyboard.clear();
+    }
+
     /// Adds a window-wide hardware key handler. Keep the subscription to
     /// receive events before focused widgets and fallback editing actions.
     pub fn add_hardware_key_handler(
@@ -4374,6 +4387,9 @@ impl Runtime {
         // external selection before routing the event through retained parents.
         self.adopt_external_focus_change();
         let raw_delivery = message_source.raw_delivery();
+        if let incular_widgets::RawKeyDelivery::Supplied(raw) = raw_delivery {
+            self.legacy_raw_keyboard.observe(raw);
+        }
         self.tree.notify_raw_keyboard_observers_with_report(
             self.focused, &event, raw_delivery, |error| self.report_raw_keyboard_error(error),
         );

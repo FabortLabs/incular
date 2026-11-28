@@ -4268,3 +4268,5 @@ packages/flutter/test/services/raw_keyboard_test.dart	3177	Arrow keys from a key
 packages/flutter/test/services/raw_keyboard_test.dart	3194	Unrecognized keys are mapped to Web plane	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
 packages/flutter/test/services/raw_keyboard_test.dart	3214	data.toString	partial-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
 packages/flutter/test/services/raw_keyboard_test.dart	3246	data.equality	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	338	keysPressed modifiers are synchronized with key events on fuchsia	paired-match	upstream-raw-keyboard.md#pressed-key-reconciliation-from-raw-modifier-flags
+packages/flutter/test/services/raw_keyboard_test.dart	520	keysPressed modifiers are synchronized with key events on web	paired-match	upstream-raw-keyboard.md#pressed-key-reconciliation-from-raw-modifier-flags

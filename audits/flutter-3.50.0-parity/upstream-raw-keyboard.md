@@ -31,3 +31,22 @@ observer's panic escape dispatch. Window and mounted listeners now
 report the original event and panic payload while other listeners
 continue. Hardware state is recorded before callbacks, so KeyA is
 pressed after the failed down and cleared normally on up.
+
+## Pressed-key reconciliation from raw modifier flags
+
+Pinned originals `services/raw_keyboard_test.dart:338` (Fuchsia,
+`RawKeyEvent` variant) and `:520` (Web) passed. The native runtime
+replays the corresponding platform packets in
+`flutter350_raw_pressed_modifiers`: an A press can reveal a Shift
+that was already held; a subsequent packet without Shift clears it.
+Fuchsia specifies the exact side(s). A Web mask with no known side
+defaults to left but preserves a right side already present.
+Release uses the physical identity even if the logical layout
+changes. The reconciled state is visible separately from modern
+hardware state; no synthetic hardware key presses are sent.
+
+Adjacent native controls cover right Alt reported as AltGraph and
+CapsLock remapped to a regular logical key. The original
+browser-only registrations for those scenarios are not counted here.
+This check replays framework packets rather than using Fuchsia or
+browser hardware.
