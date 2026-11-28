@@ -3863,3 +3863,4 @@ packages/flutter/test/rendering/shifted_box_test.dart	14	RenderAligningShiftedBo
 packages/flutter/test/rendering/shifted_box_test.dart	34	computeDryBaseline returns null when child is null	paired-match	upstream-shifted-box-baselines.md#childless-aligned-boxes
 packages/flutter/test/rendering/paragraph_test.dart	269	overflow test	paired-match	upstream-paragraph-overflow-fade.md
 packages/flutter/test/rendering/paragraph_test.dart	1106	paints selection highlights outside fade layer and handles after text	partial-match	upstream-paragraph-overflow-fade.md
+packages/flutter/test/rendering/shifted_box_test.dart	98	computeDryBaseline with different TextBaseline types	paired-match	upstream-shifted-box-baselines.md#typed-dry-baseline-queries

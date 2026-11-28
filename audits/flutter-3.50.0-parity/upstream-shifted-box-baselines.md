@@ -102,3 +102,14 @@ descriptor. All 24 selected baseline, layout, structure, and
 transition tests passed. A separate sliver-alpha fixture was
 also checked and reproduced its pre-existing failure unchanged
 on the prior commit; it is not evidence for this slice.
+
+## Typed dry baseline queries
+
+The final original in `rendering/shifted_box_test.dart` (:98)
+passed. With the same top-left fixture, the public typed query
+returns 40 px for both alphabetic and ideographic requests without
+running live layout. Flutter's actual RenderParagraph uses its
+alphabetic metric for both policies at this revision; supported
+retained paragraph wrappers apply the requested placement to that
+same metric. This is not a claim about a custom render box that
+supplies independent metrics. All 10 native baseline tests passed.

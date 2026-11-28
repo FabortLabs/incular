@@ -265,3 +265,24 @@ fn a_childless_align_answers_the_dry_query_and_expands_only_unfactored_bounded_a
         Some(Size::new(100., 0.))
     );
 }
+
+#[test]
+fn the_current_paragraph_based_child_answers_both_dry_baseline_policies() {
+    use incular_config::Alignment;
+    use incular_text::TextBaseline;
+    use incular_widgets::Align;
+
+    let mut tree = WidgetTree::new();
+    let widget = Align::new(Alignment::TOP_LEFT, measurable_mock());
+    let root = tree.mount(widget.into()).unwrap();
+    let render = tree.render_id(root).unwrap();
+    let constraints = Constraints::loose(Size::new(100., 100.));
+    assert_eq!(
+        tree.dry_baseline(render, constraints, TextBaseline::Alphabetic),
+        Some(40.)
+    );
+    assert_eq!(
+        tree.dry_baseline(render, constraints, TextBaseline::Ideographic),
+        Some(40.)
+    );
+}

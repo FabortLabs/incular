@@ -26,6 +26,24 @@ impl WidgetTree {
         self.dry_size_and_baseline(id, constraints, true)?.1
     }
 
+    /// Queries a shifted box's dry baseline by policy. For an ordinary
+    /// paragraph Flutter currently uses its alphabetic metric for either
+    /// policy (RenderParagraph.computeDryBaseline). These supported
+    /// wrappers only add their vertical placement to that metric.
+    #[must_use]
+    pub fn dry_baseline(
+        &self,
+        id: RenderObjectId,
+        constraints: Constraints,
+        baseline: incular_text::TextBaseline,
+    ) -> Option<f32> {
+        match baseline {
+            incular_text::TextBaseline::Alphabetic | incular_text::TextBaseline::Ideographic => {
+                self.dry_alphabetic_baseline(id, constraints)
+            }
+        }
+    }
+
     fn dry_size_and_baseline(
         &self,
         id: RenderObjectId,
