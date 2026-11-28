@@ -83,3 +83,20 @@ The native early and late callback registries also use an ordered
 snapshot for the typed events in the packet. Existing focused
 single-event, custom-handler, and hardware-handler cases passed.
 This authored batch probe is not an additional original registration.
+
+## A raw press absent from its own modifier snapshot
+
+A real browser-style raw ShiftLeft down with its Shift mask absent no
+longer leaves Shift stuck in the hardware state. The supplied down
+arrives before the reconstructed up. Focus receives both typed events
+in that order before the single unchanged original raw down; the
+unrelated held A remains down. A packet whose snapshot does contain
+Shift still yields only the supplied down.
+
+The pinned `hardware_keyboard_test.dart:263` RawKeyEvent variant passed.
+The mounted native test failed on the missing up before the fix; 11
+focused native tests passed afterward across the focus batch, raw
+dispatch, inference, and hardware state. The two original typed/raw
+engine queue timing tests (312 and 352) passed on Flutter but remain
+open natively: they exercise a transit queue before the explicit
+message-batch boundary checked here.

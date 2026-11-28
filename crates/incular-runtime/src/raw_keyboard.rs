@@ -311,6 +311,36 @@ impl LegacyRawKeyboardState {
         corrections
     }
 
+    /// A supplied raw down can itself be absent from the authoritative
+    /// pressed snapshot. Deliver its down first, then synthesize its up.
+    pub(crate) fn trailing_modifier_release(
+        &self,
+        raw: &RawKeyEvent,
+        main: &KeyboardEvent,
+    ) -> Option<KeyboardEvent> {
+        if !main.state.is_down()
+            || !matches!(
+                raw.data(),
+                Some(RawKeyPlatformData::Android(_)
+                    | RawKeyPlatformData::Fuchsia(_)
+                    | RawKeyPlatformData::Web(_)
+                    | RawKeyPlatformData::Windows(_))
+            )
+        {
+            return None;
+        }
+        let &(physical, _, _, _) = MODIFIER_PROJECTION
+            .iter()
+            .find(|(_, code, _, _)| *code == main.code)?;
+        if self.pressed.contains_key(&usb(physical)) {
+            return None;
+        }
+        let mut release = main.clone();
+        release.state = KeyState::Up;
+        release.repeat = false;
+        Some(release)
+    }
+
     fn set_modifier(&mut self, (physical, logical): (u64, LogicalKeyboardKey), down: bool) {
         if down {
             self.pressed.insert(physical, logical);
