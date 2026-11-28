@@ -308,6 +308,7 @@ impl Application {
             application_capabilities: platform_capabilities.clone(),
             displays: display_catalog.clone(),
             application_lifecycle,
+            global_semantics: Rc::default(),
         };
         let primary_window = create(&manager)?;
         Ok(Self {
@@ -1975,6 +1976,27 @@ impl Application {
     /// Keeps this window's semantics available independently of the native host.
     pub fn ensure_semantics(&mut self, window_id: WindowId) -> Option<crate::SemanticsHandle> {
         self.with_window_mut(window_id, |record| record.runtime.ensure_semantics())
+    }
+
+    /// Keeps semantics active across all current and future window roots of
+    /// this application. Native consumers and window-local handles do not
+    /// need to change their requests.
+    pub fn ensure_global_semantics(&mut self) -> crate::GlobalSemanticsHandle {
+        let scope = &self.manager.global_semantics;
+        if scope.start_tracking() {
+            // The scope has no outstanding demand yet, so registration here
+            // does not notify listeners or schedule a transition.
+            for record in self
+                .registry
+                .borrow_mut()
+                .slots
+                .iter_mut()
+                .filter_map(|slot| slot.record.as_mut())
+            {
+                record.runtime.register_global_semantics(scope);
+            }
+        }
+        scope.acquire()
     }
 
     /// Whether there is platform or application demand for this window's semantics.

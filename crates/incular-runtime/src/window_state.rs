@@ -11,6 +11,7 @@ use crate::frame::Runtime;
 use crate::global_shortcuts::GlobalShortcutBridge;
 use crate::profiling::{FrameRecord, GpuSample, RenderFrameMetrics};
 use crate::restoration;
+use crate::semantics_activation::GlobalSemanticsActivation;
 use crate::tasks::{self, TaskScope};
 use crate::window_commands::{
     DisplayCatalog, NativeWindowCommand, WindowCommandBridge, WindowHandle,
@@ -354,6 +355,7 @@ pub(crate) struct WindowManager {
     pub(crate) application_capabilities: Arc<RwLock<PlatformCapabilities>>,
     pub(crate) displays: Arc<RwLock<DisplayCatalog>>,
     pub(crate) application_lifecycle: Rc<Cell<ApplicationLifecycle>>,
+    pub(crate) global_semantics: Rc<GlobalSemanticsActivation>,
 }
 
 impl WindowManager {
@@ -521,7 +523,7 @@ impl WindowManager {
     fn install_window(
         &self,
         id: WindowId,
-        runtime: Runtime,
+        mut runtime: Runtime,
         options: WindowOptions,
         restoration: Option<RestorableWindowMetadata>,
         restoration_lease: Option<restoration::ScopeLease>,
@@ -530,6 +532,9 @@ impl WindowManager {
             .registry
             .upgrade()
             .expect("application owns its registry");
+        if self.global_semantics.is_tracking() {
+            runtime.register_global_semantics(&self.global_semantics);
+        }
         let window_scope = runtime.window_scope.clone();
         let metrics = initial_metrics(&options);
         let capabilities = Arc::new(RwLock::new(

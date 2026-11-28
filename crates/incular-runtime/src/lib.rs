@@ -75,7 +75,7 @@ pub use flutter_text_input::{
     FlutterTextInputBinding, FlutterTextInputEditingError, FlutterTextInputFloatingCursorError,
     FlutterTextInputLifecycleError, FlutterTextInputPrivateCommandError, FlutterTextInputSelectorError,
 };
-pub use semantics_activation::{SemanticsEnabledSubscription, SemanticsHandle};
+pub use semantics_activation::{GlobalSemanticsHandle, SemanticsEnabledSubscription, SemanticsHandle};
 pub use focus_keys::FocusKeySubscription;
 pub use frame::{
     EditingDiagnostics, EditorClipboardError, EditorClipboardOperation, EventTarget, FocusDiagnostics, FrameStats, HardwareKeyHandlerError,

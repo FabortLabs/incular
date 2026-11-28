@@ -746,9 +746,8 @@ impl Runtime {
         self.tree.platform_menu_bindings()
     }
 
-    /// Marks only this retained root for a future presentation.
-    /// Whether either the platform or an application handle needs the
-    /// window's retained accessibility tree.
+    /// Whether there is native, window-local or application-wide demand for
+    /// this window's retained accessibility tree.
     #[must_use]
     pub fn semantics_enabled(&self) -> bool {
         self.semantics_activation.as_ref().map_or_else(
@@ -844,6 +843,14 @@ impl Runtime {
         })
     }
 
+    pub(crate) fn register_global_semantics(
+        &mut self,
+        scope: &crate::semantics_activation::GlobalSemanticsActivation,
+    ) {
+        scope.register(self.semantics_activation());
+        self.sync_semantics_activation();
+    }
+
     pub(crate) fn sync_semantics_activation(&mut self) {
         if let Some(state) = self.semantics_activation.as_ref() {
             self.apply_semantics_enabled(state.enabled());
@@ -857,6 +864,7 @@ impl Runtime {
         }
     }
 
+    /// Marks only this retained root for a future presentation.
     pub fn request_frame(&mut self) {
         self.frame_requested = true;
     }

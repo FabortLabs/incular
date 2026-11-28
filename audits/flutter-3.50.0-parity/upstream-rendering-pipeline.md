@@ -32,3 +32,23 @@ the second consumer, checks the current retained label, and confirms no
 nodes are removed when AccessKit deactivates. Releasing the second
 consumer then disables collection. This exercises the native bridge's
 retained projection, not a live screen reader or browser adapter.
+
+## Global demand reaches each retained view
+
+Flutter's pinned `rendering/binding_pipeline_manifold_test.dart:36`
+passed. A global handle enables semantics on both the root pipeline
+and an adopted child pipeline; releasing it disables both. Incular
+does not create a dummy render owner above its window roots.
+`Application::ensure_global_semantics` expresses the same scope over
+the actual retained roots of one application.
+
+The native test starts with two clean opted-out views, acquires two
+handles, and opens another view before any release. Every view
+publishes its own label. The first release has no effect. A window
+closed under demand can be replaced in the same slot; the new
+generation inherits demand, the old one is unavailable, and the final
+release wakes the host and removes the primary view's native node.
+An independently held window request stays effective without waking
+that view. A reentrant release listener can restore app-wide demand
+without sending stale or duplicate state to other listeners. All ten
+focused native tests passed.

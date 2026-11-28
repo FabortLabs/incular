@@ -349,3 +349,143 @@ fn restarting_application_semantics_republishes_the_same_label_without_remountin
         assert!(!app.frame_requested(window), "pass {pass}");
     }
 }
+
+#[test]
+fn global_semantics_handle_covers_existing_and_future_window_roots() {
+    let mut app = app();
+    let primary = app.primary_window();
+    let open = |app: &mut Application, label: &'static str| {
+        let id = app
+            .open_window(
+                incular_platform::WindowOptions::default(),
+                Semantics::new(SizedBox::expand()).label(label).into(),
+            )
+            .unwrap()
+            .id();
+        app.set_semantics_enabled(id, false);
+        id
+    };
+    app.set_semantics_enabled(primary, false);
+    let second = open(&mut app, "second");
+    let bounds = Constraints::tight(Size::new(400., 300.));
+    for id in [primary, second] {
+        assert_eq!(app.semantics_enabled(id), Some(false));
+        app.run_window_frame_at(id, bounds, Instant::now()).unwrap();
+        assert!(!app.frame_requested(id));
+    }
+
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let _listener = app
+        .on_semantics_enabled_changed(primary, {
+            let events = events.clone();
+            move |enabled| events.borrow_mut().push(enabled)
+        })
+        .unwrap();
+    let first = app.ensure_global_semantics();
+    let last = app.ensure_global_semantics();
+    let late = open(&mut app, "late");
+    let mut projections = [
+        (primary, "target", MobileAccessibilityProjection::new()),
+        (second, "second", MobileAccessibilityProjection::new()),
+        (late, "late", MobileAccessibilityProjection::new()),
+    ];
+    drop(first);
+    assert_eq!(*events.borrow(), [true]);
+    for (id, label, projection) in &mut projections {
+        assert_eq!(app.semantics_enabled(*id), Some(true));
+        assert!(app.frame_requested(*id));
+        app.run_window_frame_at(*id, bounds, Instant::now())
+            .unwrap();
+        let update = app.sync_semantics_projection(*id, projection).unwrap();
+        let [node] = update.nodes.as_slice() else {
+            panic!("exactly one label on each independently presented view");
+        };
+        assert_eq!(node.semantic.label.as_deref(), Some(*label));
+        assert!(!app.frame_requested(*id));
+    }
+
+    // Retiring a view and reusing its slot while the handle is live must
+    // attach the new generation, not keep the old projection in the scope.
+    assert!(app.close_window(second));
+    let replacement = open(&mut app, "replacement");
+    assert_eq!(replacement.index(), second.index());
+    assert_ne!(replacement.generation(), second.generation());
+    assert_eq!(app.semantics_enabled(second), None);
+    assert_eq!(app.semantics_enabled(replacement), Some(true));
+
+    let local = app.ensure_semantics(late).unwrap();
+    app.process_runtime_work();
+    let wake = Arc::new(WakeCount::default());
+    app.set_wake_handler(wake.clone());
+    let before_release = wake.0.load(Ordering::Relaxed);
+    drop(last);
+    assert!(wake.0.load(Ordering::Relaxed) > before_release);
+    assert_eq!(*events.borrow(), [true, false]);
+    assert_eq!(app.semantics_enabled(replacement), Some(false));
+    assert_eq!(app.semantics_enabled(primary), Some(false));
+    assert!(app.frame_requested(primary));
+    assert_eq!(app.semantics_enabled(late), Some(true));
+    assert!(!app.frame_requested(late));
+    app.run_window_frame_at(primary, bounds, Instant::now())
+        .unwrap();
+    let removed = app
+        .sync_semantics_projection(primary, &mut projections[0].2)
+        .unwrap();
+    assert!(removed.nodes.is_empty());
+    assert_eq!(removed.removed.len(), 1);
+    drop(local);
+    assert_eq!(app.semantics_enabled(late), Some(false));
+    assert!(app.frame_requested(late));
+}
+
+#[test]
+fn a_release_listener_can_restore_global_demand_without_stale_notifications() {
+    let mut app = app();
+    let first = app.primary_window();
+    let second = app
+        .open_window(
+            incular_platform::WindowOptions::default(),
+            SizedBox::expand().into(),
+        )
+        .unwrap()
+        .id();
+    app.set_semantics_enabled(first, false);
+    app.set_semantics_enabled(second, false);
+    let app = Rc::new(RefCell::new(app));
+    let rebound = Rc::new(RefCell::new(None));
+    let restore_on_release = app
+        .borrow_mut()
+        .on_semantics_enabled_changed(first, {
+            let app = Rc::downgrade(&app);
+            let rebound = rebound.clone();
+            move |enabled| {
+                if !enabled {
+                    let app = app.upgrade().unwrap();
+                    assert_eq!(app.borrow().semantics_enabled(second), Some(false));
+                    *rebound.borrow_mut() = Some(app.borrow_mut().ensure_global_semantics());
+                }
+            }
+        })
+        .unwrap();
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let subscriptions = [first, second].map(|id| {
+        app.borrow_mut()
+            .on_semantics_enabled_changed(id, {
+                let events = events.clone();
+                move |enabled| events.borrow_mut().push((id, enabled))
+            })
+            .unwrap()
+    });
+    let original = app.borrow_mut().ensure_global_semantics();
+    assert_eq!(*events.borrow(), [(first, true), (second, true)]);
+    events.borrow_mut().clear();
+    drop(original);
+    assert!(events.borrow().is_empty());
+    assert_eq!(app.borrow().semantics_enabled(first), Some(true));
+    assert_eq!(app.borrow().semantics_enabled(second), Some(true));
+
+    drop(restore_on_release);
+    drop(rebound.borrow_mut().take().unwrap());
+    assert_eq!(*events.borrow(), [(first, false), (second, false)]);
+    drop(subscriptions);
+}
