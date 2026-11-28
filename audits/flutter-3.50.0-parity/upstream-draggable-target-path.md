@@ -71,3 +71,19 @@ the original delta for callbacks that do fire. Release or cancel
 uses the last real drag placement without a new offer or move.
 Both pinned authored probes and all 40 focused native tests passed.
 This authored comparison does not change the upstream count.
+
+## Typed payload movement and leave callbacks
+
+Pinned :15, :256, :328, :399 and :467 passed. With the pinned
+FlutterTest font, the native control starts once on press, paints
+feedback, sends one target move, and delivers payload 1 to both
+drop callbacks exactly once at (358,57). Release removes feedback
+and does not add another move.
+
+Moving across two separate targets and back emits exactly three move
+callbacks in order (first, second, first) and two leave callbacks in
+order (first, second). Accepted release adds neither a move nor a
+leave. The Dart callback signatures vary between precise and widened
+types; native uses their equivalent typed closure and compares the
+same delivered values and behavior. Both focused native tests ran
+with the extracted embedded FlutterTest font.

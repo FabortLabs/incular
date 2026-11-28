@@ -4127,3 +4127,8 @@ packages/flutter/test/widgets/draggable_test.dart	2173	DragTarget does not call 
 packages/flutter/test/widgets/draggable_test.dart	2514	Drag and drop - maxSimultaneousDrags	reference-ran-incular-open	upstream-draggable-target-path.md#detaching-an-entered-target-while-dragging
 packages/flutter/test/widgets/draggable_test.dart	2789	DragTarget does not set state when remove from the tree	paired-match	upstream-draggable-target-path.md#detaching-an-entered-target-while-dragging
 packages/flutter/test/widgets/draggable_test.dart	2849	Drag and drop - remove draggable	reference-ran-incular-open	upstream-draggable-target-path.md#detaching-an-entered-target-while-dragging
+packages/flutter/test/widgets/draggable_test.dart	15	Drag and drop - control test	paired-match	upstream-draggable-target-path.md#typed-payload-movement-and-leave-callbacks
+packages/flutter/test/widgets/draggable_test.dart	256	Drag and drop - onLeave callback fires correctly with generic parameter	paired-match	upstream-draggable-target-path.md#typed-payload-movement-and-leave-callbacks
+packages/flutter/test/widgets/draggable_test.dart	328	Drag and drop - onLeave callback fires correctly	paired-match	upstream-draggable-target-path.md#typed-payload-movement-and-leave-callbacks
+packages/flutter/test/widgets/draggable_test.dart	399	Drag and drop - onMove callback fires correctly with generic parameter	paired-match	upstream-draggable-target-path.md#typed-payload-movement-and-leave-callbacks
+packages/flutter/test/widgets/draggable_test.dart	467	Drag and drop - onMove callback fires correctly	paired-match	upstream-draggable-target-path.md#typed-payload-movement-and-leave-callbacks
