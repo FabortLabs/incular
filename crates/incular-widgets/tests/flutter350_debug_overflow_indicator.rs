@@ -214,3 +214,43 @@ fn an_existing_indicator_clears_after_only_the_child_shrinks() {
     assert_eq!(markers(&host.paint()).len(), 2);
     assert!(host.tree.take_constraint_overflow_diagnostics().is_empty());
 }
+
+#[test]
+fn unconstrained_square_warns_only_for_the_default_and_explicit_none() {
+    for setting in [
+        None,
+        Some(Clip::None),
+        Some(Clip::HardEdge),
+        Some(Clip::AntiAlias),
+        Some(Clip::AntiAliasWithSaveLayer),
+    ] {
+        let proxy = UnconstrainedBox::new(SizedBox::square(400.));
+        let mut host = Host::new(
+            Center::new(SizedBox::square(200.).child(match setting {
+                None => proxy,
+                Some(clip) => proxy.clip_behavior(clip),
+            }))
+            .into(),
+        );
+        host.paint();
+        let reports = host.tree.take_constraint_overflow_diagnostics();
+        if matches!(setting, None | Some(Clip::None)) {
+            assert_eq!(reports.len(), 1, "setting {setting:?}");
+            let [report] = reports.as_slice() else {
+                unreachable!()
+            };
+            assert_eq!(report.level(), incular_core::DiagnosticLevel::Summary);
+            assert!(
+                report
+                    .to_string()
+                    .starts_with("A RenderConstraintsTransformBox overflowed")
+            );
+            assert_eq!(
+                [report.left, report.top, report.right, report.bottom],
+                [100.; 4]
+            );
+        } else {
+            assert!(reports.is_empty(), "setting {setting:?}");
+        }
+    }
+}

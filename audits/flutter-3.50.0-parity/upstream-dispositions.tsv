@@ -4040,3 +4040,7 @@ packages/flutter/test/widgets/basic_test.dart	540	Semantics does not merge role 
 packages/flutter/test/widgets/basic_test.dart	468	Semantics does not merge role - header on web	reference-ran-incular-open	upstream-basic-semantic-boundaries.md
 packages/flutter/test/widgets/basic_test.dart	832	multiple baseline aligned children	paired-match	upstream-flex-retained-placement.md
 packages/flutter/test/widgets/basic_test.dart	896	baseline aligned children account for a larger, no-baseline child size	paired-match	upstream-flex-retained-placement.md
+packages/flutter/test/widgets/basic_test.dart	962	UnconstrainedBox toString	paired-match	upstream-constraints-transform.md
+packages/flutter/test/widgets/basic_test.dart	980	UnconstrainedBox can set and update clipBehavior	paired-match	upstream-constraints-transform.md
+packages/flutter/test/widgets/basic_test.dart	991	UnconstrainedBox warns only when clipBehavior is Clip.none	paired-match	upstream-constraints-transform.md
+packages/flutter/test/widgets/basic_test.dart	1058	toString	reference-ran-incular-open	upstream-constraints-transform.md

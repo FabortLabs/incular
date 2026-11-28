@@ -352,3 +352,69 @@ fn both_axis_overflow_reports_only_when_the_requested_clip_is_none() {
         );
     }
 }
+
+#[test]
+fn unconstrained_box_diagnostic_prints_physical_alignment_then_explicit_axes() {
+    use incular_config::{Alignment, Axis};
+    use incular_widgets::UnconstrainedBox;
+
+    assert_eq!(
+        UnconstrainedBox::empty()
+            .constrained_axis(Axis::Vertical)
+            .to_string(),
+        "UnconstrainedBox(alignment: Alignment.center, constrainedAxis: vertical)"
+    );
+    assert_eq!(
+        UnconstrainedBox::empty()
+            .constrained_axis(Axis::Horizontal)
+            .text_direction(TextDirection::Rtl)
+            .alignment(Alignment::TOP_RIGHT)
+            .to_string(),
+        "UnconstrainedBox(alignment: Alignment.topRight, constrainedAxis: horizontal, textDirection: rtl)"
+    );
+    assert_eq!(
+        UnconstrainedBox::empty().to_string(),
+        "UnconstrainedBox(alignment: Alignment.center)"
+    );
+}
+
+#[test]
+fn unconstrained_box_updates_clip_in_place_before_an_overflowing_child_mounts() {
+    use incular_widgets::UnconstrainedBox;
+
+    let view = Constraints::at_most(200., 200.);
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(UnconstrainedBox::empty().into()).unwrap();
+    tree.layout(view).unwrap();
+    assert_eq!(size(&tree, root), Size::ZERO);
+    let render = tree.render_id(root).unwrap();
+
+    let clipped = UnconstrainedBox::empty().clip_behavior(Clip::AntiAlias);
+    tree.update(root, clipped.clone().into()).unwrap();
+    tree.layout(view).unwrap();
+    assert_eq!(tree.render_id(root), Some(render));
+    assert_eq!(size(&tree, root), Size::ZERO);
+
+    let child = || Widget::box_(Size::new(400., 400.), Color::WHITE);
+    tree.update(root, clipped.child(child()).into()).unwrap();
+    tree.layout(view).unwrap();
+    assert_eq!(tree.render_id(root), Some(render));
+    assert_eq!(size(&tree, root), Size::new(200., 200.));
+    let painted = tree.paint();
+    assert!(painted.commands().iter().any(|op| matches!(
+        op,
+        PaintCommand::PushClipRRect {
+            coverage: ClipCoverage::AntiAlias,
+            ..
+        }
+    )));
+    tree.update(root, UnconstrainedBox::new(child()).into())
+        .unwrap();
+    tree.layout(view).unwrap();
+    assert_eq!(tree.render_id(root), Some(render));
+    let painted = tree.paint();
+    assert!(!painted.commands().iter().any(|op| matches!(
+        op,
+        PaintCommand::PushClip { .. } | PaintCommand::PushClipRRect { .. }
+    )));
+}

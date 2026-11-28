@@ -1,6 +1,6 @@
 //! Size, intrinsic measurement, and constraint-manipulation primitives.
 
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use incular_config::{Alignment, Axis, Clip, ConstraintError, Constraints, TextDirection};
 use incular_core::{Color, Size};
@@ -484,6 +484,27 @@ impl UnconstrainedBox {
     pub fn clip_behavior(mut self, behavior: Clip) -> Self {
         self.clip_behavior = behavior;
         self
+    }
+}
+
+impl fmt::Display for UnconstrainedBox {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "UnconstrainedBox(alignment: {}", self.alignment)?;
+        if let Some(axis) = self.constrained_axis {
+            let axis = match axis {
+                Axis::Horizontal => "horizontal",
+                Axis::Vertical => "vertical",
+            };
+            write!(f, ", constrainedAxis: {axis}")?;
+        }
+        if let Some(direction) = self.text_direction {
+            let direction = match direction {
+                TextDirection::Ltr => "ltr",
+                TextDirection::Rtl => "rtl",
+            };
+            write!(f, ", textDirection: {direction}")?;
+        }
+        f.write_str(")")
     }
 }
 

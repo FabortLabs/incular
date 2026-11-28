@@ -42,3 +42,23 @@ explicit LTR override is applied in an RTL subtree. The Rust node
 retains its identity across direction changes. A logical alignment
 with a mounted child requires a direction; the default physical center
 does not. The authored check adds no upstream registration credit.
+
+## UnconstrainedBox diagnostics and clip updates
+
+Pinned widget cases :962, :980, and :991 passed. Rust's Display
+now returns the same concise alignment, axis, and direction text
+for an UnconstrainedBox. A mounted childless box keeps its renderer
+when switched from the default clip to antialiasing. Mounting a
+400×400 child in the same 200×200 box demonstrates the new clip in
+the paint list, then restoring the default removes it.
+
+Using a fresh centered 200×200 proxy per setting, the 400×400 child
+produces a summary diagnostic only for the omitted mode and explicit
+Clip.none. It reports 100 px on each edge. HardEdge, AntiAlias,
+and AntiAliasWithSaveLayer produce no overflow report. Incular uses
+its nonfatal debug diagnostic queue rather than a Dart error callback.
+All 18 focused constraints and overflow tests passed.
+
+The pinned ConstraintsTransformBox diagnostic at :1058 ran, but the
+native type erases its callback; it has no stable transform label.
+That diagnostic remains reference-only.
