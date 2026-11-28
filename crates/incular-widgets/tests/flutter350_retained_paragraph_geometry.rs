@@ -901,3 +901,136 @@ fn paragraph_fade_keeps_selection_outside_and_paints_inline_widgets_inside() {
             .any(|command| matches!(command, PaintCommand::Rect { color, .. } if *color == marker))
     );
 }
+
+fn literal_span_targets(tree: &WidgetTree, x: f32, y: f32) -> Vec<String> {
+    tree.pointer_hit_test(Offset::new(x, y))
+        .text_span_targets()
+        .map(|span| span.text.clone())
+        .collect()
+}
+
+#[test]
+fn paragraph_hit_testing_keeps_the_whole_letter_spaced_grapheme_advance() {
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let span = TextSpan::empty()
+        .style(style.font_size(10.))
+        .child(TextSpan::new("AAAAAAAAAA"))
+        .child(TextSpan::new("BC").style(TextStyle::default().letter_spacing(26.)));
+    let (tree, _) = mount(span, engine, 100., false);
+    for (x, y, expected) in [
+        (5., 5., Some("AAAAAAAAAA")),
+        (95., 5., Some("AAAAAAAAAA")),
+        (200., 5., None),
+        (18., 15., Some("BC")),
+        (31., 15., Some("BC")),
+        (54., 15., Some("BC")),
+        (100., 15., None),
+        (9999., 9999., None),
+    ] {
+        assert_eq!(
+            literal_span_targets(&tree, x, y),
+            expected.into_iter().collect::<Vec<_>>(),
+            "hit at ({x}, {y})"
+        );
+    }
+}
+
+#[test]
+fn justified_space_is_hit_as_part_of_its_own_horizontal_text_span() {
+    use incular_text::TextAlign;
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let span = TextSpan::empty()
+        .style(style.font_size(10.))
+        .child(TextSpan::new("A "))
+        .child(TextSpan::new("B\u{200b}"))
+        .child(TextSpan::new("CCCCCCCCCC"));
+    let paragraph = RichText::new(span).text_align(TextAlign::Justify);
+    let mut tree = WidgetTree::with_text_engine(engine);
+    tree.mount(Directionality::new(TextDirection::Ltr, paragraph).into())
+        .unwrap();
+    tree.layout(Constraints::new(100., 100., 0., 600.)).unwrap();
+    assert_eq!(literal_span_targets(&tree, 5., 5.), ["A "]);
+    assert_eq!(literal_span_targets(&tree, 50., 5.), ["A "]);
+    assert_eq!(literal_span_targets(&tree, 95., 5.), ["B\u{200b}"]);
+}
+
+#[test]
+fn the_paragraph_locale_setter_updates_the_existing_retained_text() {
+    use incular_config::Locale;
+    use incular_widgets::Text;
+
+    let mut tree = WidgetTree::new();
+    let make = |locale: &str| {
+        Widget::from(
+            Text::new("Hello")
+                .text_direction(TextDirection::Ltr)
+                .locale(locale.parse::<Locale>().unwrap()),
+        )
+    };
+    let root = tree.mount(make("zh-HK")).unwrap();
+    let render = tree.render_id(root).unwrap();
+    let constraints = Constraints::loose(Size::new(100., 100.));
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.paragraph_locale(root), Some("zh-HK"));
+    tree.update(root, make("ja-JP")).unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.render_id(root), Some(render));
+    assert_eq!(tree.paragraph_locale(root), Some("ja-JP"));
+}
+
+#[test]
+fn inline_selection_keeps_each_of_nine_boxes_across_three_wrapped_lines() {
+    use incular_widgets::{RichParagraph, SizedBox, WidgetSpan};
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let mut span = TextSpan::new("a")
+        .style(style.font_size(10.))
+        .child(WidgetSpan::new(1))
+        .child(WidgetSpan::new(2))
+        .child(TextSpan::new("a"));
+    for id in 3..=7 {
+        span = span.child(WidgetSpan::new(id));
+    }
+    let end = span.plain_text().len();
+    let mut paragraph = RichParagraph::new(RichText::new(span));
+    for id in 1..=7 {
+        paragraph = paragraph.child(id, SizedBox::square(14.));
+    }
+    let key = GlobalKey::new();
+    let mut tree = WidgetTree::with_text_engine(engine);
+    tree.mount(
+        Directionality::new(TextDirection::Ltr, Widget::from(paragraph).with_key(key)).into(),
+    )
+    .unwrap();
+    tree.layout(Constraints::loose(Size::new(50., 100.)))
+        .unwrap();
+    let element = tree.element_with_key(&key.into()).unwrap();
+    let boxes = tree
+        .paragraph_selection_boxes(element, TextRange::new(0, end))
+        .unwrap();
+    let expected = [
+        [0., 4., 10., 14.],
+        [10., 0., 24., 14.],
+        [24., 0., 38., 14.],
+        [38., 4., 48., 14.],
+        [0., 14., 14., 28.],
+        [14., 14., 28., 28.],
+        [28., 14., 42., 28.],
+        [0., 28., 14., 42.],
+        [14., 28., 28., 42.],
+    ];
+    assert_eq!(boxes.len(), expected.len());
+    for (actual, expected) in boxes.into_iter().zip(expected) {
+        assert_eq!(actual.direction, TextDirection::Ltr);
+        for (actual, expected) in edges(actual.rect).into_iter().zip(expected) {
+            close(actual, expected);
+        }
+    }
+}

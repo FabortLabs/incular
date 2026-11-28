@@ -1417,7 +1417,7 @@ pub(crate) struct ParagraphMouseSpans {
 struct ParagraphMouseRange {
     source: std::ops::Range<usize>,
     path: Vec<usize>,
-    annotation: Arc<incular_text::TextSpanMouse>,
+    annotation: Option<Arc<incular_text::TextSpanMouse>>,
 }
 
 #[derive(Clone)]
@@ -1427,15 +1427,15 @@ struct MouseSpanTarget {
 }
 
 impl MouseSpanTarget {
-    fn annotation(&self) -> &incular_text::TextSpanMouse {
-        &self.paragraph.ranges[self.index].annotation
+    fn annotation(&self) -> Option<&incular_text::TextSpanMouse> {
+        self.paragraph.ranges[self.index].annotation.as_deref()
     }
 
     fn text_span(&self) -> &incular_text::TextSpan {
         let mut current = &self.paragraph.root;
         for &index in &self.paragraph.ranges[self.index].path {
             let incular_text::InlineSpan::Text(child) = &current.children[index] else {
-                unreachable!("mouse targets only have text spans in their paths");
+                unreachable!("paragraph span paths only contain literal text nodes");
             };
             current = child;
         }

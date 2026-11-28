@@ -1182,6 +1182,16 @@ impl WidgetTree {
         }
     }
 
+    /// Resolved locale used to shape a retained paragraph, in BCP 47 form.
+    #[must_use]
+    pub fn paragraph_locale(&self, id: ElementId) -> Option<&str> {
+        let render = self.render_id(id)?;
+        let RenderKind::Text { style, .. } = self.renders.get(render.0)?.object.kind() else {
+            return None;
+        };
+        style.locale.as_deref()
+    }
+
     /// Tight local selection boxes from the paragraph's retained layout.
     /// The UTF-8 range covers literal text, excluding synthetic ellipsis.
     #[must_use]

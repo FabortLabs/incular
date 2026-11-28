@@ -57,6 +57,13 @@ impl PointerHitTest {
         self.target
     }
 
+    /// Literal rich-text spans under this point, frontmost first. A hit
+    /// follows a grapheme's whole advance, not just its visible ink.
+    /// Mouse cursors and callbacks are not required for a span to be hit.
+    pub fn text_span_targets(&self) -> impl Iterator<Item = &incular_text::TextSpan> {
+        self.pointer_spans.iter().map(|hit| hit.span.text_span())
+    }
+
     pub(super) fn coincident_gestures(&self) -> &[ElementId] {
         &self.coincident_gestures
     }
@@ -64,7 +71,11 @@ impl PointerHitTest {
     pub(super) fn mouse_hits(&self) -> impl Iterator<Item = MouseHit<'_>> {
         let mut raw = self.raw.iter().copied().enumerate();
         let mut region = raw.next();
-        let mut spans = self.pointer_spans.iter().peekable();
+        let mut spans = self
+            .pointer_spans
+            .iter()
+            .filter(|hit| hit.span.annotation().is_some())
+            .peekable();
         std::iter::from_fn(move || {
             if let Some(span) = spans.peek()
                 && region.is_none_or(|(index, _)| span.raw_before <= index)

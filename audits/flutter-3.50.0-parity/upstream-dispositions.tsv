@@ -3864,3 +3864,7 @@ packages/flutter/test/rendering/shifted_box_test.dart	34	computeDryBaseline retu
 packages/flutter/test/rendering/paragraph_test.dart	269	overflow test	paired-match	upstream-paragraph-overflow-fade.md
 packages/flutter/test/rendering/paragraph_test.dart	1106	paints selection highlights outside fade layer and handles after text	partial-match	upstream-paragraph-overflow-fade.md
 packages/flutter/test/rendering/shifted_box_test.dart	98	computeDryBaseline with different TextBaseline types	paired-match	upstream-shifted-box-baselines.md#typed-dry-baseline-queries
+packages/flutter/test/rendering/paragraph_test.dart	607	locale setter	paired-match	upstream-paragraph-span-hits.md
+packages/flutter/test/rendering/paragraph_test.dart	702	inline widgets multiline test	paired-match	upstream-paragraph-span-hits.md
+packages/flutter/test/rendering/paragraph_test.dart	894	Basic TextSpan Hit testing	paired-match	upstream-paragraph-span-hits.md
+packages/flutter/test/rendering/paragraph_test.dart	989	TextSpan Hit testing with text justification	paired-match	upstream-paragraph-span-hits.md

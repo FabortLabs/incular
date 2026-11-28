@@ -375,7 +375,7 @@ impl WidgetTree {
             .mouse_hits()
             .filter_map(|entry| match entry {
                 MouseHit::Region(id) => self.cursor_for_raw_input(id),
-                MouseHit::Span(span) => Some(span.span.annotation().cursor),
+                MouseHit::Span(span) => span.span.annotation().map(|annotation| annotation.cursor),
             })
             .find(|cursor| *cursor != MouseCursor::Defer)
             .unwrap_or(MouseCursor::Defer);
@@ -860,7 +860,7 @@ impl WidgetTree {
         entering: bool,
     ) -> Option<MouseTransitionCallback> {
         if let Some(span) = &entry.span {
-            let annotation = span.annotation();
+            let annotation = span.annotation()?;
             return if entering { &annotation.on_enter } else { &annotation.on_exit }
                 .as_ref()
                 .cloned()

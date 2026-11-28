@@ -1034,7 +1034,7 @@ fn rich_text_widget(
         value.text.semantics_text()
     };
     if let WidgetKind::Text { pointer_spans, .. } = widget.kind_mut() {
-        *pointer_spans = paragraph_mouse_spans(value.text);
+        *pointer_spans = paragraph_hit_spans(value.text);
     }
     if let Some(parts) = parts {
         widget.semantic_properties_mut().paragraph_parts = Some(parts);
@@ -1048,14 +1048,7 @@ fn rich_text_widget(
     }
 }
 
-fn paragraph_mouse_spans(root: incular_text::TextSpan) -> Option<Arc<ParagraphMouseSpans>> {
-    fn has_annotation(span: &incular_text::TextSpan) -> bool {
-        span.mouse.is_some() && !span.text.is_empty()
-            || span.children.iter().any(|child| {
-                matches!(child, incular_text::InlineSpan::Text(child) if has_annotation(child))
-            })
-    }
-
+fn paragraph_hit_spans(root: incular_text::TextSpan) -> Option<Arc<ParagraphMouseSpans>> {
     fn collect(
         span: &incular_text::TextSpan,
         offset: &mut usize,
@@ -1063,11 +1056,11 @@ fn paragraph_mouse_spans(root: incular_text::TextSpan) -> Option<Arc<ParagraphMo
         ranges: &mut Vec<ParagraphMouseRange>,
     ) {
         let end = *offset + span.text.len();
-        if end > *offset && let Some(annotation) = &span.mouse {
+        if end > *offset {
             ranges.push(ParagraphMouseRange {
                 source: *offset..end,
                 path: path.clone(),
-                annotation: annotation.clone(),
+                annotation: span.mouse.clone(),
             });
         }
         *offset = end;
@@ -1083,12 +1076,9 @@ fn paragraph_mouse_spans(root: incular_text::TextSpan) -> Option<Arc<ParagraphMo
         }
     }
 
-    if !has_annotation(&root) {
-        return None;
-    }
     let mut ranges = Vec::new();
     collect(&root, &mut 0, &mut Vec::new(), &mut ranges);
-    Some(Arc::new(ParagraphMouseSpans { root, ranges }))
+    (!ranges.is_empty()).then(|| Arc::new(ParagraphMouseSpans { root, ranges }))
 }
 
 fn paragraph_pronunciation(
