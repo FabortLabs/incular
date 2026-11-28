@@ -4212,3 +4212,8 @@ packages/flutter/test/widgets/editable_text_test.dart	12240	input formatters can
 packages/flutter/test/widgets/editable_text_test.dart	11188	updateEditingValue filters multiple calls from formatter	paired-match	upstream-editable-callback-contracts.md#repeated-proposals-and-composition-commits
 packages/flutter/test/widgets/editable_text_test.dart	11261	formatter logic handles repeat filtering	paired-match	upstream-editable-callback-contracts.md#repeated-proposals-and-composition-commits
 packages/flutter/test/widgets/editable_text_test.dart	11362	formatter logic handles initial repeat edge case	paired-match	upstream-editable-callback-contracts.md#repeated-proposals-and-composition-commits
+packages/flutter/test/widgets/editable_text_test.dart	3557	Handles the read-only flag correctly	partial-match	upstream-editable-read-only-connection.md#native-input-connection-closes-independently-of-focus
+packages/flutter/test/widgets/editable_text_test.dart	3596	Does not accept updates when read-only	partial-match	upstream-editable-read-only-connection.md#native-input-connection-closes-independently-of-focus
+packages/flutter/test/widgets/editable_text_test.dart	3639	Read-only fields do not format text	partial-match	upstream-editable-read-only-connection.md#native-input-connection-closes-independently-of-focus
+packages/flutter/test/widgets/editable_text_test.dart	3679	Read-only fields can be traversed on all platforms	paired-match	upstream-editable-read-only-connection.md#read-only-fields-remain-in-native-tab-order
+packages/flutter/test/widgets/editable_text_test.dart	3735	Sends "updateConfig" when read-only flag is flipped	partial-match	upstream-editable-read-only-connection.md#native-input-connection-closes-independently-of-focus

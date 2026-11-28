@@ -3771,8 +3771,11 @@ impl Runtime {
                 )
             })
         });
+        // Read-only fields still own focus and selection, but Flutter
+        // attaches no input connection for them on native platforms.
         let snapshot = self
             .focused
+            .filter(|&id| cfg!(target_arch = "wasm32") || self.tree.text_field_is_editable(id))
             .and_then(|id| self.tree.text_field_ime_snapshot(id, !unchanged));
         let Some((target, snapshot)) = self.focused.zip(snapshot) else {
             if let Some(MountedTextInputConnection { client, .. }) = self.text_input_client.take() {
