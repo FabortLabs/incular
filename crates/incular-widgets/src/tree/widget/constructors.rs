@@ -1483,6 +1483,7 @@ impl Widget {
     pub(crate) fn raw_scrollbar_with_style(
         controller: ScrollController,
         style: RawScrollbarStyle,
+        cursor: Option<crate::advanced_scrolling::ScrollbarCursor>,
         child: impl Into<Self>,
     ) -> Self {
         let child = child.into();
@@ -1491,6 +1492,7 @@ impl Widget {
             kind: WidgetKind::RawScrollbar {
                 controller,
                 style,
+                cursor,
                 child,
             },
             semantics: None,
@@ -2083,7 +2085,7 @@ impl RawScrollbar {
     /// Lowers this stateful scrollbar model into a retained widget overlay.
     #[must_use]
     pub fn into_widget(self, child: impl Into<Widget>) -> Widget {
-        Widget::raw_scrollbar_with_style(self.controller(), self.style(), child)
+        Widget::raw_scrollbar_with_style(self.controller(), self.style(), self.cursor_resolver(), child)
     }
 
     /// Alias for [`Self::into_widget`] with Flutter-style wrapper wording.

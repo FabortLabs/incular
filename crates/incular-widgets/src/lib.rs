@@ -126,7 +126,7 @@ pub use advanced_scrolling::{
     DraggableScrollableSheet, DraggableScrollableState, DraggableSheetDelta, DraggableSheetExtent,
     DraggableSizeAnimation, DraggableSnap, DraggableSnapTarget, FixedExtentScrollController,
     ListWheelScrollView, ListWheelViewport, RawScrollbar, RawScrollbarGeometry,
-    RawScrollbarOrientation, RawScrollbarStyle, TwoDimensionalChildDelegate,
+    RawScrollbarOrientation, RawScrollbarStyle, ScrollbarCursorState, TwoDimensionalChildDelegate,
     TwoDimensionalChildLayout, TwoDimensionalConfigError, TwoDimensionalConstraints,
     TwoDimensionalScrollDelta, TwoDimensionalScrollView, TwoDimensionalScrollable,
     TwoDimensionalViewport, TwoDimensionalViewportLayout, WheelChildDelegate, WheelChildLayout,

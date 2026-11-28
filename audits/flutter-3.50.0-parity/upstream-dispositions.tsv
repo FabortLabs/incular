@@ -4356,3 +4356,12 @@ packages/flutter/test/widgets/interactive_viewer_test.dart	1954	not axis aligned
 packages/flutter/test/widgets/interactive_viewer_test.dart	1970	InteractiveViewer does not crash at zero area	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
 packages/flutter/test/widgets/interactive_viewer_test.dart	1408	scaleFactor	paired-match	upstream-interactive-viewer-signals.md#alignment-pivot-and-wheel-sensitivity
 packages/flutter/test/widgets/interactive_viewer_test.dart	1483	alignment argument is used properly	paired-match	upstream-interactive-viewer-signals.md#alignment-pivot-and-wheel-sensitivity
+packages/flutter/test/widgets/scrollbar_test.dart	3767	RawScrollbar.mouseCursor only applies while the pointer is over the scrollbar	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	3834	RawScrollbar.mouseCursor resolves a WidgetStateProperty.fromMap	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	3912	RawScrollbar without mouseCursor preserves the ancestor cursor over the scrollbar	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	3952	RawScrollbar.mouseCursor updates when the property changes while hovered	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	4005	RawScrollbar.mouseCursor stays applied while a thumb drag is active even when the pointer leaves the scrollbar	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	4076	RawScrollbar.mouseCursor is released when a mouse drag ends off the scrollbar	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	4145	RawScrollbar.mouseCursor is released when the scrollbar stops being interactive	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	4232	RawScrollbar.mouseCursor is released when the child stops being scrollable	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	4303	RawScrollbar.mouseCursor clears dragged state when thumb drag is cancelled	paired-match	upstream-scrollbar-cursor.md

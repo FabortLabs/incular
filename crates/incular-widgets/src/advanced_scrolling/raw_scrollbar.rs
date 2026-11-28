@@ -6,7 +6,7 @@
 //! only derives a track/thumb pair and maps pointer motion back to its offset.
 
 use incular_core::time::Instant;
-use std::time::Duration;
+use std::{fmt, rc::Rc, time::Duration};
 
 use incular_animation::Curve;
 use incular_config::{Axis, TextDirection};
@@ -15,6 +15,7 @@ use incular_core::{Color, Offset, Rect, Size};
 use incular_scroll::{ActivityOrigin, OwnedActivity, ScrollController};
 use smart_default::SmartDefault;
 
+use crate::MouseCursor;
 use crate::gestures::PointerDeviceKind;
 
 /// Flutter `_kScrollbarFadeDuration` (`widgets/scrollbar.dart:43`).
@@ -350,6 +351,49 @@ struct ThumbDrag {
     activity: OwnedActivity,
 }
 
+/// Interaction state for resolving the cursor of an explicit scrollbar.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ScrollbarCursorState {
+    pub hovered: bool,
+    pub dragged: bool,
+    pub disabled: bool,
+}
+
+#[derive(Clone)]
+pub(crate) enum ScrollbarCursor {
+    Fixed(MouseCursor),
+    Resolved(Rc<dyn Fn(ScrollbarCursorState) -> Option<MouseCursor>>),
+}
+
+impl fmt::Debug for ScrollbarCursor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Fixed(cursor) => f.debug_tuple("Fixed").field(cursor).finish(),
+            Self::Resolved(_) => f.write_str("Resolved(..)"),
+        }
+    }
+}
+
+impl PartialEq for ScrollbarCursor {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Fixed(a), Self::Fixed(b)) => a == b,
+            (Self::Resolved(a), Self::Resolved(b)) => Rc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+
+impl ScrollbarCursor {
+    pub(crate) fn resolve(&self, state: ScrollbarCursorState) -> Option<MouseCursor> {
+        match self {
+            Self::Fixed(cursor) => Some(*cursor),
+            Self::Resolved(resolve) => resolve(state),
+        }
+        .filter(|cursor| *cursor != MouseCursor::Defer)
+    }
+}
+
 /// A stateful raw scrollbar overlay attached to an existing scroll controller.
 ///
 /// Pointer methods use viewport coordinates and preserve Flutter's thumb
@@ -366,6 +410,7 @@ struct ThumbDrag {
 #[derive(Debug)]
 pub struct RawScrollbar {
     controller: ScrollController,
+    cursor: Option<ScrollbarCursor>,
     style: RawScrollbarStyle,
     text_direction: TextDirection,
     drag: Option<ThumbDrag>,
@@ -384,6 +429,7 @@ impl Clone for RawScrollbar {
         fade.set_durations(self.style.fade_duration, self.style.time_to_fade);
         Self {
             controller: self.controller.clone(),
+            cursor: self.cursor.clone(),
             style: self.style,
             text_direction: self.text_direction,
             drag: None,
@@ -401,6 +447,7 @@ impl RawScrollbar {
     pub fn new(controller: ScrollController) -> Self {
         Self {
             controller,
+            cursor: None,
             style: RawScrollbarStyle::default(),
             text_direction: TextDirection::Ltr,
             drag: None,
@@ -409,6 +456,36 @@ impl RawScrollbar {
             last_offset: None,
             was_active: false,
         }
+    }
+
+    /// Overrides the mouse cursor over this bar or during its thumb drag.
+    #[must_use]
+    pub fn mouse_cursor(mut self, cursor: MouseCursor) -> Self {
+        self.cursor = Some(ScrollbarCursor::Fixed(cursor));
+        self
+    }
+
+    /// Resolves an optional cursor from current scrollbar interaction.
+    /// Returning None or Defer leaves ordinary pointer cursor routing intact.
+    #[must_use]
+    pub fn mouse_cursor_with_states(
+        mut self,
+        resolve: impl Fn(ScrollbarCursorState) -> Option<MouseCursor> + 'static,
+    ) -> Self {
+        self.cursor = Some(ScrollbarCursor::Resolved(Rc::new(resolve)));
+        self
+    }
+
+    pub(crate) fn cursor_resolver(&self) -> Option<ScrollbarCursor> {
+        self.cursor.clone()
+    }
+
+    pub(crate) fn captures_cursor(&self, size: Size) -> bool {
+        self.drag.is_some() && self.cursor_enabled(size)
+    }
+
+    pub(crate) fn cursor_enabled(&self, size: Size) -> bool {
+        self.style.interactive && self.scrollable_geometry(size).is_some()
     }
 
     /// `RawScrollbar.thumbVisibility ?? false`.
@@ -531,7 +608,10 @@ impl RawScrollbar {
     fn resolved_axis(&self) -> Axis {
         self.style
             .orientation
-            .resolve(self.controller.metrics().axis_direction.axis(), self.text_direction)
+            .resolve(
+                self.controller.metrics().axis_direction.axis(),
+                self.text_direction,
+            )
             .1
     }
 
@@ -689,7 +769,9 @@ impl RawScrollbar {
         let grab = axis.main_extent_of(point) - axis.main_extent_of(thumb.origin);
         self.drag = Some(ThumbDrag {
             grab_offset: grab.clamp(0., axis.main_extent(thumb.size)),
-            activity: self.controller.start_owned_activity(ActivityOrigin::Scrollbar),
+            activity: self
+                .controller
+                .start_owned_activity(ActivityOrigin::Scrollbar),
         });
         // An owned thumb press holds the scrollbar in view until it ends.
         self.fade.queue(ScrollbarFadeCommand::CancelTimer);
@@ -753,8 +835,7 @@ impl RawScrollbar {
         let desired_thumb =
             (point_main - drag.grab_offset - track_start).clamp(0.0, geometry.thumb_travel);
         let mut fraction = desired_thumb / geometry.thumb_travel;
-        if self.controller.metrics().axis_direction.is_reversed()
-        {
+        if self.controller.metrics().axis_direction.is_reversed() {
             fraction = 1.0 - fraction;
         }
         self.controller.jump_to(geometry.offset_at(fraction))
@@ -794,8 +875,7 @@ impl RawScrollbar {
             (main_position - track_start - axis.main_extent_of(geometry.thumb.size) / 2.0)
                 .clamp(0.0, geometry.thumb_travel)
                 / geometry.thumb_travel;
-        if self.controller.metrics().axis_direction.is_reversed()
-        {
+        if self.controller.metrics().axis_direction.is_reversed() {
             fraction = 1.0 - fraction;
         }
         self.controller.jump_to(geometry.offset_at(fraction))

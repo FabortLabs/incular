@@ -354,7 +354,7 @@ pub mod prelude {
         PositionedTransition, PreferredSize, PrimaryScrollController, ProviderImage, RadioGroup,
         Radius, RawAutocomplete, RawGestureDetector, RawImage, RawMenuAnchor, RawMenuAnchorGroup,
         RawMenuOverlayInfo, RawPointerEvent, RawRadio, RawScrollbar, RawScrollbarGeometry,
-        RawScrollbarOrientation, RawScrollbarStyle, RawTooltip, RawTooltipBuilder,
+        RawScrollbarOrientation, RawScrollbarStyle, ScrollbarCursorState, RawTooltip, RawTooltipBuilder,
         RawTooltipController, RawTooltipDurations, RawTooltipTriggerMode, RawTooltipVisibility,
         ReadingOrderTraversalPolicy, RectDragBoundary, RelativePositionedTransition, RemovePadding,
         ReorderableDelayedDragStartListener, ReorderableDragStartListener, ReorderableList,

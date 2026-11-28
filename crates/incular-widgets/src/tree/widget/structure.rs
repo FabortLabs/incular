@@ -525,11 +525,13 @@ impl std::fmt::Debug for WidgetKind {
             Self::RawScrollbar {
                 controller,
                 style,
+                cursor,
                 child,
             } => f
                 .debug_struct("RawScrollbar")
                 .field("controller", controller)
                 .field("style", style)
+                .field("cursor", cursor)
                 .field("child", child)
                 .finish(),
             Self::ListWheelScrollView { config } => f
@@ -1430,14 +1432,16 @@ impl PartialEq for WidgetKind {
                 Self::RawScrollbar {
                     controller: a,
                     style: b,
-                    child: c,
+                    cursor: c,
+                    child: d,
                 },
                 Self::RawScrollbar {
-                    controller: d,
-                    style: e,
-                    child: f,
+                    controller: e,
+                    style: f,
+                    cursor: g,
+                    child: h,
                 },
-            ) => a == d && b == e && c == f,
+            ) => a == e && b == f && c == g && d == h,
             (Self::ListWheelScrollView { config: a }, Self::ListWheelScrollView { config: b }) => {
                 a == b
             }

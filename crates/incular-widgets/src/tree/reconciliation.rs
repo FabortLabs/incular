@@ -1205,7 +1205,15 @@ impl WidgetTree {
             ) => before != after,
             _ => false,
         };
+        let scrollbar_configuration_changed = match (old.kind(), widget.kind()) {
+            (
+                WidgetKind::RawScrollbar { cursor: old, style: old_style, .. },
+                WidgetKind::RawScrollbar { cursor: new, style: new_style, .. },
+            ) => old != new || old_style != new_style,
+            _ => false,
+        };
         if before_mouse != after_mouse
+            || scrollbar_configuration_changed
             || decoration_hit_changed
             || painter_hit_changed
             || paragraph_pointer_changed

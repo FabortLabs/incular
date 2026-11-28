@@ -2832,9 +2832,6 @@ impl Runtime {
         if phase == PointerPhase::Down && let Some(field) = outside_editor {
             self.tree.remember_editable_outside_press(gesture_window, raw_event, field);
         }
-        if hover_capable && !matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
-            self.update_mouse_cursor(raw_event, &hit);
-        }
         if metadata_rich
             && self.text_secondary_pointer(
                 phase,
@@ -2888,10 +2885,16 @@ impl Runtime {
                 now,
             )
         {
+            if hover_capable {
+                self.update_mouse_cursor(raw_event, &hit);
+            }
             self.cancel_pending_mobile_text_touch();
             self.frame_requested = true;
             self.release_legacy_pointer(device, pointer, phase, primary_changed);
             return None;
+        }
+        if hover_capable {
+            self.update_mouse_cursor(raw_event, &hit);
         }
 
         if let Some(element) = raw_target
@@ -3377,7 +3380,14 @@ impl Runtime {
     }
 
     fn update_mouse_cursor(&mut self, event: RawPointerEvent, hit: &PointerHitTest) {
-        let cursor = match self.tree.mouse_cursor_for_hit(hit) {
+        let scrollbar = if event.kind == incular_core::PointerDeviceKind::Mouse {
+            self.tree.explicit_scrollbar_mouse_cursor(
+                event.position, hit, self.legacy_pointer == Some((event.device, event.pointer)),
+            )
+        } else {
+            None
+        };
+        let cursor = match scrollbar.unwrap_or_else(|| self.tree.mouse_cursor_for_hit(hit)) {
             MouseCursor::Defer => MouseCursor::Basic,
             cursor => cursor,
         };
