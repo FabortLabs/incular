@@ -168,3 +168,96 @@ fn rotated_box_with_an_empty_child_can_complete_a_zero_area_frame() {
         .expect("zero-area frame");
     assert_eq!(subject_size(&runtime), Size::ZERO);
 }
+
+fn aligned_hit_scene(
+    direction: TextDirection,
+    alignment: incular_config::AlignmentGeometry,
+    log: &TapLog,
+) -> Widget {
+    let square = Size::new(100., 100.);
+    let overlay =
+        Transform::new(Affine::scale(0.5), target(square, CYAN, "cyan", log)).alignment(alignment);
+    Directionality::new(
+        direction,
+        Stack::new([
+            Positioned::new(Widget::box_(square, BLUE))
+                .top(100.)
+                .left(100.),
+            Positioned::new(SizedBox::square(100.).child(overlay))
+                .top(100.)
+                .left(100.),
+        ]),
+    )
+    .into()
+}
+
+#[test]
+fn physical_right_alignment_moves_the_half_scale_hit_to_the_right() {
+    let log = TapLog::default();
+    let mut runtime = Runtime::new(aligned_hit_scene(
+        TextDirection::Ltr,
+        Alignment::CENTER_RIGHT.into(),
+        &log,
+    ))
+    .unwrap();
+    let start = Instant::now();
+    runtime.run_frame_at(viewport(), start).unwrap();
+    tap(
+        &mut runtime,
+        Offset::new(110., 110.),
+        1,
+        start + Duration::from_millis(10),
+    );
+    assert!(log.take().is_empty());
+    tap(
+        &mut runtime,
+        Offset::new(190., 150.),
+        2,
+        start + Duration::from_millis(20),
+    );
+    assert_eq!(log.take(), ["cyan"]);
+}
+
+#[test]
+fn directional_alignment_changes_the_hit_pivot_on_the_same_mounted_root() {
+    use incular_config::AlignmentGeometry;
+
+    let variations = [
+        (TextDirection::Ltr, AlignmentGeometry::CENTER_END, true),
+        (TextDirection::Rtl, AlignmentGeometry::CENTER_START, true),
+        (TextDirection::Ltr, AlignmentGeometry::CENTER_START, false),
+        (TextDirection::Rtl, AlignmentGeometry::CENTER_END, false),
+    ];
+    let log = TapLog::default();
+    let (direction, alignment, _) = variations[0];
+    let mut runtime = Runtime::new(aligned_hit_scene(direction, alignment, &log)).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let start = Instant::now();
+    for (i, (direction, alignment, right)) in variations.into_iter().enumerate() {
+        let now = start + Duration::from_millis(i as u64 * 40);
+        runtime
+            .schedule_update(root, aligned_hit_scene(direction, alignment, &log))
+            .unwrap();
+        runtime.run_frame_at(viewport(), now).unwrap();
+        let (outside, inside) = if right {
+            (Offset::new(110., 110.), Offset::new(190., 150.))
+        } else {
+            (Offset::new(190., 150.), Offset::new(110., 150.))
+        };
+        tap(
+            &mut runtime,
+            outside,
+            i as u64 * 2 + 1,
+            now + Duration::from_millis(10),
+        );
+        assert!(log.take().is_empty(), "{direction:?} {alignment:?}");
+        tap(
+            &mut runtime,
+            inside,
+            i as u64 * 2 + 2,
+            now + Duration::from_millis(20),
+        );
+        assert_eq!(log.take(), ["cyan"], "{direction:?} {alignment:?}");
+        assert_eq!(runtime.tree().root(), Some(root));
+    }
+}

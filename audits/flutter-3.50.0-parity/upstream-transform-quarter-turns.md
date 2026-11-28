@@ -104,3 +104,15 @@ as in Flutter. These are partial: Incular's retained layers keep
 translation bookkeeping and flatten the local adjustment into a
 world matrix, rather than allocating Flutter's particular layer
 arrangement. All four focused native checks passed.
+
+## Physical and directional pivots route real touch input
+
+Pinned `widgets/transform_test.dart:60,101` passed. The native host
+fixture uses the same overlapping 100×100 boxes at (100,100) and
+delivers real down/up touches through the runtime at the original
+positions. Physical center-right and LTR-end/RTL-start keep
+(190,150) hittable and reject (110,110); LTR-start/RTL-end instead
+accept (110,150) and reject (190,150). Each directional change
+updates the same mounted root. All six focused native transform
+and quarter-turn hit tests passed, including the prior explicit
+origin cases.

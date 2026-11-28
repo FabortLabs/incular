@@ -4024,3 +4024,5 @@ packages/flutter/test/widgets/transform_test.dart	207	Composited transform offse
 packages/flutter/test/widgets/transform_test.dart	231	Transform.rotate	paired-match	upstream-transform-quarter-turns.md#default-affine-matrices-in-the-original-viewport
 packages/flutter/test/widgets/transform_test.dart	277	Transform.translate	partial-match	upstream-transform-quarter-turns.md#default-affine-matrices-in-the-original-viewport
 packages/flutter/test/widgets/transform_test.dart	291	Transform.scale	paired-match	upstream-transform-quarter-turns.md#default-affine-matrices-in-the-original-viewport
+packages/flutter/test/widgets/transform_test.dart	60	Transform alignment	paired-match	upstream-transform-quarter-turns.md#physical-and-directional-pivots-route-real-touch-input
+packages/flutter/test/widgets/transform_test.dart	101	Transform AlignmentDirectional alignment	paired-match	upstream-transform-quarter-turns.md#physical-and-directional-pivots-route-real-touch-input
