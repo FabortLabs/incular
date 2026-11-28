@@ -4247,3 +4247,10 @@ packages/flutter/test/widgets/editable_text_test.dart	12307	can change behavior 
 packages/flutter/test/widgets/editable_text_test.dart	13053	can change text editing behavior by overriding actions	paired-match	upstream-editable-directional-shortcuts.md#character-movement-shortcut-and-action-overrides
 packages/flutter/test/widgets/editable_text_test.dart	13106	can change tap outside behavior by overriding actions	paired-match	upstream-editable-outside-actions.md#scoped-press-and-release-overrides
 packages/flutter/test/widgets/editable_text_test.dart	13142	can change tap up outside behavior by overriding actions	paired-match	upstream-editable-outside-actions.md#scoped-press-and-release-overrides
+packages/flutter/test/services/raw_keyboard_test.dart	1546	modifier keys are recognized individually	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1574	modifier keys are recognized when combined	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1610	Printable keyboard keys are correctly translated	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1624	Control keyboard keys are correctly translated	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1636	Modifier keyboard keys are correctly translated	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1648	data.toString	partial-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1664	data.equality	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
