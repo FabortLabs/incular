@@ -116,3 +116,31 @@ fn raw_magnifier_draws_its_backdrop_through_the_matrix() {
         .expect("shape clip before the backdrop");
     assert_eq!(clip, rect(0., 0., 100., 50.));
 }
+
+#[test]
+fn shift_within_bounds_covers_each_pinned_corner_and_already_valid_bounds() {
+    let bounds = rect(0., 0., 100., 100.);
+    for (input, expected) in [
+        (rect(-100., -100., 20., 20.), rect(0., 0., 20., 20.)),
+        (rect(0., 0., 20., 20.), rect(0., 0., 20., 20.)),
+        (rect(110., 0., 10., 10.), rect(90., 0., 10., 10.)),
+        (rect(110., 110., 10., 10.), rect(90., 90., 10., 10.)),
+    ] {
+        assert_eq!(
+            MagnifierController::shift_within_bounds(input, bounds),
+            expected
+        );
+    }
+}
+
+#[test]
+fn empty_magnifier_info_displays_position_line_caret_and_field_in_flutter_order() {
+    assert_eq!(
+        MagnifierInfo::EMPTY.to_string(),
+        concat!(
+            "MagnifierInfo(position: Offset(0.0, 0.0), line: Rect.fromLTRB(0.0, 0.0, 0.0, 0.0), ",
+            "caret: Rect.fromLTRB(0.0, 0.0, 0.0, 0.0), ",
+            "field: Rect.fromLTRB(0.0, 0.0, 0.0, 0.0))"
+        )
+    );
+}

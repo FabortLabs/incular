@@ -54,6 +54,33 @@ impl MagnifierInfo {
     };
 }
 
+impl std::fmt::Display for MagnifierInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn write_rect(f: &mut std::fmt::Formatter<'_>, rect: Rect) -> std::fmt::Result {
+            write!(
+                f,
+                "Rect.fromLTRB({:.1}, {:.1}, {:.1}, {:.1})",
+                rect.origin.x,
+                rect.origin.y,
+                rect.origin.x + rect.size.width,
+                rect.origin.y + rect.size.height,
+            )
+        }
+
+        write!(
+            f,
+            "MagnifierInfo(position: Offset({:.1}, {:.1}), line: ",
+            self.global_gesture_position.x, self.global_gesture_position.y
+        )?;
+        write_rect(f, self.current_line_boundaries)?;
+        f.write_str(", caret: ")?;
+        write_rect(f, self.caret_rect)?;
+        f.write_str(", field: ")?;
+        write_rect(f, self.field_bounds)?;
+        f.write_str(")")
+    }
+}
+
 /// Builds a text magnifier for the gesture, or `None` for no magnifier.
 pub type MagnifierBuilder = Rc<dyn Fn(MagnifierInfo) -> Option<Widget>>;
 

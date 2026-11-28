@@ -4180,3 +4180,5 @@ packages/flutter/test/widgets/editable_text_test.dart	17058	should build nothing
 packages/flutter/test/widgets/editable_text_test.dart	17088	magnifier is in correct position when EditableText is scaled	paired-match	upstream-editable-magnifier.md#default-and-scaled-handle-drag
 packages/flutter/test/widgets/editable_text_test.dart	16005	magnifierConfiguration can be updated to display a new magnifier	paired-match	upstream-editable-magnifier.md#handle-free-presentation-and-updated-builder
 packages/flutter/test/widgets/text_selection_test.dart	1740	can show magnifier when no handles exist	paired-match	upstream-editable-magnifier.md#handle-free-presentation-and-updated-builder
+packages/flutter/test/widgets/magnifier_test.dart	302	'should shift ${inputRects[i]} to ${outputRects[i]} for bounds ${boundsRects[i]}'	paired-match	upstream-editable-magnifier.md#magnifier-diagnostics-and-geometry-limits
+packages/flutter/test/widgets/magnifier_test.dart	313	MagnifierInfo.toString	paired-match	upstream-editable-magnifier.md#magnifier-diagnostics-and-geometry-limits

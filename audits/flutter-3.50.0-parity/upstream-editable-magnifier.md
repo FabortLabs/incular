@@ -36,3 +36,12 @@ open the lens at the 500 ms threshold, update it at the moved
 pointer, and dismiss it on release. The Linux policy does not
 open a touch long-press lens. All five magnifier and 19 selection
 handle tests passed. The long-press control adds no registration row.
+
+## Magnifier diagnostics and geometry limits
+
+Pinned `widgets/magnifier_test.dart:302,313` passed. The four loop
+expansions cover upper-left, unchanged, right, and bottom-right
+placement; the native test preserves the rectangle dimensions and
+asserts all four exact positions. The empty geometry display string
+matches Flutter's position, line, caret, and field order and number
+format. The six focused native magnifier tests passed.
