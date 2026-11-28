@@ -3888,7 +3888,7 @@ packages/flutter/test/painting/image_cache_test.dart	525	Clearing liveImages rem
 packages/flutter/test/painting/image_cache_test.dart	561	Live image gets size updated	paired-match	upstream-decoded-bundle-image-cache.md#live-listener-ownership-eviction-and-lru-re-admission
 packages/flutter/test/painting/image_cache_test.dart	691	clear does not leave pending images stuck	paired-match	upstream-decoded-bundle-image-cache.md#live-listener-ownership-eviction-and-lru-re-admission
 packages/flutter/test/painting/image_cache_test.dart	178	Returns null if an error is caught resolving an image	paired-match	upstream-decoded-bundle-image-cache.md#loader-errors-and-decoded-resource-ownership
-packages/flutter/test/painting/image_cache_test.dart	291	failed image can successfully be removed from the cache's pending images	partial-mismatch	upstream-decoded-bundle-image-cache.md#loader-errors-and-decoded-resource-ownership
+packages/flutter/test/painting/image_cache_test.dart	291	failed image can successfully be removed from the cache's pending images	partial-match	upstream-decoded-bundle-image-cache.md#transport-failure-and-decoder-failure-are-distinct
 packages/flutter/test/painting/image_cache_test.dart	604	Image is obtained and disposed of properly for cache	partial-match	upstream-decoded-bundle-image-cache.md#loader-errors-and-decoded-resource-ownership
 packages/flutter/test/painting/image_cache_test.dart	649	Image is obtained and disposed of properly for cache when listener is still active	partial-match	upstream-decoded-bundle-image-cache.md#loader-errors-and-decoded-resource-ownership
 packages/flutter/test/foundation/diagnostics_test.dart	836	toString test	paired-match	upstream-diagnostic-tree-json.md#compact-text-summaries

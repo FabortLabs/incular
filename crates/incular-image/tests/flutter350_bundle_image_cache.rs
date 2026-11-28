@@ -940,7 +940,7 @@ fn decoded_pixels_live_until_the_last_cache_listener_or_image_info_owner_release
 }
 
 #[test]
-fn a_failed_decode_is_already_removed_when_the_observer_receives_the_error() {
+fn a_missing_bundle_asset_is_removed_before_the_observer_receives_the_error() {
     use incular_image::ImageStreamListener;
     use std::{cell::Cell, rc::Rc};
 
@@ -996,4 +996,85 @@ fn clearing_live_tracking_during_decode_keeps_the_original_listener_and_pending_
     assert_eq!(frames.get(), 1);
     assert!(matches!(stream.state(), ImageLoadState::Ready(_)));
     assert!(cache.status_for_key(&asset).keep_alive);
+}
+
+#[test]
+fn a_deferred_byte_decode_failure_can_be_evicted_by_its_error_listener() {
+    use incular_image::ImageStreamListener;
+    use std::{cell::Cell, rc::Rc};
+
+    let (cache, transport, asset) = live_bundle_fixture();
+    let first = cache.resolve_stream(asset.clone());
+    assert!(cache.status_for_key(&asset).pending);
+    let seen = Rc::new(Cell::new(None));
+    let _listener = first.listen(
+        ImageStreamListener::new(Rc::new(|_, _| {
+            panic!("invalid bytes must not produce a frame")
+        }))
+        .on_error({
+            let (cache, asset, seen) = (cache.clone(), asset.clone(), seen.clone());
+            Rc::new(move |err| {
+                assert!(matches!(err, ImageError::Decode(_)));
+                seen.set(Some((
+                    cache.status_for_key(&asset).pending,
+                    cache.evict(&asset),
+                )));
+            })
+        }),
+    );
+    transport.take("1")(Ok(Arc::from([0_u8; 8])));
+    finish_pending_streams();
+    assert_eq!(seen.get(), Some((true, true)));
+    assert!(!cache.status_for_key(&asset).pending);
+    assert_eq!(cache.retained(), (0, 0));
+
+    let retry = cache.resolve_stream(asset);
+    assert_ne!(retry, first);
+    transport.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(retry.state(), ImageLoadState::Ready(_)));
+}
+
+#[test]
+fn a_failed_async_stream_is_replayed_until_eviction_without_retaining_pixels() {
+    let (cache, transport, asset) = live_bundle_fixture();
+    let first = cache.resolve_stream(asset.clone());
+    transport.take("1")(Ok(Arc::from([0_u8; 8])));
+    finish_pending_streams();
+    assert!(matches!(
+        first.state(),
+        ImageLoadState::Failed(ImageError::Decode(_))
+    ));
+    assert!(cache.status_for_key(&asset).pending);
+    assert_eq!(cache.pending_image_count(), 1);
+    assert_eq!(cache.retained(), (0, 0));
+    let same = cache
+        .resolve_stream_on_error(asset.clone(), |_| panic!("not a fresh inline loader error"))
+        .unwrap();
+    assert_eq!(same, first);
+    assert_eq!(transport.pending(), 0);
+    assert!(cache.evict(&asset));
+    assert_eq!(cache.pending_image_count(), 0);
+}
+
+#[test]
+fn direct_bundle_callback_remains_retryable_after_invalid_bytes() {
+    let (cache, transport, asset) = live_bundle_fixture();
+    let (send, receive) = mpsc::channel();
+    cache.load_async(
+        asset.clone(),
+        Box::new(move |result| send.send(result).unwrap()),
+    );
+    transport.take("1")(Ok(Arc::from([0_u8; 8])));
+    assert!(matches!(
+        receive.try_recv().unwrap(),
+        Err(ImageError::Decode(_))
+    ));
+    assert_eq!(cache.pending_image_count(), 0);
+    assert_eq!(cache.retained(), (0, 0));
+    assert!(!cache.evict(&asset));
+    let retry = cache.resolve_stream(asset);
+    transport.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(retry.state(), ImageLoadState::Ready(_)));
 }

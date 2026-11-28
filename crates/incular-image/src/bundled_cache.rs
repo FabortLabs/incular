@@ -3,7 +3,10 @@
 use std::{
     cell::{OnceCell, RefCell},
     collections::{HashMap, HashSet, hash_map::Entry},
-    sync::{Arc, Mutex, PoisonError, Weak},
+    sync::{
+        Arc, Mutex, PoisonError, Weak,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use lru::LruCache;
@@ -15,14 +18,20 @@ use crate::{
 
 mod live_streams;
 
-type Pending = Arc<Mutex<PendingImage>>;
+type Pending = Arc<PendingDecode>;
+
+struct PendingDecode {
+    state: Mutex<PendingImage>,
+    loader_returned: AtomicBool,
+    retain_decode_error: AtomicBool,
+}
 
 /// Decode jobs are Send, but their UI stream cells are not. Intern weak
 /// views in the current UI thread without retaining finished jobs, decoded
 /// frames, or consumers. A geometric sweep bounds stale entries without
 /// forgetting a view that still has a live pending job and a caller.
 struct PendingStreamEntry {
-    job: Weak<Mutex<PendingImage>>,
+    job: Weak<PendingDecode>,
     stream: crate::stream::WeakImageStream,
 }
 
@@ -74,7 +83,10 @@ enum PendingImage {
 
 fn attach(pending: &Pending, done: ImageLoadCallback) {
     let completed = {
-        let mut pending = pending.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut pending = pending
+            .state
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
         match &mut *pending {
             PendingImage::Loading(waiters) => {
                 waiters.push(done);
@@ -314,8 +326,8 @@ impl BundleImageCache {
         (state.ready.len(), state.bytes)
     }
 
-    /// Number of cached decode jobs still waiting for an outcome. Joining
-    /// an existing key does not add another job.
+    /// Number of pending cache entries. A failed asynchronous stream decode
+    /// stays pending for explicit eviction, but retains no decoded pixels.
     #[must_use]
     pub fn pending_image_count(&self) -> usize {
         let state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
@@ -484,6 +496,9 @@ impl BundleImageCache {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             let ready = state.ready.get(key).cloned();
             let pending = state.pending.get(key).cloned();
+            if let Some(pending) = &pending {
+                pending.retain_decode_error.store(true, Ordering::Release);
+            }
             (ready, pending)
         };
         if let Some(pending) = pending {
@@ -524,7 +539,11 @@ impl BundleImageCache {
         &self,
         key: AssetBundleImageKey,
     ) -> Result<ImageStream, ImageError> {
-        let stream = self.resolve_stream(key);
+        let key = BundleDecodeKey::plain(key);
+        if let Some(stream) = self.resolve_cached_key(&key) {
+            return Ok(stream);
+        }
+        let stream = self.start_stream(key);
         if let crate::ImageLoadState::Failed(error) = stream.untracked_state() {
             return Err(error);
         }
@@ -553,12 +572,14 @@ impl BundleImageCache {
         resize: Option<ImageResizeOptions>,
     ) -> ImageStream {
         let key = BundleDecodeKey { asset, resize };
-        if let Some(stream) = self.resolve_cached_key(&key) {
-            return stream;
-        }
+        self.resolve_cached_key(&key)
+            .unwrap_or_else(|| self.start_stream(key))
+    }
+
+    fn start_stream(&self, key: BundleDecodeKey) -> ImageStream {
         let mut pending = None;
         let mut stream = ImageStream::from_load_callback(|done| {
-            pending = self.start_async_with_key(key.clone(), done);
+            pending = self.start_async_with_key(key.clone(), true, done);
         });
         if let Some(pending) = &pending {
             // A reentrant provider can resolve the same key while it
@@ -584,6 +605,7 @@ impl BundleImageCache {
         let (send, result) = futures_channel::oneshot::channel();
         let pending = self.start_async_with_key(
             key.clone(),
+            true,
             Box::new(move |result| { let _ = send.send(result); }),
         );
         PreparedBundleStream { key, pending, result }
@@ -635,12 +657,13 @@ impl BundleImageCache {
         resize: Option<ImageResizeOptions>,
         done: ImageLoadCallback,
     ) {
-        let _ = self.start_async_with_key(BundleDecodeKey { asset, resize }, done);
+        let _ = self.start_async_with_key(BundleDecodeKey { asset, resize }, false, done);
     }
 
     fn start_async_with_key(
         &self,
         key: BundleDecodeKey,
+        retain_decode_error: bool,
         done: ImageLoadCallback,
     ) -> Option<Pending> {
         let pending = {
@@ -658,12 +681,19 @@ impl BundleImageCache {
             match state.pending.entry(key.clone()) {
                 Entry::Occupied(entry) => {
                     let pending = entry.get().clone();
+                    if retain_decode_error {
+                        pending.retain_decode_error.store(true, Ordering::Release);
+                    }
                     drop(state);
                     attach(&pending, done);
                     return Some(pending);
                 }
                 Entry::Vacant(entry) => {
-                    let pending = Arc::new(Mutex::new(PendingImage::Loading(vec![done])));
+                    let pending = Arc::new(PendingDecode {
+                        state: Mutex::new(PendingImage::Loading(vec![done])),
+                        loader_returned: AtomicBool::new(false),
+                        retain_decode_error: AtomicBool::new(retain_decode_error),
+                    });
                     entry.insert(pending.clone());
                     pending
                 }
@@ -677,10 +707,15 @@ impl BundleImageCache {
             let mut detached = None;
             if let Some(cache) = cache.upgrade() {
                 let mut state = cache.lock().unwrap_or_else(PoisonError::into_inner);
-                if state
-                    .pending
-                    .get(&completed)
-                    .is_some_and(|p| Arc::ptr_eq(p, &pending))
+                // Flutter keeps a failed decoder stream pending until its
+                // listener evicts it. Transport failure, inline errors and
+                // native output-budget rejection keep our existing retry
+                // behavior. Never restore an already detached job.
+                let keep_failed = matches!(result, Err(ImageError::Decode(_)))
+                    && pending.loader_returned.load(Ordering::Acquire)
+                    && pending.retain_decode_error.load(Ordering::Acquire);
+                if !keep_failed
+                    && state.pending.get(&completed).is_some_and(|p| Arc::ptr_eq(p, &pending))
                 {
                     detached = state.pending.remove_entry(&completed);
                     if let Ok(image) = &result {
@@ -690,7 +725,10 @@ impl BundleImageCache {
             }
             drop((detached, removed));
             let previous = {
-                let mut pending = pending.lock().unwrap_or_else(PoisonError::into_inner);
+                let mut pending = pending
+                    .state
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner);
                 std::mem::replace(&mut *pending, PendingImage::Completed(result.clone()))
             };
             if let PendingImage::Loading(callbacks) = previous {
@@ -699,6 +737,7 @@ impl BundleImageCache {
                 }
             }
         }));
+        work.loader_returned.store(true, Ordering::Release);
         Some(work)
     }
 }

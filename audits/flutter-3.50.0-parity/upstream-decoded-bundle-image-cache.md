@@ -154,3 +154,24 @@ leaves the original pending decode and external listener intact. After
 the held asset bytes are released, that listener receives exactly one
 asynchronous frame, and the resulting decoded image remains retained.
 All 33 focused native cache tests passed.
+
+### Transport failure and decoder failure are distinct
+
+The earlier :291 witness used a missing bundle asset, not malformed
+bytes. Flutter's own asset provider explicitly evicts a failed bundle
+load before reporting it. The pinned authored probe now compares that
+path separately: both implementations report no pending entry and
+`evict` returns false inside the error listener.
+
+For asynchronous invalid bytes, the pinned probe and Incular now
+leave the same job pending until explicit eviction. The listener can
+evict it and retry, or a later resolver reuses the same failed
+stream without starting another load. It retains no decoded pixels.
+Before the fix the native listener observed `(false, false)`
+rather than `(true, true)` for pending and eviction. Inline decoder
+errors, low-level callback-only loads, and output-budget rejections
+retain the Rust retry behavior. The exact :291 Flutter registration
+passed, but remains partial: it uses an arbitrary custom provider
+where the native fixture drives the real asset bundle cache.
+All three authored Flutter comparisons and 58 focused native cases
+passed.

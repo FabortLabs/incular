@@ -28,7 +28,7 @@ struct Entry {
     owner: Weak<Mutex<State>>,
     bundle: Weak<dyn AssetBundle>,
     stream: crate::stream::WeakImageStream,
-    pending: Option<Weak<Mutex<PendingImage>>>,
+    pending: Option<Weak<PendingDecode>>,
 }
 
 struct Memo {
