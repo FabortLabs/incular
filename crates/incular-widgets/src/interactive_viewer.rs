@@ -689,9 +689,10 @@ impl ViewerState {
     /// Discrete trackpad scroll pans by default. Mouse-wheel input and
     /// opt-in trackpad scrolling zoom around the viewport-local pointer.
     fn pointer_signal(&self, event: RawPointerEvent) {
-        let trackpad_pan = event.kind == incular_gestures::PointerDeviceKind::Trackpad
+        let trackpad_pan = event.scale_signal.is_none()
+            && event.kind == incular_gestures::PointerDeviceKind::Trackpad
             && !self.config.trackpad_scroll_causes_scale;
-        if !trackpad_pan && event.scroll_delta.y == 0.0 {
+        if event.scale_signal.is_none() && !trackpad_pan && event.scroll_delta.y == 0.0 {
             return;
         }
         let (global, local) = (event.position, event.local_position);
@@ -728,7 +729,9 @@ impl ViewerState {
             update.local_focal_point = local - if supported { delta } else { event.scroll_delta };
             update.focal_point_delta = Offset::ZERO - delta;
         } else {
-            update.scale = (-event.scroll_delta.y / self.config.scale_factor).exp();
+            update.scale = event
+                .scale_signal
+                .unwrap_or_else(|| (-event.scroll_delta.y / self.config.scale_factor).exp());
             if self.gesture_is_supported(Some(GestureType::Scale)) {
                 let focal_point_scene = self.to_scene(local);
                 self.set_matrix(self.matrix_scale(self.matrix(), update.scale));

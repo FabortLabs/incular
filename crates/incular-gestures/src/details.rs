@@ -120,6 +120,8 @@ pub struct RawPointerEvent {
     pub scroll_delta: Offset,
     /// Wheel movement mapped into the receiving widget's coordinates.
     pub local_scroll_delta: Offset,
+    /// Multiplicative scale for a discrete pointer scale signal.
+    pub scale_signal: Option<f32>,
 }
 
 impl RawPointerEvent {
@@ -150,6 +152,7 @@ impl RawPointerEvent {
             synthesized: false,
             scroll_delta: Offset::ZERO,
             local_scroll_delta: Offset::ZERO,
+            scale_signal: None,
         }
     }
 
@@ -249,6 +252,7 @@ impl RawPointerEvent {
             button: None,
             scroll_delta: Offset::ZERO,
             local_scroll_delta: Offset::ZERO,
+            scale_signal: None,
             ..self
         }
     }

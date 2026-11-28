@@ -4301,3 +4301,6 @@ packages/flutter/test/widgets/interactive_viewer_test.dart	827	Scale with mouse 
 packages/flutter/test/widgets/interactive_viewer_test.dart	1540	discrete scroll pointer events	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
 packages/flutter/test/widgets/interactive_viewer_test.dart	1611	trackpadScrollCausesScale	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
 packages/flutter/test/widgets/interactive_viewer_test.dart	1648	trackpad pointer scroll events cause scale	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	874	Scaling amount is equal forth and back with a mouse scroll	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom
+packages/flutter/test/widgets/interactive_viewer_test.dart	906	onInteraction can be used to get scene point	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom
+packages/flutter/test/widgets/interactive_viewer_test.dart	1579	discrete scale pointer event	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom

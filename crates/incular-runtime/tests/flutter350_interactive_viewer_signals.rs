@@ -51,6 +51,10 @@ impl Scene {
     }
 
     fn send(&mut self, kind: Device, change: Change, signal: Signal) {
+        self.send_at(CENTER, kind, change, signal);
+    }
+
+    fn send_at(&mut self, at: Offset, kind: Device, change: Change, signal: Signal) {
         self.runtime.handle_pointer_data_packet(
             VIEW,
             DPR,
@@ -58,7 +62,7 @@ impl Scene {
                 view_id: VIEW,
                 device: 13,
                 pointer: 7,
-                physical_position: physical(CENTER),
+                physical_position: physical(at),
                 kind,
                 signal,
                 ..PointerData::new(change, self.time)
@@ -227,4 +231,73 @@ fn mouse_zoom_reports_start_scale_and_unchanged_pointer_scene_location() {
     near(transformed.y, 100.);
     assert_eq!(ends.borrow().len(), 1);
     assert_eq!(ends.borrow()[0].velocity.pixels_per_second, Offset::ZERO);
+}
+
+#[test]
+fn discrete_trackpad_scale_accumulates_then_clamps_at_the_maximum() {
+    let controller = TransformationController::new();
+    let widget = viewer(&controller);
+    let mut scene = Scene::new(controller, widget);
+    assert_eq!(scene.state().0, 1.);
+    for scale in [1.5, 2.25, 2.5] {
+        scene.send(Device::Trackpad, Change::Hover, Signal::Scale(1.5));
+        near(scene.state().0, scale);
+        let point = scene.controller.to_scene(Offset::new(100., 100.));
+        near(point.x, 100.);
+        near(point.y, 100.);
+    }
+    let before = scene.state();
+    for invalid in [0., -1., f32::NAN, f32::INFINITY] {
+        scene.send(Device::Trackpad, Change::Hover, Signal::Scale(invalid));
+        assert_eq!(scene.state(), before);
+    }
+}
+
+#[test]
+fn equal_forward_and_backward_mouse_wheels_cancel_without_clamps() {
+    let controller = TransformationController::new();
+    let widget = InteractiveViewer::new(SizedBox::square(1000.))
+        .constrained(false)
+        .min_scale(0.01)
+        .max_scale(100_000.)
+        .transformation_controller(controller.clone());
+    let mut scene = Scene::new(controller, widget);
+    for (delta, expected) in [
+        (-200., std::f32::consts::E),
+        (-200., 2.0_f32.exp()),
+        (200., std::f32::consts::E),
+        (200., 1.),
+    ] {
+        scene.scroll(Device::Mouse, Offset::new(0., delta));
+        near(scene.state().0, expected);
+    }
+}
+
+#[test]
+fn callbacks_and_scene_mapping_agree_for_off_center_mouse_zoom() {
+    let controller = TransformationController::new();
+    let updates = Rc::new(RefCell::new(Vec::new()));
+    let widget = viewer(&controller).on_interaction_update({
+        let out = updates.clone();
+        move |event| out.borrow_mut().push(event)
+    });
+    let mut scene = Scene::new(controller, widget);
+    let focus = CENTER - Offset::new(20., 20.);
+    scene.send_at(
+        focus,
+        Device::Mouse,
+        Change::Hover,
+        Signal::Scroll(physical(Offset::new(0., -20.))),
+    );
+    let [event] = *updates.borrow().as_slice() else {
+        panic!("expected one callback")
+    };
+    assert_eq!(event.focal_point, focus);
+    assert_eq!(event.local_focal_point, Offset::new(80., 80.));
+    near(scene.state().0, event.scale);
+    let scene_origin = scene.controller.to_scene(Offset::ZERO);
+    assert!(scene_origin.x > 0. && scene_origin.y > 0.);
+    let under_pointer = scene.controller.to_scene(event.local_focal_point);
+    near(under_pointer.x, 80.);
+    near(under_pointer.y, 80.);
 }

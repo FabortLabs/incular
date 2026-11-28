@@ -2324,9 +2324,16 @@ impl Runtime {
                 self.pending_event_processing_us = self.pending_event_processing_us
                     .saturating_add(us_since_instant(traced_at));
             }
-            // The retained window does not yet consume these signal kinds;
-            // direct embedders can still observe them from the converter.
-            ConvertedPointerKind::ScrollInertiaCancel(_) | ConvertedPointerKind::Scale { .. } => {}
+            ConvertedPointerKind::Scale { event, scale } => {
+                let started = Instant::now();
+                self.advance_text_history_clock(event.time);
+                self.frame_requested |= self.tree.scale_signal_at(event, scale);
+                self.pending_event_processing_us = self.pending_event_processing_us
+                    .saturating_add(us_since_instant(started));
+            }
+            // Scroll inertia-cancel is observable by embedders through
+            // the converter but is not consumed by the retained window.
+            ConvertedPointerKind::ScrollInertiaCancel(_) => {}
         }
     }
 

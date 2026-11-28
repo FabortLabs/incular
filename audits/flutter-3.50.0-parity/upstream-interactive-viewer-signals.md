@@ -26,3 +26,20 @@ uses the locally projected scroll vector, without changing the
 global scroll read by listeners or the Shift behavior for mice.
 Focused packet and independent signal-projection controls passed.
 These are framework input replays, not live trackpad hardware.
+
+## Discrete scale and anchored wheel zoom
+
+Three more pinned originals pass: :1579 discrete pointer scale,
+:874 equal forward/backward mouse scroll, and :906 reading the
+scene point from interaction callbacks. Native runtime replay
+red-tested the previously dropped scale signal (1.0 instead of
+1.5), then confirmed three sequential factors of 1.5 accumulate
+to 1.5, 2.25, and the configured cap of 2.5. Invalid factors
+cannot alter the transform. Discrete scale is delivered to the
+pointer-signal listeners directly; it is not a wheel event or a
+synthetic pan/zoom stream.
+
+Equal positive and negative wheel deltas restore the starting
+scale in the wide-range scene. An off-center wheel callback at
+local (80,80) gives the matching global location and the
+transform keeps scene point (80,80) under that same pointer.

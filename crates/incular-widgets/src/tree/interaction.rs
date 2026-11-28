@@ -4306,6 +4306,23 @@ impl WidgetTree {
         claimed || observed
     }
 
+    /// Delivers a discrete pinch factor at the pointer without synthesizing
+    /// scroll, motion, or a pan/zoom stream.
+    pub fn scale_signal_at(&self, mut event: crate::raw_input::RawPointerEvent, scale: f32) -> bool {
+        if !scale.is_finite() || scale <= 0. {
+            return false;
+        }
+        event.scale_signal = Some(scale);
+        let signal = crate::raw_input::PointerSignalResolver::begin();
+        let observed = self.dispatch_pointer_signal(event);
+        if let Some((_, callback)) = signal.finish() {
+            callback();
+            true
+        } else {
+            observed
+        }
+    }
+
     fn route_pointer_scroll(
         &mut self,
         event: crate::raw_input::RawPointerEvent,
