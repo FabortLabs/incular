@@ -58,3 +58,33 @@ corners, and measures the bevel against the specified 20-pixel
 cutoff. Rect requests hard-edge coverage; oval and bevel request
 antialiasing. All seven transformed clip tests passed. The three
 originals remain partial pending native pixel comparison.
+
+## Affine oval antialiasing on wgpu
+
+A rotated `ClipOval` previously became a generic path before GPU
+lowering. The backend ignored path coverage and applied a binary
+stencil even though the widget requested antialiasing. Ordinary
+affine oval clips now retain the primitive and its transform, and
+wgpu evaluates its analytic edge in physical pixels. The full
+inverse matrix accounts for rotation, nonuniform scale, or shear.
+This adds no new framebuffer, draw pass, or storage footprint per
+soft clip. The hard-edge, destination-reading and compatibility
+fallbacks retain stencil clipping, and this change does not claim
+rotated save-layer coverage.
+
+The authored pinned `transformed_oval_coverage_test.dart` uses a
+rotated, nonuniformly scaled oval at 1.25×. Flutter produces the
+interior/exterior samples [255,255,0], at least 30 partially covered
+edge pixels under antialiasing, and no partials under hard coverage.
+The native wgpu GL surfaceless readback exercises the shared
+production clip shader and exact uniform packing at the same
+geometry; the three samples and partial-coverage bound match, and
+the result is symmetric about the center within one byte. The
+widget fixture proves that the transform reaches the renderer
+without changing paint order, and hard stencil geometry still
+passes its separate test. All 53 focused checks passed.
+
+This is real GPU edge evidence for the production coverage function,
+not a native swap-chain readback or equality with the full rotated
+oval golden. Generic path and elliptical rounded-rectangle coverage,
+rotated save-layer compositing, and complete golden pixels remain open.

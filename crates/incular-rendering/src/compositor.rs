@@ -2157,7 +2157,19 @@ impl LayerTree {
                     rect: world.transform_rect_bbox(*rect),
                     coverage: *coverage,
                     isolation: self.clip_isolation(id, *coverage),
+                    clip_transform: None,
                 },
+                // Keep the primitive for per-draw analytic edge coverage.
+                // A hard clip or save-layer clip still takes the established
+                // transformed path route.
+                ClipSpace::General if *coverage == ClipCoverage::AntiAlias => {
+                    PaintCommand::PushClipOval {
+                        rect: *rect,
+                        coverage: *coverage,
+                        isolation: None,
+                        clip_transform: Some(world),
+                    }
+                }
                 ClipSpace::General => {
                     let rect = *rect;
                     PaintCommand::PushClipPath {

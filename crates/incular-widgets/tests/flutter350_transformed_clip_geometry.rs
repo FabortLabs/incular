@@ -103,7 +103,7 @@ fn rotated_frame(wrap: impl FnOnce(Widget) -> Widget) -> DisplayList {
     let mut draws = Vec::new();
     for op in display.commands() {
         match op {
-            PaintCommand::PushClipPath { .. } => depth += 1,
+            PaintCommand::PushClipPath { .. } | PaintCommand::PushClipOval { .. } => depth += 1,
             PaintCommand::PopClip => depth -= 1,
             PaintCommand::Rect { color, .. } | PaintCommand::HardEdgeRect { color, .. } => {
                 draws.push((*color, depth));
@@ -187,18 +187,25 @@ fn rotated_rect_keeps_hard_coverage_and_does_not_expand_to_its_bounding_box() {
 #[test]
 fn a_rotated_oval_does_not_show_the_square_child_at_its_corners() {
     let display = rotated_frame(|content| ClipOval::new(content).into());
-    assert_rotated_path(
-        &display,
-        ClipCoverage::AntiAlias,
-        &[
-            (5., 5., false),
-            (95., 5., false),
-            (20., 20., true),
-            (50., 0.5, true),
-            (0.5, 50., true),
-            (50., 50., true),
-        ],
-    );
+    let (bounds, paint_transform) = display
+        .commands()
+        .iter()
+        .find_map(|op| match op {
+            PaintCommand::PushClipOval {
+                rect,
+                coverage: ClipCoverage::AntiAlias,
+                clip_transform: Some(transform),
+                isolation: None,
+            } => Some((*rect, *transform)),
+            _ => None,
+        })
+        .expect("retain the affine oval for per-draw analytic antialiasing");
+    assert_eq!(bounds, rect(0., 0., 100., 100.));
+    let center = paint_transform.transform_point(Offset::new(50., 50.));
+    assert_eq!(center, Offset::new(400., 300.));
+    let top = paint_transform.transform_point(Offset::new(50., 0.));
+    assert!((top.x - (400. + 50. * 1.0_f32.sin())).abs() < 0.001);
+    assert!((top.y - (300. - 50. * 1.0_f32.cos())).abs() < 0.001);
 }
 
 #[test]

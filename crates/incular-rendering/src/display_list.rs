@@ -150,6 +150,9 @@ pub enum PaintCommand {
         rect: Rect,
         coverage: ClipCoverage,
         isolation: Option<ClipIsolation>,
+        /// Transforms only the oval, not the paints inside the clip scope.
+        /// None means the rectangle uses the current paint coordinates.
+        clip_transform: Option<Transform>,
     },
     PushClipPath {
         path: Arc<Path>,
@@ -727,6 +730,7 @@ impl Canvas {
             rect,
             coverage,
             isolation: None,
+            clip_transform: None,
         });
     }
     pub fn save_clip_path(&mut self, path: Arc<Path>, fill_rule: FillRule) {

@@ -4,6 +4,18 @@ fn analytic_coverage(point: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>, shape:
   if (rect.z <= 0. || rect.w <= 0.) {
     return 1.;
   }
+  if (shape == 3u) {
+    let q = point - rect.xy;
+    let row_x = radii.xy;
+    let row_y = radii.zw;
+    let unit_point = vec2(dot(row_x, q), dot(row_y, q));
+    let rho = length(unit_point);
+    // The norm of the framebuffer gradient normalizes the implicit ellipse
+    // to physical-pixel distance under rotation, nonuniform scale, or shear.
+    let gradient = length(unit_point.x * row_x + unit_point.y * row_y) / max(rho, 1e-6);
+    let distance = (rho - 1.0) / max(gradient, 1e-6);
+    return clamp(0.5 - distance, 0.0, 1.0);
+  }
   let q = point - rect.xy - rect.zw * 0.5;
   if (shape == 2u) {
     // Box coverage is the intersection area of the rect and the unit

@@ -45,6 +45,8 @@ mod prelude {
     pub(crate) use wgpu_profiler::{GpuProfiler, GpuProfilerSettings, GpuTimerQueryResult};
 }
 
+#[cfg(not(incular_d3d11))]
+mod affine_oval;
 mod batching;
 #[cfg(not(incular_d3d11))]
 mod built_in_shaders;

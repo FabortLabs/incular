@@ -54,9 +54,11 @@ fn world_clips(list: &DisplayList) -> Vec<WorldClip> {
                     rrect.radii,
                 )));
             }
-            PaintCommand::PushClipOval { rect, .. } => out.push(WorldClip::Oval(
-                transforms.last().unwrap().transform_rect_bbox(*rect),
-            )),
+            PaintCommand::PushClipOval { rect, clip_transform, .. } => {
+                let paint_transform = *transforms.last().unwrap();
+                let oval_transform = clip_transform.map_or(paint_transform, |clip| paint_transform.then(clip));
+                out.push(WorldClip::Oval(oval_transform.transform_rect_bbox(*rect)));
+            }
             PaintCommand::PushClipPath { .. } => out.push(WorldClip::Path),
             _ => {}
         }
@@ -329,8 +331,12 @@ fn assert_curved_clip_coverage(oval: bool) {
                     assert!(!rotated && !oval);
                     Some(*coverage)
                 }
-                PaintCommand::PushClipOval { coverage, .. } => {
-                    assert!(!rotated && oval);
+                PaintCommand::PushClipOval { coverage, clip_transform, .. } => {
+                    assert!(oval);
+                    assert_eq!(clip_transform.is_some(), rotated);
+                    if rotated {
+                        assert_eq!(*coverage, ClipCoverage::AntiAlias);
+                    }
                     Some(*coverage)
                 }
                 PaintCommand::PushClipPath { path, coverage, .. } => {

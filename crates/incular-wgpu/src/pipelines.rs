@@ -85,9 +85,11 @@ pub(crate) struct GpuCompositeInstance {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(crate) struct GpuSoftClip {
+    /// Bounds, or center plus conservative dimensions for an affine ellipse.
     pub(crate) rect: [f32; 4],
+    /// Corner radii, or inverse unit-ellipse matrix for an affine ellipse.
     pub(crate) radii: [f32; 4],
-    /// Parent index and shape tag (0 rounded rectangle, 1 ellipse).
+    /// Parent index and shape tag (0 rounded, 1 ellipse, 2 rect, 3 affine ellipse).
     pub(crate) link: [u32; 4],
 }
 

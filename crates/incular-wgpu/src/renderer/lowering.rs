@@ -1,8 +1,13 @@
 use super::*;
 
+#[cfg(not(incular_d3d11))]
+use crate::affine_oval::AffineOvalClip;
+
 enum AnalyticClip {
     Rounded([f32; 4]),
     Oval,
+    #[cfg(not(incular_d3d11))]
+    AffineOval(AffineOvalClip),
 }
 
 impl AnalyticClip {
@@ -11,6 +16,21 @@ impl AnalyticClip {
             Self::Rounded(radii) if radii == [0.; 4] => (radii, 2),
             Self::Rounded(radii) => (radii, 0),
             Self::Oval => ([0.; 4], 1),
+            #[cfg(not(incular_d3d11))]
+            Self::AffineOval(oval) => (oval.normalized_inverse, 3),
+        }
+    }
+
+    #[cfg(not(incular_d3d11))]
+    fn shader_rect(&self, rect: Rect, scale: f32) -> [f32; 4] {
+        match self {
+            Self::AffineOval(oval) => oval.shader_rect(scale),
+            _ => [
+                rect.origin.x * scale,
+                rect.origin.y * scale,
+                rect.size.width * scale,
+                rect.size.height * scale,
+            ],
         }
     }
 }
@@ -103,14 +123,10 @@ impl WgpuRenderer {
         if intersect_clip_with_rect(parent, ClipRect::hard(bounds)) == ClipState::Empty {
             return ClipState::Empty;
         }
+        let shader_rect = shape.shader_rect(rect, scale);
         let (radii, shape) = shape.shader_parts();
         self.soft_clips.push(GpuSoftClip {
-            rect: [
-                rect.origin.x * scale,
-                rect.origin.y * scale,
-                rect.size.width * scale,
-                rect.size.height * scale,
-            ],
+            rect: shader_rect,
             radii,
             link: [parent.soft_index(), shape, 0, 0],
         });
@@ -894,8 +910,10 @@ impl WgpuRenderer {
                     rect,
                     coverage,
                     isolation,
+                    clip_transform,
                 } => {
                     let parent = *clips.last().expect("clip stack");
+                    let transform = clip_transform.map_or(transform, |clip| transform.then(clip));
                     let [a, b, c, d, _, _] = transform.to_kurbo().as_coeffs();
                     if *coverage == incular_painting::ClipCoverage::AntiAliasWithSaveLayer
                         && let Some(isolation) = isolation
@@ -925,8 +943,6 @@ impl WgpuRenderer {
                     #[cfg(not(incular_d3d11))]
                     {
                         if *coverage == incular_painting::ClipCoverage::AntiAlias
-                            && b == 0.
-                            && c == 0.
                             && !*has_destination_effect.get_or_insert_with(|| {
                                 commands.iter().any(|command| {
                                     matches!(
@@ -937,16 +953,17 @@ impl WgpuRenderer {
                                 })
                             })
                         {
-                            let state = if rect.size.width <= 0. || rect.size.height <= 0. {
-                                ClipState::Empty
+                            let geometry = if rect.size.width <= 0. || rect.size.height <= 0. {
+                                None
+                            } else if b == 0. && c == 0. {
+                                Some((transform.transform_rect_bbox(*rect), AnalyticClip::Oval))
                             } else {
-                                self.push_analytic_clip(
-                                    parent,
-                                    transform.transform_rect_bbox(*rect),
-                                    scale,
-                                    AnalyticClip::Oval,
-                                )
+                                AffineOvalClip::new(*rect, transform, scale)
+                                    .map(|oval| (oval.bounds, AnalyticClip::AffineOval(oval)))
                             };
+                            let state = geometry.map_or(ClipState::Empty, |(bounds, shape)| {
+                                self.push_analytic_clip(parent, bounds, scale, shape)
+                            });
                             clips.push(state);
                             clip_masks.push(None);
                             command_index += 1;
