@@ -4026,3 +4026,7 @@ packages/flutter/test/widgets/transform_test.dart	277	Transform.translate	partia
 packages/flutter/test/widgets/transform_test.dart	291	Transform.scale	paired-match	upstream-transform-quarter-turns.md#default-affine-matrices-in-the-original-viewport
 packages/flutter/test/widgets/transform_test.dart	60	Transform alignment	paired-match	upstream-transform-quarter-turns.md#physical-and-directional-pivots-route-real-touch-input
 packages/flutter/test/widgets/transform_test.dart	101	Transform AlignmentDirectional alignment	paired-match	upstream-transform-quarter-turns.md#physical-and-directional-pivots-route-real-touch-input
+packages/flutter/test/widgets/basic_test.dart	740	Semantics with attributedValue should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
+packages/flutter/test/widgets/basic_test.dart	788	Semantics with decreasedValue should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
+packages/flutter/test/widgets/basic_test.dart	801	Semantics with increasedValue should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
+packages/flutter/test/widgets/basic_test.dart	814	Semantics with attributedHint should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md

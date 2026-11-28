@@ -354,3 +354,45 @@ fn merged_hints_rebase_utf16_attributes_and_keep_the_single_values_attributes() 
     assert_eq!(attributes.value, [StringAttribute::spell_out(0..4)]);
     assert_eq!(node.state.text_direction, Some(TextDirection::Ltr));
 }
+
+#[test]
+fn text_only_semantic_values_and_hints_retain_direction_without_a_label() {
+    use incular_semantics::{AttributedString, StringAttribute};
+    use incular_widgets::Placeholder;
+
+    let value = "test value";
+    let span = StringAttribute::spell_out(0..4);
+    for direction in [TextDirection::Ltr, TextDirection::Rtl] {
+        for property in 0..4 {
+            let attributed =
+                AttributedString::try_with_attributes(value, [span.clone()]).unwrap();
+            let semantics = Semantics::new(Placeholder::new());
+            let semantics = match property {
+                0 => semantics.attributed_value(attributed),
+                1 => semantics.decreased_value(value),
+                2 => semantics.increased_value(value),
+                _ => semantics.attributed_hint(attributed),
+            };
+            let runtime = mount(Directionality::new(direction, semantics));
+            let tree = runtime.tree().semantics();
+            let [id] = tree.roots() else {
+                panic!("a text-only property still publishes one node");
+            };
+            let node = tree.node(*id).unwrap();
+            assert!(node.label.is_none());
+            assert_eq!(node.state.text_direction, Some(direction));
+            match property {
+                0 => {
+                    assert_eq!(node.value.as_deref(), Some(value));
+                    assert_eq!(node.state.text_attributes.as_ref().unwrap().value, [span.clone()]);
+                }
+                1 => assert_eq!(node.state.decreased_value.as_deref(), Some(value)),
+                2 => assert_eq!(node.state.increased_value.as_deref(), Some(value)),
+                _ => {
+                    assert_eq!(node.description.as_deref(), Some(value));
+                    assert_eq!(node.state.text_attributes.as_ref().unwrap().hint, [span.clone()]);
+                }
+            }
+        }
+    }
+}
