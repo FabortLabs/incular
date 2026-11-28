@@ -4516,7 +4516,7 @@ impl WidgetTree {
             } else {
                 PointerHitTest::default()
             };
-            self.explicit_scrollbar_pointer_with_hit(phase, point, kind, &hit, true)
+            self.explicit_scrollbar_pointer_with_hit(phase, point, kind, &hit, true, Instant::now())
         };
         if explicit && phase != PointerPhase::Exit {
             return true;

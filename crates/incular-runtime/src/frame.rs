@@ -2679,6 +2679,7 @@ impl Runtime {
             PointerPhase::Enter | PointerPhase::Exit => false,
         };
 
+        let now = self.input_now();
         if legacy_pointer
             && self.tree.explicit_scrollbar_pointer_with_hit(
                 phase,
@@ -2686,6 +2687,7 @@ impl Runtime {
                 kind,
                 &hit,
                 !active_primary,
+                now,
             )
         {
             self.cancel_pending_mobile_text_touch();
@@ -5076,6 +5078,7 @@ impl Runtime {
         // cannot discard it — the scheduler stays awake while a driver
         // lives and idles otherwise. No timer loop, just frame demand.
         let reduced_motion = self.environment.borrow().reduced_motion;
+        let scrollbar_press_live = self.tree.pump_explicit_scrollbar_track_press(now);
         let fling_live = self.tree.pump_scroll_flings(now, reduced_motion);
         let text_long_press_live = self.pump_text_long_press(now);
         let _layout_guard = tracing::info_span!("incular.layout").entered();
@@ -5191,6 +5194,7 @@ impl Runtime {
             || tooltip_timers_live
             || text_long_press_live
             || scrollbar_live
+            || scrollbar_press_live
             || floating_caret_live
             || !self.pending.is_empty()
             || self.reactive.borrow().has_work()

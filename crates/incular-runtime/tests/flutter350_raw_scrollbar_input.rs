@@ -167,3 +167,21 @@ fn a_track_page_moves_by_eighty_percent_of_the_viewport_and_rejects_canceled_tap
     scene.frame(790);
     assert!((scene.controller.offset() - 480.).abs() < 0.01);
 }
+
+#[test]
+fn a_held_track_press_pages_once_before_release() {
+    let mut scene = Scene::new(4000., true);
+    scene.frame(300);
+    scene.touch(310, PointerPhase::Down, 500.);
+    scene.frame(409);
+    assert_eq!(scene.controller.offset(), 0.);
+    scene.frame(410);
+    scene.frame(460);
+    assert!((230. ..=255.).contains(&scene.controller.offset()));
+    scene.frame(520);
+    assert_eq!(scene.controller.offset(), 480.);
+    scene.touch(530, PointerPhase::Up, 500.);
+    scene.frame(530);
+    scene.frame(650);
+    assert_eq!(scene.controller.offset(), 480.);
+}

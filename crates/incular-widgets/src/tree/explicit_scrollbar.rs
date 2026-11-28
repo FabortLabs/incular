@@ -9,8 +9,9 @@ pub(super) enum ExplicitScrollbarPress {
     Track {
         render: RenderObjectId,
         start: Offset,
+        kind: PointerDeviceKind,
         slop_squared: f32,
-        canceled: bool,
+        deadline: Option<Instant>,
     },
 }
 
@@ -69,6 +70,49 @@ impl WidgetTree {
         Some((node.raw_scrollbar_state_mut()?.scrollbar.as_mut()?, size))
     }
 
+    fn activate_explicit_scrollbar_track(
+        &mut self,
+        render: RenderObjectId,
+        point: Offset,
+        kind: PointerDeviceKind,
+    ) {
+        if let Some(local) = self.scrollbar_local_point(render, point)
+            && let Some((scrollbar, size)) = self.explicit_scrollbar_mut(render)
+            && scrollbar.press_part(size, local, kind) == Some(RawScrollbarPart::Track)
+            && scrollbar.animate_track_page(size, local)
+        {
+            self.diagnostics.scroll_events += 1;
+        }
+    }
+
+    /// Advances the track's tap-down deadline on the Runtime frame clock.
+    /// Returns true only while a held press still awaits its deadline.
+    #[doc(hidden)]
+    pub fn pump_explicit_scrollbar_track_press(&mut self, now: Instant) -> bool {
+        let Some(ExplicitScrollbarPress::Track {
+            render,
+            start,
+            kind,
+            slop_squared,
+            deadline: Some(deadline),
+        }) = self.input.explicit_scrollbar_press
+        else {
+            return false;
+        };
+        if now < deadline {
+            return true;
+        }
+        self.input.explicit_scrollbar_press = Some(ExplicitScrollbarPress::Track {
+            render,
+            start,
+            kind,
+            slop_squared,
+            deadline: None,
+        });
+        self.activate_explicit_scrollbar_track(render, start, kind);
+        false
+    }
+
     /// Handles a mounted RawScrollbar contact before its viewport can
     /// enroll the same pointer in the ordinary scroll gesture arena.
     #[doc(hidden)]
@@ -79,6 +123,7 @@ impl WidgetTree {
         kind: PointerDeviceKind,
         hit: &PointerHitTest,
         hover: bool,
+        now: Instant,
     ) -> bool {
         if let Some(press) = self.input.explicit_scrollbar_press {
             return match phase {
@@ -95,18 +140,20 @@ impl WidgetTree {
                         ExplicitScrollbarPress::Track {
                             render,
                             start,
+                            kind,
                             slop_squared,
-                            canceled,
-                        } => {
+                            deadline: Some(_),
+                        } if movement_squared(start, point) > slop_squared => {
                             self.input.explicit_scrollbar_press =
                                 Some(ExplicitScrollbarPress::Track {
                                     render,
                                     start,
+                                    kind,
                                     slop_squared,
-                                    canceled: canceled
-                                        || movement_squared(start, point) > slop_squared,
+                                    deadline: None,
                                 });
                         }
+                        ExplicitScrollbarPress::Track { .. } => {}
                     }
                     true
                 }
@@ -121,21 +168,15 @@ impl WidgetTree {
                         ExplicitScrollbarPress::Track {
                             render,
                             start,
+                            kind,
                             slop_squared,
-                            canceled,
-                        } => {
-                            if phase == PointerPhase::Up
-                                && !canceled
-                                && movement_squared(start, point) <= slop_squared
-                                && let Some(local) = self.scrollbar_local_point(render, point)
-                                && let Some((scrollbar, size)) = self.explicit_scrollbar_mut(render)
-                                && scrollbar.press_part(size, local, kind)
-                                    == Some(RawScrollbarPart::Track)
-                                && scrollbar.animate_track_page(size, local)
-                            {
-                                self.diagnostics.scroll_events += 1;
-                            }
+                            deadline: Some(_),
+                        } if phase == PointerPhase::Up
+                            && movement_squared(start, point) <= slop_squared =>
+                        {
+                            self.activate_explicit_scrollbar_track(render, start, kind);
                         }
+                        ExplicitScrollbarPress::Track { .. } => {}
                     }
                     true
                 }
@@ -171,8 +212,9 @@ impl WidgetTree {
                         ExplicitScrollbarPress::Track {
                             render,
                             start: point,
+                            kind,
                             slop_squared: slop * slop,
-                            canceled: false,
+                            deadline: Some(now + incular_gestures::constants::PRESS_TIMEOUT),
                         }
                     }
                 };

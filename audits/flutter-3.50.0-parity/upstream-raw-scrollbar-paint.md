@@ -42,9 +42,8 @@ real pointer events through Runtime with the automatic overlay disabled:
 The track tap clamps its target, drives a 100 ms ease-in-out
 animation, and pages by 80% of the viewport (480 px for a 600 px
 view with enough content). A move past touch slop or a cancel
-before a quick tap commits does not page. Flutter can also fire
-its TapDown callback after a held press's deadline; that path
-and overscroll during thumb drag are not covered by these tests.
+before a quick tap commits does not page. Overscroll during
+thumb drag is not covered by these tests.
 Incular uses an explicit shared controller for these comparisons;
 Flutter's automatic primary-controller wiring is a separate API.
 
@@ -66,3 +65,16 @@ in a 600 px view. It paints if content grows to 600.1 px or if the
 view shrinks to 599 px, and hides again when they fit. The resize
 tests passed without a production change. All 23 focused native
 geometry, input, and adjacent defaults tests passed.
+
+## Held track tap deadline
+
+The authored `raw_scrollbar_track_deadline_test.dart` probe and
+the native Runtime test reach the same held-press outcome: at
+99 ms there is no movement, at roughly 150 ms scrolling is in
+progress, and at 210 ms the position is 480 px before release.
+Releasing afterward does not page again. Incular previously
+waited until release for every track tap. It now drives the
+100 ms deadline from the frame clock and disarms it when a
+quick tap commits, the press exceeds slop, or the press ends.
+All 18 focused native scrollbar and editor-focus tests passed.
+The authored probe does not add an upstream registration.
