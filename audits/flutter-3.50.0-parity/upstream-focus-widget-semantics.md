@@ -166,12 +166,13 @@ the native fixture now finds the nearest mounted scope from the keyed
 control and requests focus through that scope, rather than directly
 through the node.
 
-After the primary-focus ownership fix, the pinned :812 cross-scope
-case and the :1825 manager case were rerun. The native GlobalKey test
-still keeps the same element, a pending or confirmed primary focus,
-and the correct new ancestor focus. :812 is partial because the native
-fixture does not call Flutter's root `setFirstFocus` on an explicitly
-attached ScopeNode or assert the two labels during the scope move.
+The pinned :812 original now has the complete mounted replay.
+The two explicit sibling scopes stay in place; both GlobalKey children
+trade scopes. The test requests the first child through its nearest
+scope and runs the enclosing scope's setFirstFocus equivalent, then
+checks both rendered labels before and after the move. Child A stays
+primary, B stays unfocused, both element identities survive, and the
+new scope owns A without keeping focus on the old one.
 
 ## Idle focus requests and ExcludeFocus
 
