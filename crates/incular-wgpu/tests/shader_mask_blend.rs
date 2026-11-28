@@ -266,6 +266,7 @@ fn shader_mask_blend_modes_match_the_reference_formula() {
         BlendMode::Modulate,
         BlendMode::SrcIn,
         BlendMode::DstIn,
+        BlendMode::DstOut,
         BlendMode::SrcAtop,
     ] {
         let output = blend(&device, &queue, mode, &mask, &child);

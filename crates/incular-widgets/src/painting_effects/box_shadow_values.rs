@@ -6,7 +6,11 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use incular_config::Clip;
 use incular_core::{Color, Lerp, Offset, Rect, Size};
+use incular_rendering::{BlendMode, DisplayList};
+
+use crate::{CustomPaint, Opacity, Stack, Widget};
 
 use super::{BlurStyle, BoxShadow};
 
@@ -111,5 +115,53 @@ impl fmt::Display for BoxShadow {
             self.blur_radius,
             self.spread_radius,
         )
+    }
+}
+
+/// Builds a blurred box or shape shadow from a single opaque mask. A solid
+/// blur unions the source with the blur; outer and inner use subtraction
+/// and intersection respectively. The shadow alpha applies once.
+pub(super) fn styled_shadow(
+    size: Size,
+    shadow: &BoxShadow,
+    paint: impl FnOnce(&BoxShadow) -> DisplayList,
+) -> Widget {
+    let sigma = crate::utilities::banner_shadow_sigma(shadow.blur_radius);
+    if sigma <= f32::EPSILON {
+        // A zero-sigma Flutter blur does not install a mask filter.
+        return CustomPaint::new(size, paint(shadow)).into();
+    }
+    if shadow.blur_style == BlurStyle::Normal {
+        return Widget::blur(sigma, CustomPaint::new(size, paint(shadow)).into());
+    }
+    let opaque = BoxShadow {
+        color: Color {
+            alpha: 255,
+            ..shadow.color
+        },
+        ..*shadow
+    };
+    let shape: Widget = CustomPaint::new(size, paint(&opaque)).into();
+    let blurred = Widget::blur(sigma, shape.clone());
+    let blend = match shadow.blur_style {
+        BlurStyle::Outer => Some(BlendMode::DstOut),
+        BlurStyle::Inner => Some(BlendMode::DstIn),
+        BlurStyle::Solid => None,
+        BlurStyle::Normal => unreachable!("handled before composing a mask"),
+    };
+    let mask = if let Some(mode) = blend {
+        Widget::blend(mode, shape)
+    } else {
+        shape
+    };
+    let group: Widget = Stack::new([blurred, mask]).clip_behavior(Clip::None).into();
+    if shadow.color.alpha < 255 {
+        Opacity::new(f32::from(shadow.color.alpha) / 255.0, group).into()
+    } else if blend.is_some() {
+        // Alpha-one opacity layers are flattened. An explicit source-over
+        // group isolates these destination reads from earlier content.
+        Widget::blend(BlendMode::SrcOver, group)
+    } else {
+        group
     }
 }

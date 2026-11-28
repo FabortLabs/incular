@@ -226,3 +226,18 @@ also checks unequal fill or stroke values, independently allocated
 compound borders, and shared-instance comparison for opaque custom
 borders. Built-in shapes compare their paint descriptors without
 resolving direction. Nine focused native tests passed.
+
+## Shadow mask styles and isolation
+
+The authored pinned Flutter pixel probe checks box and shape normal, solid,
+outer and inner masks at outside, edge, and center samples. It checks the
+color alpha applies once, a zero-radius filter leaves the original shadow,
+and an outer shadow does not erase the backdrop it is painted over.
+Previously native shape shadows ignored the mask style. Opaque box masks
+also used an alpha-one opacity group, which the wgpu renderer flattens.
+Both painters now share the shadow mask path; opaque destination-reading
+masks isolate explicitly, translucent masks apply one opacity, and a zero
+radius needs no effect layer. All 32 focused native widget tests and the
+required surfaceless wgpu blend-shader readback (including DstOut and DstIn)
+passed. The native widget assertions inspect the full retained layer order;
+they are not full-frame Flutter golden matches.

@@ -806,7 +806,11 @@ fn decorated_with_source(
             decoration
                 .box_shadow
                 .iter()
-                .map(|shadow| styled_shadow(&decoration, size, shadow)),
+                .map(|shadow| {
+                    super::box_shadow_values::styled_shadow(size, shadow, |paint| {
+                        decoration.paint_shadow(size, paint)
+                    })
+                }),
         );
         let rect = Rect::from_origin_size(Offset::ZERO, size);
         let aligned = cache.and_then(|cache| {
@@ -1538,36 +1542,4 @@ fn painted_image(paint: ImagePaint) -> Widget {
         .into()
     })
     .into()
-}
-
-/// `BoxShadow.toPaint`'s `MaskFilter.blur(blurStyle, sigma)`. The
-/// non-normal styles compose the shadow shape painted opaque the way Skia's
-/// `SkBlurMask` combines the blurred mask `b` with the shape mask `s`:
-/// solid is `s + b - s*b`, outer `b*(1 - s)`, inner `b*s`. The combined mask
-/// takes the shadow color's alpha once, through an opacity group.
-fn styled_shadow(decoration: &BoxDecoration, size: Size, shadow: &BoxShadow) -> Widget {
-    use super::decoration::BlurStyle;
-    let sigma = crate::utilities::banner_shadow_sigma(shadow.blur_radius);
-    if shadow.blur_style == BlurStyle::Normal {
-        return Widget::blur(
-            sigma,
-            CustomPaint::new(size, decoration.paint_shadow(size, shadow)).into(),
-        );
-    }
-    let opaque = BoxShadow {
-        color: Color {
-            alpha: 255,
-            ..shadow.color
-        },
-        ..*shadow
-    };
-    let shape: Widget = CustomPaint::new(size, decoration.paint_shadow(size, &opaque)).into();
-    let blurred = Widget::blur(sigma, shape.clone());
-    let mask = match shadow.blur_style {
-        BlurStyle::Outer => Widget::blend(incular_rendering::BlendMode::DstOut, shape.clone()),
-        BlurStyle::Inner => Widget::blend(incular_rendering::BlendMode::DstIn, shape.clone()),
-        BlurStyle::Solid | BlurStyle::Normal => shape,
-    };
-    let group: Widget = Stack::new([blurred, mask]).clip_behavior(Clip::None).into();
-    Opacity::new(f32::from(shadow.color.alpha) / 255.0, group).into()
 }

@@ -627,11 +627,9 @@ impl From<DecoratedShapeBox> for Widget {
                 let size = constraints.biggest();
                 let mut layers: Vec<Widget> = Vec::with_capacity(decoration.shadows.len() + 3);
                 layers.extend(decoration.shadows.iter().map(|shadow| {
-                    Widget::blur(
-                        crate::utilities::banner_shadow_sigma(shadow.blur_radius),
-                        CustomPaint::new(size, decoration.paint_shadow(size, shadow, direction))
-                            .into(),
-                    )
+                    super::box_shadow_values::styled_shadow(size, shadow, |paint| {
+                        decoration.paint_shadow(size, paint, direction)
+                    })
                 }));
                 layers.push(
                     CustomPaint::new(size, decoration.paint_fill_with_direction(size, direction))
