@@ -1131,6 +1131,28 @@ impl Runtime {
             return false;
         }
         let changed = environment_change_mask(&previous, &environment);
+        if let Some(field) = self.focused.filter(|&field| self.tree.is_text_field(field))
+            && matches!(
+                self.text_shortcut_platform,
+                TextShortcutPlatform::Android | TextShortcutPlatform::Ios
+            )
+        {
+            let landscape = |size: Size| {
+                (size.width.is_finite() && size.height.is_finite()
+                    && size.width > 0. && size.height > 0.)
+                    .then_some(size.width > size.height)
+            };
+            if landscape(previous.viewport).zip(landscape(environment.viewport))
+                .is_some_and(|(before, after)| before != after)
+            {
+                self.editable_toolbar_restore = None;
+                if self.text_shortcut_platform == TextShortcutPlatform::Ios {
+                    self.hide_text_field_toolbar_only(field);
+                } else {
+                    self.hide_text_field_overlays(field);
+                }
+            }
+        }
         if environment.view_insets.bottom > previous.view_insets.bottom
             && self.focused.is_some_and(|field| self.tree.is_text_field(field))
         {

@@ -4230,3 +4230,5 @@ packages/flutter/test/widgets/editable_text_test.dart	10218	batch edits need to 
 packages/flutter/test/widgets/editable_text_test.dart	10238	catch unfinished batch edits on disposal	partial-match	upstream-editable-host-configuration.md#nested-batches-do-not-leak-intermediate-text-to-the-host
 packages/flutter/test/widgets/editable_text_test.dart	4226	Dragging selection base handle upwards scrolls the viewport	paired-match	upstream-editable-scroll-toolbar.md#upward-reverse-selections-track-the-actively-dragged-end
 packages/flutter/test/widgets/editable_text_test.dart	4275	Mouse drag selection from bottom to top does not snap to extent	paired-match	upstream-editable-scroll-toolbar.md#upward-reverse-selections-track-the-actively-dragged-end
+packages/flutter/test/widgets/editable_text_test.dart	2736	toolbar hidden on mobile when orientation changes	paired-match	upstream-editable-scroll-toolbar.md#mobile-orientation-and-mounted-paste-action
+packages/flutter/test/widgets/editable_text_test.dart	3908	Fires onChanged when text changes via TextSelectionOverlay	paired-match	upstream-editable-scroll-toolbar.md#mobile-orientation-and-mounted-paste-action

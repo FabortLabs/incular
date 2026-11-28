@@ -126,3 +126,18 @@ retains its anchor and the viewport no longer sits at its maximum. All
 35 focused native scrollbar/selection/handle cases passed. The fixtures
 do not require or claim parity for an externally attached editor
 ScrollController.
+
+## Mobile orientation and mounted paste action
+
+Pinned **2736** passed on both Android and iOS. A real window-metrics
+rotation used to leave the toolbar open. An orientation change now closes
+the focused mobile editor's toolbar and cancels scroll-driven restoration.
+Android also hides its handles; iOS leaves them mounted. A same-orientation
+resize and a desktop rotation leave the toolbar alone. The focus, selection,
+and keyboard client survive the rotation.
+
+Pinned **3908** passed. The native test uses long press to mount a neutral
+toolbar and clicks its actual Paste control. The clipboard text reaches
+the editor and `on_changed` exactly once, the caret ends after the inserted
+text, the toolbar closes, and the editing focus remains. All 32 focused
+native menu, clipboard and scrolling tests passed.
