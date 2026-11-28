@@ -4198,3 +4198,9 @@ packages/flutter/test/widgets/editable_text_test.dart	15746	contextMenuBuilder c
 packages/flutter/test/widgets/editable_text_test.dart	15069	can paste and remove field	paired-match	upstream-editable-scroll-toolbar.md#cut-and-paste-may-remove-their-editor
 packages/flutter/test/widgets/editable_text_test.dart	15120	can cut and remove field	paired-match	upstream-editable-scroll-toolbar.md#cut-and-paste-may-remove-their-editor
 packages/flutter/test/widgets/editable_text_test.dart	15021	EditableText consumes ActivateIntent and ButtonActivateIntent	paired-match	upstream-editable-defaults.md#editor-activation-keys-do-not-activate-ancestor-controls
+packages/flutter/test/widgets/editable_text_test.dart	15172	ctrl-A/E	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	15247	ctrl-F/B	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	15316	ctrl-N/P	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	15395	with normal characters	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	15494	with extended grapheme clusters	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	15582	macOS selectors work	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
