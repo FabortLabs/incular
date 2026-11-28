@@ -341,3 +341,144 @@ fn bundle_cache_only_retains_resized_frames_and_reuses_equivalent_requests() {
     assert_eq!(cache.retained(), (3, (50 * 50 + 16 * 20 + 8 * 10) * 4));
     cache.clear();
 }
+
+#[test]
+fn resize_retains_both_requested_dimensions_and_resolves_its_own_stream() {
+    let source = MemoryImage::new(UNIT);
+    let config = ImageConfiguration::empty();
+    let resize = ResizeImage::new(source.clone(), Some(10), Some(20));
+    assert_eq!(resize.width(), Some(10));
+    assert_eq!(resize.height(), Some(20));
+    assert_eq!(
+        resize.image_provider.downcast_ref::<MemoryImage>(),
+        Some(&source)
+    );
+    assert_ne!(source.resolve(&config), resize.resolve(&config));
+}
+
+#[test]
+fn resize_does_not_invent_a_second_requested_dimension() {
+    let source = MemoryImage::new(UNIT);
+    let config = ImageConfiguration::empty();
+    let resize = ResizeImage::new(source.clone(), Some(10), None);
+    assert_eq!(resize.width(), Some(10));
+    assert_eq!(resize.height(), None);
+    assert_eq!(
+        resize.image_provider.downcast_ref::<MemoryImage>(),
+        Some(&source)
+    );
+    assert_ne!(source.resolve(&config), resize.resolve(&config));
+}
+
+#[test]
+fn the_source_decoder_receives_the_resize_target_for_its_actual_input_size() {
+    use std::{cell::Cell, rc::Rc};
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct Probe {
+        image: MemoryImage,
+        target: Rc<Cell<Option<(u32, u32)>>>,
+    }
+    impl ImageProvider for Probe {
+        fn load(&self) -> Result<ImageHandle, ImageError> {
+            self.image.load()
+        }
+
+        fn resolve_resized(
+            &self,
+            configuration: &ImageConfiguration,
+            options: ImageResizeOptions,
+        ) -> ImageStream {
+            let source = self.load().unwrap();
+            assert_eq!(size(&source), (1, 1));
+            let target = options.target_size(size(&source), configuration).unwrap();
+            self.target.set(Some(target));
+            ImageStream::from_result(options.resize(source, configuration))
+        }
+    }
+    let seen = Rc::new(Cell::new(None));
+    let provider = Probe {
+        image: MemoryImage::new(UNIT),
+        target: seen.clone(),
+    };
+    let resize = ResizeImage::new(provider, Some(123), Some(321)).allow_upscaling(true);
+    let image = ready(&resize.resolve(&ImageConfiguration::empty()));
+    assert_eq!(seen.get(), Some((123, 321)));
+    assert_eq!(size(&image), (123, 321));
+}
+
+fn empty_resize_manifest() -> Vec<u8> {
+    use incular_core::standard_message_codec::{MessageValue, StandardMessageCodec};
+
+    StandardMessageCodec::encode_message(&MessageValue::Map(Vec::new()))
+        .unwrap()
+        .unwrap()
+}
+
+#[test]
+fn resizing_a_synchronous_asset_key_completes_inline() {
+    use incular_assets::MemoryAssetBundle;
+    use incular_image::AssetImage;
+    use std::sync::{Arc, mpsc};
+
+    let bundle =
+        Arc::new(MemoryAssetBundle::new().with("AssetManifest.bin", empty_resize_manifest()));
+    let source = AssetImage::new("test.png").bundle(bundle);
+    let resize = ResizeImage::new(source.clone(), Some(123), Some(321));
+    let config = ImageConfiguration::empty();
+    let (send, receive) = mpsc::channel();
+    resize.obtain_key_for(
+        &config,
+        |done| source.obtain_key(&config, done),
+        move |key| send.send(key).unwrap(),
+    );
+    let key = receive
+        .try_recv()
+        .expect("source callback stays inline")
+        .unwrap();
+    assert_eq!(key.provider_key().name, "test.png");
+    assert_eq!(
+        (key.options().width, key.options().height),
+        (Some(123), Some(321))
+    );
+}
+
+#[test]
+fn resizing_a_deferred_asset_key_waits_and_uses_the_original_configuration() {
+    use incular_assets::{AssetBundle, AssetError, AssetLoadCallback};
+    use incular_image::AssetImage;
+    use std::sync::{Arc, Mutex, mpsc};
+
+    #[derive(Clone, Default)]
+    struct Deferred(Arc<Mutex<Option<AssetLoadCallback>>>);
+    impl AssetBundle for Deferred {
+        fn load(&self, _: &str) -> Result<Arc<[u8]>, AssetError> {
+            panic!("key lookup must use the original deferred manifest");
+        }
+        fn load_async(&self, key: &str, complete: AssetLoadCallback) {
+            assert_eq!(key, "AssetManifest.bin");
+            assert!(self.0.lock().unwrap().replace(complete).is_none());
+        }
+    }
+
+    let deferred = Deferred::default();
+    let source = AssetImage::new("test.png").bundle(Arc::new(deferred.clone()));
+    let resize = ResizeImage::new(source.clone(), Some(123), Some(321)).use_logical_size(true);
+    let config = ImageConfiguration::new().device_pixel_ratio(2.);
+    let (send, receive) = mpsc::channel();
+    resize.obtain_key_for(
+        &config,
+        |done| source.obtain_key(&config, done),
+        move |key| send.send(key).unwrap(),
+    );
+    assert!(matches!(receive.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    let complete = deferred.0.lock().unwrap().take().unwrap();
+    drop(config);
+    complete(Ok(empty_resize_manifest().into()));
+    let key = receive.try_recv().unwrap().unwrap();
+    assert_eq!(key.provider_key().name, "test.png");
+    assert_eq!(
+        (key.options().width, key.options().height),
+        (Some(246), Some(642))
+    );
+}

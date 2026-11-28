@@ -207,6 +207,18 @@ impl ResizeImage {
         }
     }
 
+    /// Requested width before density scaling, when supplied.
+    #[must_use]
+    pub const fn width(&self) -> Option<u32> {
+        self.options.width
+    }
+
+    /// Requested height before density scaling, when supplied.
+    #[must_use]
+    pub const fn height(&self) -> Option<u32> {
+        self.options.height
+    }
+
     #[must_use]
     pub fn allow_upscaling(mut self, value: bool) -> Self {
         self.options.allow_upscaling = value;
@@ -238,6 +250,25 @@ impl ResizeImage {
             provider_key,
             options: self.options.physical(configuration),
         }
+    }
+
+    /// Decorates a typed source-key lookup with this resize policy.
+    ///
+    /// The type-erased provider does not prescribe the source key type:
+    /// pass the concrete provider's own lookup, for example
+    /// `|complete| asset.obtain_key(configuration, complete)`. Inline
+    /// callbacks stay inline and deferred callbacks stay deferred. The
+    /// physical settings are captured before starting the lookup.
+    pub fn obtain_key_for<K: 'static, E: 'static>(
+        &self,
+        configuration: &ImageConfiguration,
+        obtain_source_key: impl FnOnce(Box<dyn FnOnce(Result<K, E>) + Send>),
+        complete: impl FnOnce(Result<ResizeImageKey<K>, E>) + Send + 'static,
+    ) {
+        let options = self.options.physical(configuration);
+        obtain_source_key(Box::new(move |result| {
+            complete(result.map(|provider_key| ResizeImageKey { provider_key, options }));
+        }));
     }
 
     /// Returns the original provider when neither cache dimension is set.

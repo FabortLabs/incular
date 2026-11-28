@@ -3868,3 +3868,8 @@ packages/flutter/test/rendering/paragraph_test.dart	607	locale setter	paired-mat
 packages/flutter/test/rendering/paragraph_test.dart	702	inline widgets multiline test	paired-match	upstream-paragraph-span-hits.md
 packages/flutter/test/rendering/paragraph_test.dart	894	Basic TextSpan Hit testing	paired-match	upstream-paragraph-span-hits.md
 packages/flutter/test/rendering/paragraph_test.dart	989	TextSpan Hit testing with text justification	paired-match	upstream-paragraph-span-hits.md
+packages/flutter/test/painting/image_provider_resize_image_test.dart	604	stores values	paired-match	upstream-resize-image.md#requested-bounds-and-source-key-callback-timing
+packages/flutter/test/painting/image_provider_resize_image_test.dart	619	takes one dim	paired-match	upstream-resize-image.md#requested-bounds-and-source-key-callback-timing
+packages/flutter/test/painting/image_provider_resize_image_test.dart	633	forms closure	paired-match	upstream-resize-image.md#requested-bounds-and-source-key-callback-timing
+packages/flutter/test/painting/image_provider_resize_image_test.dart	657	handles sync obtainKey	paired-match	upstream-resize-image.md#requested-bounds-and-source-key-callback-timing
+packages/flutter/test/painting/image_provider_resize_image_test.dart	673	handles async obtainKey	paired-match	upstream-resize-image.md#requested-bounds-and-source-key-callback-timing
