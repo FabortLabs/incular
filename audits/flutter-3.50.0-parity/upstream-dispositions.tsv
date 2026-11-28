@@ -4186,3 +4186,4 @@ packages/flutter/test/widgets/magnifier_test.dart	123	should immediately remove 
 packages/flutter/test/widgets/magnifier_test.dart	151	should update shown based on animation status	paired-match	upstream-editable-magnifier.md#magnifier-controller-lifecycle-and-ordering
 packages/flutter/test/widgets/magnifier_test.dart	205	should insert below below widget	paired-match	upstream-editable-magnifier.md#magnifier-controller-lifecycle-and-ordering
 packages/flutter/test/widgets/magnifier_test.dart	240	should insert newly built widget without animating out if overlay != null	paired-match	upstream-editable-magnifier.md#magnifier-controller-lifecycle-and-ordering
+packages/flutter/test/widgets/editable_text_test.dart	18939	Prevent last character visibility in obscure text when obscureText is toggled on mobile	partial-match	upstream-editable-focus-selection.md#obscuring-restored-on-a-focused-mobile-editor

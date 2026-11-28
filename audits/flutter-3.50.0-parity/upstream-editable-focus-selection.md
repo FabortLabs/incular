@@ -127,3 +127,18 @@ checks that autofocus is visible immediately after mounting, before layout.
 The first frame paints the configured caret. Unfocusing clears both the
 runtime and focus-node state and removes the caret without remounting or
 changing the text. All three focused runtime cases passed.
+
+## Obscuring restored on a focused mobile editor
+
+Pinned `widgets/editable_text_test.dart:18939` passed for iOS, Android,
+and Fuchsia. The mounted native iOS and Android-policy tests submit
+three successive real platform text updates. They compare actual
+paint glyphs through masked, plain, and masked-again frames. Every
+glyph is masked after restoring the option. The same field stays
+focused and the text and caret are unchanged.
+
+This is partial: Flutter briefly reveals the most recently inserted
+character on the tested mobile configurations until its timer expires,
+while Incular keeps every glyph masked during entry. The comparison
+does not introduce a temporary character reveal. All three focused
+native obscured-editor tests passed.
