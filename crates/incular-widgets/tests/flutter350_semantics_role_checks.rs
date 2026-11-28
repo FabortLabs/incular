@@ -381,3 +381,65 @@ fn textual_bounds_keep_the_original_annotation_and_project_valid_numeric_limits(
     );
     assert!(typed.debug_semantic_role_issues().is_empty());
 }
+
+#[test]
+fn menu_bar_must_have_content_and_is_a_valid_menu_item_ancestor() {
+    assert_eq!(
+        issues(Semantics::new(ExcludeSemantics::new(label())).role(Role::MenuBar)),
+        [(Role::MenuBar, Issue::EmptyMenuBar)]
+    );
+    for selected in [None, Some(false)] {
+        let mut item = Semantics::new(label()).role(Role::MenuItem).on_tap(|| {});
+        if let Some(selected) = selected {
+            item = item.selected(selected);
+        }
+        assert!(
+            issues(
+                Semantics::new(item)
+                    .role(Role::MenuBar)
+                    .explicit_child_nodes(true)
+            )
+            .is_empty()
+        );
+    }
+}
+
+#[test]
+fn checkable_menu_items_need_an_explicit_checked_state_and_menu_ancestor() {
+    for (role, missing, outside) in [
+        (
+            Role::MenuItemCheckbox,
+            Issue::MenuItemCheckboxWithoutCheckedState,
+            Issue::MenuItemCheckboxOutsideMenu,
+        ),
+        (
+            Role::MenuItemRadio,
+            Issue::MenuItemRadioWithoutCheckedState,
+            Issue::MenuItemRadioOutsideMenu,
+        ),
+    ] {
+        // A missing flag is reported first even when the ancestor is invalid.
+        assert_eq!(
+            issues(Semantics::new(ExcludeSemantics::new(label())).role(role)),
+            [(role, missing)]
+        );
+        assert_eq!(
+            issues(
+                Semantics::new(ExcludeSemantics::new(label()))
+                    .role(role)
+                    .checked(false)
+            ),
+            [(role, outside)]
+        );
+        for (ancestor, checked) in [(Role::Menu, true), (Role::MenuBar, false)] {
+            assert!(
+                issues(
+                    Semantics::new(Semantics::new(label()).role(role).checked(checked))
+                        .role(ancestor)
+                        .explicit_child_nodes(true)
+                )
+                .is_empty()
+            );
+        }
+    }
+}

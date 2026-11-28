@@ -1305,6 +1305,7 @@ fn map_role(role: Role, obscured: bool, input_type: SemanticsInputType) -> Acces
         Role::Switch => AccessKitRole::Switch,
         Role::Slider => AccessKitRole::Slider,
         Role::Menu => AccessKitRole::Menu,
+        Role::MenuBar => AccessKitRole::MenuBar,
         Role::Dialog => AccessKitRole::Dialog,
         Role::AlertDialog => AccessKitRole::AlertDialog,
         Role::Alert => AccessKitRole::Alert,
@@ -1318,6 +1319,8 @@ fn map_role(role: Role, obscured: bool, input_type: SemanticsInputType) -> Acces
         Role::TabList => AccessKitRole::TabList,
         Role::TabPanel => AccessKitRole::TabPanel,
         Role::MenuItem => AccessKitRole::MenuItem,
+        Role::MenuItemCheckbox => AccessKitRole::MenuItemCheckBox,
+        Role::MenuItemRadio => AccessKitRole::MenuItemRadio,
         Role::ProgressBar => AccessKitRole::ProgressIndicator,
         Role::Meter => AccessKitRole::Meter,
         Role::SearchField => AccessKitRole::SearchInput,
@@ -1337,6 +1340,8 @@ fn is_interactive_role(role: Role) -> bool {
             | Role::Link
             | Role::Tab
             | Role::MenuItem
+            | Role::MenuItemCheckbox
+            | Role::MenuItemRadio
             | Role::SearchField
     )
 }

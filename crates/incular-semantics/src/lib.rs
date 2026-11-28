@@ -90,6 +90,7 @@ pub enum Role {
     Switch,
     Slider,
     Menu,
+    MenuBar,
     Dialog,
     /// A modal alert that needs the user's attention.
     AlertDialog,
@@ -107,6 +108,8 @@ pub enum Role {
     TabList,
     TabPanel,
     MenuItem,
+    MenuItemCheckbox,
+    MenuItemRadio,
     ProgressBar,
     Meter,
     SearchField,

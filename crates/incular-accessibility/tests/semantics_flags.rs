@@ -147,3 +147,33 @@ fn selection_presence_updates_one_stable_native_node() {
         assert_eq!(node.is_selected(), declared);
     }
 }
+
+#[test]
+fn menu_bar_and_checkable_menu_items_keep_their_distinct_native_roles() {
+    use accesskit::Role as NativeRole;
+    assert_eq!(
+        project(Role::MenuBar, SemanticState::default()).role(),
+        NativeRole::MenuBar
+    );
+    for (role, expected, checked) in [
+        (Role::MenuItemCheckbox, NativeRole::MenuItemCheckBox, false),
+        (Role::MenuItemRadio, NativeRole::MenuItemRadio, true),
+    ] {
+        let node = project(
+            role,
+            SemanticState {
+                checked: Some(checked.into()),
+                ..SemanticState::default()
+            },
+        );
+        assert_eq!(node.role(), expected);
+        assert_eq!(
+            node.toggled(),
+            Some(if checked {
+                Toggled::True
+            } else {
+                Toggled::False
+            })
+        );
+    }
+}

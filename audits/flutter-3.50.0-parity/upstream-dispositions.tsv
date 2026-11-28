@@ -4490,3 +4490,14 @@ packages/flutter/test/widgets/semantics_role_checks_test.dart	1377	failure case,
 packages/flutter/test/widgets/semantics_role_checks_test.dart	1396	success case	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
 packages/flutter/test/widgets/semantics_role_checks_test.dart	1412	success case with percentage format	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
 packages/flutter/test/widgets/semantics_role_checks_test.dart	1428	failure case, percentage value out of range	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	357	failure case, empty child	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	373	Success case	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	428	Success case with menuBar as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	448	failure case, no checked flag	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	464	failure case, no menu or menuBar as its ancestor	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	481	Success case with menu as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	500	Success case with menuBar as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	521	failure case, no checked flag	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	537	failure case, no menu or menuBar as its ancestor	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	554	Success case with menu as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	573	Success case with menuBar as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items

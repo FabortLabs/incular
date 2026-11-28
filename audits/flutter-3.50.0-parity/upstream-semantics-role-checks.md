@@ -47,3 +47,17 @@ strings. Non-finite values are not published as numeric bounds.
 All 20 selected originals and 33 targeted native tests passed.
 The typed report's language-specific diagnostics are not compared
 as string snapshots.
+
+## Menu bars and checkable menu items
+
+The 11 paired originals at 357, 373, 428, 448, 464, 481, 500, 521,
+537, 554, and 573 verify that menu bars cannot be empty, and that
+ordinary menu items accept either a menu or a menu bar ancestor.
+Checkbox and radio menu items require a real declared checked state
+(explicit false counts) before their ancestry is checked. A native
+AccessKit projection regression verifies distinct roles and toggled
+flags. Browser ARIA mappings were added, but browser execution is
+not claimed by this native test slice.
+
+All 11 selected originals, 11 focused native widget tests, and 6
+AccessKit flag tests passed.

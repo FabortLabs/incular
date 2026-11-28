@@ -1878,6 +1878,7 @@ fn semantic_role_name(role: SemanticRole) -> &'static str {
         SemanticRole::Switch => "switch",
         SemanticRole::Slider => "slider",
         SemanticRole::Menu => "menu",
+        SemanticRole::MenuBar => "menu bar",
         SemanticRole::Dialog => "dialog",
         SemanticRole::AlertDialog => "alert dialog",
         SemanticRole::Alert => "alert",
@@ -1891,6 +1892,8 @@ fn semantic_role_name(role: SemanticRole) -> &'static str {
         SemanticRole::TabList => "tab list",
         SemanticRole::TabPanel => "tab panel",
         SemanticRole::MenuItem => "menu item",
+        SemanticRole::MenuItemCheckbox => "menu item checkbox",
+        SemanticRole::MenuItemRadio => "menu item radio",
         SemanticRole::ProgressBar => "progress bar",
         SemanticRole::Meter => "meter",
         SemanticRole::SearchField => "search field",
@@ -1910,6 +1913,8 @@ fn semantic_role_is_interactive(role: SemanticRole) -> bool {
             | SemanticRole::Link
             | SemanticRole::Tab
             | SemanticRole::MenuItem
+            | SemanticRole::MenuItemCheckbox
+            | SemanticRole::MenuItemRadio
             | SemanticRole::SearchField
     )
 }

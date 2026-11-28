@@ -11,7 +11,12 @@ pub enum SemanticRoleIssueKind {
     EmptyTabList,
     TabListWithNonTabChild,
     EmptyMenu,
+    EmptyMenuBar,
     MenuItemOutsideMenu,
+    MenuItemCheckboxWithoutCheckedState,
+    MenuItemCheckboxOutsideMenu,
+    MenuItemRadioWithoutCheckedState,
+    MenuItemRadioOutsideMenu,
     LiveAlertOrStatus,
     ProgressBarMissingValueOrBounds,
     SliderMissingValue,
@@ -32,6 +37,15 @@ impl fmt::Display for SemanticRoleIssueKind {
             Self::EmptyTabList => "a TabBar cannot be empty",
             Self::TabListWithNonTabChild => "Children of TabBar must have the tab role",
             Self::EmptyMenu => "a menu cannot be empty",
+            Self::EmptyMenuBar => "a menu bar cannot be empty",
+            Self::MenuItemCheckboxWithoutCheckedState => "a menu item checkbox must be checkable",
+            Self::MenuItemCheckboxOutsideMenu => {
+                "A menu item checkbox must be a child of a menu or a menu bar"
+            }
+            Self::MenuItemRadioWithoutCheckedState => "a menu item radio must be checkable",
+            Self::MenuItemRadioOutsideMenu => {
+                "A menu item radio must be a child of a menu or a menu bar"
+            }
             Self::MenuItemOutsideMenu => "A menu item must be a child of a menu or a menu bar",
             Self::LiveAlertOrStatus => "An alert or status node cannot also be a live region",
             Self::ProgressBarMissingValueOrBounds => {
@@ -106,7 +120,16 @@ impl SemanticsTree {
                     Some(TabListWithNonTabChild)
                 }
                 Role::Menu if node.children.is_empty() => Some(EmptyMenu),
+                Role::MenuBar if node.children.is_empty() => Some(EmptyMenuBar),
                 Role::MenuItem if !has_menu => Some(MenuItemOutsideMenu),
+                Role::MenuItemCheckbox if node.state.checked.is_none() => {
+                    Some(MenuItemCheckboxWithoutCheckedState)
+                }
+                Role::MenuItemCheckbox if !has_menu => Some(MenuItemCheckboxOutsideMenu),
+                Role::MenuItemRadio if node.state.checked.is_none() => {
+                    Some(MenuItemRadioWithoutCheckedState)
+                }
+                Role::MenuItemRadio if !has_menu => Some(MenuItemRadioOutsideMenu),
                 Role::Alert | Role::Status if node.state.live_region => Some(LiveAlertOrStatus),
                 Role::Slider | Role::ProgressBar => range_issue(node),
                 _ => None,
@@ -118,7 +141,7 @@ impl SemanticsTree {
                     kind,
                 });
             }
-            let has_menu = has_menu || node.role == Role::Menu;
+            let has_menu = has_menu || matches!(node.role, Role::Menu | Role::MenuBar);
             work.extend(
                 node.children
                     .iter()

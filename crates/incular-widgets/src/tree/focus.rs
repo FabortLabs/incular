@@ -1612,7 +1612,10 @@ impl WidgetTree {
                 return false;
             };
             if let Some(explicit) = entry.widget.semantic_properties().explicit.as_ref() {
-                return explicit.role == SemanticRole::MenuItem;
+                return matches!(
+                    explicit.role,
+                    SemanticRole::MenuItem | SemanticRole::MenuItemCheckbox | SemanticRole::MenuItemRadio
+                );
             }
             let Some(parent) = entry.parent else {
                 return false;
