@@ -4052,3 +4052,5 @@ packages/flutter/test/widgets/basic_test.dart	1537	can toggle the ignoring.	pair
 packages/flutter/test/widgets/basic_test.dart	1611	ignores user interactions	paired-match	upstream-box-block-user-actions.md
 packages/flutter/test/widgets/basic_test.dart	1635	AbsorbPointer absorbs pointers	paired-match	upstream-box-block-user-actions.md
 packages/flutter/test/widgets/basic_test.dart	1732	Wrap implements debugFillProperties	paired-match	upstream-wrap-geometry-comparisons.md
+packages/flutter/test/widgets/focus_scope_test.dart	128	Can move focus in and out of FocusScope	partial-match	upstream-focus-detach-history.md
+packages/flutter/test/widgets/focus_scope_test.dart	1331	Nodes are removed when all Focuses are removed.	partial-match	upstream-focus-detach-history.md

@@ -92,3 +92,22 @@ Flutter's test button uses. Real keyboard down/up inputs focus the first
 enabled control and cross the group containing only disabled controls
 in one further Tab press. No disabled node takes focus. All 33 selected
 native checks passed.
+
+## Moving or removing the whole focused branch
+
+Pinned widget originals `focus_scope_test.dart:128,1331` passed.
+The native fixture gives the first scope primary focus, focuses its
+child explicitly, then selects the second empty scope. Moving the
+globally keyed child into the second scope and back preserves its
+identity and updates its parent link without stealing focus. Removing
+both an active Focus and its owning FocusScope clears primary focus,
+the retained parent and descendant links, and the scope's remembered
+child.
+
+These cases remain partial. Incular's scope-level autofocus by design
+finds the first traversal stop, so the test requests the shell scope
+itself rather than relying on that convenience. The second scope is
+selected after mounting it, not via Flutter's early FocusAttachment.
+The native runtime's host focus tree also does not use the same two
+synthetic root descendants or diagnostic text as Flutter. All ten
+focused ancestry and removal checks passed.
