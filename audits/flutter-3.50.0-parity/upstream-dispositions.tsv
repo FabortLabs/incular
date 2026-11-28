@@ -4305,3 +4305,15 @@ packages/flutter/test/widgets/interactive_viewer_test.dart	874	Scaling amount is
 packages/flutter/test/widgets/interactive_viewer_test.dart	906	onInteraction can be used to get scene point	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom
 packages/flutter/test/widgets/interactive_viewer_test.dart	1579	discrete scale pointer event	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom
 packages/flutter/test/services/hardware_keyboard_test.dart	139	KeyboardManager synthesizes modifier keys in rawKeyData mode	partial-match	upstream-raw-keyboard.md#raw-only-modifier-projection-into-hardware-callbacks
+packages/flutter/test/services/raw_keyboard_test.dart	1171	modifier keys are recognized individually	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1204	modifier keys are recognized when combined	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1249	Printable keyboard keys are correctly translated	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1268	Control keyboard keys are correctly translated	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1285	Modifier keyboard keys are correctly translated	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1303	DPAD keys from a joystick give physical key mappings	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1321	Arrow keys from a keyboard give correct physical key mappings	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1338	DPAD center from a game pad gives physical key mappings	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1356	Device id is read from message	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1372	Repeat count is passed correctly	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1436	data.toString	partial-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1458	data.equality	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields

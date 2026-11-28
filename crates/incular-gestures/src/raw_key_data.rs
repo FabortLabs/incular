@@ -13,10 +13,14 @@ mod web;
 #[path = "raw_key_windows.rs"]
 mod windows;
 pub use windows::WindowsRawKeyData;
+#[path = "raw_key_android.rs"]
+mod android;
+pub use android::AndroidRawKeyData;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RawKeyPlatformData {
+    Android(AndroidRawKeyData),
     Fuchsia(FuchsiaRawKeyData),
     Web(WebRawKeyData),
     Windows(WindowsRawKeyData),
@@ -324,4 +328,33 @@ fn web_key_for_code(code: &str) -> u64 {
         (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
     });
     LogicalKeyboardKey::WEB_PLANE + 1 + u64::from(hash & 0x1fff_ffff)
+}
+
+fn lookup_numeric<T: Copy>(table: &[(u32, T)], value: u32) -> Option<T> {
+    let index = table.binary_search_by_key(&value, |row| row.0).ok()?;
+    Some(table[index].1)
+}
+
+fn portable_hid(hid: u64) -> (Code, Location) {
+    let index = u32::try_from(hid).ok().and_then(|hid| {
+        fuchsia::PHYSICAL
+            .binary_search_by_key(&hid, |row| row.0)
+            .ok()
+    });
+    index.map_or((Code::Unidentified, Location::Standard), |index| {
+        let (_, _, code, location) = fuchsia::PHYSICAL[index];
+        (code, location)
+    })
+}
+
+fn portable_named(name: &str) -> Option<KeyboardKey> {
+    let name = match name {
+        "ShiftLeft" | "ShiftRight" => "Shift",
+        "ControlLeft" | "ControlRight" => "Control",
+        "AltLeft" | "AltRight" => "Alt",
+        "MetaLeft" | "MetaRight" => "Meta",
+        "NumpadEnter" => "Enter",
+        name => name,
+    };
+    name.parse().ok().map(KeyboardKey::Named)
 }

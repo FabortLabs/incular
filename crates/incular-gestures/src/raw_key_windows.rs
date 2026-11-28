@@ -1,10 +1,11 @@
 //! Numeric identities and flags in Flutter's legacy Win32 keyboard packet.
 
-use incular_core::{
-    Code, KeyState, KeyboardEvent, KeyboardKey, Location, LogicalKeyboardKey, Modifiers, NamedKey,
-};
+use incular_core::{KeyState, KeyboardEvent, KeyboardKey, LogicalKeyboardKey, Modifiers};
 
-use super::{RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide, fuchsia};
+use super::{
+    RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide, lookup_numeric as lookup,
+    portable_hid, portable_named,
+};
 use crate::RawKeyEvent;
 
 #[path = "raw_key_windows_catalog.rs"]
@@ -104,31 +105,14 @@ impl WindowsRawKeyData {
     /// remains on the ordinary portable keyboard path.
     #[must_use]
     pub fn into_event(self, state: KeyState, repeat: bool) -> RawKeyEvent {
-        let (code, location) = lookup(catalog::PHYSICAL, self.scan_code)
-            .and_then(|hid| {
-                fuchsia::PHYSICAL
-                    .binary_search_by_key(&hid, |row| row.0)
-                    .ok()
-            })
-            .map_or((Code::Unidentified, Location::Standard), |index| {
-                let (_, _, code, location) = fuchsia::PHYSICAL[index];
-                (code, location)
-            });
+        let (code, location) = portable_hid(self.flutter_physical_key_id());
         let id = self.flutter_logical_key();
         let key = char::from_u32(u32::try_from(id.key_id()).unwrap_or(u32::MAX))
             .or_else(|| self.printable_label())
             .map(|ch| KeyboardKey::Character(ch.to_string()))
             .or_else(|| {
                 let (_, name) = lookup(catalog::LOGICAL, self.key_code)?;
-                let portable = match name {
-                    "ShiftLeft" | "ShiftRight" => "Shift",
-                    "ControlLeft" | "ControlRight" => "Control",
-                    "AltLeft" | "AltRight" => "Alt",
-                    "MetaLeft" | "MetaRight" => "Meta",
-                    "NumpadEnter" => "Enter",
-                    _ => name,
-                };
-                portable.parse::<NamedKey>().ok().map(KeyboardKey::Named)
+                portable_named(name)
             })
             .unwrap_or_default();
         let mut modifiers = Modifiers::empty();
@@ -163,9 +147,4 @@ impl WindowsRawKeyData {
     fn printable_label(self) -> Option<char> {
         self.key_label().filter(|ch| !ch.is_control())
     }
-}
-
-fn lookup<T: Copy>(table: &[(u32, T)], value: u32) -> Option<T> {
-    let index = table.binary_search_by_key(&value, |row| row.0).ok()?;
-    Some(table[index].1)
 }

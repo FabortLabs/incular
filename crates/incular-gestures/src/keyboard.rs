@@ -31,6 +31,7 @@ pub type FocusKeyEventHandler = Rc<dyn Fn(&crate::FocusNode, KeyboardEvent) -> K
 pub struct RawKeyEvent {
     portable: KeyboardEvent,
     data: Option<Rc<crate::RawKeyPlatformData>>,
+    android_character: Option<Rc<str>>,
 }
 
 impl RawKeyEvent {
@@ -42,6 +43,18 @@ impl RawKeyEvent {
         Self {
             portable,
             data: Some(Rc::new(data)),
+            android_character: None,
+        }
+    }
+
+    pub(crate) fn with_android_platform_data(
+        portable: KeyboardEvent,
+        data: crate::RawKeyPlatformData,
+        character: Option<String>,
+    ) -> Self {
+        Self {
+            android_character: character.map(Rc::from),
+            ..Self::with_platform_data(portable, data)
         }
     }
 
@@ -77,6 +90,9 @@ impl RawKeyEvent {
             return None;
         }
         match self.data() {
+            Some(crate::RawKeyPlatformData::Android(_)) => {
+                self.android_character.as_deref().map(Cow::Borrowed)
+            }
             Some(crate::RawKeyPlatformData::Fuchsia(data)) => {
                 data.key_label().map(|ch| Cow::Owned(ch.to_string()))
             }
@@ -108,6 +124,7 @@ impl From<KeyboardEvent> for RawKeyEvent {
         Self {
             portable,
             data: None,
+            android_character: None,
         }
     }
 }
