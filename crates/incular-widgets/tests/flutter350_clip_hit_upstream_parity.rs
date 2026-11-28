@@ -54,7 +54,7 @@ fn rounded_clip_state(tree: &WidgetTree, key: &Key) -> (CornerRadii, Option<Text
             radius,
             text_direction,
             ..
-        }) => (*radius, *text_direction),
+        }) => (radius.to_corner_radii(), *text_direction),
         other => panic!("expected rounded clip, got {other:?}"),
     }
 }

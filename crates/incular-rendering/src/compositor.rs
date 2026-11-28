@@ -442,6 +442,13 @@ fn annotation_rect_contains(rect: Rect, point: Offset) -> bool {
         && point.y < rect.origin.y + rect.size.height
 }
 
+/// The renderer's circular fast path or a path preserving two-axis corners.
+#[doc(hidden)]
+pub enum RoundedClipGeometry {
+    Circular(RRect),
+    Elliptical(Arc<Path>),
+}
+
 #[derive(Clone, Debug)]
 pub enum LayerKind {
     Picture {
@@ -1514,6 +1521,50 @@ impl LayerTree {
         self.diagnostics.clip_updates += 1;
         true
     }
+    /// Updates a rounded clip on the same layer even if its representation
+    /// changes between the circular fast path and elliptical path.
+    #[doc(hidden)]
+    pub fn update_rounded_clip(
+        &mut self,
+        id: LayerId,
+        geometry: RoundedClipGeometry,
+        coverage: ClipCoverage,
+    ) -> bool {
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return false;
+        };
+        let same_geometry = match (&mut layer.kind, &geometry) {
+            (LayerKind::ClipRRect { rrect, coverage: current }, RoundedClipGeometry::Circular(next)) =>
+                (*rrect == *next).then_some(current),
+            (
+                LayerKind::ClipPath { path, fill_rule: FillRule::NonZero, coverage: current },
+                RoundedClipGeometry::Elliptical(next),
+            ) => (Arc::ptr_eq(path, next) || path.as_ref() == next.as_ref()).then_some(current),
+            (LayerKind::ClipRRect { .. } | LayerKind::ClipPath { .. }, _) => None,
+            _ => return false,
+        };
+        if let Some(current) = same_geometry {
+            if *current == coverage {
+                return false;
+            }
+            *current = coverage;
+        } else {
+            layer.kind = match geometry {
+                RoundedClipGeometry::Circular(rrect) => LayerKind::ClipRRect { rrect, coverage },
+                RoundedClipGeometry::Elliptical(path) => LayerKind::ClipPath {
+                    path,
+                    fill_rule: FillRule::NonZero,
+                    coverage,
+                },
+            };
+            layer.clip_cache = None;
+        }
+        layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
+        self.diagnostics.clip_updates += 1;
+        true
+    }
+
     /// Reuses the retained clip geometry (including any fallback path) when
     /// only its coverage and composition policy changes.
     pub fn update_clip_rrect_coverage(&mut self, id: LayerId, coverage: ClipCoverage) -> bool {

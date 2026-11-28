@@ -285,6 +285,12 @@ impl BorderRadius {
         EllipticalRoundedRect { rect, radii: self }
     }
 
+    pub(crate) fn has_elliptical_corners(self) -> bool {
+        [self.top_left, self.top_right, self.bottom_right, self.bottom_left]
+            .iter()
+            .any(|radius| radius.x != radius.y)
+    }
+
     #[must_use]
     pub fn to_corner_radii(self) -> CornerRadii {
         CornerRadii {
@@ -293,6 +299,29 @@ impl BorderRadius {
             bottom_right: self.bottom_right.x,
             bottom_left: self.bottom_left.x,
         }
+    }
+}
+
+impl From<CornerRadii> for BorderRadius {
+    fn from(radii: CornerRadii) -> Self {
+        Self::only(
+            Radius::circular(radii.top_left),
+            Radius::circular(radii.top_right),
+            Radius::circular(radii.bottom_right),
+            Radius::circular(radii.bottom_left),
+        )
+    }
+}
+
+impl From<Radius> for BorderRadius {
+    fn from(radius: Radius) -> Self {
+        Self::all(radius)
+    }
+}
+
+impl From<f32> for BorderRadius {
+    fn from(radius: f32) -> Self {
+        Self::circular(radius)
     }
 }
 

@@ -833,7 +833,7 @@ pub enum RenderKind {
         clipper: Option<crate::layout::ClipDelegate>,
     },
     ClipRRect {
-        radius: CornerRadii,
+        radius: crate::BorderRadius,
         text_direction: Option<TextDirection>,
         clip_behavior: Clip,
         clipper: Option<crate::layout::ClipDelegate>,

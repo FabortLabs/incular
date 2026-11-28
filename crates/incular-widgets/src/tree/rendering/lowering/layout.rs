@@ -273,9 +273,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         } => {
             let text_direction = directional_radius.and_then(|_| context.depend::<TextDirection>());
             let radius = directional_radius.map_or(*radius, |value| {
-                value
-                    .resolve(text_direction.unwrap_or(TextDirection::Ltr))
-                    .to_corner_radii()
+                value.resolve(text_direction.unwrap_or(TextDirection::Ltr))
             });
             RenderKind::ClipRRect {
                 radius,

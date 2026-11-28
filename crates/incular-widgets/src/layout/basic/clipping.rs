@@ -7,10 +7,10 @@ use std::sync::Arc;
 use incular_config::Clip;
 use incular_core::reactivity::ReactiveCell;
 use incular_core::{Offset, Rect, Size};
-use incular_rendering::{CornerRadii, Path, RRect};
+use incular_rendering::{Path, RRect};
 use typed_builder::TypedBuilder;
 
-use crate::{Widget, WidgetKind, macros::widget_from_kind};
+use crate::{BorderRadius, Widget, WidgetKind, macros::widget_from_kind};
 
 /// The geometry a [`CustomClipper`] resolves for a laid-out size, in the
 /// clipped box's local coordinates.
@@ -276,7 +276,7 @@ widget_from_kind!(ClipRect => ClipRect { clip_behavior, clipper, child });
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct ClipRRect {
     #[builder(default, setter(into))]
-    radius: CornerRadii,
+    radius: BorderRadius,
     #[builder(default, setter(strip_option))]
     directional_radius: Option<crate::BorderRadiusDirectional>,
     #[builder(default = Clip::AntiAlias)]
@@ -288,9 +288,9 @@ pub struct ClipRRect {
 }
 
 impl ClipRRect {
-    /// Creates a ClipRRect with uniform or corner radii.
+    /// Creates a ClipRRect with circular or independent two-axis corner radii.
     #[must_use]
-    pub fn new(radius: impl Into<CornerRadii>, child: impl Into<Widget>) -> Self {
+    pub fn new(radius: impl Into<BorderRadius>, child: impl Into<Widget>) -> Self {
         Self {
             radius: radius.into(),
             directional_radius: None,

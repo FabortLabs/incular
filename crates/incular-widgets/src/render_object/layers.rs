@@ -2,7 +2,7 @@ use incular_config::Clip;
 use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
 use incular_rendering::{
     Brush, CornerRadii, DisplayList, DropShadowEffect, FillRule, FollowerLayer, GaussianBlur,
-    LayerId, LayerTree, Path, RRect,
+    LayerId, LayerTree, Path, RRect, RoundedClipGeometry,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -1330,11 +1330,18 @@ fn clip_geometry(kind: &RenderKind, size: Size) -> Option<ClipGeometry> {
         ),
         RenderKind::ClipRRect {
             radius, clipper, ..
-        } => ClipGeometry::RRect(match clipper.as_ref().map(|clipper| clipper.clip(size)) {
-            None => RRect::new(bounds, *radius),
-            Some(ClipShape::RRect(rrect)) => rrect,
-            Some(shape) => RRect::new(shape.bounds(), *radius),
-        }),
+        } => {
+            let bounds = match clipper.as_ref().map(|clipper| clipper.clip(size)) {
+                None => bounds,
+                Some(ClipShape::RRect(rrect)) => return Some(ClipGeometry::RRect(rrect)),
+                Some(shape) => shape.bounds(),
+            };
+            if radius.has_elliptical_corners() {
+                ClipGeometry::Path(Arc::new(radius.to_rounded_rect(bounds).to_path()))
+            } else {
+                ClipGeometry::RRect(RRect::new(bounds, radius.to_corner_radii()))
+            }
+        }
         RenderKind::ClipOval { clipper, .. } => ClipGeometry::Oval(
             clipper
                 .as_ref()
@@ -1644,13 +1651,23 @@ impl RenderLayers {
         let LayerAttachment::Clip { clip, .. } = &self.attachment else {
             return;
         };
+        if let RenderKind::ClipRRect { clip_behavior, .. } = kind {
+            if let Some(cache) = &self.clip_geometry
+                && let Some(geometry) = cached_clip(&mut cache.borrow_mut(), kind, size)
+            {
+                let rounded = match geometry {
+                    ClipGeometry::RRect(rrect) => RoundedClipGeometry::Circular(*rrect),
+                    ClipGeometry::Path(path) => RoundedClipGeometry::Elliptical(path.clone()),
+                    _ => unreachable!("a rounded clip resolves to a rounded rectangle or path"),
+                };
+                compositor.update_rounded_clip(*clip, rounded, shape_clip_coverage(*clip_behavior));
+            }
+            return;
+        }
         // A coverage change does not recalculate cached clipper geometry.
         match kind {
             RenderKind::ClipRect { clip_behavior, .. } => {
                 compositor.update_clip_rect_coverage(*clip, shape_clip_coverage(*clip_behavior));
-            }
-            RenderKind::ClipRRect { clip_behavior, .. } => {
-                compositor.update_clip_rrect_coverage(*clip, shape_clip_coverage(*clip_behavior));
             }
             RenderKind::ClipOval { clip_behavior, .. } => {
                 compositor.update_clip_oval_coverage(*clip, shape_clip_coverage(*clip_behavior));
