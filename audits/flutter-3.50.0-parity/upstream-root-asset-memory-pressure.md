@@ -43,3 +43,24 @@ does re-insert a late parsed structured result. Incular deliberately
 does not copy that stale-cache behavior. Ten focused native cases
 and four authored Flutter checks passed. The authored checks do not
 change the original-case count.
+
+## Evicting a replaced asset
+
+The exact pinned `painting/binding_test.dart:36` original passed.
+Incular's application asset eviction releases cached values for the
+named root-bundle asset and clears both retained and live decoded-image
+tracking. The native test also covers memory providers, preserves an
+unrelated cached root string, keeps an already observed image's pixels
+valid, and verifies a later lookup decodes a new handle. All six focused
+native application-asset tests passed.
+
+## Reference-only binding cases
+
+Pinned `painting/binding_test.dart:46` confirms the Flutter engine's
+global ShaderWarmUp hook is absent by default. There is no equivalent
+public hook on Incular's wgpu renderer. Pinned
+`painting/image_cache_binding_test.dart:15` confirms Flutter buffers a
+pre-initialization system channel message and delivers it in a later
+microtask, after the image cache is ready. The current native host
+delivers memory warnings to an already constructed application; the
+exact early-message/microtask ordering has not been paired.

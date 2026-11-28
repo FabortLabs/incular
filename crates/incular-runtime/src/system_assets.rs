@@ -2,7 +2,10 @@
 
 use crate::Application;
 use incular_assets::root_asset_bundle;
-use incular_image::{clear_shared_bundle_image_cache, clear_shared_memory_image_cache};
+use incular_image::{
+    clear_shared_bundle_image_cache, clear_shared_bundle_live_images,
+    clear_shared_memory_image_cache,
+};
 
 #[derive(serde::Deserialize)]
 struct SystemNotice {
@@ -18,6 +21,16 @@ impl Application {
         root_asset_bundle().clear();
         clear_shared_bundle_image_cache();
         clear_shared_memory_image_cache();
+    }
+
+    /// Evicts a replaced root-bundle asset and clears both retained and
+    /// live decoded-image tracking, as Flutter's painting binding does.
+    /// Mounted consumers keep their existing handles until they resolve again.
+    pub fn evict_asset(&self, asset: &str) {
+        root_asset_bundle().evict(asset);
+        clear_shared_bundle_image_cache();
+        clear_shared_memory_image_cache();
+        clear_shared_bundle_live_images();
     }
 
     /// Handles the Flutter-compatible JSON system notifications for memory

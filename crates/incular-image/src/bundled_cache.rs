@@ -152,6 +152,16 @@ pub fn clear_shared_bundle_image_cache() {
     });
 }
 
+/// Stops tracking this UI thread's live bundle streams without canceling
+/// image consumers. An unused cache is not initialized to clear it.
+pub fn clear_shared_bundle_live_images() {
+    SHARED.with(|slot| {
+        if let Some(cache) = slot.get() {
+            cache.clear_live_images();
+        }
+    });
+}
+
 /// Cached decoded images, kept by exact bundle identity, physical key and
 /// scale. Counts retained decoded pixel bytes, not temporary codec buffers.
 /// A cache hit never rereads or copies encoded bytes.

@@ -189,7 +189,6 @@ fn memory_pressure_evicts_decoded_bundle_images_without_dropping_live_pixels() {
     cache.clear();
 }
 
-
 #[test]
 fn memory_pressure_evicts_the_shared_memory_provider_without_invalidating_its_stream() {
     use incular_image::{
@@ -218,4 +217,61 @@ fn memory_pressure_evicts_the_shared_memory_provider_without_invalidating_its_st
     assert_ne!(first.id(), second.id());
     assert_eq!(first.decoded().pixels(), second.decoded().pixels());
     clear_shared_memory_image_cache();
+}
+
+#[test]
+fn evicting_a_root_asset_clears_live_and_retained_images_without_dropping_consumers() {
+    use incular_assets::MemoryAssetBundle;
+    use incular_image::{
+        AssetBundleImageKey, ImageAssetBundle, ImageConfiguration, ImageLoadState, ImageProvider,
+        ImageStreamListener, MemoryImage, shared_bundle_image_cache,
+    };
+    use std::rc::Rc;
+
+    const PNG: &[u8] = include_bytes!(
+        "../../../audits/flutter-3.50.0-parity/reference-probes/fixtures/decode_cache_8x8.png"
+    );
+    let source = CountingBundle::default();
+    let root = Arc::new(CachingAssetBundle::new(source.clone()));
+    let _root = Override::install(root.clone());
+    let app = Application::new(|_| leaf()).unwrap();
+    for _ in 0..2 {
+        assert_eq!(&*root.load_string("changed", true).unwrap(), "changed");
+        assert_eq!(&*root.load_string("unrelated", true).unwrap(), "unrelated");
+    }
+    assert_eq!(source.reads(), 2);
+
+    let cache = shared_bundle_image_cache();
+    cache.clear();
+    cache.clear_live_images();
+    let bundle = ImageAssetBundle::new(Arc::new(MemoryAssetBundle::new().with("icon.png", PNG)));
+    let key = AssetBundleImageKey::new(bundle, "icon.png", 1.);
+    let old = cache.load(&key).unwrap();
+    let viewed = cache.resolve_stream(key.clone());
+    let _listener = viewed.listen(ImageStreamListener::new(Rc::new(|_, _| {})));
+    assert!(cache.status_for_key(&key).live);
+    assert_eq!(cache.retained(), (1, 256));
+
+    let memory = MemoryImage::new(PNG);
+    let config = ImageConfiguration::empty();
+    let _memory_view = memory.resolve(&config);
+    assert!(memory.resolve_cached(&config, None).is_some());
+
+    app.evict_asset("changed");
+    assert!(memory.resolve_cached(&config, None).is_none());
+    assert_eq!(cache.status_for_key(&key), Default::default());
+    assert_eq!(cache.retained(), (0, 0));
+    assert_eq!(viewed.state(), ImageLoadState::Ready(old.clone()));
+    assert_eq!(old.decoded().pixels()[..4], [28, 94, 193, 255]);
+    assert_ne!(cache.load(&key).unwrap().id(), old.id());
+
+    assert_eq!(&*root.load_string("unrelated", true).unwrap(), "unrelated");
+    assert_eq!(
+        source.reads(),
+        2,
+        "an unrelated cached string is not evicted"
+    );
+    assert_eq!(&*root.load_string("changed", true).unwrap(), "changed");
+    assert_eq!(source.reads(), 3);
+    cache.clear();
 }

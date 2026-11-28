@@ -19,7 +19,7 @@ pub use asset_image::{
 
 pub use bundled_cache::{
     BundleImageCache, BundleImageCacheStatus, clear_shared_bundle_image_cache,
-    shared_bundle_image_cache,
+    clear_shared_bundle_live_images, shared_bundle_image_cache,
 };
 
 pub use info::ImageInfo;
