@@ -1261,6 +1261,7 @@ pub struct EditableText {
     renderer_ignores_pointer: bool,
     context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
     selection_handles_builder: Option<crate::TextSelectionHandlesBuilder>,
+    on_selection_handle_tapped: Option<Rc<dyn Fn()>>,
     magnifier_configuration: crate::TextMagnifierConfiguration,
     collapsed_selection_handle_layout: Option<crate::TextSelectionHandleLayout>,
     edit_transform: Option<super::specs::EditTransform>,
@@ -1351,6 +1352,7 @@ impl EditableText {
             renderer_ignores_pointer: false,
             context_menu_builder: None,
             selection_handles_builder: None,
+            on_selection_handle_tapped: None,
             magnifier_configuration: crate::TextMagnifierConfiguration::disabled(),
             collapsed_selection_handle_layout: None,
             edit_transform: None,
@@ -1431,6 +1433,14 @@ impl EditableText {
     #[must_use]
     pub fn select_all_on_focus(mut self, select: bool) -> Self {
         self.select_all_on_focus = Some(select);
+        self
+    }
+
+    /// Handles taps on the collapsed selection knob. The editor keeps
+    /// the callback current when the widget is rebuilt.
+    #[must_use]
+    pub fn on_selection_handle_tapped(mut self, callback: impl Fn() + 'static) -> Self {
+        self.on_selection_handle_tapped = Some(Rc::new(callback));
         self
     }
 
@@ -2263,6 +2273,7 @@ impl From<EditableText> for Widget {
             legacy_selection_controls,
             toolbar_options: value.toolbar_options,
             selection_handles: None,
+            on_selection_handle_tapped: value.on_selection_handle_tapped,
             text_magnifier: None,
             spell_check: value.spell_check,
             stylus_handwriting_enabled: value.stylus_handwriting_enabled,

@@ -570,6 +570,7 @@ pub struct TextFieldSpec {
     pub(crate) on_submit: Option<Rc<dyn Fn(String)>>,
     pub(crate) on_tap_outside: Option<EditableOutsideTap>,
     pub(crate) on_tap_up_outside: Option<EditableOutsideTap>,
+    pub(crate) on_selection_handle_tapped: Option<Rc<dyn Fn()>>,
     pub(crate) on_app_private_command: Option<AppPrivateCommandCallback>,
     pub(crate) content_insertion: Option<crate::ContentInsertionConfiguration>,
     pub(crate) multiline: bool,

@@ -442,3 +442,78 @@ fn a_toolbar_is_not_restored_while_device_padding_hides_its_selection() {
             .is_some()
     );
 }
+
+#[test]
+fn a_retained_handle_uses_the_latest_tap_callback_without_treating_a_drag_as_a_tap() {
+    use incular_config::Alignment;
+    use incular_widgets::{Align, FocusNode};
+    use std::{cell::Cell, rc::Rc};
+
+    let controller = TextEditingController::new();
+    let focus = FocusNode::new();
+    let count = Rc::new(Cell::new(0));
+    let build = |with_callback| {
+        let mut editor = EditableText::new(controller.clone())
+            .focus_node(focus.clone())
+            .text_direction(TextDirection::Ltr)
+            .max_lines(Some(10))
+            .selection_handles_builder(|_, _| SizedBox::shrink().into());
+        if with_callback {
+            let count = count.clone();
+            editor = editor.on_selection_handle_tapped(move || count.set(count.get() + 1));
+        }
+        Widget::from(Align::new(Alignment::TOP_LEFT, editor))
+    };
+    let mut runtime = Runtime::new(build(false)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let now = Instant::now();
+    let at = |ms| now + Duration::from_millis(ms);
+    focus.request_focus();
+    frame(&mut runtime, at(0));
+    let field = runtime.focused_element().unwrap();
+    let handles = runtime
+        .tree()
+        .text_field_selection_handle_geometry(field)
+        .unwrap();
+    runtime
+        .tree()
+        .text_field_selection_handles(field)
+        .unwrap()
+        .show(handles);
+    frame(&mut runtime, at(0));
+    let area = handles.start.rect();
+    let point = area.origin + Offset::new(area.size.width * 0.5, area.size.height * 0.5);
+    let tap = |runtime: &mut Runtime, start| {
+        pointer(runtime, PointerPhase::Down, point, at(start));
+        pointer(runtime, PointerPhase::Up, point, at(start + 20));
+        frame(runtime, at(start + 20));
+    };
+
+    tap(&mut runtime, 10);
+    assert_eq!(count.get(), 0);
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, build(true)).unwrap();
+    frame(&mut runtime, at(100));
+    assert_eq!(runtime.focused_element(), Some(field));
+    assert!(
+        runtime
+            .tree()
+            .text_field_selection_handles(field)
+            .unwrap()
+            .is_showing()
+    );
+    tap(&mut runtime, 120);
+    assert_eq!(count.get(), 1);
+
+    pointer(&mut runtime, PointerPhase::Down, point, at(300));
+    let moved = point + Offset::new(40., 0.);
+    pointer(&mut runtime, PointerPhase::Move, moved, at(350));
+    pointer(&mut runtime, PointerPhase::Up, moved, at(380));
+    assert_eq!(count.get(), 1);
+
+    runtime.schedule_update(root, build(false)).unwrap();
+    frame(&mut runtime, at(500));
+    tap(&mut runtime, 550);
+    assert_eq!(count.get(), 1);
+    assert!(focus.has_primary_focus());
+}

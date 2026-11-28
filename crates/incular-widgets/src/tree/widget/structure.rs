@@ -811,6 +811,7 @@ impl PartialEq for TextFieldSpec {
             && same_rc(&self.on_submit, &other.on_submit)
             && same_rc(&self.on_tap_outside, &other.on_tap_outside)
             && same_rc(&self.on_tap_up_outside, &other.on_tap_up_outside)
+            && same_rc(&self.on_selection_handle_tapped, &other.on_selection_handle_tapped)
             && same_rc(&self.on_app_private_command, &other.on_app_private_command)
             && self.content_insertion == other.content_insertion
             && same_rc(&self.edit_transform, &other.edit_transform)

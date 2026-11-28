@@ -2103,7 +2103,11 @@ impl Runtime {
                 && drag.on_knob
                 && delta.x.hypot(delta.y) <= TOUCH_SLOP
             {
-                self.text_field_toggle_toolbar(drag.field, drag.down_position);
+                if !self.tree.dispatch_text_selection_handle_tap(drag.field, |error| {
+                    self.report_editing_callback_error(error);
+                }) {
+                    self.text_field_toggle_toolbar(drag.field, drag.down_position);
+                }
             }
             return;
         }

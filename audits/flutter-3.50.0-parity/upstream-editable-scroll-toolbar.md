@@ -57,3 +57,12 @@ device rectangle, selection endpoints, and ancestor viewport geometry.
 The older out-of-view and edited-value controls still pass. All six
 native scroll tests passed; this authored comparison adds no upstream
 registration and does not claim nested gesture arbitration.
+
+## Live selection-handle tap callback
+
+Pinned `widgets/editable_text_test.dart:15866` passed. A real touch on a
+mounted collapsed knob initially invokes no application callback. A
+retained rebuild supplies one; the next tap invokes it once without
+recreating the editor or refocusing it. A drag does not invoke the tap
+callback. Removing the callback stops notifications without replacing
+the handle. All seven focused editor tests and 19 handle tests passed.

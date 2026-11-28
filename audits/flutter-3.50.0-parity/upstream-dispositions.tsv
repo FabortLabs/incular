@@ -4191,3 +4191,4 @@ packages/flutter/test/widgets/editable_text_test.dart	19006	context menu reappea
 packages/flutter/test/widgets/editable_text_test.dart	18773	Does not crash when editing value changes between consecutive scrolls	paired-match	upstream-editable-scroll-toolbar.md#editing-value-invalidation-and-returning-to-view
 packages/flutter/test/widgets/editable_text_test.dart	18846	toolbar should not reappear when editing value changes during a scroll	paired-match	upstream-editable-scroll-toolbar.md#editing-value-invalidation-and-returning-to-view
 packages/flutter/test/widgets/editable_text_test.dart	15932	dragStartBehavior can be updated	paired-match	upstream-editable-scroll-toolbar.md#live-drag-origin
+packages/flutter/test/widgets/editable_text_test.dart	15866	onSelectionHandleTapped can be updated	paired-match	upstream-editable-scroll-toolbar.md#live-selection-handle-tap-callback

@@ -22,6 +22,7 @@ pub enum TextEditingCallback {
     AppPrivateCommand,
     ContentInserted,
     SelectionChanged,
+    SelectionHandleTapped,
 }
 
 /// A caught Rust panic from an editor callback, preserving its message.
@@ -1521,6 +1522,26 @@ impl WidgetTree {
     #[doc(hidden)]
     pub fn hide_text_field_magnifier(&self, id: ElementId) -> bool {
         self.text_field_magnifier(id).is_some_and(|state| state.set_info(None))
+    }
+
+    /// Invokes the current callback on a tap, returning false when the
+    /// application has not supplied one.
+    #[doc(hidden)]
+    pub fn dispatch_text_selection_handle_tap(
+        &self,
+        field: ElementId,
+        mut report: impl FnMut(TextEditingCallbackError),
+    ) -> bool {
+        let Some(callback) = self.elements.get(field.0).and_then(|element| {
+            let WidgetKind::TextField(spec) = element.widget.kind() else {
+                return None;
+            };
+            spec.on_selection_handle_tapped.clone()
+        }) else {
+            return false;
+        };
+        run_editing_callback(TextEditingCallback::SelectionHandleTapped, || callback(), &mut report);
+        true
     }
 
     /// The shared toolbar overlay, including a currently open suggestions menu.
