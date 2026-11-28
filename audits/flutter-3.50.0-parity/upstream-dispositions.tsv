@@ -3908,3 +3908,8 @@ packages/flutter/test/widgets/focus_traversal_test.dart	435	Find the initial foc
 packages/flutter/test/widgets/focus_traversal_test.dart	559	Nested navigator does not trap focus	paired-match	upstream-navigation-initial-focus.md#push-pop-and-nested-traversal
 packages/flutter/test/widgets/focus_traversal_test.dart	1534	Find the initial focus when a route is pushed or popped.	paired-match	upstream-navigation-initial-focus.md#push-pop-and-nested-traversal
 packages/flutter/test/widgets/routes_test.dart	517	Can autofocus a TextField nested in a Focus in a route.	paired-match	upstream-navigation-initial-focus.md#editor-nested-inside-a-focus-boundary
+packages/flutter/test/widgets/shape_decoration_test.dart	24	ShapeDecoration.image	paired-match	upstream-shape-decoration-hit-and-clip.md#mounted-shape-paint-order-and-image-clip
+packages/flutter/test/widgets/shape_decoration_test.dart	46	ShapeDecoration.color	paired-match	upstream-shape-decoration-hit-and-clip.md#mounted-shape-paint-order-and-image-clip
+packages/flutter/test/widgets/shape_decoration_test.dart	72	TestBorder and Directionality - 1	paired-match	upstream-shape-decoration-hit-and-clip.md#mounted-shape-paint-order-and-image-clip
+packages/flutter/test/widgets/shape_decoration_test.dart	88	TestBorder and Directionality - 2	paired-match	upstream-shape-decoration-hit-and-clip.md#mounted-shape-paint-order-and-image-clip
+packages/flutter/test/widgets/shape_decoration_test.dart	108	Does not crash with directional gradient	paired-match	upstream-shape-decoration-hit-and-clip.md#mounted-shape-paint-order-and-image-clip

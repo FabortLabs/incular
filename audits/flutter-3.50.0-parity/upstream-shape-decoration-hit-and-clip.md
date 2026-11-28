@@ -180,3 +180,17 @@ orders over black: red followed by a green/blue group produces
 each exact leaf opacity. The earlier implementation failed by
 emitting Plus *around* the nested group. Ten focused image and
 transition tests passed. No additional registration was counted.
+
+## Mounted shape paint order and image clip
+
+Five pinned originals in `widgets/shape_decoration_test.dart` passed:
+:24, :46, :72, :88, and :108. Mounted fills and images paint before the
+outer then inner strokes of a compound border. A custom border receives the
+filled box and inherited direction, with outer-path then paint for a color
+and inner-path then paint for an image. The old native image painter asked
+for the outer path and painted beneath both strokes. The corrected image
+clip excludes their full combined width. The public decoration-wide clip
+and shape hit contour still use the outer path. The directional radial
+gradient case also verifies the emitted focal point, radii, and stops.
+All nine focused native paint, image, and crossfade tests passed; these
+inspect the retained display list, not framebuffer goldens.

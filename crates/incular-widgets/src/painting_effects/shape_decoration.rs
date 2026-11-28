@@ -93,7 +93,7 @@ pub struct ShapeDecoration {
     pub aligned_gradient: Option<AlignedShapeGradient>,
     pub shadows: Vec<BoxShadow>,
     /// Flutter `ShapeDecoration.image`: painted over the color or gradient,
-    /// clipped to the shape's outer path, under the border.
+    /// clipped to the shape's inner path, excluding the border's stroke.
     pub image: Option<DecorationImage>,
     pub shape: Rc<dyn ShapeBorder>,
 }
@@ -609,10 +609,13 @@ impl From<DecoratedShapeBox> for Widget {
                         .into(),
                 );
                 if let Some(image) = &decoration.image {
-                    let clip = Arc::new(
-                        decoration
-                            .get_clip_path(Rect::from_origin_size(Offset::ZERO, size), direction),
-                    );
+                    // The decoration's public clip and hit testing use the
+                    // outer contour. Only its image is clipped inside the
+                    // border, including every layer of a compound stroke.
+                    let clip = Arc::new(decoration.shape.inner_path_with_direction(
+                        Rect::from_origin_size(Offset::ZERO, size),
+                        direction,
+                    ));
                     let painted = super::box_painter::decoration_image_widget(image);
                     layers.push(Positioned::fill(ClipPath::new(clip, painted)).into());
                 }
