@@ -4,8 +4,8 @@ use crate::{SelectionAreaController, SelectionContainerDelegate, Widget};
 
 /// A retained selection boundary around a widget subtree.
 ///
-/// The boundary owns a delegate/controller pair and is isolated from any
-/// nested selection boundary. Use [`SelectionContainer::disabled`] to keep a
+/// The boundary owns a delegate/controller pair. A non-empty enabled
+/// container counts as one entry in its enclosing selection registrar. Use [`SelectionContainer::disabled`] to keep a
 /// subtree visible while preventing its selectable children from registering.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SelectionContainer {

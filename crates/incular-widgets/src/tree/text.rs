@@ -2165,61 +2165,59 @@ impl WidgetTree {
         }
     }
     pub(super) fn selectable_texts_in_area(&self, area: ElementId) -> Vec<ElementId> {
+        self.selection_registry_members(area, false).0
+    }
+
+    /// Direct label entries and, optionally, child proxy containers. An owned
+    /// SelectionArea remains an independent region, and a disabled container
+    /// blocks both its own registration and its descendants.
+    fn selection_registry_members(
+        &self,
+        area: ElementId,
+        include_proxies: bool,
+    ) -> (Vec<ElementId>, Vec<ElementId>) {
+        let Some(element) = self.elements.get(area.0) else {
+            return (Vec::new(), Vec::new());
+        };
         let Some(policy) = self.selection_boundary_policy(area) else {
-            // A standalone SelectableText owns its implicit one-item
-            // selection region. It has no explicit boundary policy, but it
-            // must still participate in select-all and copy operations.
-            let standalone = self.elements.get(area.0).is_some_and(|element| {
-                matches!(element.widget.kind(), WidgetKind::SelectableText { .. })
-            });
-            return if standalone { vec![area] } else { Vec::new() };
+            let standalone = matches!(element.widget.kind(), WidgetKind::SelectableText { .. });
+            return (if standalone { vec![area] } else { Vec::new() }, Vec::new());
         };
         if !policy.accepts_children() {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
+
         let mut entries = Vec::new();
-        let mut work = Vec::new();
-        if let Some(element) = self.elements.get(area.0) {
-            for child in &element.children {
-                self.collect_selectable_texts(*child, &mut entries, &mut work);
-            }
-        }
-        entries
-    }
-    pub(super) fn collect_selectable_texts(
-        &self,
-        id: ElementId,
-        entries: &mut Vec<ElementId>,
-        work: &mut Vec<ElementId>,
-    ) {
-        work.clear();
-        work.push(id);
+        let mut proxies = Vec::new();
+        let mut work: Vec<_> = element.children.iter().rev().copied().collect();
         while let Some(current) = work.pop() {
             let Some(element) = self.elements.get(current.0) else {
                 continue;
             };
-            // Inside an accepting boundary every `Text` registers, as
-            // Flutter's `Text` does with `SelectionContainer.maybeOf`.
-            if matches!(
-                element.widget.kind(),
-                WidgetKind::SelectableText { .. } | WidgetKind::Text { .. }
-            ) {
-                entries.push(current);
-                continue;
+            match element.widget.kind() {
+                WidgetKind::SelectableText { .. } | WidgetKind::Text { .. } => {
+                    entries.push(current);
+                }
+                WidgetKind::SelectionContainer { delegate, .. }
+                | WidgetKind::SelectionListener { delegate, .. } => {
+                    if include_proxies && delegate.is_enabled() {
+                        proxies.push(current);
+                    }
+                }
+                WidgetKind::SelectionArea { .. } => {}
+                _ => work.extend(element.children.iter().rev().copied()),
             }
-            // A nested selection boundary owns its registrar subtree. Its
-            // leaves must not be harvested by an ancestor container, even
-            // when the nested boundary is disabled.
-            if self.selection_boundary_policy(current).is_some() {
-                continue;
-            }
-            work.extend(element.children.iter().rev().copied());
         }
+        (entries, proxies)
     }
+
     pub(super) fn sync_static_selection(&mut self, area: ElementId) {
         let entries = self.selectable_texts_in_area(area);
+        self.sync_static_selection_entries(area, entries);
+    }
+
+    fn sync_static_selection_entries(&mut self, area: ElementId, entries: Vec<ElementId>) {
         if let Some(controller) = self.selection_area_controller(area) {
-            controller.set_registered_child_count(entries.len());
             if let Some(selection) = self.static_selections.get(&area).copied() {
                 let selected = static_selection_text(self, &entries, selection);
                 let geometry = self.selection_geometry(area, &entries, selection);
@@ -2353,18 +2351,47 @@ impl WidgetTree {
     }
 
     pub(super) fn refresh_selection_states(&mut self) {
-        let areas = self
+        enum Work {
+            Enter(ElementId),
+            Finish(ElementId, Vec<ElementId>, Vec<ElementId>),
+        }
+
+        // A child proxy contributes one entry to its nearest accepting
+        // registrar, but only while the proxy's own registry has content.
+        // Resolve children before parents in this layout pass instead of
+        // relying on the tracked bucket's iteration order or another frame.
+        let mut work: Vec<_> = self
             .tracked
             .selection_boundaries
             .iter()
             .copied()
-            .filter(|&id| {
-                self.selection_boundary_policy(id).is_some()
-                    && self.selection_area_controller(id).is_some()
-            })
-            .collect::<Vec<_>>();
-        for area in areas {
-            self.sync_static_selection(area);
+            .map(Work::Enter)
+            .collect();
+        let mut visited = FastHashSet::default();
+        while let Some(next) = work.pop() {
+            match next {
+                Work::Enter(area) if visited.insert(area) => {
+                    let (entries, proxies) = self.selection_registry_members(area, true);
+                    let children = proxies.iter().copied().map(Work::Enter);
+                    let start = work.len();
+                    work.extend(children);
+                    work.insert(start, Work::Finish(area, entries, proxies));
+                }
+                Work::Enter(_) => {}
+                Work::Finish(area, entries, proxies) => {
+                    if let Some(controller) = self.selection_area_controller(area) {
+                        let nested = proxies
+                            .iter()
+                            .filter(|&&proxy| {
+                                self.selection_area_controller(proxy)
+                                    .is_some_and(|child| child.registered_child_count() != 0)
+                            })
+                            .count();
+                        controller.set_registered_child_count(entries.len() + nested);
+                        self.sync_static_selection_entries(area, entries);
+                    }
+                }
+            }
         }
     }
     /// Runs the logical cursor action advertised to assistive technology.

@@ -1134,6 +1134,17 @@ impl WidgetTree {
             old_notifier.unregister();
             new_notifier.register();
         }
+        if let (
+            WidgetKind::SelectionContainer { delegate: old, .. },
+            WidgetKind::SelectionContainer { delegate: new, .. },
+        ) = (old.kind(), widget.kind())
+            && old.controller() != new.controller()
+        {
+            self.static_selections.remove(&id);
+            let old = old.controller();
+            old.set_registered_child_count(0);
+            old.clear_selection();
+        }
         let (old_override, old_boundary, render_context) = {
             let element = self.element_live(id, "retained element must remain live");
             (
