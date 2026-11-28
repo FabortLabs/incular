@@ -503,3 +503,29 @@ fn a_semantic_parent_owns_its_child_snapshot_until_an_explicit_replacement() {
     assert_eq!(*id, parent);
     assert_eq!(changed.children, [third, first]);
 }
+
+#[test]
+fn a_replacement_node_cannot_change_the_retained_identity_of_its_slot() {
+    let mut tree = SemanticsTree::new();
+    let original = tree.insert(node(placeholder()));
+    let other = tree.insert(node(placeholder()));
+    tree.set_root(Some(original));
+    assert_ne!(original, other);
+
+    let revision = tree.revision();
+    let replacement = SemanticNode {
+        label: Some("updated".into()),
+        ..node(other)
+    };
+    assert!(tree.update(original, replacement));
+    let first = tree.node(original).unwrap();
+    assert_eq!(first.id, original);
+    assert_eq!(first.label.as_deref(), Some("updated"));
+    assert_eq!(tree.node(other).unwrap().id, other);
+    assert_eq!(tree.node(other).unwrap().label, None);
+    assert_eq!(tree.root(), Some(original));
+    assert_eq!(
+        tree.changed_since(revision).map(|(slot, node)| (slot, node.id)).collect::<Vec<_>>(),
+        [(original, original)]
+    );
+}

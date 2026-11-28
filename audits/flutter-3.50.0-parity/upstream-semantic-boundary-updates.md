@@ -21,3 +21,15 @@ it or replacing its contents at the same length, does not alter
 the existing list or its revision. The new vector takes effect only
 on an explicit update. Flutter instead diagnoses mutation of its
 shared list at run time with error hints and child descriptions.
+
+## Retained node identity on replacement
+
+A direct native regression replaces one node's payload using a
+template that carries another node's ID. The retained arena slot,
+incremental update, and root keep the first node's identity; the
+second is untouched. The old update path could overwrite the ID
+inside the retained record even though the arena slot and root
+still named the original. Updates now take identity from the slot,
+as inserts already do. All 35 focused semantics and accessibility
+projection checks passed; this extra regression does not add an
+upstream registration.

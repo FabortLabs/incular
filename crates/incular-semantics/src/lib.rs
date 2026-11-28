@@ -1001,7 +1001,9 @@ impl SemanticsTree {
                     self.focused.remove(&id.0);
                 }
             }
-            *old = node;
+            // The arena slot owns identity. Treat the supplied record as
+            // replacement data, just as insert ignores its placeholder ID.
+            *old = SemanticNode { id, ..node };
             self.diagnostics.nodes_updated += 1;
             self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
             retained.changed_at = self.diagnostics.revisions;
