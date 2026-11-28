@@ -318,3 +318,42 @@ fn cursor_changes_repaint_the_shared_layer_but_not_its_nested_boundary() {
     update(&mut runtime, scene(MouseCursor::Text));
     assert_eq!(counts(), [0, 0, 0]);
 }
+
+#[test]
+fn editable_cursor_override_then_default_wins_over_a_hovered_ancestor() {
+    use incular_text::TextEditingController;
+    use incular_widgets::{EditableText, FocusNode, TextDirection, internal::Key};
+
+    let controller = TextEditingController::new();
+    let focus = FocusNode::new();
+    let build = |override_cursor| {
+        let field = EditableText::new(controller.clone())
+            .focus_node(focus.clone())
+            .text_direction(TextDirection::Ltr)
+            .size(Size::new(150., 30.));
+        let field = match override_cursor {
+            Some(cursor) => field.mouse_cursor(cursor),
+            None => field,
+        };
+        top_left(
+            MouseRegion::new(Widget::from(field).with_key("raw editable"))
+                .cursor(MouseCursor::NotAllowed),
+        )
+    };
+    let mut runtime = Runtime::new(build(Some(MouseCursor::Click))).unwrap();
+    frame(&mut runtime);
+    let key = Key::from("raw editable");
+    let element = runtime.tree().element_with_key(&key).unwrap();
+    let bounds = runtime.tree().element_bounds(element).unwrap();
+    connect_mouse(&mut runtime, bounds.origin + Offset::new(12., 10.));
+    frame(&mut runtime);
+    assert_eq!(runtime.effective_mouse_cursor(), MouseCursor::Click);
+
+    update(&mut runtime, build(None));
+    assert_eq!(runtime.tree().element_with_key(&key), Some(element));
+    assert_eq!(runtime.effective_mouse_cursor(), MouseCursor::Text);
+    assert!(!focus.has_focus());
+
+    update(&mut runtime, build(Some(MouseCursor::Defer)));
+    assert_eq!(runtime.effective_mouse_cursor(), MouseCursor::NotAllowed);
+}

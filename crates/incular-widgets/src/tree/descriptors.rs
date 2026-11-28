@@ -1227,6 +1227,7 @@ pub struct EditableText {
     show_cursor: Option<bool>,
     paint_cursor_above_text: bool,
     cursor_color: Color,
+    mouse_cursor: Option<crate::MouseCursor>,
     background_cursor_color: Option<Color>,
     selection_color: Option<Color>,
     selection_height_style: incular_text::BoxHeightStyle,
@@ -1313,6 +1314,7 @@ impl EditableText {
             show_cursor: None,
             paint_cursor_above_text: false,
             cursor_color: Color::WHITE,
+            mouse_cursor: None,
             background_cursor_color: None,
             selection_color: None,
             selection_height_style: if cfg!(target_arch = "wasm32") {
@@ -1801,6 +1803,14 @@ impl EditableText {
         self
     }
 
+    /// Sets the pointer cursor while hovering over the editor. By default,
+    /// enabled editors use the text cursor.
+    #[must_use]
+    pub fn mouse_cursor(mut self, cursor: crate::MouseCursor) -> Self {
+        self.mouse_cursor = Some(cursor);
+        self
+    }
+
     /// Sets the regular caret color shown at the nearest text position
     /// while a floating caret is dragged far enough away from it.
     /// No background caret is painted unless a color is supplied.
@@ -2264,6 +2274,7 @@ impl From<EditableText> for Widget {
             show_cursor: value.show_cursor.unwrap_or(!value.read_only),
             paint_cursor_above_text: value.paint_cursor_above_text,
             cursor_color: value.cursor_color,
+            mouse_cursor: value.mouse_cursor,
             background_cursor_color: value.background_cursor_color,
             selection_color: value.selection_color,
             selection_height_style: value.selection_height_style,

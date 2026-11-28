@@ -166,3 +166,18 @@ attached client carry `Brightness.light` by default and
 that the corresponding Show and subsequent editing-state update
 use the attachment's same client ID. This compares the platform
 configuration payload, not the operating system's rendered theme.
+
+### Pointer cursor follows the editor before the containing MouseRegion
+
+Pinned `widgets/editable_text_test.dart:11405` passed. An editor inside
+a Forbidden mouse region uses its explicit Click cursor, then changes
+to the default Text cursor on rebuild without any pointer movement.
+Previously the containing region was consulted first, so even an
+explicit child override appeared Forbidden. Native now evaluates the
+editor in the retained hit order, distinct from activating the text
+caret. It retains the editor and focus state across the update; an
+additional explicit Defer case correctly exposes the parent's cursor.
+
+All 74 focused cursor, hover, text-span, tap-outside and editable
+interaction tests passed. Physical mouse handling was represented
+with normalized platform events.

@@ -777,6 +777,13 @@ impl WidgetTree {
         if want_target && target.is_none() {
             target = self_hit.then_some(id);
         }
+        // EditableText's cursor is an annotation in the same paint order as
+        // MouseRegion, not a fallback after every ancestor's mouse cursor.
+        if let (Some(element), Some(WidgetKind::TextField(_))) = (element, kind)
+            && half_open_hit(node.size, point - current)
+        {
+            result.elements.push(element);
+        }
         if let (Some(element), Some(WidgetKind::RawInput { kind, .. })) = (element, kind) {
             use crate::gestures::HitTestBehavior::{DeferToChild, Opaque};
             let behavior = kind.hit_test_behavior();

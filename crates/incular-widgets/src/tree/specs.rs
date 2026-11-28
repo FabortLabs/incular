@@ -591,6 +591,7 @@ pub struct TextFieldSpec {
     pub(crate) show_cursor: bool,
     pub(crate) paint_cursor_above_text: bool,
     pub(crate) cursor_color: Color,
+    pub(crate) mouse_cursor: Option<crate::MouseCursor>,
     pub(crate) background_cursor_color: Option<Color>,
     pub(crate) selection_color: Option<Color>,
     pub(crate) selection_height_style: incular_text::BoxHeightStyle,
@@ -616,6 +617,14 @@ pub struct TextFieldSpec {
 }
 
 impl TextFieldSpec {
+    pub(crate) fn effective_mouse_cursor(&self) -> crate::MouseCursor {
+        self.mouse_cursor.unwrap_or(if self.enabled {
+            crate::MouseCursor::Text
+        } else {
+            crate::MouseCursor::Basic
+        })
+    }
+
     pub(crate) fn allows_spell_check_toolbar(&self) -> bool {
         self.enabled
             && !self.read_only

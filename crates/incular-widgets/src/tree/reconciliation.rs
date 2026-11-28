@@ -1158,11 +1158,7 @@ impl WidgetTree {
         let after_mouse = mouse_policy(widget.kind());
         let control_cursor = |kind: &WidgetKind| match kind {
             WidgetKind::Button(spec) => Some(spec.mouse_cursor),
-            WidgetKind::TextField(spec) => Some(if spec.enabled {
-                crate::MouseCursor::Text
-            } else {
-                crate::MouseCursor::Basic
-            }),
+            WidgetKind::TextField(spec) => Some(spec.effective_mouse_cursor()),
             _ => None,
         };
         let resize_cursor = |kind: &WidgetKind| match kind {

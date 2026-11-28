@@ -398,19 +398,13 @@ impl WidgetTree {
             {
                 return spec.mouse_cursor;
             }
-            // Flutter's TextField wraps its EditableText in a MouseRegion with
-            // WidgetStateMouseCursor.textable: text cursor when enabled, basic
-            // cursor when disabled.
             if let Some(WidgetKind::TextField(spec)) = self
                 .elements
                 .get(element.0)
                 .map(|entry| entry.widget.kind())
+                && spec.effective_mouse_cursor() != MouseCursor::Defer
             {
-                return if spec.enabled {
-                    MouseCursor::Text
-                } else {
-                    MouseCursor::Basic
-                };
+                return spec.effective_mouse_cursor();
             }
             let Some(parent) = self.parent(element) else {
                 return MouseCursor::Defer;
@@ -420,6 +414,9 @@ impl WidgetTree {
     }
 
     fn cursor_for_raw_input(&self, element: ElementId) -> Option<MouseCursor> {
+        if let WidgetKind::TextField(spec) = self.elements.get(element.0)?.widget.kind() {
+            return Some(spec.effective_mouse_cursor());
+        }
         match self.raw_input_kind(element)? {
             RawInputKind::MouseRegion { cursor, .. } => Some(*cursor),
             RawInputKind::WindowResizeRegion { direction } => Some(match direction {

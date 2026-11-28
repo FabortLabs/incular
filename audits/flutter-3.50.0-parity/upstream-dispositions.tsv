@@ -4111,3 +4111,4 @@ packages/flutter/test/widgets/editable_text_test.dart	2008	single line inputs ha
 packages/flutter/test/widgets/mouse_region_test.dart	2031	stylus input works	paired-match	upstream-mouse-tracker-callbacks.md#stylus-crossing-a-mounted-mouseregion
 packages/flutter/test/widgets/editable_text_test.dart	6137	default keyboardAppearance is respected	paired-match	upstream-editable-defaults.md#keyboard-appearance-on-the-attached-input-client
 packages/flutter/test/widgets/editable_text_test.dart	6809	custom keyboardAppearance is respected	paired-match	upstream-editable-defaults.md#keyboard-appearance-on-the-attached-input-client
+packages/flutter/test/widgets/editable_text_test.dart	11405	EditableText changes mouse cursor when hovered	paired-match	upstream-editable-defaults.md#pointer-cursor-follows-the-editor-before-the-containing-mouseregion
