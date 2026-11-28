@@ -457,3 +457,32 @@ fn wrap_uses_the_topmost_actual_baseline_across_reversed_runs() {
 fn wrap_without_text() -> Wrap {
     Wrap::new([SizedBox::new().width(80.).height(20.)]).text_direction(TextDirection::Ltr)
 }
+
+#[test]
+fn wrap_diagnostic_properties_show_reported_fields_and_filter_only_declared_defaults() {
+    use incular_config::{TextDirection, VerticalDirection};
+    use incular_core::DiagnosticLevel;
+    use incular_widgets::{Text, Wrap};
+
+    let wrap = Wrap::new([
+        Text::new("Hamilton"),
+        Text::new("Lafayette"),
+        Text::new("Mulligan"),
+    ])
+    .spacing(8.)
+    .run_spacing(4.)
+    .text_direction(TextDirection::Ltr)
+    .vertical_direction(VerticalDirection::Up);
+    let diagnostic = wrap.to_diagnostics();
+    assert_eq!(diagnostic.properties().len(), 8);
+    assert_eq!(
+        diagnostic.to_string_shallow(DiagnosticLevel::Info),
+        "Wrap(direction: horizontal, alignment: start, spacing: 8.0, runAlignment: start, runSpacing: 4.0, crossAxisAlignment: start, textDirection: ltr, verticalDirection: up)"
+    );
+    let defaults = Wrap::default().to_diagnostics();
+    assert_eq!(defaults.properties().len(), 8);
+    assert_eq!(
+        defaults.to_string_shallow(DiagnosticLevel::Info),
+        "Wrap(direction: horizontal, alignment: start, spacing: 0.0, runAlignment: start, runSpacing: 0.0, crossAxisAlignment: start)"
+    );
+}

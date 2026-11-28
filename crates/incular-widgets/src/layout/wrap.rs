@@ -3,6 +3,7 @@
 use incular_config::{
     Axis, Clip, TextDirection, VerticalDirection, WrapAlignment, WrapCrossAlignment,
 };
+use incular_core::{DiagnosticEnum, DiagnosticValue, DiagnosticsNode, DiagnosticsProperty};
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
@@ -122,6 +123,87 @@ impl Wrap {
     #[must_use]
     pub fn get_run_spacing(&self) -> f32 {
         self.run_spacing
+    }
+}
+
+// These local adapters keep Flutter's inspector spelling and wire types
+// separate from Rust's Debug spellings and the layout's hot path.
+macro_rules! enum_diagnostic {
+    ($adapter:ident, $value:ident { $($variant:ident => $name:literal),+ $(,)? }) => {
+        #[derive(Clone, Copy, PartialEq)]
+        struct $adapter($value);
+
+        impl DiagnosticValue for $adapter {
+            const TYPE_NAME: &'static str = stringify!($value);
+
+            fn to_diagnostic_json(&self) -> serde_json::Value {
+                self.variant_name().into()
+            }
+
+            fn diagnostic_text(&self) -> String {
+                format!("{}.{}", Self::TYPE_NAME, self.variant_name())
+            }
+        }
+
+        impl DiagnosticEnum for $adapter {
+            fn variant_name(&self) -> &'static str {
+                match self.0 { $($value::$variant => $name),+ }
+            }
+        }
+    };
+}
+
+enum_diagnostic!(DiagnosticAxis, Axis {
+    Horizontal => "horizontal", Vertical => "vertical",
+});
+enum_diagnostic!(DiagnosticWrapAlignment, WrapAlignment {
+    Start => "start", End => "end", Center => "center",
+    SpaceBetween => "spaceBetween", SpaceAround => "spaceAround", SpaceEvenly => "spaceEvenly",
+});
+enum_diagnostic!(DiagnosticWrapCrossAlignment, WrapCrossAlignment {
+    Start => "start", End => "end", Center => "center",
+});
+enum_diagnostic!(DiagnosticTextDirection, TextDirection {
+    Ltr => "ltr", Rtl => "rtl",
+});
+enum_diagnostic!(DiagnosticVerticalDirection, VerticalDirection {
+    Down => "down", Up => "up",
+});
+
+impl Wrap {
+    /// Captures the properties reported by the widget inspector without
+    /// mounting the widget or inspecting its children.
+    #[must_use]
+    pub fn to_diagnostics(&self) -> DiagnosticsNode {
+        fn enumeration<T: DiagnosticEnum>(name: &str, value: T) -> DiagnosticsNode {
+            DiagnosticsNode::property(&DiagnosticsProperty::enumeration(name, Some(value)))
+        }
+        fn spacing(name: &str, value: f32) -> DiagnosticsNode {
+            DiagnosticsNode::property(&DiagnosticsProperty::double(name, Some(value.into())))
+        }
+        let text_direction = DiagnosticsProperty::enumeration(
+            "textDirection",
+            self.text_direction.map(DiagnosticTextDirection),
+        )
+        .default_value(None);
+        let vertical_direction = DiagnosticsProperty::enumeration(
+            "verticalDirection",
+            Some(DiagnosticVerticalDirection(self.vertical_direction)),
+        )
+        .default_value(Some(DiagnosticVerticalDirection(VerticalDirection::Down)));
+        DiagnosticsNode::new("Wrap", "DiagnosticableTreeNode").with_properties(vec![
+            enumeration("direction", DiagnosticAxis(self.direction)),
+            enumeration("alignment", DiagnosticWrapAlignment(self.alignment)),
+            spacing("spacing", self.spacing),
+            enumeration("runAlignment", DiagnosticWrapAlignment(self.run_alignment)),
+            spacing("runSpacing", self.run_spacing),
+            enumeration(
+                "crossAxisAlignment",
+                DiagnosticWrapCrossAlignment(self.cross_axis_alignment),
+            ),
+            DiagnosticsNode::property(&text_direction),
+            DiagnosticsNode::property(&vertical_direction),
+        ])
     }
 }
 

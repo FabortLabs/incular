@@ -17,3 +17,16 @@ These cover observable geometry and hit behavior, not private render
 objects or native window resize. They do not close the independent
 fractional-fit C05 case. Logs under
 `.tmp/flutter350-full-audit/wrap-widget-geometry-20261124-164936-092/`.
+
+## Widget inspector properties
+
+Pinned `widgets/basic_test.dart:1732` passed. Wrap exposes an
+on-demand diagnostic snapshot with all eight original properties:
+direction, alignment, spacing, run alignment, run spacing, cross-axis
+alignment, text direction, and vertical direction. The comparison
+uses the original three named children, 8.0/4.0 spacing, LTR and
+vertical-up. It checks the INFO text and additionally verifies the
+unset text direction and default down are the only filtered fields
+in the default view. The snapshot uses typed enum and double
+properties and does not mount or measure children. All 17 checks in
+the focused Wrap constraints target passed.
