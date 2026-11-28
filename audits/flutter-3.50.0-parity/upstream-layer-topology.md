@@ -127,3 +127,16 @@ link resolution rather than importing a second tree's coordinates.
 
 Both pinned probes and 105 focused native compositor, follower, overlay
 and tooltip tests passed. This comparison adds no upstream registration.
+
+## Routed taps across all anchor pairs
+
+All 25 generated names from `widgets/composited_transform_test.dart:356`
+passed. The pinned original accepts two alignment arguments but does not
+pass them to its follower, so those iterations all verify the default
+anchors. The matching Rust fixture confirms the 2×2 opaque gesture
+detector and actual tap dispatch on its transparent SizedBox child.
+
+A separate authored fixture on each side applies all five target and
+five follower anchors. Each 2×2 target projects to the exact expected
+position and receives one routed tap at its center. This is 25 expanded
+checks but only one original registration in the coverage inventory.
