@@ -913,6 +913,7 @@ pub(crate) enum WidgetKind {
     },
     Draggable {
         source: Rc<dyn RetainedDragSource>,
+        behavior: crate::gestures::HitTestBehavior,
         child: Widget,
     },
     DragTarget {

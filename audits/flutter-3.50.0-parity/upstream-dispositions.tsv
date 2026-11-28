@@ -4135,3 +4135,6 @@ packages/flutter/test/widgets/draggable_test.dart	467	Drag and drop - onMove cal
 packages/flutter/test/widgets/draggable_test.dart	3906	feedback respect the MouseRegion cursor configure	paired-match	upstream-draggable-target-path.md#feedback-hit-testing-and-accessibility
 packages/flutter/test/widgets/draggable_test.dart	3938	configurable feedback ignore pointer behavior	paired-match	upstream-draggable-target-path.md#feedback-hit-testing-and-accessibility
 packages/flutter/test/widgets/draggable_test.dart	3970	configurable feedback ignore pointer behavior - LongPressDraggable	paired-match	upstream-draggable-target-path.md#feedback-hit-testing-and-accessibility
+packages/flutter/test/widgets/draggable_test.dart	3395	configurable DragTarget hit test behavior	paired-match	upstream-draggable-target-path.md#source-and-target-hit-policies
+packages/flutter/test/widgets/draggable_test.dart	3886	configurable Draggable hit test behavior	paired-match	upstream-draggable-target-path.md#source-and-target-hit-policies
+packages/flutter/test/widgets/draggable_test.dart	4006	configurable DragTarget hit test behavior	paired-match	upstream-draggable-target-path.md#source-and-target-hit-policies

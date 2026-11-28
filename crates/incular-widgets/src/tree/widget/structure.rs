@@ -1039,12 +1039,14 @@ impl PartialEq for WidgetKind {
                 Self::Draggable {
                     source: a,
                     child: b,
+                    behavior: left,
                 },
                 Self::Draggable {
                     source: c,
                     child: d,
+                    behavior: right,
                 },
-            ) => Rc::ptr_eq(a, c) && b == d,
+            ) => Rc::ptr_eq(a, c) && b == d && left == right,
             (
                 Self::DragTarget {
                     target: a,

@@ -132,3 +132,19 @@ independently of pointer hits. The two authored Flutter cases and the
 native semantics tree agree on label presence before feedback teardown.
 All seven focused native cases passed. The comparison checks
 framework cursor selection and semantics, not OS presentation.
+
+## Source and target hit policies
+
+Pinned :3395, :3886 and :4006 passed. The first registration's title
+says DragTarget but it actually configures an opaque LongPressDraggable.
+The native getters distinguish the ordinary source's defer-to-child
+default, the long-press opaque override, and the target's translucent
+default versus its explicit defer-to-child setting.
+
+Mounted controls verify what those options do. An empty default
+source leaves a lower tap target alone; an opaque source starts from
+its empty bounds and blocks that target. A translucent source leaves
+a tap available to the lower sibling but competes and can win when
+the pointer actually drags. Opaque long press starts at the deadline
+over the empty child. The authored Flutter cases and all 21 focused
+native tests passed.

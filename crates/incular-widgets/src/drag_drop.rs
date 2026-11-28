@@ -189,6 +189,7 @@ pub struct Draggable<T: Clone + 'static> {
     context: DragDropContext<T>,
     payload: T,
     child: Widget,
+    hit_test_behavior: HitTestBehavior,
     child_when_dragging: Option<Widget>,
     feedback: Option<Rc<dyn Fn(T) -> Widget>>,
     ignoring_feedback_pointer: bool,
@@ -214,6 +215,7 @@ impl<T: Clone + 'static> Draggable<T> {
             context,
             payload,
             child: child.into(),
+            hit_test_behavior: HitTestBehavior::DeferToChild,
             child_when_dragging: None,
             feedback: None,
             ignoring_feedback_pointer: true,
@@ -237,6 +239,16 @@ impl<T: Clone + 'static> Draggable<T> {
     pub fn feedback(mut self, builder: impl Fn(T) -> Widget + 'static) -> Self {
         self.feedback = Some(Rc::new(builder));
         self
+    }
+    /// Whether empty parts of the source opt into pointer hit testing.
+    #[must_use]
+    pub fn hit_test_behavior(mut self, behavior: HitTestBehavior) -> Self {
+        self.hit_test_behavior = behavior;
+        self
+    }
+    #[must_use]
+    pub const fn configured_hit_test_behavior(&self) -> HitTestBehavior {
+        self.hit_test_behavior
     }
     /// Whether the drag avatar ignores pointer hits. Defaults to true.
     #[must_use]
@@ -551,6 +563,7 @@ impl<T: Clone + 'static> From<Draggable<T>> for Widget {
                 active,
                 revision,
             }),
+            value.hit_test_behavior,
             child,
         )
     }
@@ -632,6 +645,10 @@ impl<T: Clone + 'static> DragTarget<T> {
     pub fn hit_test_behavior(mut self, behavior: HitTestBehavior) -> Self {
         self.hit_test_behavior = behavior;
         self
+    }
+    #[must_use]
+    pub const fn configured_hit_test_behavior(&self) -> HitTestBehavior {
+        self.hit_test_behavior
     }
     #[must_use]
     pub fn on_enter(mut self, callback: impl Fn(T) + 'static) -> Self {
@@ -827,6 +844,16 @@ impl<T: Clone + 'static> LongPressDraggable<T> {
     pub fn feedback(mut self, builder: impl Fn(T) -> Widget + 'static) -> Self {
         self.draggable = self.draggable.feedback(builder);
         self
+    }
+    /// See [`Draggable::hit_test_behavior`].
+    #[must_use]
+    pub fn hit_test_behavior(mut self, behavior: HitTestBehavior) -> Self {
+        self.draggable = self.draggable.hit_test_behavior(behavior);
+        self
+    }
+    #[must_use]
+    pub const fn configured_hit_test_behavior(&self) -> HitTestBehavior {
+        self.draggable.configured_hit_test_behavior()
     }
     /// See [`Draggable::ignoring_feedback_pointer`].
     #[must_use]

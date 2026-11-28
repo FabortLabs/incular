@@ -1123,10 +1123,14 @@ impl Widget {
             semantics: None,
         })
     }
-    pub(crate) fn draggable(source: Rc<dyn RetainedDragSource>, child: Self) -> Self {
+    pub(crate) fn draggable(
+        source: Rc<dyn RetainedDragSource>,
+        behavior: crate::gestures::HitTestBehavior,
+        child: Self,
+    ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
-            kind: WidgetKind::Draggable { source, child },
+            kind: WidgetKind::Draggable { source, behavior, child },
             semantics: None,
         })
     }

@@ -157,6 +157,7 @@ fn claims_own_bounds(kind: Option<&WidgetKind>) -> bool {
         kind,
         Some(
             WidgetKind::Gesture { .. }
+                | WidgetKind::Draggable { .. }
                 | WidgetKind::DragTarget { .. }
                 | WidgetKind::RawInput { .. }
                 | WidgetKind::Scroll { .. }
@@ -212,7 +213,7 @@ fn hit_box_contains(
     if matches!(
         kind,
         RenderKind::Colored { .. } | RenderKind::CustomPaint { .. } | RenderKind::Image { .. }
-    ) || matches!(widget, Some(WidgetKind::DragTarget { .. }))
+    ) || matches!(widget, Some(WidgetKind::Draggable { .. } | WidgetKind::DragTarget { .. }))
         || matches!(widget, Some(WidgetKind::RawInput { kind, .. }) if kind.mouse_region_opaque().is_some())
     {
         // Flutter's RenderBox covers its half-open layout box, even if
@@ -839,12 +840,18 @@ impl WidgetTree {
             {
                 result.coincident_gestures.push(element);
             }
+            if let (Some(element), Some(WidgetKind::Draggable { behavior: Translucent, .. })) =
+                (element, kind)
+            {
+                result.coincident_gestures.push(element);
+            }
             // An opaque gesture surface ends the sibling search for raw
             // listeners too. Translucent gestures still get their own
             // contender without blocking the hit behind an empty child.
             result.blocks_siblings |= matches!(
                 kind,
                 Some(WidgetKind::Gesture { behavior: Opaque, .. }
+                    | WidgetKind::Draggable { behavior: Opaque, .. }
                     | WidgetKind::DragTarget { behavior: Opaque, .. })
             );
             result.accepts_hit |= match kind {
@@ -1892,7 +1899,7 @@ fn retained_self_hit(kind: Option<&WidgetKind>) -> bool {
         Some(WidgetKind::Gesture { behavior, .. }) => {
             *behavior != crate::gestures::HitTestBehavior::DeferToChild
         }
-        Some(WidgetKind::DragTarget { behavior, .. }) => {
+        Some(WidgetKind::Draggable { behavior, .. } | WidgetKind::DragTarget { behavior, .. }) => {
             *behavior == crate::gestures::HitTestBehavior::Opaque
         }
         Some(WidgetKind::RawInput { kind, .. }) => {
@@ -1905,9 +1912,6 @@ fn retained_self_hit(kind: Option<&WidgetKind>) -> bool {
                 None => kind.hit_test_behavior() != DeferToChild,
             }
         }
-        // drag_target.dart: Draggable defaults to HitTestBehavior.deferToChild,
-        // so it claims a hit only where its child is hit.
-        Some(WidgetKind::Draggable { .. }) => false,
         // Flutter `Scrollable.hitTestBehavior` (default opaque).
         Some(WidgetKind::Scroll {
             hit_test_behavior, ..
