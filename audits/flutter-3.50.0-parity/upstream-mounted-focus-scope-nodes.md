@@ -267,3 +267,13 @@ the leaf's history and the outer scope records the nested scope, not its
 leaf. Moving primary focus to a direct child replaces the outer selection
 without clearing the inactive nested scope's selection. The entire focused
 `flutter350_focus_scope_nodes` target passed all 33 cases.
+
+## Reparenting an active node within its scope
+
+Pinned `widgets/focus_manager_test.dart:739` passed. The native mounted
+fixture starts with two ordered focus parents and two ordered children under
+the first parent. A retained update replaces only the active child's
+explicit focus parent. The child's primary focus and the containing scope's
+selection persist, the old and new ancestors' focus-path flags switch, and
+the other child stays under the old parent. The focused target does not
+report a transient blur. All 34 native focus scope cases passed.

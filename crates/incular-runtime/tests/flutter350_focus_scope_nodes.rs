@@ -1566,3 +1566,54 @@ fn selecting_a_direct_child_preserves_the_inactive_nested_scopes_history() {
     assert!(!leaf.has_focus());
     assert!(!leaf.has_primary_focus());
 }
+
+#[test]
+fn explicit_focus_parent_can_change_without_losing_primary_focus_or_reordering_siblings() {
+    use incular_widgets::Column;
+    use std::{cell::RefCell, rc::Rc};
+
+    let scope = FocusScopeNode::new();
+    let [left, right, moving, staying] = std::array::from_fn(|_| FocusNode::new());
+    let scene = |parent: &FocusNode| {
+        let children = [
+            Focus::new(SizedBox::shrink()).node(left.clone()),
+            Focus::new(SizedBox::shrink()).node(right.clone()),
+            Focus::new(SizedBox::shrink()).node(moving.clone()).parent_node(parent.clone()),
+            Focus::new(SizedBox::shrink()).node(staying.clone()).parent_node(left.clone()),
+        ];
+        FocusScope::new(Column::new(children)).node(scope.clone())
+    };
+    let mut runtime = Runtime::new(scene(&left).into()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(bounds).unwrap();
+    let anchor = scope.scope_focus_node();
+    assert_eq!(anchor.children(), [left.clone(), right.clone()]);
+    assert_eq!(left.parent(), Some(anchor.clone()));
+    assert_eq!(right.parent(), Some(anchor));
+    assert_eq!(moving.parent(), Some(left.clone()));
+    assert_eq!(staying.parent(), Some(left.clone()));
+    assert_eq!(left.children(), [moving.clone(), staying.clone()]);
+
+    moving.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(moving.has_primary_focus());
+    assert!(left.has_focus());
+    assert!(!right.has_focus());
+
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let observed = moving.clone();
+    let recorded = events.clone();
+    let subscription = moving.observe(move || recorded.borrow_mut().push(observed.has_primary_focus()));
+    runtime.schedule_update(runtime.tree().root().unwrap(), scene(&right).into()).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(scope.focused_child(), Some(moving.clone()));
+    assert_eq!(moving.parent(), Some(right.clone()));
+    assert_eq!(staying.parent(), Some(left.clone()));
+    assert_eq!(left.children(), [staying]);
+    assert_eq!(right.children(), [moving.clone()]);
+    assert!(moving.has_primary_focus());
+    assert!(!left.has_focus());
+    assert!(right.has_focus());
+    assert!(events.borrow().iter().all(|focused| *focused), "reparenting must not report a transient blur");
+    drop(subscription);
+}
