@@ -105,3 +105,6 @@ pub(crate) use pipelines::*;
 pub(crate) use render_passes::*;
 pub(crate) use render_plan::*;
 pub(crate) use resources::SharedGpuGradient;
+
+#[cfg(all(test, not(incular_d3d11)))]
+mod rounded_border_readback_test;
