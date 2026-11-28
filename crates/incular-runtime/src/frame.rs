@@ -3037,12 +3037,12 @@ impl Runtime {
                                 && !self.continues_text_tap_series(field, position, self.input_now()))
                     });
                 let keep_text_field_focus = text_target.is_none()
-                    && self
-                        .focused
-                        .is_some_and(|focused| self.tree.is_text_field(focused))
-                    && (notified_text_outside
-                        || mobile_touch
-                        || self.tree.preserves_text_field_focus_with_hit(&hit));
+                    && self.focused.is_some_and(|focused| {
+                        self.tree.is_text_field(focused)
+                            && (notified_text_outside
+                                || mobile_touch
+                                || self.tree.preserves_editable_group_with_hit(focused, &hit))
+                    });
                 // Flutter on desktop: a press focuses the text field it hits, a
                 // press outside a focused text field unfocuses it
                 // (`EditableText` tap-outside), and any other press leaves

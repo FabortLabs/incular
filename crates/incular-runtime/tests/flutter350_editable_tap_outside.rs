@@ -184,3 +184,96 @@ fn pointer_up_reports_the_press_group_even_when_it_releases_across_the_boundary(
     assert_eq!(releases.borrow().as_slice(), [INSIDE]);
     assert!(node.has_primary_focus());
 }
+
+#[test]
+fn raw_editors_preserve_each_custom_group_and_share_the_default_group() {
+    use incular_widgets::{GlobalKey, TapRegionGroupId};
+
+    let specs = ["Group A", "Group B", "Group C"].map(TapRegionGroupId::named);
+    for override_groups in [true, false] {
+        let keys: [GlobalKey; 3] = std::array::from_fn(|_| GlobalKey::new());
+        let children = std::array::from_fn::<_, 3, _>(|index| {
+            let mut editor = EditableText::new(TextEditingController::new());
+            if override_groups {
+                editor = editor.group_id(specs[index].clone());
+            }
+            Widget::from(editor.size(Size::new(100., 40.))).with_key(keys[index])
+        });
+        let runtime = mount(children, TextShortcutPlatform::Linux);
+        let tree = runtime.tree();
+        for (index, key) in keys.into_iter().enumerate() {
+            let id = tree.element_with_key(&key.into()).unwrap();
+            let expected = if override_groups {
+                &specs[index]
+            } else {
+                &TapRegionGroupId::TextField
+            };
+            assert_eq!(tree.text_field_group_id(id), Some(expected));
+        }
+    }
+}
+
+#[test]
+fn an_editors_custom_group_matches_companions_by_group_on_both_press_phases() {
+    use incular_widgets::{TapRegion, TapRegionSurface};
+
+    let node = FocusNode::new();
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let editor = field(&node, true)
+        .group_id("Group A")
+        .on_tap_outside({
+            let events = events.clone();
+            move |_| events.borrow_mut().push(PointerPhase::Down)
+        })
+        .on_tap_up_outside({
+            let events = events.clone();
+            move |_| events.borrow_mut().push(PointerPhase::Up)
+        });
+
+    let row = Row::new([
+        Widget::from(TapRegion::new(box_()).group_id("Group A")),
+        editor.into(),
+        TextFieldTapRegion::new(box_()).group_id("Group B").into(),
+    ]);
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, TapRegionSurface::new(row)).into())
+            .unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Linux);
+    frame(&mut runtime);
+    let companion = OUTSIDE;
+    let foreign = Offset::new(250., 60.);
+    let kind = PointerDeviceKind::Mouse;
+
+    assert!(node.has_primary_focus());
+    sample(&mut runtime, PointerPhase::Down, companion, kind);
+    sample(&mut runtime, PointerPhase::Move, foreign, kind);
+    sample(&mut runtime, PointerPhase::Up, foreign, kind);
+    assert!(events.borrow().is_empty());
+    assert!(node.has_primary_focus());
+
+    sample(&mut runtime, PointerPhase::Down, foreign, kind);
+    assert_eq!(*events.borrow(), [PointerPhase::Down]);
+    sample(&mut runtime, PointerPhase::Move, companion, kind);
+    sample(&mut runtime, PointerPhase::Up, companion, kind);
+    assert_eq!(*events.borrow(), [PointerPhase::Down, PointerPhase::Up]);
+    assert!(node.has_primary_focus());
+}
+
+#[test]
+fn only_the_current_editors_companion_prevents_default_desktop_blur() {
+    let node = FocusNode::new();
+    let editor = field(&node, true).group_id("Group A");
+    let mut runtime = mount(
+        [
+            TextFieldTapRegion::new(box_()).group_id("Group A").into(),
+            editor.into(),
+            TextFieldTapRegion::new(box_()).group_id("Group B").into(),
+        ],
+        TextShortcutPlatform::Linux,
+    );
+    let mouse = PointerDeviceKind::Mouse;
+    tap(&mut runtime, OUTSIDE, mouse, || {});
+    assert!(node.has_primary_focus());
+    tap(&mut runtime, Offset::new(250., 60.), mouse, || {});
+    assert!(!node.has_focus());
+}

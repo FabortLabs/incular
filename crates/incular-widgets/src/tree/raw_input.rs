@@ -465,6 +465,46 @@ impl WidgetTree {
         })
     }
 
+    /// Returns the group of an existing editor element.
+    #[must_use]
+    pub fn text_field_group_id(&self, editor: ElementId) -> Option<&crate::TapRegionGroupId> {
+        let WidgetKind::TextField(spec) = self.elements.get(editor.0)?.widget.kind() else {
+            return None;
+        };
+        Some(&spec.group_id)
+    }
+
+    fn hit_editable_groups<'a>(
+        &'a self,
+        hit: &'a PointerHitTest,
+    ) -> impl Iterator<Item = (Option<ElementId>, &'a crate::TapRegionGroupId)> + 'a {
+        let field = self.text_field_for_hit(hit).and_then(|editor| {
+            self.text_field_group_id(editor)
+                .map(|id| (self.nearest_tap_surface(editor), id))
+        });
+        field.into_iter().chain(hit.raw().iter().copied().filter_map(|element| {
+            match self.raw_input_kind(element)? {
+                RawInputKind::TextFieldTapRegion { enabled: true, group_id, .. } => {
+                    Some((self.nearest_tap_surface(element), group_id))
+                }
+                RawInputKind::TapRegion { enabled: true, group_id: Some(group_id), .. } => {
+                    self.nearest_tap_surface(element).map(|surface| (Some(surface), group_id))
+                }
+                _ => None,
+            }
+        }))
+    }
+
+    /// True when a hit belongs to this particular editor's tap group.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn preserves_editable_group_with_hit(&self, editor: ElementId, hit: &PointerHitTest) -> bool {
+        let Some(group) = self.text_field_group_id(editor) else { return false; };
+        let surface = self.nearest_tap_surface(editor);
+        self.hit_editable_groups(hit)
+            .any(|(hit_surface, hit_group)| hit_surface == surface && hit_group == group)
+    }
+
     /// Dispatches Flutter's focused EditableText tap-outside notification.
     /// The caller supplies the currently focused element and the live hit.
     #[doc(hidden)]
@@ -491,10 +531,9 @@ impl WidgetTree {
                 let Some(press) = self.input.raw_pointer_routes.get(&key) else {
                     return false;
                 };
-                press.inside_editable_group
+                press.editable_groups.contains(self.nearest_tap_surface(focused), &spec.group_id)
             } else {
-                self.text_field_for_hit(hit).is_some()
-                    || self.preserves_text_field_focus_with_hit(hit)
+                self.preserves_editable_group_with_hit(focused, hit)
             };
             if inside {
                 return false;
@@ -735,11 +774,16 @@ impl WidgetTree {
             } else {
                 Vec::new()
             };
-            let inside_editable_group = self.text_field_for_hit(pointer_hit).is_some()
-                || self.preserves_text_field_focus_with_hit(pointer_hit);
+            // Like TapRegionSurface, release uses membership at press time.
+            // Keep the common zero/one group inline, and snapshot names so a
+            // rebuild cannot retroactively change the contact's group.
+            let mut editable_groups = EditablePressGroups::default();
+            for (surface, group) in self.hit_editable_groups(pointer_hit) {
+                editable_groups.insert(surface, group);
+            }
             self.input.raw_pointer_routes.insert(
                 key,
-                RawPointerRoute { listeners, tap_path, inside_editable_group },
+                RawPointerRoute { listeners, tap_path, editable_groups },
             );
         }
         let finished;

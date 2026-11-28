@@ -1397,7 +1397,37 @@ struct RawPointerRoute {
     listeners: Vec<RawPointerRouteEntry>,
     /// The press hit path for TapRegionSurface, retained until release.
     tap_path: Vec<ElementId>,
-    inside_editable_group: bool,
+    editable_groups: EditablePressGroups,
+}
+
+#[derive(Default)]
+struct EditablePressGroups {
+    first: Option<EditableTapGroup>,
+    additional: Vec<EditableTapGroup>,
+}
+
+struct EditableTapGroup {
+    surface: Option<ElementId>,
+    id: crate::TapRegionGroupId,
+}
+
+impl EditablePressGroups {
+    fn contains(&self, surface: Option<ElementId>, id: &crate::TapRegionGroupId) -> bool {
+        self.first.iter().chain(&self.additional)
+            .any(|group| group.surface == surface && &group.id == id)
+    }
+
+    fn insert(&mut self, surface: Option<ElementId>, id: &crate::TapRegionGroupId) {
+        if self.contains(surface, id) {
+            return;
+        }
+        let group = EditableTapGroup { surface, id: id.clone() };
+        if self.first.is_none() {
+            self.first = Some(group);
+        } else {
+            self.additional.push(group);
+        }
+    }
 }
 
 struct DeferredSingleTap {

@@ -1185,6 +1185,7 @@ impl ToolbarOptions {
 /// re-clamping.
 pub struct EditableText {
     controller: TextEditingController,
+    group_id: crate::TapRegionGroupId,
     focus_node: Option<crate::FocusNode>,
     autofocus: bool,
     select_all_on_focus: Option<bool>,
@@ -1270,6 +1271,7 @@ impl EditableText {
     pub fn new(controller: TextEditingController) -> Self {
         Self {
             controller,
+            group_id: crate::TapRegionGroupId::text_field(),
             focus_node: None,
             autofocus: false,
             select_all_on_focus: None,
@@ -1351,6 +1353,20 @@ impl EditableText {
 
     /// Binds the editor directly to an application-owned keyboard focus node.
     /// The node survives rebuilds when the application reuses the handle.
+    /// Associates this editor with tap-region companions in the same group.
+    /// An omitted group is shared by EditableText and TextFieldTapRegion.
+    #[must_use]
+    pub fn group_id(mut self, group_id: impl Into<crate::TapRegionGroupId>) -> Self {
+        self.group_id = group_id.into();
+        self
+    }
+
+    /// Returns the group used to recognize taps that should preserve focus.
+    #[must_use]
+    pub fn configured_group_id(&self) -> &crate::TapRegionGroupId {
+        &self.group_id
+    }
+
     #[must_use]
     pub fn focus_node(mut self, node: crate::FocusNode) -> Self {
         self.focus_node = Some(node);
@@ -2192,6 +2208,7 @@ impl From<EditableText> for Widget {
             spell_check: value.spell_check,
             spell_check_suppressed,
             controller: value.controller,
+            group_id: value.group_id,
             focus_node: value.focus_node,
             autofocus: value.autofocus,
             select_all_on_focus: value.select_all_on_focus,

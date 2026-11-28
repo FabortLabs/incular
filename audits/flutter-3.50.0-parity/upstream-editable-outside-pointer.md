@@ -24,3 +24,21 @@ A touch release intentionally avoids a fresh hit test in Incular; using an
 empty fresh result here had falsely labeled even a direct inside tap as
 outside. The retained route now carries the editable-group membership.
 Six focused native editable tests and eight adjacent tap-region tests passed.
+
+## EditableText group identity
+
+Pinned group ID originals `editable_text_test.dart:378,412` passed.
+Three mounted native editors retain their own named group overrides,
+while three unconfigured editors all use the common EditableText
+group. The descriptor now exposes the typed group and the retained
+editor uses it during mouse dispatch: only a matching companion in
+the same TapRegionSurface is inside. Unrelated text-field companions
+no longer prevent default desktop blur.
+
+The authored Flutter probe and native test cross the boundary in
+both directions. Starting in the matching group produces no outside
+callbacks even when released elsewhere. Starting in a foreign group
+produces both outside notifications even when released over a
+matching companion. Native contacts capture group identity at press
+time, with no extra allocation for the common default-only group.
+All 50 focused editor, tap-region, menu and handle tests passed.

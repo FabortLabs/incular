@@ -4075,3 +4075,5 @@ packages/flutter/test/widgets/editable_text_test.dart	1198	multiline keyboard is
 packages/flutter/test/widgets/editable_text_test.dart	1428	visiblePassword keyboard is requested when set explicitly	paired-match	upstream-editable-defaults.md
 packages/flutter/test/widgets/editable_text_test.dart	1464	enableSuggestions flag is sent to the engine properly	paired-match	upstream-editable-defaults.md
 packages/flutter/test/widgets/editable_text_test.dart	1493	enableIMEPersonalizedLearning flag is sent to the engine properly	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	378	The value of the passed-in groupId should match the groupId of the EditableText	paired-match	upstream-editable-outside-pointer.md
+packages/flutter/test/widgets/editable_text_test.dart	412	When the value of groupId is not passed in, the default type should be EditableText	paired-match	upstream-editable-outside-pointer.md

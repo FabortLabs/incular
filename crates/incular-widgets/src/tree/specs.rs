@@ -546,6 +546,7 @@ pub(crate) type AppPrivateCommandCallback =
 #[derive(Clone)]
 pub struct TextFieldSpec {
     pub(crate) controller: TextEditingController,
+    pub(crate) group_id: crate::TapRegionGroupId,
     pub(crate) focus_node: Option<crate::FocusNode>,
     pub(crate) autofocus: bool,
     pub(crate) select_all_on_focus: Option<bool>,

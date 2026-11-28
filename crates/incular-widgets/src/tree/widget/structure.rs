@@ -758,6 +758,7 @@ impl PartialEq for ButtonSpec {
 impl PartialEq for TextFieldSpec {
     fn eq(&self, other: &Self) -> bool {
         self.controller == other.controller
+            && self.group_id == other.group_id
             && self.focus_node == other.focus_node
             && self.autofocus == other.autofocus
             && self.select_all_on_focus == other.select_all_on_focus
