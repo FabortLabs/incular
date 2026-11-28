@@ -277,3 +277,60 @@ fn only_the_current_editors_companion_prevents_default_desktop_blur() {
     tap(&mut runtime, Offset::new(250., 60.), mouse, || {});
     assert!(!node.has_focus());
 }
+
+#[test]
+fn an_outside_release_goes_to_the_editor_that_owned_the_press_even_after_default_blur() {
+    let node = FocusNode::new();
+    let releases = Rc::new(RefCell::new(Vec::new()));
+    let editor = field(&node, true).on_tap_up_outside({
+        let releases = releases.clone();
+        move |event| releases.borrow_mut().push((event.phase, event.position))
+    });
+    let mut runtime = mount([box_(), editor.into()], TextShortcutPlatform::Linux);
+    assert!(node.has_primary_focus());
+    sample(
+        &mut runtime,
+        PointerPhase::Down,
+        OUTSIDE,
+        PointerDeviceKind::Mouse,
+    );
+    assert!(
+        !node.has_primary_focus(),
+        "default outside press should blur"
+    );
+    assert!(releases.borrow().is_empty());
+    sample(
+        &mut runtime,
+        PointerPhase::Up,
+        OUTSIDE,
+        PointerDeviceKind::Mouse,
+    );
+    assert_eq!(*releases.borrow(), [(PointerPhase::Up, OUTSIDE)]);
+}
+
+#[test]
+fn an_editor_focused_after_an_outside_press_does_not_inherit_that_release() {
+    let node = FocusNode::new();
+    let releases = Rc::new(RefCell::new(Vec::new()));
+    let editor = field(&node, false).on_tap_up_outside({
+        let releases = releases.clone();
+        move |event| releases.borrow_mut().push(event.position)
+    });
+    let mut runtime = mount([box_(), editor.into()], TextShortcutPlatform::Linux);
+    sample(
+        &mut runtime,
+        PointerPhase::Down,
+        OUTSIDE,
+        PointerDeviceKind::Mouse,
+    );
+    node.request_focus();
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    sample(
+        &mut runtime,
+        PointerPhase::Up,
+        OUTSIDE,
+        PointerDeviceKind::Mouse,
+    );
+    assert!(releases.borrow().is_empty());
+}

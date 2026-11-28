@@ -2791,15 +2791,27 @@ impl Runtime {
         let hit = self.hit_for_pointer_event(gesture_window, raw_event, hover_capable);
         // Outside notifications observe physical down/up independently of
         // whether a different gesture recognizer later wins the contact.
-        let notified_text_outside = matches!(phase, PointerPhase::Down | PointerPhase::Up)
-            && !on_text_handle
-            && self.focused.is_some_and(|focused| {
-                self.tree.dispatch_editable_tap_outside(gesture_window, focused, raw_event, &hit)
-            });
+        let outside_editor = match phase {
+            PointerPhase::Down
+                if !on_text_handle && !self.tree.has_raw_pointer_contact(gesture_window, raw_event) =>
+            {
+                self.focused.filter(|&field| {
+                    self.tree.is_text_field(field)
+                        && !self.tree.preserves_editable_group_with_hit(field, &hit)
+                })
+            }
+            PointerPhase::Up => self.tree.take_editable_outside_press(gesture_window, raw_event),
+            _ => None,
+        };
+        let notified_text_outside = outside_editor
+            .is_some_and(|field| self.tree.dispatch_editable_tap_outside(field, raw_event));
         self.frame_requested |= notified_text_outside;
         let raw_target = self
             .tree
             .dispatch_raw_pointer_with_motion_source(gesture_window, raw_event, &hit, measured_delta);
+        if phase == PointerPhase::Down && let Some(field) = outside_editor {
+            self.tree.remember_editable_outside_press(gesture_window, raw_event, field);
+        }
         if hover_capable && !matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
             self.update_mouse_cursor(raw_event, &hit);
         }
