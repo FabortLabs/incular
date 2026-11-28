@@ -142,3 +142,26 @@ character on the tested mobile configurations until its timer expires,
 while Incular keeps every glyph masked during entry. The comparison
 does not introduce a temporary character reveal. All three focused
 native obscured-editor tests passed.
+
+## Focus requested by an unchanged editor value
+
+The exact pinned web-only `editable_text_test.dart:17485` passed in
+headless Chromium. The native retained comparison mounts an editor with
+`Text1` and an unset selection, submits the same editing value as a user
+action, and verifies that neither focus node is granted focus before the
+frame. An intervening request wins, and the subsequent external request
+to the original editor selects all five characters.
+
+The origin belongs to the individual pending focus request, not the
+editor's next arbitrary focus change. Internal requests that actually
+win do not select all. A newer request for the same editor restores the
+external policy; a user edit callback can also move focus elsewhere
+without the earlier edit stealing it back. The Rust comparisons exercise
+the common Runtime with the same select-all default as Web; they do not
+claim a separately built Incular browser backend.
+
+The pre-existing native `tabbing between fields` caret regression
+reproduced identically on the last published revision, so it was
+isolated from the focused run for this change. The remaining seven
+focus-selection, five hosted focus and thirteen input lifecycle
+checks passed. The caret regression needs its own follow-up.

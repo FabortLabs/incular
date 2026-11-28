@@ -5,6 +5,7 @@ usage() {
   printf '%s\n' 'Usage: bash run-reference-linux.sh probe FILE_test.dart' \
     '       bash run-reference-linux.sh upstream LIBRARY/FILE_test.dart "Exact full test name" [...]' \
     '       bash run-reference-linux.sh web-text-input services/text_input_test.dart "Exact full test name" [...]' \
+    '       bash run-reference-linux.sh web-editable widgets/editable_text_test.dart "Exact full test name" [...]' \
     '       bash run-reference-linux.sh tooling WIDGET_PREVIEW_FILE_test.dart "Exact full test name" [...]' \
     '       bash run-reference-linux.sh scaffold WIDGET_PREVIEW_FILE_test.dart "Exact full test name" [...]' \
     '       bash run-reference-linux.sh scaffold-probe FILE_test.dart "Exact full test name" [...]' >&2
@@ -30,7 +31,7 @@ case "$mode" in
     [[ "$test_file" =~ ^[a-z0-9_]+_test\.dart$ ]] || usage
     fixture="$audit/reference-probes/test/$test_file"
     ;;
-  upstream|web-text-input|tooling|scaffold|scaffold-probe)
+  upstream|web-text-input|web-editable|tooling|scaffold|scaffold-probe)
     (( $# >= 1 && $# <= 5 )) || usage
     if [[ "$mode" == tooling ]]; then
       [[ "$test_file" =~ ^([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
@@ -55,7 +56,8 @@ case "$mode" in
         fixture="$audit/reference-probes/scaffold/$test_file"
       fi
     else
-      if [[ "$mode" == web-text-input && "$test_file" != services/text_input_test.dart ]]; then
+      if [[ "$mode" == web-text-input && "$test_file" != services/text_input_test.dart ]] ||
+         [[ "$mode" == web-editable && "$test_file" != widgets/editable_text_test.dart ]]; then
         usage
       fi
       [[ "$test_file" =~ ^(animation|foundation|gestures|painting|physics|rendering|scheduler|semantics|services|widget_previews|widgets)/([a-z0-9_]+/)*[a-z0-9_]+_test\.dart$ ]] || usage
@@ -108,7 +110,7 @@ manifest = manifest.replace("  flutter_tools:\n    path: ../../../packages/flutt
 print(manifest)
 PYTHON
   fixture="test/$test_file"
-elif [[ "$mode" == upstream || "$mode" == web-text-input ]]; then
+elif [[ "$mode" == upstream || "$mode" == web-text-input || "$mode" == web-editable ]]; then
   python3 - "$flutter_root/packages/flutter_goldens" > "$scratch/pubspec.yaml" <<'PY'
 import json
 import sys
@@ -126,12 +128,17 @@ dev_dependencies:
   flutter_goldens:
     path: """ + json.dumps(sys.argv[1]))
 PY
-  if [[ "$mode" == web-text-input ]]; then
+  if [[ "$mode" == web-text-input || "$mode" == web-editable ]]; then
     # The browser compiler cannot import tests outside its package root.
     # Copy only this fixture and its pinned local helper/config files.
     source_root="$flutter_root/packages/flutter/test"
-    mkdir -p "$scratch/test/services"
-    cp "$fixture" "$source_root/services/text_input_utils.dart" "$scratch/test/services/"
+    destination="$scratch/test/${test_file%/*}"
+    mkdir -p "$destination"
+    if [[ "$mode" == web-text-input ]]; then
+      cp "$fixture" "$source_root/services/text_input_utils.dart" "$destination/"
+    else
+      cp "$fixture" "$source_root/widgets/"{clipboard_utils,editable_text_tester,editable_text_utils,live_text_utils,semantics_tester}.dart "$destination/"
+    fi
     cp "$source_root/flutter_test_config.dart" "$source_root"/_goldens_{io,web}.dart "$scratch/test/"
     cmp "$fixture" "$scratch/test/$test_file"
     fixture="test/$test_file"
@@ -182,10 +189,10 @@ else
   fi
 
   test_args=(--no-pub --concurrency=1 --reporter expanded)
-  if [[ "$mode" == web-text-input ]]; then
+  if [[ "$mode" == web-text-input || "$mode" == web-editable ]]; then
     test_args=(--no-pub --platform chrome --reporter expanded)
   fi
-  if [[ "$mode" == upstream || "$mode" == web-text-input || "$mode" == scaffold || "$mode" == scaffold-probe ]]; then
+  if [[ "$mode" == upstream || "$mode" == web-text-input || "$mode" == web-editable || "$mode" == scaffold || "$mode" == scaffold-probe ]]; then
     test_args+=(--name "$pattern")
   fi
   "$flutter" test "${test_args[@]}" "$fixture" 2>&1 | tee result.log

@@ -3595,15 +3595,15 @@ impl Runtime {
     /// node becomes the runtime's focus (releasing the previous one), and an
     /// unfocused current node clears it.
     pub(crate) fn adopt_external_focus_change(&mut self) {
-        if let Some(next) = self.take_external_focus_change() {
+        if let Some((next, from_editor)) = self.take_external_focus_change() {
             let same_node = self.primary_focus_node.as_ref().is_some_and(|previous| {
                 next.and_then(|id| self.tree.focus_node_at(id)).as_ref() == Some(previous)
             });
-            self.set_focus_with_external_selection(next, !same_node);
+            self.set_focus_with_external_selection(next, !same_node && !from_editor);
         }
     }
 
-    fn take_external_focus_change(&mut self) -> Option<Option<ElementId>> {
+    fn take_external_focus_change(&mut self) -> Option<(Option<ElementId>, bool)> {
         self.tree.refresh_hosted_scope_membership();
         if let Some((_, host_order)) = self.pending_view_entry
             && self.tree.has_newer_hosted_focus_request(host_order)
@@ -3621,7 +3621,7 @@ impl Runtime {
         // Focus observers can queue another request while a transition is
         // being delivered. Do not acknowledge that newer request here.
         self.adopted_focus_epoch = Some(epoch);
-        self.tree.external_focus_change(current).or_else(|| {
+        self.tree.external_focus_change_with_origin(current).or_else(|| {
             // Explicit requests have already won. If a widget moved under
             // a new parent and retained the same FocusNode, preserve that
             // node's primary focus even though its old ElementId is gone.
@@ -3638,7 +3638,7 @@ impl Runtime {
                         }
                     })
                     .or_else(|| self.tree.focus_fallback_after_node_detached())
-            })
+            }).map(|next| (next, false))
         })
     }
 
@@ -3650,7 +3650,7 @@ impl Runtime {
         let direct = self.take_external_focus_change();
         if let Some(next) = self.tree.finish_hosted_scope_autofocus(pending) {
             self.set_focus_with_external_selection(Some(next), false);
-        } else if let Some(next) = direct {
+        } else if let Some((next, _)) = direct {
             self.set_focus(next);
         }
     }
@@ -3872,6 +3872,54 @@ impl Runtime {
             return false;
         }
         self.set_focus(Some(target));
+        true
+    }
+
+    /// Applies a user-originated edit to a specific mounted editor. Even an
+    /// unchanged value can request focus, but that request is settled at
+    /// the next focus boundary. A newer request can win without inheriting
+    /// this editor's internal-focus policy.
+    pub fn user_update_editable_value(
+        &mut self,
+        target: ElementId,
+        value: incular_text::TextEditingValue,
+        cause: incular_text::SelectionChangedCause,
+    ) -> bool {
+        if !self.tree.can_request_focus(target) {
+            return false;
+        }
+        let Some(controller) = self.tree.text_controller(target) else {
+            return false;
+        };
+        let Some(focus) = self.tree.focus_node_at(target) else {
+            return false;
+        };
+        let (changed, content_changed) = controller.with_value(|old| {
+            (old != &value, old.text != value.text || old.composing != value.composing)
+        });
+        if content_changed && !self.tree.text_field_is_editable(target) {
+            return false;
+        }
+        let requests_focus = self.focused != Some(target) && !focus.has_primary_focus();
+        if requests_focus {
+            focus.request_focus_from_editor();
+        }
+        if changed {
+            let previous = self.observed_editor_selection(target);
+            controller.apply_platform_editing_value(
+                value,
+                true,
+                incular_text::TextAffinity::Downstream,
+                false,
+            );
+            if content_changed {
+                self.hide_text_field_overlays(target);
+            }
+            self.report_editor_selection_delta(target, previous, cause);
+            controller.reset_caret(self.input_now());
+            self.flush_text_editing_callback_errors();
+        }
+        self.frame_requested |= changed || requests_focus;
         true
     }
 

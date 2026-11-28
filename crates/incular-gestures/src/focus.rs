@@ -192,7 +192,7 @@ struct FocusState {
     host_children: RefCell<Vec<Weak<FocusState>>>,
     focused: Cell<bool>,
     descendant_focused: Cell<bool>,
-    requested: Cell<Option<u64>>,
+    requested: Cell<Option<(u64, bool)>>,
     authority: Cell<FocusAuthority>,
     host_attachment_count: Cell<usize>,
     schedule_host_frame: Cell<Option<fn()>>,
@@ -408,6 +408,16 @@ impl FocusNode {
 
     /// Requests focus without granting it to a node that has not been attached.
     pub fn request_focus(&self) {
+        self.request_focus_with_origin(false);
+    }
+
+    /// An editor-initiated request should not select all when it wins.
+    #[doc(hidden)]
+    pub fn request_focus_from_editor(&self) {
+        self.request_focus_with_origin(true);
+    }
+
+    fn request_focus_with_origin(&self, from_editor: bool) {
         if self.can_request_focus() {
             if self.state.host_attachment_count.get() == 0 && self.remember_unmounted_scope_path() {
                 self.clear_pending_focus_request();
@@ -415,7 +425,7 @@ impl FocusNode {
                 return;
             }
             let request = FOCUS_EPOCH.get().wrapping_add(1);
-            self.state.requested.set(Some(request));
+            self.state.requested.set(Some((request, from_editor)));
             FOCUS_EPOCH.set(request);
             self.state.schedule_host_frame();
             if self.state.authority.get() == FocusAuthority::Standalone {
@@ -668,6 +678,12 @@ impl FocusNode {
     #[doc(hidden)]
     #[must_use]
     pub fn focus_request_order(&self) -> Option<u64> {
+        self.state.requested.get().map(|(order, _)| order)
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn pending_focus_request(&self) -> Option<(u64, bool)> {
         self.state.requested.get()
     }
 

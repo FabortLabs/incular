@@ -914,7 +914,7 @@ packages/flutter/test/widgets/editable_text_test.dart	6593	called with proper co
 packages/flutter/test/widgets/editable_text_test.dart	6635	only send updates when necessary	paired-match	upstream-editable-ime-caret.md
 packages/flutter/test/widgets/editable_text_test.dart	6653	set to selection start on forward selection	paired-match	upstream-editable-ime-caret.md
 packages/flutter/test/widgets/editable_text_test.dart	6673	set to selection start on reversed selection	paired-match	upstream-editable-ime-caret.md
-packages/flutter/test/widgets/editable_text_test.dart	17330	tabbing between fields	paired-match	upstream-editable-focus-selection.md
+packages/flutter/test/widgets/editable_text_test.dart	17330	tabbing between fields	paired-mismatch	upstream-editable-focus-selection.md
 packages/flutter/test/widgets/editable_text_test.dart	17552	when selectAllOnFocus is turned off	paired-match	upstream-editable-focus-selection.md
 packages/flutter/test/widgets/editable_text_test.dart	17581	when selectAllOnFocus is turned on	paired-match	upstream-editable-focus-selection.md
 packages/flutter/test/widgets/editable_text_test.dart	17613	when having focus regained after the app resumed	paired-match	upstream-editable-focus-selection.md
@@ -4645,3 +4645,4 @@ packages/flutter/test/widgets/editable_text_test.dart	14095	Can undo as intented
 packages/flutter/test/widgets/editable_text_test.dart	14426	does not save composing changes (except Android)	paired-match	undo-history-comparisons.md#ime-composition-has-a-separate-target-platform-policy
 packages/flutter/test/widgets/editable_text_test.dart	14550	does save composing changes on Android	paired-match	undo-history-comparisons.md#ime-composition-has-a-separate-target-platform-policy
 packages/flutter/test/widgets/editable_text_test.dart	14715	saves right up to composing change even when throttled	paired-match	undo-history-comparisons.md#ime-composition-has-a-separate-target-platform-policy
+packages/flutter/test/widgets/editable_text_test.dart	17485	when having focus stolen between frames on web	paired-match	upstream-editable-focus-selection.md#focus-requested-by-an-unchanged-editor-value

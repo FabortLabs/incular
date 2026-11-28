@@ -2328,31 +2328,41 @@ impl WidgetTree {
     /// A standalone tree retains direct focus behavior for existing users.
     #[must_use]
     pub fn external_focus_change(&self, current: Option<ElementId>) -> Option<Option<ElementId>> {
+        self.external_focus_change_with_origin(current).map(|(next, _)| next)
+    }
+
+    /// Settles the winning request and reports whether it came from an editor.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn external_focus_change_with_origin(
+        &self,
+        current: Option<ElementId>,
+    ) -> Option<(Option<ElementId>, bool)> {
         if let Some(hosted) = &self.hosted_focus_nodes {
             let epoch = self.focus_epoch();
             let mut requests: Vec<_> = hosted
                 .iter()
                 .filter_map(|(&id, binding)| {
-                    let order = binding.node().focus_request_order()?;
+                    let (order, from_editor) = binding.node().pending_focus_request()?;
                     self.can_request_focus(id)
-                        .then_some((epoch.wrapping_sub(order), id))
+                        .then_some((epoch.wrapping_sub(order), id, from_editor))
                 })
                 .collect();
             // The last eligible request owns primary focus; earlier
             // requests still update the scopes they touched.
-            requests.sort_unstable_by_key(|(age, _)| std::cmp::Reverse(*age));
-            for &(_, target) in &requests {
+            requests.sort_unstable_by_key(|(age, _, _)| std::cmp::Reverse(*age));
+            for &(_, target, _) in &requests {
                 self.record_hosted_focus_history(target);
             }
-            let requested = requests.last().map(|&(_, target)| target);
+            let requested = requests.last().map(|&(_, target, from_editor)| (target, from_editor));
             // Consume rejected requests as well. A branch that was hidden
             // at this boundary must not steal focus when it becomes visible.
             for binding in hosted.values() {
                 binding.node().clear_pending_focus_request();
             }
-            if let Some(requested) = requested {
+            if let Some((requested, from_editor)) = requested {
                 if Some(requested) != current {
-                    return Some(Some(requested));
+                    return Some((Some(requested), from_editor));
                 }
                 hosted[&requested].node().apply_host_focus(true);
                 return None;
@@ -2360,7 +2370,7 @@ impl WidgetTree {
             return current
                 .and_then(|id| hosted.get(&id))
                 .is_some_and(|binding| !binding.node().has_primary_focus())
-                .then_some(None);
+                .then_some((None, false));
         }
         let node_of = |id: ElementId| {
             self.elements
@@ -2376,12 +2386,12 @@ impl WidgetTree {
                     .is_some_and(|node| node.has_pending_focus_request() && node.has_focus())
             })
         {
-            return Some(Some(requested));
+            return Some((Some(requested), false));
         }
         let current = current?;
         node_of(current)
             .is_some_and(|node| !node.has_focus())
-            .then_some(None)
+            .then_some((None, false))
     }
 
     /// Returns the first listener that requested autofocus and can currently

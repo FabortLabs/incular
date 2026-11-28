@@ -247,3 +247,130 @@ fn external_focus_to_a_different_field_after_resuming_still_selects_all_on_deskt
         assert_eq!(second.selection(), TextSelection::new(0, 5));
     }
 }
+
+fn editable_focus_race() -> (Runtime, TextEditingController, FocusNode, FocusNode) {
+    use incular_widgets::{Focus, SizedBox, Widget};
+
+    let editor = TextEditingController::with_text("Text1");
+    let first = FocusNode::new();
+    let second = FocusNode::new();
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            Column::new([
+                Widget::from(EditableText::new(editor.clone()).focus_node(first.clone()))
+                    .with_key("editable-focus-race"),
+                SizedBox::new().height(200.).into(),
+                Focus::new(SizedBox::shrink())
+                    .node(second.clone())
+                    .into(),
+            ]),
+        )
+        .into(),
+    )
+    .unwrap();
+    // Linux uses the same external select-all default as Flutter Web.
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Linux);
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    (runtime, editor, first, second)
+}
+
+fn request_by_repeating_value(runtime: &mut Runtime, editor: &TextEditingController) {
+    let field = runtime
+        .tree()
+        .element_with_key(&"editable-focus-race".into())
+        .unwrap();
+    assert!(runtime.user_update_editable_value(
+        field,
+        editor.value(),
+        incular_text::SelectionChangedCause::Keyboard,
+    ));
+}
+
+#[test]
+fn stealing_focus_before_a_frame_does_not_suppress_external_select_all_later() {
+    let (mut runtime, editor, first, second) = editable_focus_race();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    assert!(!first.has_focus() && !second.has_focus());
+    assert_eq!(editor.selection_if_set(), None);
+
+    request_by_repeating_value(&mut runtime, &editor);
+    assert!(!first.has_focus() && !second.has_focus());
+    assert_eq!(editor.selection_if_set(), None);
+
+    second.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(!first.has_focus() && second.has_primary_focus());
+    assert_eq!(editor.selection_if_set(), None);
+
+    first.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert!(first.has_primary_focus() && !second.has_focus());
+    assert_eq!(editor.selection_if_set(), Some(TextSelection::new(0, 5)));
+}
+
+#[test]
+fn editor_focus_does_not_select_all_unless_a_newer_external_request_wins() {
+    for external in [false, true] {
+        let (mut runtime, editor, first, second) = editable_focus_race();
+        request_by_repeating_value(&mut runtime, &editor);
+        if external {
+            first.request_focus();
+        }
+        runtime
+            .run_frame(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        assert!(first.has_primary_focus() && !second.has_focus());
+        assert_eq!(
+            editor.selection_if_set(),
+            Some(if external {
+                TextSelection::new(0, 5)
+            } else {
+                TextSelection::collapsed(5)
+            })
+        );
+    }
+}
+
+#[test]
+fn a_user_edit_callback_can_supply_the_newest_focus_request() {
+    use incular_text::{SelectionChangedCause, TextEditingValue};
+    use incular_widgets::{Focus, SizedBox, Widget};
+
+    let editor = TextEditingController::with_text("old");
+    let edit_focus = FocusNode::new();
+    let other_focus = FocusNode::new();
+    let field = EditableText::new(editor.clone())
+        .focus_node(edit_focus.clone())
+        .on_changed({
+            let other_focus = other_focus.clone();
+            move |text| {
+                assert_eq!(text, "new");
+                other_focus.request_focus();
+            }
+        });
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            Column::new([
+                Widget::from(field).with_key("edit"),
+                Focus::new(SizedBox::shrink()).node(other_focus.clone()).into(),
+            ]),
+        )
+        .into(),
+    )
+    .unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(bounds).unwrap();
+    let target = runtime.tree().element_with_key(&"edit".into()).unwrap();
+    let mut next = TextEditingValue::new("new");
+    next.selection = TextSelection::collapsed(1);
+    assert!(runtime.user_update_editable_value(target, next, SelectionChangedCause::Keyboard));
+    assert!(!edit_focus.has_focus() && !other_focus.has_focus());
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(editor.text(), "new");
+    assert_eq!(editor.selection_if_set(), Some(TextSelection::collapsed(1)));
+    assert!(!edit_focus.has_focus() && other_focus.has_primary_focus());
+}
