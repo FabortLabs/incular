@@ -3904,3 +3904,6 @@ packages/flutter/test/widgets/focus_manager_test.dart	489	Can setFirstFocus on a
 packages/flutter/test/widgets/focus_manager_test.dart	701	Adding a focusedChild to a scope sets scope as focusedChild in parent scope	paired-match	upstream-mounted-focus-scope-nodes.md#inactive-child-scope-remembers-its-selection
 packages/flutter/test/widgets/focus_scope_test.dart	1825	Focus does not update the focusNode attributes when the widget updates if withExternalFocusNode is used 2	paired-match	upstream-focus-widget-semantics.md#ownership-of-focus-node-properties
 packages/flutter/test/widgets/focus_scope_test.dart	1840	Focus passes changes in attribute values to its focus node	paired-match	upstream-focus-widget-semantics.md#ownership-of-focus-node-properties
+packages/flutter/test/widgets/focus_traversal_test.dart	435	Find the initial focus when a route is pushed or popped.	paired-match	upstream-navigation-initial-focus.md#push-pop-and-nested-traversal
+packages/flutter/test/widgets/focus_traversal_test.dart	559	Nested navigator does not trap focus	paired-match	upstream-navigation-initial-focus.md#push-pop-and-nested-traversal
+packages/flutter/test/widgets/focus_traversal_test.dart	1534	Find the initial focus when a route is pushed or popped.	paired-match	upstream-navigation-initial-focus.md#push-pop-and-nested-traversal

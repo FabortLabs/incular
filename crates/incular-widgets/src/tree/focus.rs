@@ -2151,6 +2151,14 @@ impl WidgetTree {
     /// receive focus.
     #[must_use]
     pub fn autofocus_element(&self) -> Option<ElementId> {
+        self.autofocus_element_where(|_| true)
+    }
+
+    /// Selects autofocus within an owning subtree, ignoring declarations
+    /// and candidates outside it even when they remain mounted and focusable.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn autofocus_element_where(&self, mut includes: impl FnMut(ElementId) -> bool) -> Option<ElementId> {
         // Autofocus is a direct request, not a Tab traversal. Walk declarations
         // in mounting order, including nodes excluded from traversal.
         let mut pending: Vec<_> = self.root.into_iter().collect();
@@ -2165,14 +2173,15 @@ impl WidgetTree {
                 WidgetKind::TextField(spec) => spec.autofocus,
                 _ => false,
             };
-            if requested && self.can_request_focus(id) {
+            if requested && includes(id) && self.can_request_focus(id) {
                 return Some(id);
             }
-            if element.widget.semantic_properties().focus_scope_autofocus {
+            if element.widget.semantic_properties().focus_scope_autofocus && includes(id) {
                 autofocusing_scopes.push(id);
             }
             if navigation_anchor.is_none()
                 && element.widget.semantic_properties().navigation_scope_autofocus
+                && includes(id)
                 && self.can_request_focus(id)
             {
                 navigation_anchor = Some(id);
@@ -2191,7 +2200,7 @@ impl WidgetTree {
                 focusable
                     .iter()
                     .copied()
-                    .find(|candidate| self.is_focus_descendant_or_self(*candidate, scope))
+                    .find(|candidate| self.is_focus_descendant_or_self(*candidate, scope) && includes(*candidate))
             })
             .or(navigation_anchor)
     }

@@ -126,12 +126,17 @@ impl RouteFocusState {
         let current = runtime.focused_element();
         let vacant =
             current.is_none_or(|id| Self::orphaned(runtime, navigator, &self.owner_of, id));
-        if vacant
-            && let Some(auto) = runtime.tree().autofocus_element()
-            && (self.owner_of)(runtime.tree(), auto) == Some(route)
-        {
-            runtime.set_focus(Some(auto));
-            return;
+        if vacant {
+            let tree = runtime.tree();
+            // During activation the previous route may still be mounted
+            // and focusable until the committed frame releases its staged
+            // focus. Filter ownership before choosing the first candidate.
+            if let Some(auto) =
+                tree.autofocus_element_where(|id| (self.owner_of)(tree, id) == Some(route))
+            {
+                runtime.set_focus(Some(auto));
+                return;
+            }
         }
         if let Some(current) = current
             && Self::orphaned(runtime, navigator, &self.owner_of, current)
