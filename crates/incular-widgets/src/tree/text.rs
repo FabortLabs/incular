@@ -6,6 +6,7 @@ use crate::selection::{
     TextSelectionPoint,
 };
 use incular_rendering::{SelectionResult, SelectionUtils};
+use std::borrow::Cow;
 use incular_text::{LineBoundary, TextGeometry};
 
 type SelectionProxyRange = (ElementId, std::ops::Range<usize>);
@@ -2307,20 +2308,73 @@ impl WidgetTree {
                 Some((selection, locate(selection.anchor)?, locate(selection.extent)?))
             })
         };
+        let mut fragments = selection.and_then(|selection| {
+            let custom = self.selection_content_combiner(area).is_some()
+                || proxies
+                    .iter()
+                    .any(|(proxy, _)| self.selection_content_combiner(*proxy).is_some());
+            custom.then(|| {
+                entries.iter().map(|&element| {
+                    let range = static_selection_range(self, &entries, selection, element)?;
+                    let text = self.selectable_text_value(element)?;
+                    Some(Cow::Borrowed(&text[range.start..range.end]))
+                }).collect::<Vec<_>>()
+            })
+        });
         // Child delegates receive their local range, not all the parent's
-        // text, before the outer selection callback fires.
+        // text, before the outer selection callback fires. Collapse each
+        // proxy's formatted fragments into one part for its own parent.
         for (proxy, range) in proxies {
             let children = &entries[range.clone()];
             let local = indexes.and_then(|(selection, anchor, extent)| {
                 self.project_selection(proxy, children, range.start, anchor, extent, selection)
             });
-            self.update_selection_snapshot(proxy, children, local);
+            let content = fragments.as_mut().and_then(|fragments| {
+                if range.is_empty() {
+                    return None;
+                }
+                let pieces = &mut fragments[range];
+                let content = self.combine_selection_fragments(proxy, pieces);
+                pieces.fill(None);
+                if !content.is_empty() {
+                    pieces[0] = Some(Cow::Owned(content.clone()));
+                }
+                Some(content)
+            });
+            self.update_selection_snapshot(proxy, children, local, content);
         }
-        self.update_selection_snapshot(area, &entries, selection);
+        let content = fragments.as_ref().map(|parts| self.combine_selection_fragments(area, parts));
+        self.update_selection_snapshot(area, &entries, selection, content);
+        drop(fragments);
         for element in entries {
             if let Some(render) = self.render_id(element) {
                 self.mark_render_paint(render);
             }
+        }
+    }
+
+    fn selection_content_combiner(&self, area: ElementId) -> Option<&dyn Fn(&[&str]) -> String> {
+        match self.elements.get(area.0)?.widget.kind() {
+            WidgetKind::SelectionContainer { delegate, .. } => delegate.content_combiner(),
+            _ => None,
+        }
+    }
+
+    fn combine_selection_fragments(
+        &self,
+        area: ElementId,
+        pieces: &[Option<Cow<'_, str>>],
+    ) -> String {
+        let present = pieces.iter().flatten().map(Cow::as_ref);
+        if let Some(combine) = self.selection_content_combiner(area) {
+            let parts: Vec<_> = present.collect();
+            if parts.is_empty() {
+                String::new()
+            } else {
+                combine(&parts)
+            }
+        } else {
+            present.collect()
         }
     }
 
@@ -2329,10 +2383,11 @@ impl WidgetTree {
         area: ElementId,
         entries: &[ElementId],
         selection: Option<StaticSelection>,
+        content: Option<String>,
     ) {
         let Some(controller) = self.selection_area_controller(area) else { return; };
         if let Some(selection) = selection.filter(|_| !entries.is_empty()) {
-            let content = static_selection_text(self, entries, selection);
+            let content = content.unwrap_or_else(|| static_selection_text(self, entries, selection));
             let geometry = self.selection_geometry(area, entries, selection);
             let range = selection_content_range(self, entries, selection);
             controller.set_selection_snapshot(content, range, geometry);

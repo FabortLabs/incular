@@ -275,3 +275,91 @@ fn select_all_bridges_nested_containers_and_projects_their_local_selection() {
     assert!(region.selected_text().is_empty());
     assert!(nested.selection_geometry().has_content);
 }
+
+#[test]
+fn a_child_delegate_formats_selected_paragraphs_before_the_outer_region_callback() {
+    use incular_core::Offset;
+    use incular_widgets::SelectionContainerDelegate;
+    use std::{cell::RefCell, rc::Rc};
+
+    let region = SelectionAreaController::new();
+    let delegate =
+        SelectionContainerDelegate::new().combine_selected_content_with(|parts| parts.join("\n"));
+    let nested = delegate.controller();
+    let observed = Rc::new(RefCell::new(None));
+    region.set_selection_changed_listener({
+        let observed = observed.clone();
+        move |content| *observed.borrow_mut() = content
+    });
+    let label =
+        |text, key| Widget::from(Text::new(text).text_direction(TextDirection::Ltr)).with_key(key);
+    let child = SelectionContainer::with_delegate(
+        delegate,
+        Column::new([label("Hello World!", 1_u64), label("How are you!", 2_u64)]),
+    );
+    let mut tree = WidgetTree::new();
+    tree.mount(Widget::selection_area(region.clone(), child.into()))
+        .unwrap();
+    frame(&mut tree);
+    assert_eq!(region.registered_child_count(), 1);
+    assert_eq!(nested.registered_child_count(), 2);
+
+    let first = tree.element_with_key(&1_u64.into()).unwrap();
+    let second = tree.element_with_key(&2_u64.into()).unwrap();
+    let point = |id, byte| {
+        let (transform, size) = tree.element_geometry(id).expect("mounted label");
+        let layout = tree.text_layout(tree.render_id(id).unwrap()).unwrap();
+        let x = layout
+            .line_caret_positions(0)
+            .iter()
+            .find(|stop| stop.offset == byte)
+            .expect("visible shaped caret")
+            .x;
+        transform.transform_point(Offset::new(x, size.height / 2.))
+    };
+    let start = point(first, 4);
+    let finish = point(second, 10);
+    assert!(tree.selectable_text_set_selection(first, start, false));
+    assert!(observed.borrow().is_none());
+    assert!(tree.selectable_text_set_selection(second, finish, true));
+    let expected = "o World!\nHow are yo";
+    assert_eq!(nested.selected_text(), expected);
+    assert_eq!(region.selected_text(), expected);
+    assert_eq!(
+        observed
+            .borrow()
+            .as_ref()
+            .map(|value| value.plain_text.as_str()),
+        Some(expected)
+    );
+}
+
+#[test]
+fn formatters_compose_hierarchically_and_only_for_selected_children() {
+    use incular_widgets::SelectionContainerDelegate;
+    let inner =
+        SelectionContainerDelegate::new().combine_selected_content_with(|parts| parts.join("\n"));
+    let inner_controller = inner.controller();
+    let outer =
+        SelectionContainerDelegate::new().combine_selected_content_with(|parts| parts.join("|"));
+    let outer_controller = outer.controller();
+    let label = |text| Widget::from(Text::new(text).text_direction(TextDirection::Ltr));
+    let widget = SelectionContainer::with_delegate(
+        outer,
+        Column::new([
+            label("a").with_key(1_u64),
+            SelectionContainer::with_delegate(inner, Column::new([label("b"), label("c")])).into(),
+            label("d"),
+        ]),
+    );
+    let mut tree = WidgetTree::new();
+    tree.mount(widget.into()).unwrap();
+    frame(&mut tree);
+    let first = tree.element_with_key(&1_u64.into()).unwrap();
+    assert!(tree.selectable_text_select_all(first));
+    assert_eq!(outer_controller.selected_text(), "a|b\nc|d");
+    assert_eq!(inner_controller.selected_text(), "b\nc");
+    assert!(tree.selectable_text_select(first, incular_text::TextSelection::new(0, 1)));
+    assert_eq!(outer_controller.selected_text(), "a");
+    assert!(inner_controller.selected_text().is_empty());
+}

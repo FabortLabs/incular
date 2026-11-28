@@ -43,3 +43,16 @@ continues to pass the native lifetime suite.
 
 The authored Flutter probe and all 17 targeted native tests passed.
 No additional original registrations are counted by this slice.
+
+## Custom selected content
+
+The pinned `selectable_region_test.dart` case
+`Can extend StaticSelectionContainerDelegate` and the native mounted
+equivalent both select from byte-equivalent caret positions 4 and 10 in
+two rendered paragraphs. The child's custom combiner produces
+`o World!\nHow are yo`; the enclosing region publishes that exact
+string to its selection-change callback. Nested formatters compose
+per direct child rather than flattening all leaf strings, and absent
+selection does not invoke a formatter. Formatting does not change
+the underlying range, highlights, or caret geometry. All 19 focused
+native tests passed.
