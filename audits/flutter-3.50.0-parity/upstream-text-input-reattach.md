@@ -334,3 +334,14 @@ sends the updated matrix without repeating its editing state.
 The 14/140 px fixtures use the extracted pinned FlutterTest font,
 not the host's default metrics; all 18 focused geometry, style and
 platform control tests ran with that font.
+
+### Live composing geometry and degenerate transforms
+
+Pinned :6720, :6758 and :6779 passed. With no marked range, showing
+the keyboard sends the narrow caret rectangle at offset zero. A
+subsequently composed ten-character range replaces it with actual
+laid-out text bounds. The periodic rectangle publisher skips the
+identical next frame without reopening the client or emitting new
+commands. A programmatically focused editor inside a zero-size
+FittedBox still sends finite composing geometry. All 16 focused
+native runtime and platform cases passed.

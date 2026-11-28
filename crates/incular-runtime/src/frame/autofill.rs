@@ -61,14 +61,7 @@ impl Runtime {
         let (editing, composing) = controller.with_value(|value| {
             (editor_wire(&controller, &value.text, value.composing), value.composing)
         });
-        let local_caret = |offset| {
-            self.tree.editable_local_caret_rect(field, offset, TextAffinity::Downstream)
-        };
-        let marked = composing
-            .and_then(|range| self.tree.editable_composing_rect(field, range))
-            .or_else(|| local_caret(composing.map_or(0, |range| range.start)));
-        let caret = controller.selection_if_set()
-            .and_then(|selection| local_caret(selection.range().start));
+        let (marked, caret) = self.flutter_input_rects(field, &controller, composing);
         let [a, b, c, d, x, y] = transform.coefficients();
         controls.update(client, Update::EditableSizeAndTransform {
             size,
@@ -89,6 +82,53 @@ impl Runtime {
             controls.update(client, Update::CaretRect(caret))?;
         }
         Ok(shown)
+    }
+
+    /// Publishes changed local composing and caret bounds after layout, for
+    /// the active Flutter host attachment. Unchanged rectangles are not
+    /// sent. The host may call this after each subsequent frame.
+    pub fn publish_flutter_text_input_rects(
+        &self,
+        controls: &mut FlutterTextInputControls,
+    ) -> Result<bool, FlutterTextInputControlsError> {
+        use FlutterTextInputControlUpdate as Update;
+
+        let Some(connection) = self.text_input_client.filter(|connection| {
+            self.focused == Some(connection.target) && controls.has_shown(connection.client)
+        }) else {
+            return Ok(false);
+        };
+        let field = connection.target;
+        let Some(controller) = self.tree.text_controller(field) else {
+            return Ok(false);
+        };
+        let composing = controller.with_value(|value| value.composing);
+        let (marked, caret) = self.flutter_input_rects(field, &controller, composing);
+        let mut sent = false;
+        if let Some(marked) = marked {
+            sent |= controls.update(connection.client, Update::ComposingRect(marked))?;
+        }
+        if let Some(caret) = caret {
+            sent |= controls.update(connection.client, Update::CaretRect(caret))?;
+        }
+        Ok(sent)
+    }
+
+    fn flutter_input_rects(
+        &self,
+        field: ElementId,
+        controller: &TextEditingController,
+        composing: Option<TextRange>,
+    ) -> (Option<incular_core::Rect>, Option<incular_core::Rect>) {
+        let local_caret = |offset| {
+            self.tree.editable_local_caret_rect(field, offset, TextAffinity::Downstream)
+        };
+        let marked = composing
+            .and_then(|range| self.tree.editable_composing_rect(field, range))
+            .or_else(|| local_caret(composing.map_or(0, |range| range.start)));
+        let caret = controller.selection_if_set()
+            .and_then(|selection| local_caret(selection.range().start));
+        (marked, caret)
     }
 
     /// Publishes the active laid-out editor to an opt-in Flutter host.

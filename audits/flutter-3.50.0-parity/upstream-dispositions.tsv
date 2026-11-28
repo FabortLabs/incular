@@ -4152,3 +4152,6 @@ packages/flutter/test/widgets/editable_text_test.dart	10466	keyboard is requeste
 packages/flutter/test/widgets/editable_text_test.dart	6174	location of widget is sent on show keyboard	paired-match	upstream-text-input-reattach.md#editor-size-and-transform-at-keyboard-show
 packages/flutter/test/widgets/editable_text_test.dart	6216	transform and size is reset when text connection opens	paired-match	upstream-text-input-reattach.md#editor-size-and-transform-at-keyboard-show
 packages/flutter/test/widgets/editable_text_test.dart	6344	size and transform are sent when they change	paired-match	upstream-text-input-reattach.md#editor-size-and-transform-at-keyboard-show
+packages/flutter/test/widgets/editable_text_test.dart	6720	called when the composing range changes	paired-match	upstream-text-input-reattach.md#live-composing-geometry-and-degenerate-transforms
+packages/flutter/test/widgets/editable_text_test.dart	6758	only send updates when necessary	paired-match	upstream-text-input-reattach.md#live-composing-geometry-and-degenerate-transforms
+packages/flutter/test/widgets/editable_text_test.dart	6779	zero matrix paint transform	paired-match	upstream-text-input-reattach.md#live-composing-geometry-and-degenerate-transforms
