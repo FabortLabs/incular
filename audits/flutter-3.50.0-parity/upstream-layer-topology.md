@@ -84,3 +84,23 @@ to 0, then repainted only its sibling. The leader's transform and
 size stayed correct through all three frames, and the sibling
 produced its expected fill exactly once. All ten focused native
 composited transform tests passed.
+
+## Retained leaders detached from the scene
+
+The authored pinned Flutter layer probe keeps an ancestor and its
+leader alive with handles. Removing and reattaching the ancestor
+clears and restores the link; detaching the root also clears it.
+
+Before the Incular fix, removing a retained branch from the root
+left one ghost follower picture in the published display list.
+A departing branch now clears only links published by its own
+leaders. Native tests check actual follower paint and placement,
+retained identity, root detachment and replacement, and ancestor
+removal. A shared-link control verifies that a departing non-owner
+cannot clear another tree's publication and that moving the root
+into an already attached branch leaves that branch linked.
+
+All 22 focused topology and composition callback tests passed.
+A wider rendering target returned 70 passes and two curve-bounds
+failures; rerunning against the pre-fix compositor reproduced
+both unchanged. The authored comparison adds no upstream credit.

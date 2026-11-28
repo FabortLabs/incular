@@ -843,8 +843,15 @@ impl LayerTree {
         self.layers.contains(id.0)
     }
     pub fn set_root(&mut self, root: LayerId) {
-        self.scene_dirty |= self.root != Some(root);
-        self.root = Some(root);
+        if self.root == Some(root) {
+            return;
+        }
+        self.scene_dirty = true;
+        if let Some(previous) = self.root.replace(root)
+            && self.leader_layers != 0
+        {
+            self.clear_detached_leader_links(previous);
+        }
     }
 
     /// Detaches the scene root without destroying its retained layers.
@@ -854,6 +861,9 @@ impl LayerTree {
     pub fn detach_root(&mut self) -> Option<LayerId> {
         let root = self.root.take()?;
         self.scene_dirty = true;
+        if self.leader_layers != 0 {
+            self.clear_detached_leader_links(root);
+        }
         self.notify_composition_subtree(root, true);
         Some(root)
     }
@@ -1193,6 +1203,9 @@ impl LayerTree {
         id
     }
     pub fn remove(&mut self, id: LayerId) {
+        let clear_descendant_links = self.leader_layers != 0
+            && self.layers.get(id.0).is_some_and(|layer| !layer.children.is_empty())
+            && self.actually_attached(id);
         if let Some(layer) = self.layers.remove(id.0) {
             self.composition_observers.clear_layer(id);
             self.matrix_stages.remove(&id);
@@ -1227,19 +1240,24 @@ impl LayerTree {
             if self.root == Some(id) {
                 self.root = None;
             }
+            if clear_descendant_links && self.leader_layers != 0 {
+                for child in layer.children {
+                    self.clear_detached_leader_links(child);
+                }
+            }
             // Children are pruned by their owners before removal in normal
             // widget unmounting; stale entries are ignored by flattening.
         }
     }
     pub fn set_children(&mut self, id: LayerId, children: Vec<LayerId>) {
-        let track_detachment = !self.composition_observers.is_empty();
+        if self.layers.get(id.0).is_none_or(|layer| layer.children == children) {
+            return;
+        }
+        let track_detachment = self.leader_layers != 0 || !self.composition_observers.is_empty();
         let parent_was_attached = track_detachment && self.actually_attached(id);
         let Some(layer) = self.layers.get_mut(id.0) else {
             return;
         };
-        if layer.children == children {
-            return;
-        }
         let previous = std::mem::replace(&mut layer.children, children);
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
@@ -1298,6 +1316,9 @@ impl LayerTree {
         let mut notified = std::collections::HashSet::new();
         for child in potentially_detached {
             if !self.actually_attached(child) && notified.insert(child) {
+                if self.leader_layers != 0 {
+                    self.clear_detached_leader_links(child);
+                }
                 self.notify_composition_subtree(child, true);
             }
         }
@@ -2712,6 +2733,24 @@ impl LayerTree {
             }
         }
     }
+    /// Unpublish layers outside the new scene without revoking a different
+    /// publisher that happens to share a link. A replacement root may be
+    /// inside the old branch; its still-attached subtree is not detached.
+    fn clear_detached_leader_links(&self, id: LayerId) {
+        if self.root == Some(id) {
+            return;
+        }
+        let Some(layer) = self.layers.get(id.0) else {
+            return;
+        };
+        if let LayerKind::Leader { link, publisher, .. } = &layer.kind {
+            link.clear_if_owned_by(publisher);
+        }
+        for child in &layer.children {
+            self.clear_detached_leader_links(*child);
+        }
+    }
+
     fn clear_link_states(&self, id: LayerId) {
         let Some(layer) = self.layers.get(id.0) else {
             return;

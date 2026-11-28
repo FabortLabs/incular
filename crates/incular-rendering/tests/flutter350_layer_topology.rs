@@ -305,3 +305,95 @@ fn a_hidden_leader_cannot_claim_the_link_before_a_visible_one() {
         );
     }
 }
+
+#[test]
+fn a_detached_retained_leader_does_not_leave_a_painted_follower() {
+    use incular_rendering::{FollowerLayer, LayerAnchor, LayerLink};
+
+    let mut tree = LayerTree::new();
+    let link = LayerLink::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let branch = tree.create_transform(Transform::IDENTITY);
+    let origin = Offset::new(31., 17.);
+    let leader = tree.create_leader_at(link.clone(), unit().size, origin);
+    let follower = tree.create_follower(FollowerLayer {
+        link: link.clone(),
+        show_when_unlinked: false,
+        offset: Offset::new(10., 0.),
+        target_anchor: LayerAnchor::TOP_LEFT,
+        follower_anchor: LayerAnchor::TOP_LEFT,
+        size: unit().size,
+    });
+    let paint = picture(&mut tree);
+    tree.set_children(follower, vec![paint]);
+    tree.set_children(branch, vec![leader]);
+    tree.set_children(root, vec![branch, follower]);
+    tree.set_root(root);
+    let assert_paint = |tree: &mut LayerTree, visible: bool| {
+        let _ = tree.flatten();
+        assert_eq!(tree.flattened_pictures().len(), usize::from(visible));
+        if visible {
+            assert_eq!(tree.flattened_pictures()[0].layer, paint);
+            assert_eq!(
+                tree.flattened_pictures()[0].world_bounds.origin,
+                origin + Offset::new(10., 0.)
+            );
+        }
+    };
+    assert_paint(&mut tree, true);
+    assert!(link.is_linked());
+
+    tree.set_children(root, vec![follower]);
+    assert_paint(&mut tree, false);
+    assert!(!link.is_linked());
+    assert!(tree.layer(leader).is_some());
+
+    tree.set_children(root, vec![branch, follower]);
+    assert_paint(&mut tree, true);
+    assert!(link.is_linked());
+    assert_eq!(tree.detach_root(), Some(root));
+    assert!(!link.is_linked());
+    assert!(tree.layer(leader).is_some());
+
+    tree.set_root(root);
+    assert_paint(&mut tree, true);
+    tree.set_root(follower);
+    assert_paint(&mut tree, false);
+    assert!(!link.is_linked());
+
+    tree.set_root(root);
+    assert_paint(&mut tree, true);
+    tree.remove(branch);
+    assert_paint(&mut tree, false);
+    assert!(!link.is_linked());
+}
+
+#[test]
+fn only_a_departing_owner_loses_its_publication() {
+    use incular_rendering::LayerLink;
+
+    let link = LayerLink::new();
+    let make_tree = |origin| {
+        let mut tree = LayerTree::new();
+        let root = tree.create_transform(Transform::IDENTITY);
+        let branch = tree.create_transform(Transform::IDENTITY);
+        let leader = tree.create_leader_at(link.clone(), unit().size, origin);
+        tree.set_children(branch, vec![leader]);
+        tree.set_children(root, vec![branch]);
+        tree.set_root(root);
+        let _ = tree.flatten();
+        (tree, root, branch)
+    };
+
+    let (mut old_tree, old_root, _) = make_tree(Offset::new(10., 20.));
+    let winning_origin = Offset::new(20., 30.);
+    let (mut active_tree, _, branch) = make_tree(winning_origin);
+    let winning_transform = Some(Transform::translation(winning_origin));
+
+    old_tree.set_children(old_root, vec![]);
+    assert_eq!(link.leader_transform(), winning_transform);
+    active_tree.set_root(branch);
+    assert_eq!(link.leader_transform(), winning_transform);
+    assert_eq!(active_tree.detach_root(), Some(branch));
+    assert!(!link.is_linked());
+}
