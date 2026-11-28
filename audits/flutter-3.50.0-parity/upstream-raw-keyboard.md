@@ -68,6 +68,18 @@ does not infer another hardware key from its legacy flags.
 The original registration is partial, not counted as paired:
 the exact Android branch ran only on the reference, and the Web
 branch is verified through an authored packet replay, not via a
-browser test runner. The reconstructed events in this step reach
-global hardware handlers; focus batch delivery is tracked
-separately.
+browser test runner. Reconstructed events reach global hardware
+handlers and the focus routing described below.
+
+## One raw packet is one focus batch
+
+The authored pinned Flutter and native tests mount two focus
+nodes. Each node receives ShiftLeft and A as typed callbacks,
+then the original A once as legacy raw input. Only then is that
+node's handling result applied to its parent. Handling synthesized
+Shift at the leaf does not drop that leaf's A or raw callback,
+but it prevents delivery of the whole batch to the parent.
+The native early and late callback registries also use an ordered
+snapshot for the typed events in the packet. Existing focused
+single-event, custom-handler, and hardware-handler cases passed.
+This authored batch probe is not an additional original registration.

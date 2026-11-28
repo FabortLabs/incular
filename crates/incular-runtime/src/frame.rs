@@ -4469,15 +4469,19 @@ impl Runtime {
         });
 
         let mut hardware_handled = false;
-        if raw_platform_only {
-            for correction in self.legacy_raw_keyboard.modifier_corrections(&self.hardware_keyboard, &event) {
-                self.observe_hardware_key_state(&correction);
+        let corrections = if raw_platform_only {
+            let corrections = self.legacy_raw_keyboard.modifier_corrections(&self.hardware_keyboard, &event);
+            for correction in &corrections {
+                self.observe_hardware_key_state(correction);
                 hardware_handled |= self.dispatch_hardware_callbacks(
-                    &correction, HardwareKeyOrigin::LegacyModifierReconciliation,
+                    correction, HardwareKeyOrigin::LegacyModifierReconciliation,
                 );
             }
             self.observe_hardware_key_state(&event);
-        }
+            corrections
+        } else {
+            Vec::new()
+        };
         hardware_handled |= self.dispatch_hardware_callbacks(&event, HardwareKeyOrigin::Supplied);
         if !matches!(self.key_message_route, KeyMessageRoute::Focus) {
             let mut handled = hardware_handled;
@@ -4507,7 +4511,7 @@ impl Runtime {
         // Flutter's implicit root scope receives focus-manager key stages
         // even when no application widget has input focus.
         let has_focus_root = self.tree.root().is_some();
-        if has_focus_root && self.early_focus_key_handlers.dispatch(&event) == KeyEventResult::Handled
+        if has_focus_root && self.early_focus_key_handlers.dispatch(&corrections, &event) == KeyEventResult::Handled
         {
             self.frame_requested = true;
             return true;
@@ -4522,15 +4526,16 @@ impl Runtime {
             return true;
         }
         let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
-        let (focus_result, runtime_intent) = self.tree.route_keyboard_with_runtime_intent(
+        let (focus_result, runtime_intent) = self.tree.route_keyboard_with_runtime_intent_and_prefix(
             self.focused,
+            &corrections,
             event.clone(),
             lock_modes,
             message_source.raw_delivery(),
             Some(&self.hardware_keyboard),
         );
         let late_result = if has_focus_root && focus_result != KeyEventResult::Handled {
-            self.late_focus_key_handlers.dispatch(&event)
+            self.late_focus_key_handlers.dispatch(&corrections, &event)
         } else {
             KeyEventResult::Ignored
         };
