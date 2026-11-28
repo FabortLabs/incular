@@ -57,7 +57,10 @@ pub type TextInputTypeHint = incular_platform::TextInputType;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TextInputActionHint {
+    /// Choose Done or Newline from the selected keyboard type.
     #[default]
+    Automatic,
+    /// Explicitly ask the platform for its unspecified action.
     Unspecified,
     None,
     Done,

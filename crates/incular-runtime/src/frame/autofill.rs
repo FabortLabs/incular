@@ -290,7 +290,7 @@ fn editor_wire(
 }
 
 fn field_input(field: &TextFieldInputSnapshot, view_id: &Value) -> Map<String, Value> {
-    let input_action = resolve_text_input_action(field.input_action, field.multiline);
+    let input_action = resolve_text_input_action(field.input_action, field.input_type);
     let mut fields = FlutterTextInputConfiguration {
         input_type: field.input_type,
         read_only: field.read_only,

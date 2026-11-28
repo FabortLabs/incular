@@ -262,10 +262,11 @@ pub struct HardwareKeyHandlerError {
     pub payload: Box<dyn Any + Send + 'static>,
 }
 
-fn resolve_text_input_action(hint: TextInputActionHint, multiline: bool) -> TextInputAction {
+fn resolve_text_input_action(hint: TextInputActionHint, input_type: TextInputType) -> TextInputAction {
     match hint {
-        TextInputActionHint::Unspecified if multiline => TextInputAction::Newline,
-        TextInputActionHint::Unspecified | TextInputActionHint::Done => TextInputAction::Done,
+        TextInputActionHint::Automatic if input_type == TextInputType::Multiline => TextInputAction::Newline,
+        TextInputActionHint::Automatic | TextInputActionHint::Done => TextInputAction::Done,
+        TextInputActionHint::Unspecified => TextInputAction::Unspecified,
         TextInputActionHint::None => TextInputAction::None,
         TextInputActionHint::Go => TextInputAction::Go,
         TextInputActionHint::Search => TextInputAction::Search,
@@ -3766,7 +3767,7 @@ impl Runtime {
         });
         let client = connection.client;
         let input_type = snapshot.input_type;
-        let action = resolve_text_input_action(snapshot.input_action, snapshot.multiline);
+        let action = resolve_text_input_action(snapshot.input_action, input_type);
         let configuration = TextInputConfiguration {
             client,
             input_type: if snapshot.obscure_text && input_type == TextInputType::Text {

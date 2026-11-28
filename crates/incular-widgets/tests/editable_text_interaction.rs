@@ -219,7 +219,7 @@ fn input_hints_update_while_focused() {
         .text_field_input_snapshot(root)
         .expect("input snapshot");
     assert_eq!(snapshot.input_type, TextInputTypeHint::Text);
-    assert_eq!(snapshot.input_action, TextInputActionHint::Unspecified);
+    assert_eq!(snapshot.input_action, TextInputActionHint::Automatic);
 
     tree.update(
         root,

@@ -352,3 +352,118 @@ fn an_on_submitted_error_is_reported_without_preventing_default_blur() {
             .any(|c| matches!(c, TextInputCommand::SetClient { .. }))
     );
 }
+
+fn mounted_keyboard_wire(
+    build: impl FnOnce(EditableText) -> EditableText,
+) -> serde_json::Map<String, serde_json::Value> {
+    use incular_platform::FlutterTextInputConfiguration;
+
+    let node = FocusNode::new();
+    let text = TextEditingController::new();
+    let mut runtime = mount(build(editable(&node, &text)).into());
+    assert!(node.has_primary_focus());
+    let commands = runtime.take_text_input_commands();
+    let config = commands
+        .iter()
+        .find_map(|command| match command {
+            TextInputCommand::SetClient { configuration, .. } => Some(configuration),
+            _ => None,
+        })
+        .unwrap();
+    assert!(commands.iter().any(|command| matches!(
+        command,
+        TextInputCommand::Show { client } if *client == config.client
+    )));
+    text.set_text("test");
+    runtime
+        .run_frame(Constraints::tight(Size::new(180., 100.)))
+        .unwrap();
+    assert!(runtime.take_text_input_commands().iter().any(|command| matches!(
+        command,
+        TextInputCommand::Update { client, state } if *client == config.client && state.text == "test"
+    )));
+    FlutterTextInputConfiguration::from_native_editor(config, None).to_json()
+}
+
+#[test]
+fn each_explicit_keyboard_action_reaches_the_attached_client_unchanged() {
+    use incular_widgets::TextInputActionHint::*;
+
+    for (hint, suffix) in [
+        (Unspecified, "unspecified"),
+        (None, "none"),
+        (Done, "done"),
+        (Send, "send"),
+        (Go, "go"),
+        (Search, "search"),
+        (Next, "next"),
+        (Previous, "previous"),
+        (ContinueAction, "continueAction"),
+        (Join, "join"),
+        (Route, "route"),
+        (EmergencyCall, "emergencyCall"),
+    ] {
+        let config = mounted_keyboard_wire(|field| field.input_action(hint));
+        assert_eq!(
+            config["inputAction"],
+            format!("TextInputAction.{suffix}"),
+            "{hint:?}"
+        );
+    }
+}
+
+#[test]
+fn automatic_action_follows_keyboard_type_not_the_editors_visual_line_count() {
+    use incular_platform::TextInputType;
+    use incular_widgets::TextInputActionHint;
+
+    for (kind, multiline, action) in [
+        (None, false, "TextInputAction.done"),
+        (None, true, "TextInputAction.newline"),
+        (
+            Some(TextInputType::Multiline),
+            false,
+            "TextInputAction.newline",
+        ),
+        (Some(TextInputType::Text), true, "TextInputAction.done"),
+        (Some(TextInputType::Password), false, "TextInputAction.done"),
+    ] {
+        let config = mounted_keyboard_wire(|field| {
+            let field = field.multiline(multiline);
+            if let Some(kind) = kind {
+                field.input_type(kind)
+            } else {
+                field
+            }
+        });
+        assert_eq!(
+            config["inputType"]["name"],
+            kind.unwrap_or(if multiline {
+                TextInputType::Multiline
+            } else {
+                TextInputType::Text
+            })
+            .flutter_name()
+        );
+        assert_eq!(config["inputAction"], action);
+    }
+    let explicitly_unspecified = mounted_keyboard_wire(|field| {
+        field
+            .multiline(true)
+            .input_action(TextInputActionHint::Unspecified)
+    });
+    assert_eq!(
+        explicitly_unspecified["inputAction"],
+        "TextInputAction.unspecified"
+    );
+}
+
+#[test]
+fn disabling_the_two_ime_keyboard_traits_changes_only_the_requested_wire_field() {
+    let no_suggestions = mounted_keyboard_wire(|field| field.enable_suggestions(false));
+    assert_eq!(no_suggestions["enableSuggestions"], false);
+    assert_eq!(no_suggestions["enableIMEPersonalizedLearning"], true);
+    let no_learning = mounted_keyboard_wire(|field| field.enable_ime_personalized_learning(false));
+    assert_eq!(no_learning["enableSuggestions"], true);
+    assert_eq!(no_learning["enableIMEPersonalizedLearning"], false);
+}

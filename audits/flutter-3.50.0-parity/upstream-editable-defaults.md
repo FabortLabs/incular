@@ -124,3 +124,23 @@ advertises Text input with autocorrection, suggestions and IME
 personalization enabled; locale hints are absent. Its cursor is
 2 px wide with no explicit height, text is unobscured, and LTR
 start remains flush left. All 13 native checks passed.
+
+## Native keyboard action and privacy hints
+
+Eighteen pinned widget registrations passed: the default keyboard,
+13 explicit-action cases (two original registrations cover Send),
+the explicitly multiline and visible-password keyboards, and
+the opt-outs for suggestions and IME personalization. The native
+fixture attaches and shows the real runtime client, updates its
+controller to `test`, then compares the configuration that the
+same client gives to the Flutter-format bridge.
+
+An explicit Unspecified action previously became Done or Newline.
+An omitted action also incorrectly followed the editor's layout line
+count even when its keyboard type was overridden. Unspecified now
+reaches the host unchanged, and Automatic chooses Newline only for
+the multiline keyboard. This applies to both the ordinary client
+and autofill serialization. The styled field retains its previous
+line-based fallback; this change does not audit design systems.
+The privacy flags are checked separately, so turning off either one
+does not turn off the other. Forty-two focused native checks passed.

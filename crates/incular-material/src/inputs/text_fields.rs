@@ -36,9 +36,12 @@ fn text_input_type_hint(input_type: TextInputType) -> TextInputTypeHint {
     }
 }
 
-fn text_input_action_hint(action: TextInputAction) -> TextInputActionHint {
+fn text_input_action_hint(action: TextInputAction, multiline: bool) -> TextInputActionHint {
     match action {
-        TextInputAction::Unspecified => TextInputActionHint::Unspecified,
+        // Keep the styled field's line-based fallback independent of the
+        // raw editor's keyboard-based automatic action.
+        TextInputAction::Unspecified if multiline => TextInputActionHint::Newline,
+        TextInputAction::Unspecified => TextInputActionHint::Done,
         TextInputAction::None => TextInputActionHint::None,
         TextInputAction::Done
         | TextInputAction::Continue
@@ -705,7 +708,7 @@ impl TextField {
             .placeholder(self.placeholder.clone())
             .style(self.style.clone().color(foreground))
             .input_type(text_input_type_hint(self.keyboard_type))
-            .input_action(text_input_action_hint(self.text_input_action))
+            .input_action(text_input_action_hint(self.text_input_action, multiline))
             .context_menu_builder_rc(self.context_menu_builder.clone())
             .selection_handles_builder_rc(self.selection_handles_builder.clone());
         if self.on_submit.is_some() || self.on_editing_complete.is_some() {

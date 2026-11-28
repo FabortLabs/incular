@@ -4057,3 +4057,21 @@ packages/flutter/test/widgets/focus_scope_test.dart	1331	Nodes are removed when 
 packages/flutter/test/widgets/editable_text_test.dart	657	has expected defaults	paired-match	upstream-editable-defaults.md
 packages/flutter/test/widgets/editable_text_test.dart	11543	EditableText inherits DefaultTextHeightBehavior	paired-match	upstream-editable-defaults.md
 packages/flutter/test/widgets/editable_text_test.dart	11571	EditableText defaultTextHeightBehavior is used over inherited widget	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	713	text keyboard is requested when maxLines is default	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	747	Keyboard is configured for "unspecified" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	757	Keyboard is configured for "none" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	767	Keyboard is configured for "done" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	777	Keyboard is configured for "send" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	787	Keyboard is configured for "go" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	797	Keyboard is configured for "search" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	807	Keyboard is configured for "send" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	817	Keyboard is configured for "next" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	827	Keyboard is configured for "previous" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	837	Keyboard is configured for "continue" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	847	Keyboard is configured for "join" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	857	Keyboard is configured for "route" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	867	Keyboard is configured for "emergencyCall" action when explicitly requested	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	1198	multiline keyboard is requested when set explicitly	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	1428	visiblePassword keyboard is requested when set explicitly	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	1464	enableSuggestions flag is sent to the engine properly	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	1493	enableIMEPersonalizedLearning flag is sent to the engine properly	paired-match	upstream-editable-defaults.md

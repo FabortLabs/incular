@@ -1319,7 +1319,7 @@ impl EditableText {
             selection_width_style: incular_text::BoxWidthStyle::Tight,
             autocorrection_text_rect_color: None,
             input_type: None,
-            input_action: TextInputActionHint::Unspecified,
+            input_action: TextInputActionHint::Automatic,
             text_direction: None,
             locale: None,
             paragraph_layout: false,
