@@ -28,3 +28,19 @@ without limiting hits in the child's rectangular bounds. Both hit
 cases also passed the authored pinned Flutter reference. Fourteen
 focused native tests passed. This does not compare the two renderers'
 shadow algorithms or edge pixels in a save-layer composition.
+
+## Circle tangent and property propagation
+
+The pinned `widgets/basic_test.dart:118,134` cases passed. A real
+800×600 native hit test uses the same shortest-side circle centered
+at (400,300), blue fill, green shadow, and elevation 2. Only
+(100,300) hits the child. The other three probes, (99,300),
+(100,299), and (100,301), miss even with the default Clip.none.
+
+The separate native paint check confirms one blue circle with bounds
+(100,0)–(700,600), the green shadow, and the change in the shadow
+effect when elevation changes from 2 to 4 and then 0. :118 remains
+partial: Incular supplies precomputed path geometry instead of
+retaining a ShapeBorderClipper as the render-object property, and
+uses a non-painting child to supply layout. No shadow pixel
+equivalence is claimed. All ten focused native tests passed.

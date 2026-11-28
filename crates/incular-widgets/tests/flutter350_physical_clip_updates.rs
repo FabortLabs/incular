@@ -124,3 +124,96 @@ fn only_the_custom_physical_shape_restricts_hit_testing_as_clip_mode_changes() {
         }
     }
 }
+
+#[test]
+fn physical_shape_matches_the_circle_tangent_in_an_eight_hundred_by_six_hundred_view() {
+    use incular_core::Rect;
+    use incular_widgets::{BorderSide, CircleBorder, ShapeBorder};
+
+    let view = Size::new(800., 600.);
+    let outline =
+        CircleBorder::new(BorderSide::NONE).outer_path(Rect::from_origin_size(Offset::ZERO, view));
+    let blue = Color::rgba(0, 0, 255, 255);
+    let green = Color::rgba(0, 255, 0, 255);
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        PhysicalShape::new(
+            outline,
+            blue,
+            Widget::box_(view, blue).with_key("physical-child"),
+        )
+        .shadow_color(green)
+        .elevation(2.)
+        .into(),
+    )
+    .unwrap();
+    tree.layout(Constraints::tight(view)).unwrap();
+    tree.update_compositor(Instant::now()).unwrap();
+    let target = tree
+        .render_id(tree.element_with_key(&Key::from("physical-child")).unwrap())
+        .unwrap();
+    for (x, y, expected) in [
+        (99., 300., None),
+        (100., 300., Some(target)),
+        (100., 299., None),
+        (100., 301., None),
+    ] {
+        assert_eq!(tree.hit_test(Offset::new(x, y)), expected, "({}, {})", x, y);
+    }
+}
+
+#[test]
+fn physical_shape_sends_its_circle_fill_shadow_color_and_elevation_to_painting() {
+    use incular_core::Rect;
+    use incular_rendering::Brush;
+    use incular_widgets::{BorderSide, CircleBorder, ShapeBorder, SizedBox};
+
+    let view = Size::new(800., 600.);
+    let viewport = Rect::from_origin_size(Offset::ZERO, view);
+    let circle = CircleBorder::new(BorderSide::NONE).outer_path(viewport);
+    let blue = Color::rgba(0, 0, 255, 255);
+    let green = Color::rgba(0, 255, 0, 255);
+    let scene = |elevation| -> Widget {
+        PhysicalShape::new(circle.clone(), blue, SizedBox::expand())
+            .shadow_color(green)
+            .elevation(elevation)
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(scene(2.)).unwrap();
+    for elevation in [2., 4., 0.] {
+        tree.update(root, scene(elevation)).unwrap();
+        tree.layout(Constraints::tight(view)).unwrap();
+        tree.update_compositor(Instant::now()).unwrap();
+        let display = tree.paint();
+        let mut fills = display.commands().iter().filter_map(|op| match op {
+            PaintCommand::FillPath {
+                path,
+                brush: Brush::Solid(color),
+                ..
+            } if *color == blue => Some(path),
+            _ => None,
+        });
+        let fill = fills.next().unwrap();
+        assert_eq!(fill.as_ref(), &circle);
+        assert_eq!(
+            fill.bounds(),
+            Some(Rect::from_origin_size(
+                Offset::new(100., 0.),
+                Size::new(600., 600.)
+            ))
+        );
+        assert!(fills.next().is_none());
+        let shadow = display.commands().iter().find_map(|op| match op {
+            PaintCommand::PushDropShadow { shadow, .. } => Some(shadow),
+            _ => None,
+        });
+        if elevation == 0. {
+            assert!(shadow.is_none());
+        } else {
+            let shadow = shadow.unwrap();
+            assert_eq!(shadow.color, green);
+            assert_eq!(shadow.offset, Offset::new(0., elevation * 0.18));
+        }
+    }
+}

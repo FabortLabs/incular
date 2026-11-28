@@ -4044,3 +4044,5 @@ packages/flutter/test/widgets/basic_test.dart	962	UnconstrainedBox toString	pair
 packages/flutter/test/widgets/basic_test.dart	980	UnconstrainedBox can set and update clipBehavior	paired-match	upstream-constraints-transform.md
 packages/flutter/test/widgets/basic_test.dart	991	UnconstrainedBox warns only when clipBehavior is Clip.none	paired-match	upstream-constraints-transform.md
 packages/flutter/test/widgets/basic_test.dart	1058	toString	reference-ran-incular-open	upstream-constraints-transform.md
+packages/flutter/test/widgets/basic_test.dart	118	properties	partial-match	upstream-physical-surfaces.md
+packages/flutter/test/widgets/basic_test.dart	134	hit test	paired-match	upstream-physical-surfaces.md
