@@ -1032,3 +1032,79 @@ fn matrix_mip_reduction_preserves_even_and_odd_source_area() {
     assert!((127..=128).contains(&frame[16]));
     assert!((127..=128).contains(&frame[18]));
 }
+
+#[test]
+fn high_matrix_quality_matches_pinned_cubic_edge_pixels() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let size = wgpu::Extent3d {
+        width: 4,
+        height: 4,
+        depth_or_array_layers: 1,
+    };
+    let source = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("cubic matrix filter source"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let pixels = (0..16)
+        .flat_map(|i| {
+            if i % 4 < 2 {
+                [255u8, 0, 0, 255]
+            } else {
+                [0u8, 0, 255, 255]
+            }
+        })
+        .collect::<Vec<_>>();
+    queue.write_texture(
+        source.as_image_copy(),
+        &pixels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(16),
+            rows_per_image: Some(4),
+        },
+        size,
+    );
+    let view = source.create_view(&Default::default());
+    let run = |mode, x_offset: f32| {
+        let mut params = [0u32; PARAM_WORDS];
+        params[2..8].copy_from_slice(&[4f32, 4., 8., 8., 1., 1.].map(f32::to_bits));
+        params[9] = mode;
+        params[12] = 0.5f32.to_bits();
+        params[15] = 1f32.to_bits();
+        params[16] = x_offset.to_bits();
+        read_effect(
+            &device,
+            &queue,
+            built_in_shaders::RESAMPLE_SHADER,
+            bytemuck::cast_slice(&params),
+            &view,
+            wgpu::AddressMode::ClampToEdge,
+            false,
+        )
+    };
+    let low = run(2, 0.);
+    let high = run(8, 0.);
+    assert_eq!(&low[12..20], &[191, 0, 64, 255, 64, 0, 191, 255]);
+    for (&actual, expected) in high[8..24].iter().zip([
+        255u8, 0, 0, 255, 193, 0, 62, 255, 62, 0, 193, 255, 0, 0, 255, 255,
+    ]) {
+        assert!(
+            actual.abs_diff(expected) <= 1,
+            "cubic edge samples = {:?}",
+            &high[8..24]
+        );
+    }
+    assert_eq!(
+        &run(8, 0.5)[28..32],
+        &[0; 4],
+        "cubic resampling cannot leak past source bounds"
+    );
+}

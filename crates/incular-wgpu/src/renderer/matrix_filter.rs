@@ -77,6 +77,7 @@ impl WgpuRenderer {
         let mode = match filter.sampling {
             incular_painting::ImageSampling::Linear => 2,
             incular_painting::ImageSampling::Nearest => 4,
+            incular_painting::ImageSampling::MatrixCubic => 8,
             incular_painting::ImageSampling::LinearMipmap => {
                 if cfg!(incular_d3d11) {
                     2

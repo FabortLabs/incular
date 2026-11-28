@@ -79,8 +79,23 @@ The focused GL/llvmpipe test builds and reads the production shader's
 mip chain, verifies the Flutter sample to one byte per channel, tests
 fractional levels, and checks pixels outside the filtered shape remain
 transparent. The widget tests also check the retained default mode.
-This is not full original golden equality, a different GPU backend
-comparison, or verification of cubic High quality.
+This is not full original golden equality or a different GPU backend
+comparison.
+
+### High-quality matrix transforms
+
+Pinned Flutter's High setting uses the Mitchell-Netravali kernel
+with B=C=1/3. The authored probe reads red/blue edge pixels: the two
+inner samples change from `[191,0,64]` and `[64,0,191]` at Low to
+`[193,0,62]` and `[62,0,193]` at High. Opaque interiors and pixels
+outside the filtered bounds retain their original values.
+
+The production wgpu resample shader now applies that separable cubic
+kernel for High. Its output remains premultiplied and bounded; negative
+lobes cannot produce negative alpha or paint beyond finite source
+coverage. The GL readback and retained Transform tests verify that High
+does not lower to Low. Ordinary image draws keep their existing path.
+This comparison adds no original golden registration.
 
 ### Focus traversal from a directly focused skipped node
 

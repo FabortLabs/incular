@@ -41,6 +41,34 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
   }
   return vec2<f32>(0., 0.);
 }
+// Mitchell-Netravali reconstruction, B=C=1/3, as used by Flutter's
+// high quality matrix filters. The source contains premultiplied colors.
+fn mitchell(distance: f32) -> f32 {
+  let x = abs(distance);
+  if (x < 1.) {
+    return ((7. * x - 12.) * x * x + 16. / 3.) / 6.;
+  }
+  if (x < 2.) {
+    return (((-7. / 3. * x + 12.) * x - 20.) * x + 32. / 3.) / 6.;
+  }
+  return 0.;
+}
+fn cubic_matrix(px: vec2<f32>) -> vec4<f32> {
+  let centred = px - vec2<f32>(0.5);
+  let origin = vec2<i32>(floor(centred));
+  let last = vec2<i32>(params.source_size) - vec2<i32>(1);
+  var sum = vec4<f32>(0.);
+  for (var y = -1; y <= 2; y += 1) {
+    let wy = mitchell(centred.y - f32(origin.y + y));
+    for (var x = -1; x <= 2; x += 1) {
+      let p = origin + vec2<i32>(x, y);
+      let wx = mitchell(centred.x - f32(p.x));
+      sum += textureLoad(source, clamp(p, vec2<i32>(0), last), 0) * wx * wy;
+    }
+  }
+  let alpha = clamp(sum.a, 0., 1.);
+  return vec4<f32>(clamp(sum.rgb, vec3<f32>(0.), vec3<f32>(alpha)), alpha);
+}
 @fragment fn fs_main(input: Out) -> @location(0) vec4<f32> {
   if (params.mode == 5u) {
     // A bounded blur masks the pre-filter copy of the backdrop, not the
@@ -111,7 +139,7 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
   // UV already addresses output pixel centers. Keep source coordinates in
   // that convention so upsampling retains coverage at the first texel.
   var px = input.uv * params.output_size * params.direction - params.source_origin;
-  if (params.mode == 2u || params.mode == 4u || params.mode == 6u) {
+  if (params.mode == 2u || params.mode == 4u || params.mode == 6u || params.mode == 8u) {
     // An affine resample (ImageFilter.matrix): the output pixel position
     // maps through [a c e; b d f], packed in the first weights. Mode 4
     // samples the nearest texel (FilterQuality.none).
@@ -129,6 +157,9 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
   if (params.sampling_mode == 0u &&
       (px.x < 0. || px.y < 0. || px.x >= params.source_size.x || px.y >= params.source_size.y)) {
     return vec4<f32>(0.);
+  }
+  if (params.mode == 8u) {
+    return cubic_matrix(px);
   }
   let level = select(0., params.weights[1].z, params.mode == 6u);
   return textureSampleLevel(source, source_sampler, px / params.source_size, level);

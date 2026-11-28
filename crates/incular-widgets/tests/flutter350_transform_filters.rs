@@ -106,3 +106,12 @@ fn filter_is_removed_and_recreated_when_the_widget_option_changes() {
     tree.update(root, scene(true)).unwrap();
     assert_eq!(matrix_stages(&paint(&mut tree)).len(), 1);
 }
+
+#[test]
+fn high_matrix_quality_retains_cubic_policy_instead_of_low() {
+    let (mut tree, _) = mount(Transform::scale(2., sized()).filter_quality(FilterQuality::High));
+    assert_eq!(
+        matrix_stages(&paint(&mut tree))[0].1,
+        ImageSampling::MatrixCubic
+    );
+}

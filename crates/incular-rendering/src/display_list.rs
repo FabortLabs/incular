@@ -263,6 +263,8 @@ pub enum ImageSampling {
     Nearest,
     /// Linear filtering within and between mip levels when minifying.
     LinearMipmap,
+    /// Mitchell-Netravali sampling of an isolated matrix filter source.
+    MatrixCubic,
 }
 /// Recorded paint commands. Cloning is a reference-count bump; the command
 /// buffer is copied only when a shared list is mutated.

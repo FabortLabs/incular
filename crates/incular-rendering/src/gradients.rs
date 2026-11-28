@@ -558,10 +558,9 @@ pub type Shader = Brush;
 
 /// Image filtering policy matching Flutter's public quality vocabulary.
 ///
-/// The current display-list backend exposes nearest-neighbour and linear
-/// sampling. `Low`, `Medium`, and `High` intentionally lower to linear until
-/// a backend grows a more expensive filter; callers still retain a stable,
-/// renderer-independent policy value.
+/// Direct image draws use the existing nearest/linear path. Isolated
+/// matrix filters can also use mipmapped linear and Mitchell cubic
+/// sampling, selected via [Self::matrix_sampling].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum FilterQuality {
     None,
@@ -586,6 +585,7 @@ impl FilterQuality {
     pub const fn matrix_sampling(self) -> ImageSampling {
         match self {
             Self::Medium => ImageSampling::LinearMipmap,
+            Self::High => ImageSampling::MatrixCubic,
             quality => quality.sampling(),
         }
     }

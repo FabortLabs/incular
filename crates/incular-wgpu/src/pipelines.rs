@@ -1096,6 +1096,7 @@ pub(crate) async fn create_shared_pipeline_resources(
     for (sampling, filter) in [
         (ImageSampling::Linear, wgpu::FilterMode::Linear),
         (ImageSampling::LinearMipmap, wgpu::FilterMode::Linear),
+        (ImageSampling::MatrixCubic, wgpu::FilterMode::Linear),
         (ImageSampling::Nearest, wgpu::FilterMode::Nearest),
     ] {
         image_samplers.insert(
