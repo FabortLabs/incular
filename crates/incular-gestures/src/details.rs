@@ -1135,4 +1135,5 @@ impl GestureCallbacks {
     }
 }
 
-mod drag_diagnostics;
+pub(crate) mod drag_diagnostics;
+mod pointer_diagnostics;

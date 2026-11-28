@@ -6,7 +6,7 @@ use super::{
     DragDownDetails, DragEndDetails, DragStartDetails, DragUpdateDetails, PointerDeviceKind,
 };
 
-struct DiagnosticOffset(Offset);
+pub(crate) struct DiagnosticOffset(pub(crate) Offset);
 
 impl Display for DiagnosticOffset {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -43,7 +43,7 @@ impl Display for DiagnosticSourceTime {
     }
 }
 
-fn device_name(kind: Option<PointerDeviceKind>) -> &'static str {
+pub(super) fn device_name(kind: Option<PointerDeviceKind>) -> &'static str {
     match kind {
         None => "null",
         Some(PointerDeviceKind::Touch) => "touch",

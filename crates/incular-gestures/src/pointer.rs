@@ -1,3 +1,6 @@
+mod diagnostics;
+pub use diagnostics::{TapRecognizerDiagnostics, TapTrackingState};
+
 use incular_core::time::Instant;
 use std::cell::Cell;
 use std::rc::Rc;

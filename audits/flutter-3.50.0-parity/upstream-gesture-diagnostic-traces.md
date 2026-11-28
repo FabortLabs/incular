@@ -16,3 +16,20 @@ All three originals and 20 targeted native arena/callback tests
 passed. The ledger marks these three partial rather than pairing
 them: Dart's runtime-type/hash formatting, recognizer-state text
 and indentation are not duplicated by the native typed trace API.
+
+## Pointer descriptions and tap-down state
+
+A raw pointer sample now has brief and full single-line descriptions.
+They use the recorded event phase, global position, and (when distinct)
+local position; full output includes the real device, button mask,
+contact, and synthesized marker rather than manufacturing defaults.
+
+The tap diagnostic snapshot reads the real recognizer state and does not
+change gesture arbitration. A raw primary-button press makes it possible
+but does not report tap-down early. At the press timeout it reports
+“sent tap down” exactly once; cancellation restores the ready state.
+The formatted preview leaves out Dart object address hashes.
+
+The pinned `gestures/events_test.dart:14` and
+`gestures/debug_test.dart:207` originals passed, as did seven focused
+native tests covering these descriptions and neighboring callbacks.

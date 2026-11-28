@@ -101,7 +101,8 @@ pub use pointer::DragBoundaryFrame;
 pub use pointer::{
     DragAxis, DragGestureDetector, FlingLimits, GestureDetector, MonodragGestureRecognizer,
     MultitouchDragStrategy,
-    PendingTapRelease, PointerGestureRecognizer, TapMemory, TapSlopTolerance, TrackpadDragAxis,
+    PendingTapRelease, PointerGestureRecognizer, TapMemory, TapRecognizerDiagnostics,
+    TapSlopTolerance, TapTrackingState, TrackpadDragAxis,
     TrackpadDragRecognizer,
 };
 pub use signal::{PointerSignalError, PointerSignalEvent, PointerSignalResolver};
