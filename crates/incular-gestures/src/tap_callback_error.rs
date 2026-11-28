@@ -1,4 +1,4 @@
-//! Error boundary for user callbacks invoked by a tap recognizer.
+//! Error boundary for user callbacks invoked by tap and tap-drag recognizers.
 
 use std::{
     any::Any,
@@ -27,6 +27,12 @@ pub enum TapCallbackKind {
     Up,
     Tap,
     Cancel(TapCancelReason),
+    DragStart,
+    DragUpdate,
+    DragEnd,
+    DragCancel,
+    TapTrackStart,
+    TapTrackReset,
 }
 
 impl TapCallbackKind {
@@ -40,6 +46,12 @@ impl TapCallbackKind {
             Self::Cancel(TapCancelReason::Pointer) => "onTapCancel",
             Self::Cancel(TapCancelReason::Spontaneous) => "spontaneous onTapCancel",
             Self::Cancel(TapCancelReason::Forced) => "forced onTapCancel",
+            Self::DragStart => "onDragStart",
+            Self::DragUpdate => "onDragUpdate",
+            Self::DragEnd => "onDragEnd",
+            Self::DragCancel => "onCancel",
+            Self::TapTrackStart => "onTapTrackStart",
+            Self::TapTrackReset => "onTapTrackReset",
         }
     }
 }
@@ -87,7 +99,7 @@ thread_local! {
     static TRACE: RefCell<Option<TapCallbackTraceHandler>> = const { RefCell::new(None) };
 }
 
-/// Replaces the current UI thread's tap error reporter and returns the
+/// Replaces the current UI thread's tap and tap-drag reporter and returns the
 /// previous reporter. With unwinding panic strategies, an error is isolated
 /// even when no reporter is installed; the normal panic hook still runs.
 pub fn set_tap_callback_error_handler(

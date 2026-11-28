@@ -739,7 +739,7 @@ packages/flutter/test/gestures/tap_and_drag_test.dart	390	Recognizer detects tap
 packages/flutter/test/gestures/tap_and_drag_test.dart	406	Recognizer detects drag gesture when pointer moves past tap tolerance but not the drag minimum	paired-match	upstream-tap-and-drag.md
 packages/flutter/test/gestures/tap_and_drag_test.dart	933	Defaults to drag when pointer dragged past slop tolerance	paired-match	upstream-tap-and-drag.md
 packages/flutter/test/gestures/tap_and_drag_test.dart	954	Fires cancel and resets for PointerCancelEvent	paired-match	upstream-tap-and-drag.md
-packages/flutter/test/gestures/tap_and_drag_test.dart	975	Does not call onDragEnd if not provided	partial-match	upstream-tap-and-drag.md
+packages/flutter/test/gestures/tap_and_drag_test.dart	975	Does not call onDragEnd if not provided	paired-match	upstream-tap-and-drag.md#missing-and-failing-drag-end-callbacks
 packages/flutter/test/gestures/tap_and_drag_test.dart	1013	Contains correct positions in the drag end details	paired-match	upstream-tap-and-drag.md
 packages/flutter/test/widgets/single_child_scroll_view_test.dart	52	SingleChildScrollView overflow and clipRect test	paired-match	upstream-single-child-scroll-basics.md#retained-clip-coverage
 packages/flutter/test/widgets/single_child_scroll_view_test.dart	146	SingleChildScrollView control test	paired-match	upstream-single-child-scroll-basics.md

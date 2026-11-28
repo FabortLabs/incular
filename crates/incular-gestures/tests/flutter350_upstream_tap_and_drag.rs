@@ -259,8 +259,37 @@ fn pointer_cancel_has_no_lift_and_resets_count() {
     g.expect(&[Press(1), Lift(1)]);
 }
 
+struct ErrorCapture {
+    previous: Option<incular_gestures::TapCallbackErrorHandler>,
+    errors: Rc<RefCell<Vec<(incular_gestures::TapCallbackKind, String)>>>,
+}
+
+impl ErrorCapture {
+    fn new() -> Self {
+        let errors = Rc::<RefCell<Vec<_>>>::default();
+        let capture = errors.clone();
+        let previous =
+            incular_gestures::set_tap_callback_error_handler(Some(Rc::new(move |error| {
+                capture.borrow_mut().push((
+                    error.callback,
+                    error.message().unwrap_or_default().to_owned(),
+                ));
+            })));
+        Self { previous, errors }
+    }
+}
+
+impl Drop for ErrorCapture {
+    fn drop(&mut self) {
+        drop(incular_gestures::set_tap_callback_error_handler(
+            self.previous.take(),
+        ));
+    }
+}
+
 #[test]
 fn absent_drag_end_handler_does_not_break_the_next_down() {
+    let errors = ErrorCapture::new();
     let log = Log::default();
     let mut g = TapAndDragGestureRecognizer::pan()
         .drag_start_behavior(DragStartBehavior::Down)
@@ -270,16 +299,47 @@ fn absent_drag_end_handler_does_not_break_the_next_down() {
             move |d| l.borrow_mut().push(Press(d.consecutive_tap_count))
         });
     let base = Instant::now();
-    for (ms, id, phase, at) in [
-        (0, 5, Down, A),
-        (0, 5, Move, (25., 25.)),
-        (0, 5, Up, (25., 25.)),
-        (1000, 1, Down, A),
-        (1000, 1, Up, A_UP),
-    ] {
-        g.handle_raw(event(base, ms, id, phase, at));
+    for (phase, at) in [(Down, A), (Move, (25., 25.)), (Up, (25., 25.))] {
+        g.handle_raw(event(base, 0, 5, phase, at));
     }
-    assert_eq!(log.take(), [Press(1), Press(1)]);
+    assert_eq!(log.take(), [Press(1)]);
+    assert!(errors.errors.borrow().is_empty());
+    for (phase, at) in [(Down, A), (Up, A_UP)] {
+        g.handle_raw(event(base, 1000, 1, phase, at));
+    }
+    assert_eq!(log.take(), [Press(1)]);
+    assert!(errors.errors.borrow().is_empty());
+}
+
+#[test]
+fn an_error_in_drag_end_is_reported_before_the_next_tap_and_does_not_poison_it() {
+    let errors = ErrorCapture::new();
+    let log = Log::default();
+    let mut recognizer = TapAndDragGestureRecognizer::pan()
+        .drag_start_behavior(DragStartBehavior::Down)
+        .max_consecutive_tap(3)
+        .on_tap_down({
+            let log = log.clone();
+            move |details| log.borrow_mut().push(Press(details.consecutive_tap_count))
+        })
+        .on_drag_end(|_| panic!("end callback failed"));
+    let base = Instant::now();
+    for (phase, at) in [(Down, A), (Move, (25., 25.)), (Up, (25., 25.))] {
+        recognizer.handle_raw(event(base, 0, 5, phase, at));
+    }
+    assert_eq!(log.take(), [Press(1)]);
+    assert_eq!(
+        &*errors.errors.borrow(),
+        &[(
+            incular_gestures::TapCallbackKind::DragEnd,
+            "end callback failed".to_owned()
+        )]
+    );
+    for (phase, at) in [(Down, A), (Up, A_UP)] {
+        recognizer.handle_raw(event(base, 1000, 1, phase, at));
+    }
+    assert_eq!(log.take(), [Press(1)]);
+    assert_eq!(errors.errors.borrow().len(), 1);
 }
 
 #[test]
@@ -356,7 +416,10 @@ fn horizontal_and_pan_updates_keep_both_components_and_no_primary_delta() {
             assert_eq!(details.delta, delta);
             assert_eq!(details.primary_delta, None);
             assert_eq!(details.offset_from_origin, travel);
-            assert_eq!(details.local_offset_from_origin, transform.transform_vector(travel));
+            assert_eq!(
+                details.local_offset_from_origin,
+                transform.transform_vector(travel)
+            );
             assert_eq!(details.kind, PointerDeviceKind::Touch);
             assert_eq!(details.consecutive_tap_count, 1);
         }

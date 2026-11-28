@@ -14,9 +14,8 @@ between two different gesture recognizers.
 - :390/:406/:933 distinguish a tap with small motion, a drag past tap
   tolerance but short of pan threshold, and a fresh normal tap afterward.
 - :954 verifies the cancel-only trace and a new count for the next tap.
-- :975 is partial: no drag-end callback is installed and the next tap
-  still reports its down callback. Rust has no corresponding Flutter
-  global error-reporting hook; the test checks no panic.
+- :975 pairs: no drag-end callback reports no error, and the next tap
+  starts a fresh count. The callback error reporter is observed directly.
 - :1013 checks the exact final global point (120,45) after three horizontal
   drag updates, not just that the callback fires.
 
@@ -40,3 +39,13 @@ are checked under 2× scaling on two successive diagonal moves, including
 the source timestamp, global and local position, accumulated travel in
 both spaces, touch kind, and tap count. Both authored Flutter cases and
 all 18 native cases passed. The probe adds no original registrations.
+
+## Missing and failing drag-end callbacks
+
+Pinned :975 and the authored `tap_drag_error_recovery_test.dart` pass.
+Tap-and-drag now uses the same callback error reporter as taps, including
+throttled updates and end. A missing callback does not notify it. A failing
+end callback reports the original error and the end phase exactly once;
+cleanup still completes, so the next tap starts a new series and reports
+no second error. The native tests directly record callback traces and
+errors. All 19 tap-and-drag and three ordinary tap-error tests passed.

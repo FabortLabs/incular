@@ -12,6 +12,7 @@ use incular_core::{
 use crate::arena_member::{ArenaLink, ArenaMember, arena_recognizer, distance};
 use crate::constants::{DOUBLE_TAP_SLOP, DOUBLE_TAP_TIMEOUT, PRESS_TIMEOUT};
 use crate::slop::{compute_hit_slop, compute_pan_slop};
+use crate::tap_callback_error::{TapCallbackKind as CallbackKind, invoke};
 use crate::{GestureDisposition, OffsetPair, PointerDeviceKind, RawPointerEvent, Velocity};
 use incular_core::DeviceGestureSettings;
 
@@ -380,7 +381,7 @@ impl TapAndDragGestureRecognizer {
         self.last_tap_offset = Some(event.position);
         self.origin_position = Some(OffsetPair::from_event_position(&event));
         if let Some(callback) = &self.on_tap_track_start {
-            callback();
+            invoke(CallbackKind::TapTrackStart, || callback());
         }
 
         self.primary_pointer = Some(event.pointer);
@@ -525,7 +526,9 @@ impl TapAndDragGestureRecognizer {
     }
 
     fn tracked_deadline(&self, pointer: u64) -> Option<Instant> {
-        (self.primary_pointer == Some(pointer)).then(|| self.next_deadline()).flatten()
+        (self.primary_pointer == Some(pointer))
+            .then(|| self.next_deadline())
+            .flatten()
     }
 
     /// The earliest pending deadline. The consecutive-tap timer only marks
@@ -542,7 +545,7 @@ impl TapAndDragGestureRecognizer {
         if let (Some(callback), Some(details)) =
             (&self.on_drag_update, self.last_drag_update_details)
         {
-            callback(details);
+            invoke(CallbackKind::DragUpdate, || callback(details));
         }
         self.drag_update_throttle_timer = None;
         self.last_drag_update_details = None;
@@ -683,7 +686,7 @@ impl TapAndDragGestureRecognizer {
             consecutive_tap_count: self.consecutive_tap_count,
         };
         if let Some(callback) = &self.on_tap_down {
-            callback(details);
+            invoke(CallbackKind::Down, || callback(details));
         }
         self.sent_tap_down = true;
     }
@@ -699,7 +702,7 @@ impl TapAndDragGestureRecognizer {
             consecutive_tap_count: self.consecutive_tap_count,
         };
         if let Some(callback) = &self.on_tap_up {
-            callback(details);
+            invoke(CallbackKind::Up, || callback(details));
         }
         self.reset_taps();
         if !self.remove_accepted_active_pointer(event.pointer) {
@@ -709,12 +712,14 @@ impl TapAndDragGestureRecognizer {
 
     fn check_drag_start(&mut self, event: &RawPointerEvent) {
         if let Some(callback) = &self.on_drag_start {
-            callback(TapDragStartDetails {
-                global_position: self.initial_position.global,
-                local_position: self.initial_position.local,
-                source_time: Some(event.time),
-                kind: self.kind_for_pointer(event.pointer),
-                consecutive_tap_count: self.consecutive_tap_count,
+            invoke(CallbackKind::DragStart, || {
+                callback(TapDragStartDetails {
+                    global_position: self.initial_position.global,
+                    local_position: self.initial_position.local,
+                    source_time: Some(event.time),
+                    kind: self.kind_for_pointer(event.pointer),
+                    consecutive_tap_count: self.consecutive_tap_count,
+                })
             });
         }
         self.start = None;
@@ -743,7 +748,7 @@ impl TapAndDragGestureRecognizer {
                 self.drag_update_throttle_timer = event.time.checked_add(frequency);
             }
         } else if let Some(callback) = &self.on_drag_update {
-            callback(details);
+            invoke(CallbackKind::DragUpdate, || callback(details));
         }
     }
 
@@ -759,7 +764,7 @@ impl TapAndDragGestureRecognizer {
             consecutive_tap_count: self.consecutive_tap_count,
         };
         if let Some(callback) = &self.on_drag_end {
-            callback(details);
+            invoke(CallbackKind::DragEnd, || callback(details));
         }
         self.reset_taps();
         self.reset_drag_update_throttle();
@@ -770,7 +775,7 @@ impl TapAndDragGestureRecognizer {
             return;
         }
         if let Some(callback) = &self.on_cancel {
-            callback();
+            invoke(CallbackKind::DragCancel, || callback());
         }
         self.reset_drag_update_throttle();
         self.reset_taps();
@@ -820,7 +825,7 @@ impl TapAndDragGestureRecognizer {
         self.down = None;
         self.up = None;
         if let Some(callback) = &self.on_tap_track_reset {
-            callback();
+            invoke(CallbackKind::TapTrackReset, || callback());
         }
     }
 
