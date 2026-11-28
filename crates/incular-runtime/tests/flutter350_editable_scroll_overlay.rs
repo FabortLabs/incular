@@ -102,3 +102,147 @@ fn a_short_touch_scroll_hides_then_restores_the_toolbar_without_semantics() {
         assert_eq!(controller.selection(), selection);
     }
 }
+
+fn started_with_toolbar() -> (Runtime, TextEditingController, ElementId, Instant) {
+    let controller = TextEditingController::with_text("text ".repeat(10_000));
+    let editor = EditableText::new(controller.clone())
+        .text_direction(TextDirection::Ltr)
+        .max_lines(None)
+        .context_menu_builder(|_, _| SizedBox::shrink().into())
+        .selection_handles_builder(|_, _| SizedBox::shrink().into());
+    let mut runtime = Runtime::new(editor.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let clock = Instant::now();
+    frame(&mut runtime, clock);
+    let first_word = Offset::new(2., 8.);
+    pointer(
+        &mut runtime,
+        PointerPhase::Down,
+        first_word,
+        clock + Duration::from_millis(10),
+    );
+    frame(&mut runtime, clock + Duration::from_millis(510));
+    pointer(
+        &mut runtime,
+        PointerPhase::Up,
+        first_word,
+        clock + Duration::from_millis(530),
+    );
+    frame(&mut runtime, clock + Duration::from_millis(530));
+    let field = runtime.focused_element().unwrap();
+    assert_eq!(
+        controller.selection(),
+        incular_text::TextSelection::new(0, 4)
+    );
+    assert!(toolbar_visible(&runtime, field));
+    (runtime, controller, field, clock)
+}
+
+fn drag_away_from_selection(runtime: &mut Runtime, field: ElementId, clock: Instant) {
+    let center = Offset::new(200., 100.);
+    let moved = center - Offset::new(0., 200.);
+    pointer(
+        runtime,
+        PointerPhase::Down,
+        center,
+        clock + Duration::from_millis(1000),
+    );
+    pointer(
+        runtime,
+        PointerPhase::Move,
+        moved,
+        clock + Duration::from_millis(1020),
+    );
+    frame(runtime, clock + Duration::from_millis(1020));
+    assert!(runtime.tree().text_field_scroll_offset(field).unwrap().y > 100.);
+    assert!(!toolbar_visible(runtime, field));
+    pointer(
+        runtime,
+        PointerPhase::Up,
+        moved,
+        clock + Duration::from_millis(1040),
+    );
+}
+
+#[test]
+fn a_value_replacement_before_the_scroll_end_frame_never_reopens_the_old_toolbar() {
+    let (mut runtime, controller, field, clock) = started_with_toolbar();
+    drag_away_from_selection(&mut runtime, field, clock);
+    controller.set_text("a different value");
+    for elapsed in [1040, 1060, 1200] {
+        frame(&mut runtime, clock + Duration::from_millis(elapsed));
+        assert!(!toolbar_visible(&runtime, field));
+    }
+    assert_eq!(controller.text(), "a different value");
+    assert_eq!(runtime.focused_element(), Some(field));
+}
+
+#[test]
+fn replacing_the_document_between_two_scroll_contacts_does_not_reuse_old_geometry() {
+    let (mut runtime, controller, field, clock) = started_with_toolbar();
+    drag_away_from_selection(&mut runtime, field, clock);
+    controller.set_text("a different value");
+    let center = Offset::new(200., 100.);
+    let moved = center - Offset::new(0., 100.);
+    pointer(
+        &mut runtime,
+        PointerPhase::Down,
+        center,
+        clock + Duration::from_millis(1050),
+    );
+    pointer(
+        &mut runtime,
+        PointerPhase::Move,
+        moved,
+        clock + Duration::from_millis(1070),
+    );
+    frame(&mut runtime, clock + Duration::from_millis(1070));
+    pointer(
+        &mut runtime,
+        PointerPhase::Up,
+        moved,
+        clock + Duration::from_millis(1090),
+    );
+    frame(&mut runtime, clock + Duration::from_millis(1090));
+    assert!(!toolbar_visible(&runtime, field));
+    assert_eq!(controller.text(), "a different value");
+    assert_eq!(runtime.focused_element(), Some(field));
+}
+
+#[test]
+fn an_unchanged_toolbar_waits_until_its_selection_is_back_inside_the_editor() {
+    let (mut runtime, controller, field, clock) = started_with_toolbar();
+    drag_away_from_selection(&mut runtime, field, clock);
+    frame(&mut runtime, clock + Duration::from_millis(1040));
+    assert!(!toolbar_visible(&runtime, field));
+
+    let center = Offset::new(200., 100.);
+    let moved = center + Offset::new(0., 200.);
+    pointer(
+        &mut runtime,
+        PointerPhase::Down,
+        center,
+        clock + Duration::from_millis(1100),
+    );
+    pointer(
+        &mut runtime,
+        PointerPhase::Move,
+        moved,
+        clock + Duration::from_millis(1120),
+    );
+    frame(&mut runtime, clock + Duration::from_millis(1120));
+    assert!(!toolbar_visible(&runtime, field));
+    pointer(
+        &mut runtime,
+        PointerPhase::Up,
+        moved,
+        clock + Duration::from_millis(1140),
+    );
+    frame(&mut runtime, clock + Duration::from_millis(1140));
+    frame(&mut runtime, clock + Duration::from_millis(1160));
+    assert!(toolbar_visible(&runtime, field));
+    assert_eq!(
+        controller.selection(),
+        incular_text::TextSelection::new(0, 4)
+    );
+}
