@@ -50,6 +50,12 @@ pub enum DiagnosticsTreeStyle {
     /// Use the normal sparse tree presentation.
     #[default]
     Sparse,
+    /// Keep properties inline without omitting descendants.
+    Dense,
+    /// Use dashed connection lines for offstage descendants.
+    Offstage,
+    /// Put a framed boundary between differently styled sections.
+    Transition,
     /// Render a tree with indentation but no connecting lines.
     Whitespace,
     /// Render a block without adding indentation.
@@ -67,6 +73,9 @@ impl DiagnosticsTreeStyle {
         match self {
             Self::None => "none",
             Self::Sparse => "sparse",
+            Self::Dense => "dense",
+            Self::Offstage => "offstage",
+            Self::Transition => "transition",
             Self::Whitespace => "whitespace",
             Self::Flat => "flat",
             Self::Error => "error",
@@ -467,7 +476,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             missing_if_null: false,
             allow_wrap: true,
             allow_name_wrap: true,
-            style: DiagnosticsTreeStyle::Sparse,
+            style: DiagnosticsTreeStyle::SingleLine,
             flag_labels: [None, None],
             presentation: Presentation::Plain,
         }
@@ -672,18 +681,25 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         !cfg!(debug_assertions) || self.effective_level() < minimum
     }
 
-    pub(crate) fn compact_iterable_description(&self) -> Option<String> {
-        if let Presentation::Iterable {
-            values_for_display, ..
-        } = self.presentation
-            && let Some(values) = self.value()
-        {
-            let members = values_for_display(values);
-            if !members.is_empty() {
-                return Some(format!("[{}]", members.join(", ")));
-            }
+    pub(crate) fn compact_description(&self) -> Option<String> {
+        if self.description.is_some() {
+            return None;
         }
-        None
+        match self.presentation {
+            Presentation::Iterable { is_empty, .. }
+                if self.value().is_some_and(|v| !is_empty(v)) =>
+            {
+                Some(self.description_for_layout(true))
+            }
+            Presentation::String { .. }
+                if self
+                    .value()
+                    .is_some_and(|v| v.diagnostic_text().contains('\n')) =>
+            {
+                Some(self.description_for_layout(true))
+            }
+            _ => None,
+        }
     }
 
     /// Controls word wrapping of the description when rendering a tree.
@@ -703,29 +719,39 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
     /// A display description without the property-name prefix.
     #[must_use]
     pub fn to_description(&self) -> String {
+        self.description_for_layout(false)
+    }
+
+    fn description_for_layout(&self, compact: bool) -> String {
         let raw = |value: &T| {
-            let text = value.diagnostic_text();
+            if let Presentation::Iterable {
+                is_empty,
+                values_for_display,
+                ..
+            } = self.presentation
+            {
+                if is_empty(value) {
+                    return self.if_empty.as_deref().unwrap_or("[]").to_owned();
+                }
+                let values = values_for_display(value);
+                return if compact {
+                    format!("[{}]", values.join(", "))
+                } else if self.style == DiagnosticsTreeStyle::SingleLine {
+                    values.join(", ")
+                } else {
+                    values.join("\n")
+                };
+            }
+            let mut text = value.diagnostic_text();
+            if compact && matches!(self.presentation, Presentation::String { .. }) {
+                text = text.replace('\n', "\\n");
+            }
             let empty = self.if_empty.as_deref().filter(|_| text.is_empty());
             match self.presentation {
                 Presentation::String { quoted: true } if empty.is_none() => format!("\"{text}\""),
                 Presentation::Flag => self.flag_label().map_or(text, str::to_owned),
                 Presentation::ObjectFlag => self.if_present.as_deref().map_or(text, str::to_owned),
                 Presentation::Enum { short_name } => short_name(value).to_owned(),
-                Presentation::Iterable {
-                    is_empty,
-                    values_for_display,
-                    ..
-                } => {
-                    if is_empty(value) {
-                        self.if_empty.as_deref().unwrap_or("[]").to_owned()
-                    } else {
-                        let separator = match self.style {
-                            DiagnosticsTreeStyle::None | DiagnosticsTreeStyle::SingleLine => ", ",
-                            _ => "\n",
-                        };
-                        values_for_display(value).join(separator)
-                    }
-                }
                 Presentation::Number {
                     format,
                     unit_separator,

@@ -1,0 +1,290 @@
+TestTree#00000
+ │ stringProperty1: value1
+ │ doubleProperty1: 42.5
+ │ roundedProperty: 0.3
+ │ nullProperty: null
+ │ <root node>
+ │
+ ├─child node A: TestTree#00000
+ ├─child node B: TestTree#00000
+ │ │ p1: v1
+ │ │ p2: v2
+ │ │
+ │ ├─child node B1: TestTree#00000
+ │ ├─child node B2: TestTree#00000
+ │ │   property1: value1
+ │ │
+ │ └─child node B3: TestTree#00000
+ │     <leaf node>
+ │     foo: 42
+ │
+ └─child node C: TestTree#00000
+     foo:
+       multi
+       line
+       value!
+
+<<<NEXT>>>
+TestTree#00000
+ │ stringProperty1:
+ │   value1
+ │ doubleProperty1:
+ │   42.5
+ │ roundedProperty:
+ │   0.3
+ │ nullProperty:
+ │   null
+ │ <root node>
+ │
+ ├─child node A: TestTree#00000
+ ├─child node B: TestTree#00000
+ │ │ p1:
+ │ │   v1
+ │ │ p2:
+ │ │   v2
+ │ │
+ │ ├─child node B1: TestTree#00000
+ │ ├─child node B2: TestTree#00000
+ │ │   property1:
+ │ │     value1
+ │ │
+ │ └─child node B3: TestTree#00000
+ │     <leaf node>
+ │     foo:
+ │       42
+ │
+ └─child node C: TestTree#00000
+     foo:
+       multi
+       line
+       value!
+
+<<<NEXT>>>
+TestTree#00000(stringProperty1: value1, doubleProperty1: 42.5, roundedProperty: 0.3, nullProperty: null, <root node>)
+├child node A: TestTree#00000
+├child node B: TestTree#00000(p1: v1, p2: v2)
+│├child node B1: TestTree#00000
+│├child node B2: TestTree#00000(property1: value1)
+│└child node B3: TestTree#00000(<leaf node>, foo: 42)
+└child node C: TestTree#00000(foo: multi\nline\nvalue!)
+
+<<<NEXT>>>
+TestTree#00000
+ │ stringProperty1: value1
+ │ doubleProperty1: 42.5
+ │ roundedProperty: 0.3
+ │ nullProperty: null
+ │ <root node>
+ │
+ ╎╌child node A: TestTree#00000
+ ╎╌child node B: TestTree#00000
+ ╎ │ p1: v1
+ ╎ │ p2: v2
+ ╎ │
+ ╎ ╎╌child node B1: TestTree#00000
+ ╎ ╎╌child node B2: TestTree#00000
+ ╎ ╎   property1: value1
+ ╎ ╎
+ ╎ └╌child node B3: TestTree#00000
+ ╎     <leaf node>
+ ╎     foo: 42
+ ╎
+ └╌child node C: TestTree#00000
+     foo:
+       multi
+       line
+       value!
+
+<<<NEXT>>>
+TestTree#00000
+ │ stringProperty1: value1
+ │ doubleProperty1: 42.5
+ │ roundedProperty: 0.3
+ │ nullProperty: null
+ │ <root node>
+ │
+ ├─child node A: TestTree#00000
+ ├─child node B: TestTree#00000
+ │ │ p1: v1
+ │ │ p2: v2
+ │ │
+ │ ├─child node B1: TestTree#00000
+ │ ├─child node B2: TestTree#00000
+ │ │   property1: value1
+ │ │
+ │ ╘═╦══ child node B3 ═══
+ │   ║ TestTree#00000:
+ │   ║   <leaf node>
+ │   ║   foo: 42
+ │   ╚═══════════
+ ╘═╦══ child node C ═══
+   ║ TestTree#00000:
+   ║   foo:
+   ║     multi
+   ║     line
+   ║     value!
+   ╚═══════════
+
+<<<NEXT>>>
+TestTree#00000
+ │ stringProperty1: value1
+ │ doubleProperty1: 42.5
+ │ roundedProperty: 0.3
+ │ nullProperty: null
+ │ <root node>
+ │
+ ├─child node A: TestTree#00000
+ ├─child node B: TestTree#00000
+ │ │ p1: v1
+ │ │ p2: v2
+ │ │
+ │ ├─child node B1: TestTree#00000
+ │ ├─child node B2: TestTree#00000
+ │ │   property1: value1
+ │ │
+ │ ╘═╦══╡ CHILD NODE B3: TESTTREE#00000 ╞═══════════════════════════════
+ │   ║ <leaf node>
+ │   ║ foo: 42
+ │   ╚══════════════════════════════════════════════════════════════════
+ ╘═╦══╡ CHILD NODE C: TESTTREE#00000 ╞════════════════════════════════
+   ║ foo:
+   ║   multi
+   ║   line
+   ║   value!
+   ╚══════════════════════════════════════════════════════════════════
+
+<<<NEXT>>>
+TestTree#00000:
+  stringProperty1: value1
+  doubleProperty1: 42.5
+  roundedProperty: 0.3
+  nullProperty: null
+  <root node>
+  ╞═╦══ child node A ═══
+  │ ║ TestTree#00000
+  │ ╚═══════════
+  ╞═╦══ child node B ═══
+  │ ║ TestTree#00000:
+  │ ║   p1: v1
+  │ ║   p2: v2
+  │ ║   ╞═╦══ child node B1 ═══
+  │ ║   │ ║ TestTree#00000
+  │ ║   │ ╚═══════════
+  │ ║   ╞═╦══ child node B2 ═══
+  │ ║   │ ║ TestTree#00000:
+  │ ║   │ ║   property1: value1
+  │ ║   │ ╚═══════════
+  │ ║   ╘═╦══ child node B3 ═══
+  │ ║     ║ TestTree#00000:
+  │ ║     ║   <leaf node>
+  │ ║     ║   foo: 42
+  │ ║     ╚═══════════
+  │ ╚═══════════
+  ╘═╦══ child node C ═══
+    ║ TestTree#00000:
+    ║   foo:
+    ║     multi
+    ║     line
+    ║     value!
+    ╚═══════════
+
+<<<NEXT>>>
+TestTree#00000:
+  stringProperty1: value1
+  doubleProperty1: 42.5
+  roundedProperty: 0.3
+  nullProperty: null
+  <root node>
+  child node A: TestTree#00000
+  child node B: TestTree#00000:
+    p1: v1
+    p2: v2
+    child node B1: TestTree#00000
+    child node B2: TestTree#00000:
+      property1: value1
+    child node B3: TestTree#00000:
+      <leaf node>
+      foo: 42
+  child node C: TestTree#00000:
+    foo:
+      multi
+      line
+      value!
+
+<<<NEXT>>>
+TestTree#00000:
+stringProperty1: value1
+doubleProperty1: 42.5
+roundedProperty: 0.3
+nullProperty: null
+<root node>
+child node A: TestTree#00000
+child node B: TestTree#00000:
+p1: v1
+p2: v2
+child node B1: TestTree#00000
+child node B2: TestTree#00000:
+property1: value1
+child node B3: TestTree#00000:
+<leaf node>
+foo: 42
+child node C: TestTree#00000:
+foo:
+  multi
+  line
+  value!
+
+<<<NEXT>>>
+TestTree#00000(stringProperty1: value1, doubleProperty1: 42.5, roundedProperty: 0.3, nullProperty: null, <root node>)
+<<<NEXT>>>
+some name: TestTree#00000(stringProperty1: value1, doubleProperty1: 42.5, roundedProperty: 0.3, nullProperty: null, <root node>)
+<<<NEXT>>>
+TestTree#00000(stringProperty1: value1, doubleProperty1: 42.5, roundedProperty: 0.3, nullProperty: null, <root node>)
+
+<<<NEXT>>>
+some name:
+  TestTree#00000(stringProperty1: value1, doubleProperty1: 42.5, roundedProperty: 0.3, nullProperty: null, <root node>)
+
+<<<NEXT>>>
+TestTree#00000
+ │ stringProperty1: value1
+ │ doubleProperty1: 42.5
+ │ roundedProperty: 0.3
+ │ nullProperty: null
+ │ <root node>
+ │
+ ├─child node A: TestTree#00000
+ ├─child node B: TestTree#00000
+ │ │ p1: v1
+ │ │ p2: v2
+ │ │
+ │ ├─child node B1: TestTree#00000
+ │ ├─child node B2: TestTree#00000
+ │ │   property1: value1
+ │ │
+ │ └─child node B3: TestTree#00000(<leaf node>, foo: 42)
+ └─child node C: TestTree#00000(foo: multi\nline\nvalue!)
+
+<<<NEXT>>>
+TestTree#00000
+ │ stringProperty1: value1
+ │ doubleProperty1: 42.5
+ │ roundedProperty: 0.3
+ │ nullProperty: null
+ │ <root node>
+ │
+ ├─child node A: TestTree#00000
+ ├─child node B: TestTree#00000
+ │ │ p1: v1
+ │ │ p2: v2
+ │ │
+ │ ├─child node B1: TestTree#00000
+ │ ├─child node B2: TestTree#00000
+ │ │   property1: value1
+ │ │
+ │ └─child node B3:
+ │     TestTree#00000(<leaf node>, foo: 42)
+ └─child node C:
+     TestTree#00000(foo: multi\nline\nvalue!)
+
+<<<END>>>

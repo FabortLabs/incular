@@ -63,7 +63,7 @@ impl DiagnosticsNode {
         Self {
             details,
             specialized,
-            compact_description: property.compact_iterable_description(),
+            compact_description: property.compact_description(),
             properties: Vec::new(),
             children: Vec::new(),
         }
@@ -79,7 +79,11 @@ impl DiagnosticsNode {
     /// Selects the style used when displaying this node as a text tree.
     #[must_use]
     pub fn style(mut self, style: DiagnosticsTreeStyle) -> Self {
-        self.details.insert("style".into(), json!(style.name()));
+        if style == DiagnosticsTreeStyle::Sparse {
+            self.details.remove("style");
+        } else {
+            self.details.insert("style".into(), json!(style.name()));
+        }
         self
     }
 

@@ -637,3 +637,242 @@ fn wrap_budget_counts_utf16_columns_and_preserves_indivisible_text() {
         "root:\n👋👋 aa\nbb\n  unbreakable-url\nplain\ntext\nmany words stay together\n"
     );
 }
+
+// Adapted from Flutter's diagnostics_test.dart (see fixtures/flutter350_LICENSE).
+fn goldens(text: &str) -> Vec<&str> {
+    text.strip_suffix("\n<<<END>>>\n")
+        .unwrap()
+        .split("\n<<<NEXT>>>\n")
+        .collect()
+}
+
+fn style_tree(
+    root: incular_core::DiagnosticsTreeStyle,
+    leaf: Option<incular_core::DiagnosticsTreeStyle>,
+    property_style: Option<incular_core::DiagnosticsTreeStyle>,
+) -> Node {
+    use incular_core::DiagnosticsTreeStyle as Style;
+    let child = |name, style| {
+        Node::new("TestTree#00000", "DiagnosticableTreeNode")
+            .style(style)
+            .named(format!("child node {name}"))
+    };
+    let style = property_style.unwrap_or(Style::SingleLine);
+    let string = |name, value: &str, show_name| {
+        Node::property(
+            &Property::string(name, Some(value.into()))
+                .quoted(false)
+                .style(style)
+                .show_name(show_name),
+        )
+    };
+    let props = |properties: Vec<Node>| {
+        if property_style.is_some() {
+            properties
+        } else {
+            vec![]
+        }
+    };
+    let leaf = leaf.unwrap_or(root);
+    Node::new("TestTree#00000", "DiagnosticableTreeNode")
+        .style(root)
+        .with_properties(props(vec![
+            string("stringProperty1", "value1", true),
+            Node::property(&Property::double("doubleProperty1", Some(42.5)).style(style)),
+            Node::property(&Property::double("roundedProperty", Some(1.0 / 3.0)).style(style)),
+            Node::property(
+                &Property::new("DO_NOT_SHOW", Some("hidden".to_owned()))
+                    .level(DiagnosticLevel::Hidden)
+                    .style(style),
+            ),
+            Node::property(
+                &Property::<String>::new("DO_NOT_SHOW_NULL", None)
+                    .default_value(None)
+                    .style(style),
+            ),
+            Node::property(&Property::<String>::new("nullProperty", None).style(style)),
+            string("node_type", "<root node>", false),
+        ]))
+        .with_children(vec![
+            child("A", root),
+            child("B", root)
+                .with_properties(props(vec![
+                    string("p1", "v1", true),
+                    string("p2", "v2", true),
+                ]))
+                .with_children(vec![
+                    child("B1", root),
+                    child("B2", root).with_properties(props(vec![string(
+                        "property1",
+                        "value1",
+                        true,
+                    )])),
+                    child("B3", leaf).with_properties(props(vec![
+                        string("node_type", "<leaf node>", false),
+                        Node::property(&Property::integer("foo", Some(42)).style(style)),
+                    ])),
+                ]),
+            child("C", leaf).with_properties(props(vec![string(
+                "foo",
+                "multi\nline\nvalue!",
+                true,
+            )])),
+        ])
+}
+
+#[test]
+fn diagnostic_tree_child_styles_match_reference_controls() {
+    use incular_core::DiagnosticsTreeStyle as Style;
+    let scenarios = [
+        (Style::Dense, None),
+        (Style::Sparse, None),
+        (Style::Offstage, None),
+        (Style::Sparse, Some(Style::Transition)),
+        (Style::Sparse, Some(Style::Error)),
+        (Style::Transition, None),
+        (Style::Error, None),
+        (Style::Whitespace, None),
+        (Style::SingleLine, None),
+    ];
+    let expected = goldens(include_str!("fixtures/diagnostics/control-styles.txt"));
+    assert_eq!(scenarios.len(), expected.len());
+    for (index, ((root, leaf), expected)) in scenarios.into_iter().zip(expected).enumerate() {
+        let tree = style_tree(root, leaf, None);
+        assert_eq!(
+            tree.to_string_deep(DiagnosticLevel::Debug),
+            expected,
+            "style case {index}: {root:?}/{leaf:?}"
+        );
+        let expected_root = leaf.unwrap_or(Style::Sparse);
+        let wire_tree = Value::Object(
+            tree.clone()
+                .style(expected_root)
+                .to_json(Options::default(), &()),
+        );
+        assert_eq!(wire_tree["type"], "DiagnosticableTreeNode");
+        assert_eq!(wire_tree["description"], "TestTree#00000");
+        assert_eq!(wire_tree["hasChildren"], true);
+        assert!(wire_tree.get("name").is_none());
+        if let Some(leaf) = leaf {
+            assert_eq!(
+                wire_tree["style"],
+                if leaf == Style::Transition {
+                    "transition"
+                } else {
+                    "error"
+                }
+            );
+        }
+    }
+}
+
+#[test]
+fn diagnostic_tree_property_styles_match_reference_controls() {
+    use incular_core::DiagnosticsTreeStyle as Style;
+    let scenarios = [
+        (Style::Sparse, None, Style::SingleLine, None),
+        (Style::Sparse, None, Style::ErrorProperty, None),
+        (Style::Dense, None, Style::SingleLine, None),
+        (Style::Offstage, None, Style::SingleLine, None),
+        (
+            Style::Sparse,
+            Some(Style::Transition),
+            Style::SingleLine,
+            None,
+        ),
+        (Style::Sparse, Some(Style::Error), Style::SingleLine, None),
+        (Style::Transition, None, Style::SingleLine, None),
+        (Style::Whitespace, None, Style::SingleLine, None),
+        (Style::Flat, None, Style::SingleLine, None),
+        (Style::SingleLine, None, Style::SingleLine, None),
+        (
+            Style::SingleLine,
+            None,
+            Style::SingleLine,
+            Some("some name"),
+        ),
+        (Style::ErrorProperty, None, Style::SingleLine, None),
+        (
+            Style::ErrorProperty,
+            None,
+            Style::SingleLine,
+            Some("some name"),
+        ),
+        (
+            Style::Sparse,
+            Some(Style::SingleLine),
+            Style::SingleLine,
+            None,
+        ),
+        (
+            Style::Sparse,
+            Some(Style::ErrorProperty),
+            Style::SingleLine,
+            None,
+        ),
+    ];
+    let expected = goldens(include_str!("fixtures/diagnostics/properties-styles.txt"));
+    assert_eq!(scenarios.len(), expected.len());
+    for (index, ((root, leaf, property, name), expected)) in
+        scenarios.into_iter().zip(expected).enumerate()
+    {
+        let mut tree = style_tree(root, leaf, Some(property));
+        if let Some(name) = name {
+            tree = tree.named(name);
+        }
+        assert_eq!(
+            tree.to_string_deep(DiagnosticLevel::Debug),
+            expected,
+            "style case {index}: {root:?}/{leaf:?}/{property:?}"
+        );
+    }
+}
+
+#[test]
+fn transitional_tree_changes_connector_style_without_changing_sibling_indentation() {
+    use incular_core::DiagnosticsTreeStyle as Style;
+    let quoted = |name, value: &str| Node::property(&Property::string(name, Some(value.into())));
+    let tree = || Node::new("TestTree#00000", "DiagnosticableTreeNode");
+    let transition = tree()
+        .named("child node transition")
+        .style(Style::Transition)
+        .with_properties(vec![
+            quoted("p1", "v1"),
+            tree()
+                .named("tree property")
+                .style(Style::Whitespace)
+                .with_properties(vec![Node::property(&Property::new("survived", Some(true)))]),
+        ])
+        .with_children(vec![
+            tree().named("child dense child").style(Style::Dense),
+            tree()
+                .named("child dense")
+                .style(Style::Dense)
+                .with_properties(vec![quoted("property1", "value1")]),
+            tree()
+                .named("child node B3")
+                .style(Style::Dense)
+                .with_properties(vec![
+                    Node::property(
+                        &Property::string("node_type", Some("<leaf node>".into()))
+                            .quoted(false)
+                            .show_name(false),
+                    ),
+                    Node::property(&Property::integer("foo", Some(42))),
+                ]),
+        ]);
+    let root = tree()
+        .with_properties(vec![quoted("stringProperty1", "value1")])
+        .with_children(vec![
+            transition,
+            tree()
+                .named("child node C")
+                .with_properties(vec![Node::property(
+                    &Property::string("foo", Some("multi\nline\nvalue!".into())).quoted(false),
+                )]),
+        ]);
+    assert_eq!(
+        root.to_string_deep(DiagnosticLevel::Debug),
+        include_str!("fixtures/diagnostics/mixed-transition.txt"),
+    );
+}

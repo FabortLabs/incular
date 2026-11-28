@@ -25,3 +25,16 @@ explicit line breaks and matrix rows survive, and word wrapping can be
 disabled on a description independently of its label. The Unicode regression
 checks width in UTF-16 columns, as on the reference. All 34 focused native
 diagnostics tests passed.
+
+## Diagnostic tree styles
+
+The exact pinned `foundation/diagnostics_test.dart` cases at lines 195, 371,
+and 864 passed. Three native comparison tests exercise 25 complete output
+fixtures from those cases. They verify dense, sparse, dashed offstage, flat,
+whitespace, transition, error, and inline output; sibling continuation rails
+and nested frame widths; property filtering, quoting, escaping, and selected
+default inspector metadata. This includes the mixed transition tree with
+a nested diagnostic property, dense children, and a following sparse sibling.
+The fixtures retain Flutter's license. All 49 focused native tests in the
+six diagnostics targets passed. All 30 registration sites in this pinned
+reference file are now paired matches.

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use serde_json::Value;
 
 use super::{DiagnosticLevel, DiagnosticsNode};
@@ -5,6 +7,9 @@ use super::{DiagnosticLevel, DiagnosticsNode};
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Style {
     Sparse,
+    Dense,
+    Offstage,
+    Transition,
     Whitespace,
     Flat,
     Error,
@@ -15,24 +20,65 @@ enum Style {
 impl Style {
     fn of(node: &DiagnosticsNode) -> Self {
         match node.text("style") {
-            Some("sparse") => Self::Sparse,
+            Some("dense") => Self::Dense,
+            Some("offstage") => Self::Offstage,
+            Some("transition") => Self::Transition,
             Some("whitespace") => Self::Whitespace,
             Some("flat") => Self::Flat,
             Some("error") => Self::Error,
             Some("errorProperty") => Self::ErrorProperty,
             Some("singleLine" | "none") => Self::Inline,
-            _ if node.specialized.contains_key("propertyType") => Self::Inline,
             _ => Self::Sparse,
         }
     }
 
     fn root_indent(self) -> &'static str {
         match self {
-            Self::Sparse => " ",
+            Self::Sparse | Self::Offstage => " ",
             Self::Whitespace => "  ",
-            Self::Flat | Self::Error | Self::ErrorProperty | Self::Inline => "",
+            _ => "",
         }
     }
+
+    fn block_spacing(self) -> bool {
+        matches!(self, Self::Sparse | Self::Offstage)
+    }
+
+    fn caption_colon(self) -> bool {
+        matches!(self, Self::Transition | Self::Whitespace | Self::Flat)
+    }
+
+    fn body_indent(self) -> &'static str {
+        if self == Self::Transition { "  " } else { "" }
+    }
+
+    fn child_link(self, last: bool) -> Link {
+        let (first, rail, inside) = match (self, last) {
+            (Self::Dense, false) => ("├", "│", ""),
+            (Self::Dense, true) => ("└", " ", ""),
+            (Self::Sparse, false) => ("├─", "│", " "),
+            (Self::Sparse, true) => ("└─", " ", " "),
+            (Self::Offstage, false) => ("╎╌", "╎", " "),
+            (Self::Offstage, true) => ("└╌", " ", " "),
+            (Self::Transition, false) => ("╞═╦══ ", "│", " ║ "),
+            (Self::Transition, true) => ("╘═╦══ ", " ", " ║ "),
+            (Self::Error, false) => ("╞═╦", "│", " ║ "),
+            (Self::Error, true) => ("╘═╦", " ", " ║ "),
+            (Self::Whitespace, _) => ("", " ", " "),
+            _ => ("", "", ""),
+        };
+        Link {
+            first,
+            rail,
+            inside,
+        }
+    }
+}
+
+struct Link {
+    first: &'static str,
+    rail: &'static str,
+    inside: &'static str,
 }
 
 #[derive(Clone, Copy)]
@@ -193,6 +239,11 @@ impl DiagnosticsNode {
         let allow_name_wrap = self.flag("allowNameWrap", false);
         let allow_wrap = self.flag("allowWrap", true);
         if let Some(name) = self.label() {
+            let name = if style == Style::Error {
+                Cow::Owned(name.to_uppercase())
+            } else {
+                Cow::Borrowed(name)
+            };
             let separator = if !description.is_empty() && self.flag("showSeparator", true) {
                 ":"
             } else {
@@ -333,7 +384,7 @@ impl DiagnosticsNode {
             .iter()
             .filter(|p| !p.filtered(settings.minimum))
             .collect();
-        let connection = if style == Style::Sparse {
+        let connection = if style.block_spacing() {
             if self.children.is_empty() {
                 "  "
             } else {
@@ -342,38 +393,80 @@ impl DiagnosticsNode {
         } else {
             ""
         };
-        let body = format!("{continuing}{connection}");
+        let caption_prefix = format!("{continuing}{connection}");
+        let child_base = format!("{continuing}{}", style.body_indent());
+        let body = format!("{caption_prefix}{}", style.body_indent());
         let description = self.text("description").unwrap_or_default();
-        if style == Style::Error {
-            self.append_heading(
+        match style {
+            Style::Dense => {
+                self.render_inline(output, settings.minimum, false, first, continuing, None);
+            }
+            Style::Error => {
+                self.append_heading(
+                    output,
+                    &format!("{first}══╡ "),
+                    &body,
+                    &body,
+                    &description.to_uppercase(),
+                    None,
+                );
+                output.push_str(" ╞══");
+                let length = columns(output.rsplit('\n').next().unwrap_or_default());
+                repeat_border(output, width.saturating_sub(length));
+            }
+            Style::Transition if self.label().is_some() => {
+                let name = self.label().expect("transition has a label");
+                output.push_str(first);
+                output.push_str(name);
+                if self.flag("showSeparator", true) {
+                    output.push_str(" ═══");
+                }
+                output.push('\n');
+                for (index, line) in description.trim_end().split('\n').enumerate() {
+                    if index != 0 {
+                        output.push('\n');
+                    }
+                    let available = width.saturating_sub(columns(&caption_prefix));
+                    let lines = wrap_line(line, available, available, |_| {
+                        self.flag("allowWrap", false)
+                    });
+                    append_lines(output, &lines, &caption_prefix, &caption_prefix);
+                }
+            }
+            _ => self.append_heading(
                 output,
-                &format!("{first}══╡ "),
-                &body,
-                &body,
-                &description.to_uppercase(),
-                None,
-            );
-            output.push_str(" ╞══");
-            let length = columns(output.rsplit('\n').next().unwrap_or_default());
-            repeat_border(output, width.saturating_sub(length));
-        } else {
-            self.append_heading(output, first, &body, &body, description, Some(width));
+                first,
+                &caption_prefix,
+                &caption_prefix,
+                description,
+                Some(width),
+            ),
         }
-        if matches!(style, Style::Whitespace | Style::Flat)
-            && (!properties.is_empty() || !self.children.is_empty())
-        {
+        if style.caption_colon() && (!properties.is_empty() || !self.children.is_empty()) {
             output.push(':');
         }
         output.push('\n');
 
-        for property in &properties {
-            property.render(
-                output,
-                settings,
-                &body,
-                &format!("{body}{}", Style::of(property).root_indent()),
-                true,
-            );
+        if style != Style::Dense {
+            for property in &properties {
+                let link = Style::of(property).child_link(false);
+                let hanging = Style::of(property).child_link(true);
+                property.render(
+                    output,
+                    settings,
+                    &format!("{body}{}", link.first),
+                    &format!("{body}{}{}", hanging.rail, hanging.inside),
+                    true,
+                );
+            }
+        }
+        if style.block_spacing()
+            && self.children.is_empty()
+            && !properties.is_empty()
+            && !body.trim_end().is_empty()
+        {
+            output.push_str(body.trim_end());
+            output.push('\n');
         }
         for (index, child) in self.children.iter().enumerate() {
             let last = index + 1 == self.children.len();
@@ -381,31 +474,44 @@ impl DiagnosticsNode {
                 Style::Inline | Style::ErrorProperty => style,
                 other => other,
             };
-            let (link, next) = match (child_style, last) {
-                (Style::Sparse, true) => ("└─", "  "),
-                (Style::Sparse, false) => ("├─", "│ "),
-                (Style::Whitespace, _) => ("", "  "),
-                _ => ("", ""),
-            };
+            let link = child_style.child_link(last);
             if index == 0
                 && !properties.is_empty()
-                && style == Style::Sparse
-                && child_style == Style::Sparse
+                && style.block_spacing()
+                && child_style.block_spacing()
             {
-                output.push_str(continuing);
-                output.push_str("│\n");
+                output.push_str(body.trim_end());
+                output.push('\n');
             }
+            let child_continuing = format!("{child_base}{}{}", link.rail, link.inside);
             child.render(
                 output,
                 settings,
-                &format!("{continuing}{link}"),
-                &format!("{continuing}{next}"),
+                &format!("{child_base}{}", link.first),
+                &child_continuing,
                 true,
             );
+            if matches!(child_style, Style::Transition | Style::Error) {
+                let footer = format!("{child_base}{} ╚", link.rail);
+                let count = if child_style == Style::Error {
+                    width
+                        .max(
+                            columns(&child_continuing)
+                                .saturating_add(settings.wrap_width_properties),
+                        )
+                        .saturating_sub(columns(&footer))
+                        .max(16)
+                } else {
+                    11
+                };
+                output.push_str(&footer);
+                repeat_border(output, count);
+                output.push('\n');
+            }
         }
         if style == Style::Error && !embedded {
             output.push_str(continuing);
-            repeat_border(output, width.max(5).saturating_sub(columns(continuing)));
+            repeat_border(output, width.saturating_sub(columns(continuing)).max(5));
             output.push('\n');
         }
     }

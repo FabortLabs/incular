@@ -1,0 +1,99 @@
+TestTree#00000
+├child node A: TestTree#00000
+├child node B: TestTree#00000
+│├child node B1: TestTree#00000
+│├child node B2: TestTree#00000
+│└child node B3: TestTree#00000
+└child node C: TestTree#00000
+
+<<<NEXT>>>
+TestTree#00000
+ ├─child node A: TestTree#00000
+ ├─child node B: TestTree#00000
+ │ ├─child node B1: TestTree#00000
+ │ ├─child node B2: TestTree#00000
+ │ └─child node B3: TestTree#00000
+ └─child node C: TestTree#00000
+
+<<<NEXT>>>
+TestTree#00000
+ ╎╌child node A: TestTree#00000
+ ╎╌child node B: TestTree#00000
+ ╎ ╎╌child node B1: TestTree#00000
+ ╎ ╎╌child node B2: TestTree#00000
+ ╎ └╌child node B3: TestTree#00000
+ └╌child node C: TestTree#00000
+
+<<<NEXT>>>
+TestTree#00000
+ ├─child node A: TestTree#00000
+ ├─child node B: TestTree#00000
+ │ ├─child node B1: TestTree#00000
+ │ ├─child node B2: TestTree#00000
+ │ ╘═╦══ child node B3 ═══
+ │   ║ TestTree#00000
+ │   ╚═══════════
+ ╘═╦══ child node C ═══
+   ║ TestTree#00000
+   ╚═══════════
+
+<<<NEXT>>>
+TestTree#00000
+ ├─child node A: TestTree#00000
+ ├─child node B: TestTree#00000
+ │ ├─child node B1: TestTree#00000
+ │ ├─child node B2: TestTree#00000
+ │ ╘═╦══╡ CHILD NODE B3: TESTTREE#00000 ╞═══════════════════════════════
+ │   ╚══════════════════════════════════════════════════════════════════
+ ╘═╦══╡ CHILD NODE C: TESTTREE#00000 ╞════════════════════════════════
+   ╚══════════════════════════════════════════════════════════════════
+
+<<<NEXT>>>
+TestTree#00000:
+  ╞═╦══ child node A ═══
+  │ ║ TestTree#00000
+  │ ╚═══════════
+  ╞═╦══ child node B ═══
+  │ ║ TestTree#00000:
+  │ ║   ╞═╦══ child node B1 ═══
+  │ ║   │ ║ TestTree#00000
+  │ ║   │ ╚═══════════
+  │ ║   ╞═╦══ child node B2 ═══
+  │ ║   │ ║ TestTree#00000
+  │ ║   │ ╚═══════════
+  │ ║   ╘═╦══ child node B3 ═══
+  │ ║     ║ TestTree#00000
+  │ ║     ╚═══════════
+  │ ╚═══════════
+  ╘═╦══ child node C ═══
+    ║ TestTree#00000
+    ╚═══════════
+
+<<<NEXT>>>
+══╡ TESTTREE#00000 ╞═════════════════════════════════════════════
+╞═╦══╡ CHILD NODE A: TESTTREE#00000 ╞════════════════════════════════
+│ ╚══════════════════════════════════════════════════════════════════
+╞═╦══╡ CHILD NODE B: TESTTREE#00000 ╞════════════════════════════════
+│ ║ ╞═╦══╡ CHILD NODE B1: TESTTREE#00000 ╞═══════════════════════════════
+│ ║ │ ╚══════════════════════════════════════════════════════════════════
+│ ║ ╞═╦══╡ CHILD NODE B2: TESTTREE#00000 ╞═══════════════════════════════
+│ ║ │ ╚══════════════════════════════════════════════════════════════════
+│ ║ ╘═╦══╡ CHILD NODE B3: TESTTREE#00000 ╞═══════════════════════════════
+│ ║   ╚══════════════════════════════════════════════════════════════════
+│ ╚══════════════════════════════════════════════════════════════════
+╘═╦══╡ CHILD NODE C: TESTTREE#00000 ╞════════════════════════════════
+  ╚══════════════════════════════════════════════════════════════════
+═════════════════════════════════════════════════════════════════
+
+<<<NEXT>>>
+TestTree#00000:
+  child node A: TestTree#00000
+  child node B: TestTree#00000:
+    child node B1: TestTree#00000
+    child node B2: TestTree#00000
+    child node B3: TestTree#00000
+  child node C: TestTree#00000
+
+<<<NEXT>>>
+TestTree#00000
+<<<END>>>

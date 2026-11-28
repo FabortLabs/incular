@@ -1,0 +1,16 @@
+TestTree#00000
+ │ stringProperty1: "value1"
+ ╞═╦══ child node transition ═══
+ │ ║ TestTree#00000:
+ │ ║   p1: "v1"
+ │ ║   tree property: TestTree#00000:
+ │ ║     survived: true
+ │ ║   ├child dense child: TestTree#00000
+ │ ║   ├child dense: TestTree#00000(property1: "value1")
+ │ ║   └child node B3: TestTree#00000(<leaf node>, foo: 42)
+ │ ╚═══════════
+ └─child node C: TestTree#00000
+     foo:
+       multi
+       line
+       value!
