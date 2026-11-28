@@ -39,11 +39,62 @@ pub enum ActivityOrigin {
     Animation,
 }
 
+impl ScrollState {
+    fn reports_scrolling(&self) -> bool {
+        self.activity_active || self.wheel_scrolling_depth != 0
+    }
+}
+
+/// Flutter publishes the wheel's scrolling flag before forcePixels, but
+/// does not open its notification bracket until afterward. An actual
+/// activity can still take ownership during either observer callback.
+struct WheelScrolling {
+    controller: ScrollController,
+    active: bool,
+}
+
+impl WheelScrolling {
+    fn begin(controller: &ScrollController) -> Self {
+        let notify = {
+            let mut state = controller.state.borrow_mut();
+            let notify = !state.reports_scrolling();
+            state.wheel_scrolling_depth += 1;
+            notify
+        };
+        let scope = Self { controller: controller.clone(), active: true };
+        if notify {
+            controller.notify_scrolling_changed(true);
+        }
+        scope
+    }
+
+    fn finish(mut self) {
+        self.retire();
+        self.controller.notify_scrolling_changed(false);
+    }
+
+    fn retire(&mut self) {
+        if std::mem::take(&mut self.active) {
+            let mut state = self.controller.state.borrow_mut();
+            state.wheel_scrolling_depth -= 1;
+            if !state.reports_scrolling() {
+                state.activity_user_direction = 0;
+            }
+        }
+    }
+}
+
+impl Drop for WheelScrolling {
+    fn drop(&mut self) {
+        self.retire();
+    }
+}
+
 impl ScrollController {
-    /// Whether this position is currently driven by a scroll activity.
+    /// Whether this position reports scrolling to its observers.
     #[must_use]
     pub fn is_scrolling(&self) -> bool {
-        self.state.borrow().activity_active
+        self.state.borrow().reports_scrolling()
     }
 
     /// Observes transitions of the position's scrolling state. Unlike
@@ -75,7 +126,7 @@ impl ScrollController {
     fn notify_scrolling_changed(&self, expected: bool) {
         let notifier = {
             let state = self.state.borrow();
-            if state.activity_active != expected {
+            if state.reports_scrolling() != expected {
                 return;
             }
             state.activity_changes.clone()
@@ -89,19 +140,22 @@ impl ScrollController {
     /// Repeated pointer/wheel samples in the same gesture do not emit
     /// duplicate starts.
     pub fn begin_activity(&self) -> bool {
-        let started = {
+        let (started, notify) = {
             let mut state = self.state.borrow_mut();
             if state.activity_active {
-                false
+                (false, false)
             } else {
+                let notify = !state.reports_scrolling();
                 state.activity_active = true;
                 next_activity_generation(&mut state);
-                true
+                (true, notify)
             }
         };
         if started {
-            self.notify_scrolling_changed(true);
-            if self.is_scrolling() {
+            if notify {
+                self.notify_scrolling_changed(true);
+            }
+            if self.current_activity_id().is_some() {
                 self.dispatch_notification(ScrollNotificationType::Start, 0., 0.);
             }
         }
@@ -124,12 +178,13 @@ impl ScrollController {
         // stranding an open flag no token owns. A reentrant takeover
         // bumps past this generation, making this token stale — its
         // eventual drop then cannot cancel the newer activity.
-        let (started, generation) = {
+        let (started, notify, generation) = {
             let mut state = self.state.borrow_mut();
             let started = !state.activity_active;
+            let notify = !state.reports_scrolling();
             state.activity_active = true;
             let generation = next_activity_generation(&mut state);
-            (started, generation)
+            (started, notify, generation)
         };
         let token = OwnedActivity {
             controller: self.clone(),
@@ -137,8 +192,10 @@ impl ScrollController {
             origin,
         };
         if started {
-            self.notify_scrolling_changed(true);
-            if self.is_scrolling() {
+            if notify {
+                self.notify_scrolling_changed(true);
+            }
+            if self.current_activity_id().is_some() {
                 self.dispatch_notification(ScrollNotificationType::Start, 0., 0.);
             }
         }
@@ -268,6 +325,11 @@ impl ScrollController {
         if !unclaimed() {
             return superseded();
         }
+        let scrolling = WheelScrolling::begin(self);
+        if !unclaimed() {
+            scrolling.finish();
+            return superseded();
+        }
         let (persistence, committed) = {
             let mut state = self.state.borrow_mut();
             state.offset = result.position;
@@ -284,6 +346,7 @@ impl ScrollController {
                 || state.activity_generation != generation
             {
                 drop(state);
+                scrolling.finish();
                 return superseded();
             }
         }
@@ -295,6 +358,7 @@ impl ScrollController {
             self.dispatch_scroll_notification(ScrollNotificationType::Update, result.consumed, 0.);
         }
         sample.finish();
+        scrolling.finish();
         ScrollDelta {
             overscroll: 0.,
             ..result

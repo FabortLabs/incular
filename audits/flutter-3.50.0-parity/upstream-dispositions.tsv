@@ -3989,3 +3989,4 @@ packages/flutter/test/rendering/multi_view_binding_test.dart	147	hit-testing rea
 packages/flutter/test/widgets/view_test.dart	516	ViewFocusEvents cause unfocusing and refocusing	paired-match	upstream-window-focus-binding.md#focus-entry-into-a-retained-view
 packages/flutter/test/widgets/view_test.dart	567	ViewFocusEvent with an undefined direction keeps the focused child	paired-match	upstream-window-focus-binding.md#focus-entry-into-a-retained-view
 packages/flutter/test/widgets/view_test.dart	622	ViewFocusEvent with a forward direction moves focus to the first child	paired-match	upstream-window-focus-binding.md#focus-entry-into-a-retained-view
+packages/flutter/test/widgets/scroll_controller_test.dart	382	isScrollingNotifier works with pointer scroll	paired-match	upstream-scroll-position-observers.md#wheel-position-and-scrolling-state

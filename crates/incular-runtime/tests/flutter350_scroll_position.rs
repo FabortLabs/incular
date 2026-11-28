@@ -169,3 +169,101 @@ fn a_position_listener_can_start_a_replacement_activity_during_a_wheel_update() 
     scroll.end_activity();
     assert!(!scroll.is_scrolling());
 }
+
+#[test]
+fn wheel_activity_is_observable_before_position_and_until_after_end() {
+    let scroll = ScrollController::new();
+    let mut runtime =
+        mount(ListView::new([SizedBox::new().height(2000.)]).controller(scroll.clone()));
+    let trace = Rc::new(RefCell::new(Vec::new()));
+    let record = |event| {
+        let trace = Rc::clone(&trace);
+        let scroll = scroll.clone();
+        move || {
+            trace
+                .borrow_mut()
+                .push((event, scroll.offset(), scroll.is_scrolling()))
+        }
+    };
+    let _moving = scroll.add_scrolling_listener(record("scrolling"));
+    let _position = scroll.add_position_listener(record("position"));
+    let _bubble = scroll.add_listener({
+        let start = record("start");
+        let update = record("update");
+        let end = record("end");
+        move |notice| {
+            match notice.kind {
+                ScrollNotificationType::Start => start(),
+                ScrollNotificationType::Update => update(),
+                ScrollNotificationType::End => end(),
+                _ => {}
+            }
+            false
+        }
+    });
+
+    let _ = runtime.handle_input(incular_core::InputEvent::ScrollAt {
+        position: incular_core::Offset::new(30., 30.),
+        delta: incular_core::Offset::new(0., 25.),
+    });
+    assert_eq!(
+        *trace.borrow(),
+        [
+            ("scrolling", 0., true),
+            ("position", 25., true),
+            ("start", 25., true),
+            ("update", 25., true),
+            ("end", 25., true),
+            ("scrolling", 25., false),
+        ],
+    );
+    runtime.run_frame(Constraints::tight(VIEW)).unwrap();
+    assert_eq!(trace.borrow().len(), 6);
+}
+
+#[test]
+fn scrolling_notifier_is_true_inside_the_position_listener_for_a_300_pixel_wheel_move() {
+    let scroll = ScrollController::new();
+    let mut runtime = mount(
+        ListView::new((0..50).map(|i| {
+            SizedBox::new()
+                .height(100.)
+                .child(Text::new(format!("Item {i}")))
+        }))
+        .controller(scroll.clone()),
+    );
+    let observed = Rc::new(Cell::new(false));
+    let _position = scroll.add_position_listener({
+        let observed = observed.clone();
+        let scroll = scroll.clone();
+        move || observed.set(scroll.is_scrolling())
+    });
+    let _ = runtime.handle_input(incular_core::InputEvent::ScrollAt {
+        position: incular_core::Offset::new(400., 300.),
+        delta: incular_core::Offset::new(0., 300.),
+    });
+    assert!(observed.get());
+    assert_eq!(scroll.offset(), 300.);
+    assert!(!scroll.is_scrolling());
+}
+
+#[test]
+fn a_scrolling_observer_can_take_over_before_the_wheel_commits_pixels() {
+    let scroll = ScrollController::new();
+    let _runtime = mount(ListView::new([SizedBox::new().height(2000.)]).controller(scroll.clone()));
+    let observer = scroll.add_scrolling_listener({
+        let scroll = scroll.clone();
+        move || {
+            if scroll.is_scrolling() {
+                assert_eq!(scroll.offset(), 0.);
+                assert!(scroll.begin_activity());
+            }
+        }
+    });
+    scroll.apply_pointer_scroll(incular_scroll::ScrollPhysics::CLAMPING, 25.);
+    assert!(scroll.is_scrolling());
+    assert_eq!(scroll.offset(), 0.);
+    drop(observer);
+    scroll.end_activity();
+    assert!(!scroll.is_scrolling());
+}

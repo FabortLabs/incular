@@ -21,3 +21,20 @@ rows defer loading after a 50,000-pixel jump, then load immediately
 after a 500-pixel move. Incular's fixed-extent index does not build
 every intervening row, so it intentionally does not match Flutter's
 total of 102 builder calls. All fifteen focused native tests passed.
+
+## Wheel position and scrolling state
+
+Pinned `widgets/scroll_controller_test.dart:382` passed. A position
+listener sees scrolling already active during the original 300-pixel
+wheel move. An authored 25-pixel reference probe confirms the full
+sequence: scrolling becomes true at offset zero, position and all
+three boundary callbacks see offset 25 while scrolling is true, then
+the position reports idle again.
+
+The native baseline reported false during the position and End
+callbacks. The wheel now publishes the transient scrolling flag
+separately from its notification bracket, so a reentrant listener
+can still start a real replacement activity without the stale wheel
+claiming or closing it. Tests cover takeover both before changing
+pixels and from the position callback. All 42 focused native
+activity, wheel, position and keyboard-dismissal tests passed.
