@@ -4084,3 +4084,7 @@ packages/flutter/test/widgets/editable_text_test.dart	13957	Should have no effec
 packages/flutter/test/widgets/editable_text_test.dart	13977	Should have no effect on an empty and focused field	paired-match	undo-history-comparisons.md
 packages/flutter/test/widgets/editable_text_test.dart	14183	Initial value is recorded when an undo is received just after getting the focus	paired-match	undo-history-comparisons.md
 packages/flutter/test/widgets/editable_text_test.dart	9983	bringIntoView does nothing if the physics prohibits implicit scrolling	partial-match	upstream-editable-reveal.md
+packages/flutter/test/widgets/mouse_region_test.dart	882	Callbacks aren't called during build	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/widgets/mouse_region_test.dart	930	MouseRegion activate/deactivate don't duplicate annotations	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/widgets/mouse_region_test.dart	1029	detects pointer enter with closure arguments	paired-match	upstream-mouse-tracker-callbacks.md
+packages/flutter/test/widgets/mouse_region_test.dart	1818	Does not trigger side effects during a reparent	paired-match	upstream-mouse-tracker-callbacks.md

@@ -642,3 +642,122 @@ fn moving_an_existing_region_under_the_pointer_rebuilds_its_feedback_next_frame(
     assert!(model.changes.borrow().is_empty());
     assert!(!stats.requested_another_frame);
 }
+
+#[test]
+fn removing_and_remounting_a_hovered_region_never_runs_an_exit_during_build() {
+    let model = HoverFeedback::new(true, true);
+    let mut runtime = mount(model.widget());
+    presence(
+        &mut runtime,
+        Mouse,
+        Offset::new(200., 200.),
+        HoverDeviceChange::Added,
+    );
+    pointer(&mut runtime, Mouse, Offset::new(5., 5.), Move, false);
+    frame(&mut runtime);
+    assert_eq!(model.changes.take(), [true]);
+    assert!(HoverFeedback::has(&runtime, "hover inner"));
+
+    model.shown.set_value(false);
+    assert!(model.changes.borrow().is_empty());
+    frame(&mut runtime);
+    assert!(!HoverFeedback::has(&runtime, "hover inner"));
+    assert!(model.changes.borrow().is_empty());
+
+    model.hovering.set_value(false);
+    model.shown.set_value(true);
+    assert!(model.changes.borrow().is_empty());
+    let (_, stats) = runtime
+        .run_frame(Constraints::tight(Size::new(300., 400.)))
+        .unwrap();
+    assert_eq!(
+        model.changes.take(),
+        [true],
+        "the remount has exactly one enter"
+    );
+    assert!(HoverFeedback::has(&runtime, "unhover inner"));
+    assert!(stats.requested_another_frame);
+    frame(&mut runtime);
+    assert!(HoverFeedback::has(&runtime, "hover inner"));
+    assert!(model.changes.borrow().is_empty());
+}
+
+#[test]
+fn rebuilding_the_same_keyed_hover_feedback_never_duplicates_annotations() {
+    use incular_widgets::GlobalKey;
+
+    let model = HoverFeedback::new(true, true);
+    let key = GlobalKey::new();
+    let mut runtime = mount(model.widget().with_key(key));
+    presence(
+        &mut runtime,
+        Mouse,
+        Offset::new(200., 200.),
+        HoverDeviceChange::Added,
+    );
+    pointer(&mut runtime, Mouse, Offset::new(5., 5.), Move, false);
+    frame(&mut runtime);
+    assert_eq!(model.changes.take(), [true]);
+
+    let original = runtime.tree().element_with_key(&key.into()).unwrap();
+    runtime
+        .schedule_update(original, model.widget().with_key(key))
+        .unwrap();
+    frame(&mut runtime);
+    assert_eq!(runtime.tree().element_with_key(&key.into()), Some(original));
+    assert!(HoverFeedback::has(&runtime, "hover inner"));
+    assert!(model.changes.borrow().is_empty());
+
+    model.shown.set_value(false);
+    frame(&mut runtime);
+    assert!(!HoverFeedback::has(&runtime, "hover inner"));
+    assert!(model.changes.borrow().is_empty());
+}
+
+#[test]
+fn moving_from_ten_pixels_outside_to_ten_inside_delivers_the_enter_closure_once() {
+    let hovering = ValueNotifier::new(false);
+    let entries = Rc::new(std::cell::Cell::new(0));
+    let scene = {
+        let entries = entries.clone();
+        let hovering = hovering.clone();
+        Builder::new(move |_| {
+            let in_region = hovering.value();
+            let child = Widget::from(Text::new(if in_region {
+                "HOVERING"
+            } else {
+                "not hovering"
+            }))
+            .with_key(if in_region {
+                "hovering label"
+            } else {
+                "outside label"
+            });
+            let captured = hovering.clone();
+            let entries = entries.clone();
+            let region =
+                MouseRegion::new(SizedBox::square(50.).child(child)).on_enter(move |event| {
+                    assert_eq!(event.local_position, Offset::new(40., 40.));
+                    entries.set(entries.get() + 1);
+                    captured.set_value(true);
+                });
+            Directionality::new(TextDirection::Ltr, Align::new(Alignment::TOP_LEFT, region)).into()
+        })
+    };
+    let mut runtime = mount(scene);
+    assert!(HoverFeedback::has(&runtime, "outside label"));
+    presence(
+        &mut runtime,
+        Mouse,
+        Offset::new(200., 200.),
+        HoverDeviceChange::Added,
+    );
+    pointer(&mut runtime, Mouse, Offset::new(60., 40.), Move, false);
+    frame(&mut runtime);
+    assert!(HoverFeedback::has(&runtime, "outside label"));
+    assert_eq!(entries.get(), 0);
+    pointer(&mut runtime, Mouse, Offset::new(40., 40.), Move, false);
+    frame(&mut runtime);
+    assert!(HoverFeedback::has(&runtime, "hovering label"));
+    assert_eq!(entries.get(), 1);
+}

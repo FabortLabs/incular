@@ -32,3 +32,20 @@ case earns no original-registration credit.
 Nine original registration sites passed on the pinned reference (ten actual
 executions). Ten focused native tracker checks and five adjacent per-device
 checks passed.
+
+## Rebuilding, remounting and reparenting a hovered region
+
+Pinned `widgets/mouse_region_test.dart:882,930,1029,1818` passed.
+Removing a hovered region emits no exit on a dead annotation.
+Mounting a replacement under the still pointer produces one enter
+after paint, then its reactive text changes next frame. Rebuilding
+the same keyed region produces neither enter nor exit. A real
+movement from ten pixels outside to ten inside invokes its closure
+once with local coordinates and changes the mounted text.
+
+The reparent port uses the original 50/50 then 30/70 row widths and
+the stationary pointer at (40,5). The MouseRegion changes parent
+without changing its element or renderer, emitting no enter, exit,
+or host cursor activation. Its existing Click cursor remains
+active. All 29 focused mouse tracker and cursor session tests
+passed, including the final enter-count assertion.

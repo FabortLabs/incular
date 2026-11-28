@@ -250,3 +250,91 @@ fn changing_resize_direction_reactivates_the_cursor_under_a_still_pointer() {
     frame(&mut runtime);
     expect(&trace, &[(0, MouseCursor::ResizeVertical)]);
 }
+
+#[test]
+fn keyed_mouse_region_reparents_without_reentering_or_reactivating_the_cursor() {
+    use incular_widgets::{Align, Alignment, Directionality, GlobalKey, Row};
+
+    let key = GlobalKey::new();
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let build = |moved| {
+        let (enter, exit) = (events.clone(), events.clone());
+        let region = Widget::from(
+            MouseRegion::without_child()
+                .cursor(MouseCursor::Click)
+                .on_enter(move |event| {
+                    enter
+                        .borrow_mut()
+                        .push((PointerPhase::Enter, event.local_position))
+                })
+                .on_exit(move |event| {
+                    exit.borrow_mut()
+                        .push((PointerPhase::Exit, event.local_position))
+                }),
+        )
+        .with_key(key);
+        let children = if moved {
+            [
+                Widget::from(SizedBox::new().width(30.).height(50.)),
+                Widget::from(SizedBox::new().width(70.).height(50.).child(region)),
+            ]
+        } else {
+            [
+                Widget::from(SizedBox::square(50.).child(region)),
+                Widget::from(SizedBox::square(50.)),
+            ]
+        };
+        Directionality::new(
+            TextDirection::Ltr,
+            Align::new(
+                Alignment::TOP_LEFT,
+                SizedBox::new()
+                    .width(100.)
+                    .height(50.)
+                    .child(Row::new(children)),
+            ),
+        )
+    };
+    let (mut runtime, cursor_changes) = mount(build(false));
+    let inside = Offset::new(40., 5.);
+    let _ = runtime.handle_platform_event(PlatformEvent::HoverDevice(HoverDeviceEvent {
+        pointer: 1,
+        device: 1,
+        kind: PointerDeviceKind::Mouse,
+        position: Offset::new(100., 100.),
+        change: HoverDeviceChange::Added,
+    }));
+    cursor_changes.take();
+    let motion = |runtime: &mut Runtime, position| {
+        let _ = runtime.handle_input(InputEvent::PointerWithMetadata {
+            pointer: 1,
+            device: 1,
+            kind: PointerDeviceKind::Mouse,
+            position,
+            phase: PointerPhase::Move,
+            buttons: 0,
+            button: None,
+            sample: PointerSampleMetadata::default(),
+        });
+    };
+    motion(&mut runtime, inside);
+    assert_eq!(events.take(), [(PointerPhase::Enter, inside)]);
+    expect(&cursor_changes, &[(1, MouseCursor::Click)]);
+    let root = runtime.tree().root().unwrap();
+    let region = runtime.tree().element_with_key(&key.into()).unwrap();
+    let renderer = runtime.tree().render_id(region);
+    let original_parent = runtime.tree().parent(region);
+
+    runtime.schedule_update(root, build(true).into()).unwrap();
+    frame(&mut runtime);
+    assert_eq!(runtime.tree().element_with_key(&key.into()), Some(region));
+    assert_eq!(runtime.tree().render_id(region), renderer);
+    assert_ne!(runtime.tree().parent(region), original_parent);
+    assert_eq!(runtime.tree().element_bounds(region).unwrap().origin.x, 30.);
+    assert!(events.borrow().is_empty());
+    expect(&cursor_changes, &[]);
+    assert_eq!(
+        runtime.mouse_cursor_for_device(1, 1),
+        Some(MouseCursor::Click)
+    );
+}
