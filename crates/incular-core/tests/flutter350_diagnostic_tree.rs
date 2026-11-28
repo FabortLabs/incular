@@ -369,3 +369,32 @@ fn compact_calls_delegates_breadth_first_and_only_marks_the_truncated_parent() {
             .is_none()
     );
 }
+
+#[test]
+fn shallow_tree_summary_keeps_visible_properties_and_never_includes_children() {
+    let root = Node::new("TestTree#00000", "DiagnosticableTreeNode")
+        .with_properties(vec![
+            string("stringProperty1", "value1"),
+            Node::property(&Property::double("doubleProperty1", Some(42.5))),
+            Node::property(&Property::double("roundedProperty", Some(1.0 / 3.0))),
+            Node::property(
+                &Property::string("DO_NOT_SHOW", Some("DO_NOT_SHOW".into()))
+                    .level(DiagnosticLevel::Hidden)
+                    .quoted(false),
+            ),
+            Node::property(
+                &Property::string("DEBUG_ONLY", Some("DEBUG_ONLY".into()))
+                    .level(DiagnosticLevel::Debug)
+                    .quoted(false),
+            ),
+        ])
+        .with_children(vec![Node::new("node A", "DiagnosticableTreeNode")]);
+    assert_eq!(
+        root.to_string_shallow(DiagnosticLevel::Info),
+        "TestTree#00000(stringProperty1: value1, doubleProperty1: 42.5, roundedProperty: 0.3)",
+    );
+    assert_eq!(
+        root.to_string_shallow(DiagnosticLevel::Debug),
+        "TestTree#00000(stringProperty1: value1, doubleProperty1: 42.5, roundedProperty: 0.3, DEBUG_ONLY: DEBUG_ONLY)",
+    );
+}

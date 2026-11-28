@@ -42,3 +42,12 @@ Both pinned Element originals passed, as did three native identity/lifecycle
 tests and seven native Placeholder size, paint, and pointer regressions.
 This is not an exhaustive per-widget audit of Flutter's StatefulWidget
 hierarchy or a change to the existing DevTools transport.
+
+## Compact text summaries
+
+The exact pinned `foundation/diagnostics_test.dart:836` original
+passed. The native shallow renderer reports the same ordered
+properties, preserves one-decimal rounding, omits descendants
+and hidden data, and adds debug-only data only at the debug
+threshold. All 27 focused native tree and scalar tests passed.
+This does not yet cover deep branch decoration or wrapped errors.

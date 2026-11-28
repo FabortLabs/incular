@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 use serde_json::{Map, Value, json};
 
-use crate::{DiagnosticValue, DiagnosticsProperty};
+use crate::{DiagnosticLevel, DiagnosticValue, DiagnosticsProperty};
 
 /// A heterogeneous snapshot of a diagnostics node and its ordered relationships.
 #[derive(Debug, Clone)]
@@ -111,6 +111,70 @@ impl DiagnosticsNode {
         self.details["type"]
             .as_str()
             .expect("node type is a string")
+    }
+
+    /// Formats a compact diagnostic summary with visible properties but
+    /// no child nodes, as Flutter's DiagnosticableTree.toString does.
+    #[must_use]
+    pub fn to_string_shallow(&self, minimum: DiagnosticLevel) -> String {
+        use std::fmt::Write as _;
+
+        let mut output = self.details["description"]
+            .as_str()
+            .expect("diagnostic description is a string")
+            .to_owned();
+        let mut first = true;
+        for property in &self.properties {
+            if property.filtered(minimum) {
+                continue;
+            }
+            output.push_str(if first { "(" } else { ", " });
+            first = false;
+            if property.details.get("showName").and_then(Value::as_bool) != Some(false)
+                && let Some(name) = property.details.get("name").and_then(Value::as_str)
+                && !name.is_empty()
+            {
+                let separator = if property
+                    .details
+                    .get("showSeparator")
+                    .and_then(Value::as_bool)
+                    == Some(false)
+                {
+                    " "
+                } else {
+                    ": "
+                };
+                let _ = write!(output, "{name}{separator}");
+            }
+            output.push_str(property.details["description"].as_str().unwrap_or_default());
+        }
+        if !first {
+            output.push(')');
+        }
+        output
+    }
+
+    fn filtered(&self, minimum: DiagnosticLevel) -> bool {
+        let actual = self
+            .details
+            .get("level")
+            .and_then(Value::as_str)
+            .unwrap_or("info");
+        let level = [
+            DiagnosticLevel::Hidden,
+            DiagnosticLevel::Fine,
+            DiagnosticLevel::Debug,
+            DiagnosticLevel::Info,
+            DiagnosticLevel::Warning,
+            DiagnosticLevel::Hint,
+            DiagnosticLevel::Summary,
+            DiagnosticLevel::Error,
+            DiagnosticLevel::Off,
+        ]
+        .into_iter()
+        .find(|level| level.name() == actual)
+        .unwrap_or_default();
+        !cfg!(debug_assertions) || level < minimum
     }
 
     /// Serializes the node with full details, honoring the delegate at each level.
