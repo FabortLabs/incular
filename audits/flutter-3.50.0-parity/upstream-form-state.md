@@ -35,3 +35,26 @@ At :1975 and :2002, clearing one field or the entire form removes the
 rendered error labels without changing the values. The native fixtures
 read mounted text widgets after each update. All 26 focused native
 form state and error-presentation cases passed.
+
+## Validation on focus loss
+
+Four exact registrations in the pinned `widgets/form_test.dart`
+passed. The native Runtime fixture uses real, undecorated
+EditableText fields and checks the mounted error labels:
+
+- :1597: typing in the first field does not show an error. Moving
+  focus validates only the field just left, including an untouched
+  second field when it loses focus later.
+- :1657: a field set to Always validates immediately inside a form
+  set to OnUnfocus; its sibling still waits for its own blur.
+- :1719: the platform Next editing action focuses the second editor.
+  The native control also verifies that this blurs the first field.
+- :1803: explicit form validation shows errors on all registered
+  fields, including the currently focused field.
+
+A non-traversable focus boundary observes descendant focus without
+becoming an editor or adding a stop to keyboard traversal. Typed
+field builders now update from their own value and error revisions,
+without reconstructing the whole form. All 37 focused native form
+and editor-focus tests passed. This does not cover form-wide
+Always scheduling or assistive announcements.

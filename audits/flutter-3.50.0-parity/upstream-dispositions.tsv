@@ -3839,3 +3839,7 @@ packages/flutter/test/widgets/scrollbar_test.dart	300	scrollbarOrientation defau
 packages/flutter/test/widgets/scrollbar_test.dart	1922	not passing any shape or radius to RawScrollbar will draw the usual rectangular thumb	paired-match	upstream-raw-scrollbar-paint.md#omitted-orientation-rectangular-thumb-and-resizing
 packages/flutter/test/widgets/scrollbar_test.dart	1954	The bar can show or hide when the viewport size change	paired-match	upstream-raw-scrollbar-paint.md#omitted-orientation-rectangular-thumb-and-resizing
 packages/flutter/test/widgets/scrollbar_test.dart	1989	The bar can show or hide when the view size change	paired-match	upstream-raw-scrollbar-paint.md#omitted-orientation-rectangular-thumb-and-resizing
+packages/flutter/test/widgets/form_test.dart	1597	AutovalidateMode.onUnfocus	paired-match	upstream-form-state.md#validation-on-focus-loss
+packages/flutter/test/widgets/form_test.dart	1657	Validate conflicting AutovalidateModes	paired-match	upstream-form-state.md#validation-on-focus-loss
+packages/flutter/test/widgets/form_test.dart	1719	FocusNode should move to next field when TextInputAction.next is received	paired-match	upstream-form-state.md#validation-on-focus-loss
+packages/flutter/test/widgets/form_test.dart	1803	AutovalidateMode.onUnfocus should validate all fields manually with FormState	paired-match	upstream-form-state.md#validation-on-focus-loss

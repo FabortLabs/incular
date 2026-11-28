@@ -2,9 +2,7 @@
 
 use incular_core::{RestorationKey, RestorationScope};
 use incular_text::TextEditingController;
-use incular_widgets::{
-    AutovalidateMode, Form, FormFieldState, FormState, GenericFormField, Widget,
-};
+use incular_widgets::{AutovalidateMode, Form, FormFieldState, FormState, GenericFormField};
 
 #[test]
 fn form_errors_track_and_field_drop_removes_its_controller_observer() {
@@ -347,6 +345,10 @@ fn typed_form_field_autovalidates_on_did_change() {
 
 #[test]
 fn generic_form_field_connects_retained_state_to_builder_and_validation() {
+    use incular_config::Constraints;
+    use incular_core::Size;
+    use incular_widgets::internal::WidgetTree;
+
     let form = Form::new();
     let state = form.register_value::<String>(None);
     let saved = Rc::new(RefCell::new(None::<String>));
@@ -365,13 +367,16 @@ fn generic_form_field_connects_retained_state_to_builder_and_validation() {
         })
     };
 
-    let _: Widget = build(state.clone()).into();
+    let mut tree = WidgetTree::new();
+    let constraints = Constraints::loose(Size::new(100., 100.));
+    tree.mount(build(state.clone()).into()).unwrap();
+    tree.layout(constraints).unwrap();
     assert_eq!(rendered.borrow().as_slice(), [None]);
-    assert!(!form.validate(), "the conversion installed the validator");
+    assert!(!form.validate(), "the mounted field installed the validator");
     assert_eq!(state.error_text().as_deref(), Some("required"));
 
     state.did_change("Ada".to_owned());
-    let _: Widget = build(state.clone()).into();
+    tree.layout(constraints).unwrap();
     assert_eq!(
         rendered.borrow().last().cloned(),
         Some(Some("Ada".to_owned())),
