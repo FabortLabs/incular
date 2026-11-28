@@ -397,3 +397,28 @@ fn only_a_departing_owner_loses_its_publication() {
     assert_eq!(active_tree.detach_root(), Some(branch));
     assert!(!link.is_linked());
 }
+
+#[test]
+fn shared_link_placements_are_independent_and_expire_with_their_trees() {
+    use incular_rendering::LayerLink;
+
+    let link = LayerLink::new();
+    let view = |offset| {
+        let mut tree = LayerTree::new();
+        let size = unit().size;
+        let leader = tree.create_leader_at(link.clone(), size, offset);
+        tree.set_root(leader);
+        tree.publish_leader_links();
+        (tree, (Transform::translation(offset), size))
+    };
+    let (first, first_placement) = view(Offset::new(10., 20.));
+    let (second, second_placement) = view(Offset::new(30., 40.));
+    assert_eq!(first.leader_placement(&link), Some(first_placement));
+    assert_eq!(second.leader_placement(&link), Some(second_placement));
+    assert_eq!(link.leader_transform(), Some(second_placement.0));
+    drop(second);
+    assert_eq!(link.leader_transform(), Some(first_placement.0));
+    assert_eq!(first.leader_placement(&link), Some(first_placement));
+    drop(first);
+    assert!(!link.is_linked());
+}

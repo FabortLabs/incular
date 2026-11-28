@@ -384,3 +384,78 @@ fn a_leader_updates_padding_then_survives_an_independent_sibling_repaint() {
         );
     }
 }
+
+#[test]
+fn a_follower_cannot_read_an_anchor_from_an_independent_runtime() {
+    use incular_semantics::Role;
+    use incular_widgets::internal::ExplicitSemantics;
+
+    const LABEL: &str = "follower in its own view";
+    let viewport = Constraints::tight(Size::new(800., 600.));
+    for show in [false, true] {
+        let link = LayerLink::new();
+        let leader = |x, y| {
+            Positioned::new(CompositedTransformTarget::new(
+                link.clone(),
+                SizedBox::square(24.),
+            ))
+            .left(x)
+            .top(y)
+        };
+        let follower = || {
+            let paint = Widget::box_(Size::new(20., 20.), MARKER)
+                .semantics(ExplicitSemantics::new(Role::GenericContainer).label(LABEL))
+                .with_key(FOLLOWER);
+            Positioned::new(
+                CompositedTransformFollower::new(link.clone(), paint)
+                    .show_when_unlinked(show)
+                    .offset(Offset::new(10., 0.)),
+            )
+            .left(80.)
+            .top(70.)
+        };
+        let mut foreign = Runtime::new(Stack::new([leader(31., 17.)]).into()).unwrap();
+        let _ = foreign.run_frame(viewport).unwrap();
+        assert!(link.is_linked());
+        let mut local = Runtime::new(Stack::new([follower()]).into()).unwrap();
+        let (frame, _) = local.run_frame(viewport).unwrap();
+        let tree = local.tree();
+        let marker = tree.element_with_key(&Key::from(FOLLOWER)).unwrap();
+        let renderer = tree.render_id(marker).unwrap();
+        assert_ne!(tree.hit_test(Offset::new(45., 20.)), Some(renderer));
+        assert_eq!(tree.hit_test(Offset::new(83., 73.)) == Some(renderer), show);
+        let published = tree
+            .semantics()
+            .iter()
+            .find(|(_, node)| node.label.as_deref() == Some(LABEL))
+            .map(|(_, node)| node.bounds);
+        assert_eq!(published, show.then(|| rect(80., 70., 20., 20.)));
+        if show {
+            assert_eq!(painted_marker(&frame), rect(80., 70., 20., 20.));
+        } else {
+            assert!(
+                !frame
+                    .commands()
+                    .iter()
+                    .any(|op| matches!(op, PaintCommand::Rect { color, .. } if *color == MARKER))
+            );
+        }
+
+        let root = local.tree().root().unwrap();
+        local
+            .schedule_update(root, Stack::new([leader(51., 27.), follower()]).into())
+            .unwrap();
+        let (frame, _) = local.run_frame(viewport).unwrap();
+        assert_eq!(painted_marker(&frame), rect(61., 27., 20., 20.));
+        let root = foreign.tree().root().unwrap();
+        foreign
+            .schedule_update(root, Stack::new([leader(131., 117.)]).into())
+            .unwrap();
+        let _ = foreign.run_frame(viewport).unwrap();
+        let tree = local.tree();
+        let marker = tree.element_with_key(&Key::from(FOLLOWER)).unwrap();
+        let renderer = tree.render_id(marker).unwrap();
+        assert_eq!(tree.hit_test(Offset::new(65., 30.)), Some(renderer));
+        assert_ne!(tree.hit_test(Offset::new(45., 20.)), Some(renderer));
+    }
+}

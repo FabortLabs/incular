@@ -18,7 +18,7 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     collections::HashMap,
-    rc::Rc,
+    rc::{Rc, Weak},
     sync::Arc,
 };
 
@@ -262,10 +262,38 @@ struct ResolvedClipPath {
 
 #[derive(Clone, Debug)]
 struct LeaderData {
+    tree: Weak<()>,
     owner: PublisherIdentity,
     transform: Transform,
     size: Size,
     generation: u64,
+}
+
+#[derive(Default)]
+struct LeaderPublications {
+    latest: Option<LeaderData>,
+    // Usually empty: independently mounted trees may share a link value,
+    // but they must not share its coordinate space or replace each other.
+    previous: Vec<LeaderData>,
+}
+
+impl LeaderPublications {
+    fn live(&self) -> impl Iterator<Item = &LeaderData> {
+        self.latest
+            .iter()
+            .chain(self.previous.iter().rev())
+            .filter(|leader| leader.tree.strong_count() != 0)
+    }
+
+    fn remove(&mut self, retire: impl Fn(&LeaderData) -> bool) {
+        self.previous
+            .retain(|leader| leader.tree.strong_count() != 0 && !retire(leader));
+        if self.latest.as_ref().is_some_and(|leader| {
+            leader.tree.strong_count() == 0 || retire(leader)
+        }) {
+            self.latest = self.previous.pop();
+        }
+    }
 }
 
 /// One reachable leader layer snapshotted for the resolution pass, in
@@ -306,9 +334,9 @@ impl PublisherIdentity {
 }
 
 /// Shared identity used to resolve a composited target and any number of
-/// followers across otherwise unrelated retained subtrees.
+/// followers across otherwise unrelated retained subtrees of one scene.
 #[derive(Clone)]
-pub struct LayerLink(Rc<RefCell<Option<LeaderData>>>);
+pub struct LayerLink(Rc<RefCell<LeaderPublications>>);
 impl Default for LayerLink {
     fn default() -> Self {
         Self::new()
@@ -330,55 +358,70 @@ impl PartialEq for LayerLink {
 impl LayerLink {
     #[must_use]
     pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(None)))
+        Self(Rc::new(RefCell::new(LeaderPublications::default())))
     }
     #[must_use]
     pub fn is_linked(&self) -> bool {
-        self.0.borrow().is_some()
+        self.0.borrow().live().next().is_some()
     }
     #[must_use]
     pub fn leader_size(&self) -> Option<Size> {
-        self.0.borrow().as_ref().map(|leader| leader.size)
+        self.0.borrow().live().next().map(|leader| leader.size)
     }
     #[must_use]
     pub fn leader_transform(&self) -> Option<Transform> {
-        self.0.borrow().as_ref().map(|leader| leader.transform)
+        self.0.borrow().live().next().map(|leader| leader.transform)
     }
     #[must_use]
     pub fn leader_generation(&self) -> u64 {
         self.0
             .borrow()
-            .as_ref()
+            .live()
+            .next()
             .map_or(0, |leader| leader.generation)
+    }
+    fn placement_in(&self, tree: &Rc<()>) -> Option<(Transform, Size)> {
+        self.0.borrow().live()
+            .find(|leader| std::ptr::eq(leader.tree.as_ptr(), Rc::as_ptr(tree)))
+            .map(|leader| (leader.transform, leader.size))
     }
     /// Releases the publication only when `owner` made it. Removing or
     /// rebinding any other leader layer must not disturb the winner.
     fn clear_if_owned_by(&self, owner: &PublisherIdentity) {
-        let mut state = self.0.borrow_mut();
-        if state
-            .as_ref()
-            .is_some_and(|leader| leader.owner.same_owner(owner))
-        {
-            *state = None;
-        }
+        self.0
+            .borrow_mut()
+            .remove(|leader| leader.owner.same_owner(owner));
     }
-    /// Unconditional frame reset. The resolution pass republishes every live
-    /// leader right after, so no reader observes the gap.
-    fn clear_publication(&self) {
-        *self.0.borrow_mut() = None;
+    /// Resets only this frame's scene. Its resolution pass republishes every
+    /// live leader right after, so no reader observes the gap.
+    fn clear_publication(&self, tree: &Rc<()>) {
+        self.0
+            .borrow_mut()
+            .remove(|leader| std::ptr::eq(leader.tree.as_ptr(), Rc::as_ptr(tree)));
     }
-    fn publish(&self, owner: PublisherIdentity, transform: Transform, size: Size, generation: u64) {
-        // One target per link: the first resolvable leader in paint order
+    fn publish(
+        &self,
+        tree: &Rc<()>,
+        owner: PublisherIdentity,
+        transform: Transform,
+        size: Size,
+        generation: u64,
+    ) {
+        // One target per link in a scene: the first resolvable leader in paint order
         // wins. Keeping that rule deterministic is preferable to allowing
         // a later subtree to move an already published follower.
+        if self.placement_in(tree).is_some() {
+            return;
+        }
         let mut state = self.0.borrow_mut();
-        if state.is_none() {
-            *state = Some(LeaderData {
-                owner,
-                transform,
-                size,
-                generation,
-            });
+        if let Some(former) = state.latest.replace(LeaderData {
+            tree: Rc::downgrade(tree),
+            owner,
+            transform,
+            size,
+            generation,
+        }) && former.tree.strong_count() != 0 {
+            state.previous.push(former);
         }
     }
 }
@@ -604,6 +647,7 @@ fn next_generation(counter: &mut u64) -> u64 {
 /// This deliberately has no GPU resources or offscreen textures.
 pub struct LayerTree {
     layers: Arena<Layer>,
+    scope: Rc<()>,
     root: Option<LayerId>,
     diagnostics: CompositorDiagnostics,
     composition_observers: CompositionObservers,
@@ -620,8 +664,7 @@ pub struct LayerTree {
     /// Live leader layers; leader publication and its two layer walks are
     /// skipped entirely while there are none.
     leader_layers: usize,
-    /// Live follower layers. Their placement reads link state that another
-    /// tree may publish, so a scene holding one is flattened every time.
+    /// Live follower layers, used to decide when to resolve follower state.
     follower_layers: usize,
     /// Flutter's impossible self-dependency: a leader is inside a follower
     /// that needs this same link before it can paint its child.
@@ -671,6 +714,7 @@ impl LayerTree {
     pub fn new() -> Self {
         Self {
             layers: Arena::new(),
+            scope: Rc::new(()),
             root: None,
             diagnostics: CompositorDiagnostics::default(),
             composition_observers: CompositionObservers::default(),
@@ -706,6 +750,13 @@ impl LayerTree {
     #[must_use]
     pub fn root(&self) -> Option<LayerId> {
         self.root
+    }
+    /// Placement published for this scene, independent of other roots
+    /// that happen to use the same link value.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn leader_placement(&self, link: &LayerLink) -> Option<(Transform, Size)> {
+        link.placement_in(&self.scope)
     }
     /// Read-only view of one layer's kind and ordered children, for
     /// diagnostics and inspection tooling.
@@ -2756,7 +2807,7 @@ impl LayerTree {
             return;
         };
         if let LayerKind::Leader { link, .. } = &layer.kind {
-            link.clear_publication();
+            link.clear_publication(&self.scope);
         }
         for child in layer.children.iter() {
             self.clear_link_states(*child);
@@ -2885,6 +2936,7 @@ impl LayerTree {
             Some(world) => {
                 let record = &leaders[index];
                 record.link.publish(
+                    &self.scope,
                     record.publisher.clone(),
                     world,
                     record.size,
@@ -2942,20 +2994,20 @@ impl LayerTree {
                 }
                 LayerKind::Follower(follower) => {
                     let link = &follower.link;
-                    if link.leader_transform().is_none() {
+                    if self.leader_placement(link).is_none() {
                         // Publish the dependency first: a nested leader
                         // waits for its ancestor follower's link, trying
                         // candidates in paint order until one publishes.
                         for dependency in 0..leaders.len() {
                             if leaders[dependency].link == *link {
                                 self.ensure_published(dependency, leaders, parents, states);
-                                if link.leader_transform().is_some() {
+                                if self.leader_placement(link).is_some() {
                                     break;
                                 }
                             }
                         }
                     }
-                    match link.leader_transform() {
+                    match self.leader_placement(link) {
                         Some(_) => {
                             world = self.follower_transform(world, follower)?;
                         }
@@ -2994,10 +3046,9 @@ impl LayerTree {
             follower_anchor,
             size,
         } = follower;
-        let Some(leader_transform) = link.leader_transform() else {
+        let Some((leader_transform, leader_size)) = self.leader_placement(link) else {
             return show_when_unlinked.then_some(world_transform);
         };
-        let leader_size = link.leader_size().unwrap_or(Size::ZERO);
         // Flutter cannot resolve the link through a degenerate follower
         // path. Once that path is invertible it cancels out in world space.
         world_transform.inverse()?;

@@ -698,13 +698,12 @@ impl WidgetTree {
         else {
             return Some(CoreTransform::IDENTITY);
         };
-        let base = self.render_world_transform(id);
-        let Some(leader_transform) = link.leader_transform() else {
+        let Some((leader_transform, leader_size)) = self.compositor.leader_placement(link) else {
             // An unlinked follower remains at its normal layout placement
             // when requested; a hidden one is culled by the compositor.
             return show_when_unlinked.then_some(CoreTransform::IDENTITY);
         };
-        let leader_size = link.leader_size().unwrap_or(Size::ZERO);
+        let base = self.render_world_transform(id);
         let world = resolve_linked_follower_world_transform(
             leader_transform,
             leader_size,
@@ -727,18 +726,6 @@ impl WidgetTree {
     /// by the compositor, so hidden content is never interactive or
     /// semantically exposed.
     pub(super) fn follower_content_visible(&self, id: RenderObjectId) -> bool {
-        let node = self.render_live(id, "follower visibility render must remain live");
-        let RenderKind::Follower {
-            link,
-            show_when_unlinked,
-            ..
-        } = node.object.kind()
-        else {
-            return true;
-        };
-        if link.leader_transform().is_none() {
-            return *show_when_unlinked;
-        }
         self.follower_resolved_transform(id).is_some()
     }
     pub(super) fn render_world_transform(&self, id: RenderObjectId) -> CoreTransform {

@@ -104,3 +104,26 @@ All 22 focused topology and composition callback tests passed.
 A wider rendering target returned 70 passes and two curve-bounds
 failures; rerunning against the pre-fix compositor reproduced
 both unchanged. The authored comparison adds no upstream credit.
+
+## Scene ownership of follower transforms
+
+The two authored Flutter cases confirm that a follower cannot import
+the transform of a leader owned by a different scene, regardless of
+its unlinked visibility flag. Attaching the follower under the leader's
+scene instead restores its exact projection. Flutter debug rejects the
+invalid configuration; Incular safely uses the local unlinked policy
+rather than surfacing the Flutter assertion.
+
+Before the fix a mounted second Incular runtime accepted hits at a
+foreign anchor, even with `show_when_unlinked: false`. Paint, pointer
+placement, and semantic bounds now consume the same scene-local
+publication. Unlinked visible content stays at (80,70); hidden content
+has no picture, hits, or semantic label. A newly mounted local leader
+positions the follower at (61,27), and moving the foreign leader on a
+later frame cannot move that local target. Two scene publications are
+independent and expire with their owning trees. Same-scene tooltip and
+overlay controls still pass; these routes split the display list after
+link resolution rather than importing a second tree's coordinates.
+
+Both pinned probes and 105 focused native compositor, follower, overlay
+and tooltip tests passed. This comparison adds no upstream registration.
