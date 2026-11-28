@@ -849,3 +849,104 @@ fn keep_alive_handles_report_their_own_create_and_dispose() {
     assert!(driver.disposed.get());
     drop(observer);
 }
+
+#[test]
+fn an_unhandled_codec_attachment_failure_is_reported_without_listeners() {
+    let source = ImagePlayback::scheduled();
+    let reports = Rc::new(RefCell::new(Vec::new()));
+    source.set_unhandled_error_reporter({
+        let reports = reports.clone();
+        move |error| reports.borrow_mut().push(error)
+    });
+    let error = ImageError::Decode("failure message".into());
+    assert!(source.attach_error(error.clone()));
+    assert!(!source.attach_error(ImageError::Decode("duplicate reply".into())));
+    assert_eq!(*reports.borrow(), [error]);
+    assert!(source.frame_demand().is_none());
+}
+
+#[test]
+fn an_unhandled_chunk_error_is_reported_without_stopping_later_progress() {
+    use incular_image::{ImageChunkEvent, ImageStreamListener};
+
+    let source = ImagePlayback::scheduled();
+    let reports = Rc::new(RefCell::new(Vec::new()));
+    let chunks = Rc::new(RefCell::new(Vec::new()));
+    source.set_unhandled_error_reporter({
+        let reports = reports.clone();
+        move |error| reports.borrow_mut().push(error)
+    });
+    let _listener = source
+        .listen_group(
+            ImageStreamListener::new(Rc::new(|_, _| panic!("codec is still pending"))).on_chunk({
+                let chunks = chunks.clone();
+                Rc::new(move |event| chunks.borrow_mut().push(event))
+            }),
+        )
+        .unwrap();
+    let error = ImageError::Io("chunk transport failure".into());
+    let later = ImageChunkEvent::new(2, Some(3));
+    assert!(source.report_transport_error(error.clone()));
+    assert!(source.report_chunk(later));
+    assert_eq!(*reports.borrow(), [error]);
+    assert_eq!(*chunks.borrow(), [later]);
+}
+
+#[test]
+fn an_unhandled_first_frame_failure_reports_without_retiring_the_codec() {
+    use incular_image::ImageStreamListener;
+
+    let source = ImagePlayback::scheduled();
+    let reports = Rc::new(RefCell::new(Vec::new()));
+    source.set_unhandled_error_reporter({
+        let reports = reports.clone();
+        move |error| reports.borrow_mut().push(error)
+    });
+    let _listener = source
+        .listen_group(ImageStreamListener::new(Rc::new(|_, _| {
+            panic!("the next frame failed");
+        })))
+        .unwrap();
+    let codec = Rc::new(Driver::default());
+    codec.attach(&source, 1, Some(0));
+    let complete = codec.pending.borrow_mut().pop_front().unwrap();
+    let error = ImageError::Decode("frame completion error".into());
+    complete(Err(error.clone()));
+    assert_eq!(*reports.borrow(), [error]);
+    assert!(!codec.disposed.get());
+}
+
+#[test]
+fn explicit_playback_handlers_take_precedence_and_late_replay_is_not_a_new_report() {
+    use incular_image::ImageStreamListener;
+
+    let source = ImagePlayback::scheduled();
+    let captured = Rc::new(RefCell::new(Vec::new()));
+    source.set_unhandled_error_reporter(|_| panic!("explicit handlers own this error"));
+    let watch = |errors: Rc<RefCell<Vec<ImageError>>>| {
+        ImageStreamListener::new(Rc::new(|_, _| panic!("codec is still pending")))
+            .on_error(Rc::new(move |error| errors.borrow_mut().push(error)))
+    };
+    let _first = source.listen_group(watch(captured.clone())).unwrap();
+    let error = ImageError::Decode("broken initialization".into());
+    assert!(source.attach_error(error.clone()));
+    let _second = source.listen_group(watch(captured.clone())).unwrap();
+    assert_eq!(*captured.borrow(), [error.clone(), error]);
+}
+
+#[test]
+fn disabling_unhandled_playback_reports_outlives_the_listener() {
+    use incular_image::ImageStreamListener;
+
+    let source = ImagePlayback::scheduled();
+    let _keep_alive = source.keep_alive().unwrap();
+    source.set_unhandled_error_reporter(|_| panic!("listener suppressed unhandled reports"));
+    let listener = source
+        .listen_group(
+            ImageStreamListener::new(Rc::new(|_, _| panic!("codec is still pending")))
+                .report_errors(false),
+        )
+        .unwrap();
+    drop(listener);
+    assert!(source.attach_error(ImageError::Decode("still silent".into())));
+}

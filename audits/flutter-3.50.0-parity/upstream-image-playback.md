@@ -149,3 +149,20 @@ source or wake playback; dropping the second permits disposal.
 The allocation observer can query the same playback without
 re-entering a borrowed state. All 37 focused playback, handoff,
 and chunk delivery tests passed.
+
+## Unhandled animated playback failures
+
+The three original failures at :91, :297, and :325 now pair:
+codec initialization reports without any listeners, a transport
+error reports without swallowing the next 2-of-3 progress event,
+and a failed next frame reports without disposing its live
+codec. The Rust cases install a scoped playback reporter as the
+error capture destination; the Flutter runner uses its binding's
+error capture. Both lanes inspect the actual published errors.
+
+The native controls also verify that an explicit handler takes
+precedence, late replay does not report again, and reportErrors
+false permanently suppresses the unhandled route even if the
+listener is removed. These controls use the normal codec and
+listener lifecycle, not a replacement for the error dispatcher.
+All 43 focused native playback and stream tests passed.

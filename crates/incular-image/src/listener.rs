@@ -152,8 +152,9 @@ impl ImagePlayback {
             on_image,
             on_chunk,
             on_error,
-            ..
+            report_errors,
         } = listener;
+        let handles_error = on_error.is_some();
         self.listen_with_chunks(
             move |result, synchronous| match result {
                 Ok(image) => on_image(image, synchronous),
@@ -164,6 +165,8 @@ impl ImagePlayback {
                 }
             },
             on_chunk,
+            handles_error,
+            report_errors,
         )
     }
 }

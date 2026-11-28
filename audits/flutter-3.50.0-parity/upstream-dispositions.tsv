@@ -2883,9 +2883,9 @@ packages/flutter/test/widgets/image_test.dart	1220	Image state handles enabling 
 packages/flutter/test/widgets/image_test.dart	1294	disableAnimations prevents the image from updating	paired-match	upstream-image-playback.md#mounted-image-timing-and-reduced-motion
 packages/flutter/test/widgets/image_test.dart	1942	the first frame is still loaded when disableAnimations is true on first load	paired-match	upstream-image-playback.md#mounted-image-timing-and-reduced-motion
 packages/flutter/test/widgets/image_test.dart	2012	the first frame is still loaded when TickerMode is disabled on first load	paired-match	upstream-image-playback.md#mounted-image-timing-and-reduced-motion
-packages/flutter/test/painting/image_stream_test.dart	91	Codec future fails	partial-match	upstream-image-playback.md#callback-and-error-lifecycle
-packages/flutter/test/painting/image_stream_test.dart	297	Chunk errors are reported	partial-match	upstream-image-playback.md#callback-and-error-lifecycle
-packages/flutter/test/painting/image_stream_test.dart	325	getNextFrame future fails	partial-match	upstream-image-playback.md#callback-and-error-lifecycle
+packages/flutter/test/painting/image_stream_test.dart	91	Codec future fails	paired-match	upstream-image-playback.md#unhandled-animated-playback-failures
+packages/flutter/test/painting/image_stream_test.dart	297	Chunk errors are reported	paired-match	upstream-image-playback.md#unhandled-animated-playback-failures
+packages/flutter/test/painting/image_stream_test.dart	325	getNextFrame future fails	paired-match	upstream-image-playback.md#unhandled-animated-playback-failures
 packages/flutter/test/painting/image_stream_test.dart	771	error handlers can intercept errors	paired-match	upstream-image-playback.md#callback-and-error-lifecycle
 packages/flutter/test/painting/image_stream_test.dart	806	remove and add listener 	paired-match	upstream-image-playback.md#callback-and-error-lifecycle
 packages/flutter/test/painting/image_stream_test.dart	909	Keep alive handles do not drive frames or prevent last listener callbacks	partial-match	upstream-image-playback.md#callback-and-error-lifecycle

@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{ImageChunkEvent, ImageChunkListener, ImageError, ImageInfo};
+use crate::{ImageChunkEvent, ImageChunkListener, ImageError, ImageErrorListener, ImageInfo};
 
 mod scheduled;
 
@@ -49,6 +49,7 @@ type SharedState = Rc<RefCell<State>>;
 struct PlaybackObserver {
     frame: FrameObserver,
     chunks: Option<ImageChunkListener>,
+    handles_error: bool,
 }
 
 struct Source {
@@ -72,6 +73,8 @@ struct State {
     pending: Option<DecodedImageFrame>,
     current: Option<ImageInfo>,
     error: Option<ImageError>,
+    unhandled_error_reporter: Option<ImageErrorListener>,
+    suppress_unhandled_errors: bool,
     decode_failed: bool,
     visible: Option<(Instant, Duration)>,
     frame_in_cycle: usize,
@@ -94,6 +97,16 @@ impl State {
             .values()
             .map(|listener| listener.frame.clone())
             .collect()
+    }
+
+    fn unhandled_error_reporter(&self) -> Option<ImageErrorListener> {
+        self.unhandled_error_reporter
+            .as_ref()
+            .filter(|_| {
+                !self.suppress_unhandled_errors
+                    && !self.listeners.values().any(|listener| listener.handles_error)
+            })
+            .cloned()
     }
 
     fn needs_more(&mut self) -> bool {
@@ -176,22 +189,34 @@ impl ImagePlayback {
         }
     }
 
+    /// Sets the destination for unhandled codec, transport, and frame
+    /// errors. An active error listener takes precedence. The failed state
+    /// is still retained for late listeners independently of this report.
+    pub fn set_unhandled_error_reporter(&self, report: impl Fn(ImageError) + 'static) {
+        let previous = {
+            let mut state = self.state.borrow_mut();
+            if state.disposed {
+                return;
+            }
+            state.unhandled_error_reporter.replace(Rc::new(report))
+        };
+        drop(previous);
+    }
+
     /// Completes deferred attachment with a codec-initialization failure.
     /// Existing observers see it now; later observers can still replay it.
     /// An already attached or disposed playback refuses the update.
     pub fn attach_error(&self, error: ImageError) -> bool {
-        let listeners = {
+        let (listeners, reporter) = {
             let mut state = self.state.borrow_mut();
             if state.disposed || state.attached {
                 return false;
             }
             state.attached = true;
             state.error = Some(error.clone());
-            state.snapshot()
+            (state.snapshot(), state.unhandled_error_reporter())
         };
-        for listener in listeners {
-            listener(Err(error.clone()), false);
-        }
+        deliver_playback_error(listeners, reporter, error);
         true
     }
 
@@ -223,13 +248,15 @@ impl ImagePlayback {
         &self,
         observer: impl Fn(Result<ImageInfo, ImageError>, bool) + 'static,
     ) -> Option<ImagePlaybackSubscription> {
-        self.listen_with_chunks(observer, None)
+        self.listen_with_chunks(observer, None, true, true)
     }
 
     pub(crate) fn listen_with_chunks(
         &self,
         observer: impl Fn(FrameResult, bool) + 'static,
         chunks: Option<ImageChunkListener>,
+        handles_error: bool,
+        report_errors: bool,
     ) -> Option<ImagePlaybackSubscription> {
         let observer: FrameObserver = Rc::new(observer);
         let (id, current, error) = {
@@ -237,6 +264,7 @@ impl ImagePlayback {
             if state.disposed {
                 return None;
             }
+            state.suppress_unhandled_errors |= !report_errors;
             let id = state.next_listener;
             state.next_listener = id.checked_add(1).expect("image listener id exhausted");
             state.listeners.insert(
@@ -244,6 +272,7 @@ impl ImagePlayback {
                 PlaybackObserver {
                     frame: Rc::clone(&observer),
                     chunks,
+                    handles_error,
                 },
             );
             (id, state.current.clone(), state.error.clone())
@@ -285,17 +314,15 @@ impl ImagePlayback {
     /// Reports a transport error independently of frame decoding. The most
     /// recent error remains available to newly added listener groups.
     pub fn report_transport_error(&self, error: ImageError) -> bool {
-        let listeners = {
+        let (listeners, reporter) = {
             let mut state = self.state.borrow_mut();
             if state.disposed {
                 return false;
             }
             state.error = Some(error.clone());
-            state.snapshot()
+            (state.snapshot(), state.unhandled_error_reporter())
         };
-        for listener in listeners {
-            listener(Err(error.clone()), false);
-        }
+        deliver_playback_error(listeners, reporter, error);
         true
     }
 
@@ -409,7 +436,7 @@ impl ImagePlayback {
     }
 
     fn decoded(&self, generation: u64, result: Result<DecodedImageFrame, ImageError>) {
-        let (delivery, finished) = {
+        let (delivery, finished, reporter) = {
             let mut state = self.state.borrow_mut();
             if state.generation != generation || !state.decoding {
                 return;
@@ -423,13 +450,14 @@ impl ImagePlayback {
                         .is_some_and(|source| source.frames.get() > 1) =>
                 {
                     state.pending = Some(frame);
-                    (None, None)
+                    (None, None, None)
                 }
                 Ok(frame) => {
                     state.current = Some(frame.image.clone());
                     (
                         Some((Ok(frame.image), state.snapshot())),
                         state.source.take(),
+                        None,
                     )
                 }
                 Err(error) => {
@@ -438,13 +466,22 @@ impl ImagePlayback {
                     // Keep the last good image and codec alive while there
                     // are owners. Adding a listener to the active set does
                     // not trigger an automatic retry loop.
-                    (Some((Err(error), state.snapshot())), None)
+                    (
+                        Some((Err(error), state.snapshot())),
+                        None,
+                        state.unhandled_error_reporter(),
+                    )
                 }
             }
         };
         if let Some((result, listeners)) = delivery {
-            for listener in listeners {
-                listener(result.clone(), false);
+            match result {
+                Ok(image) => {
+                    for listener in listeners {
+                        listener(Ok(image.clone()), false);
+                    }
+                }
+                Err(error) => deliver_playback_error(listeners, reporter, error),
             }
         } else {
             (self.request_frame)();
@@ -505,11 +542,25 @@ impl ImagePlayback {
                 state.source.take(),
                 state.current.take(),
                 state.error.take(),
+                state.unhandled_error_reporter.take(),
                 std::mem::take(&mut state.last_listener_callbacks),
             )
         };
         drop(retired);
         true
+    }
+}
+
+fn deliver_playback_error(
+    listeners: Vec<FrameObserver>,
+    reporter: Option<ImageErrorListener>,
+    error: ImageError,
+) {
+    for listener in listeners {
+        listener(Err(error.clone()), false);
+    }
+    if let Some(reporter) = reporter {
+        reporter(error);
     }
 }
 
