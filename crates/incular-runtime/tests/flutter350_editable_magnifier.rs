@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -230,5 +230,138 @@ fn toggling_a_builder_preserves_the_mounted_editor_when_handles_are_configured()
         assert_eq!(runtime.tree().text_field_elements().next(), Some(field));
         assert_eq!(runtime.focused_element(), Some(field));
         assert_eq!(runtime.tree().text_field_has_magnifier(field), enabled);
+    }
+}
+
+#[test]
+fn a_custom_lens_can_show_without_a_handle_overlay_and_updates_its_key() {
+    let controller = TextEditingController::with_text("abc");
+    let current_key = Rc::new(Cell::new("lens one"));
+    let geometry = Rc::new(Cell::new(MagnifierInfo::EMPTY));
+    let configuration = TextMagnifierConfiguration::new({
+        let current_key = current_key.clone();
+        let geometry = geometry.clone();
+        move |info| {
+            geometry.set(info);
+            Some(Widget::from(SizedBox::shrink()).with_key(current_key.get()))
+        }
+    })
+    .should_display_handles_in_magnifier(false);
+    let root = || {
+        Widget::from(
+            EditableText::new(controller.clone())
+                .text_direction(TextDirection::Ltr)
+                .magnifier_configuration(configuration.clone()),
+        )
+    };
+    let viewport = Constraints::tight(Size::new(200., 50.));
+    let mut runtime = Runtime::new(root()).unwrap();
+    runtime.run_frame(viewport).unwrap();
+    let field = runtime.tree().text_field_elements().next().unwrap();
+    assert!(runtime.tree().text_field_selection_handles(field).is_none());
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("lens one"))
+            .is_none()
+    );
+
+    let position = Offset::new(10., 10.);
+    assert!(runtime.show_editable_magnifier(field, position));
+    runtime.run_frame(viewport).unwrap();
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("lens one"))
+            .is_some()
+    );
+    assert_eq!(geometry.get().global_gesture_position, position);
+    assert_eq!(geometry.get().field_bounds.origin, Offset::ZERO);
+    assert_eq!(geometry.get().field_bounds.size, Size::new(200., 50.));
+    assert!(
+        runtime.focused_element().is_none(),
+        "showing a lens does not request focus"
+    );
+
+    current_key.set("lens two");
+    let element = runtime.tree().root().unwrap();
+    runtime.schedule_update(element, root()).unwrap();
+    runtime.run_frame(viewport).unwrap();
+    assert_eq!(runtime.tree().text_field_elements().next(), Some(field));
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("lens one"))
+            .is_none()
+    );
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("lens two"))
+            .is_some()
+    );
+    assert!(runtime.hide_editable_magnifier(field));
+    runtime.run_frame(viewport).unwrap();
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("lens two"))
+            .is_none()
+    );
+}
+
+#[test]
+fn touch_long_press_updates_a_configured_lens_until_release_on_mobile_only() {
+    for (platform, expected) in [
+        (TextShortcutPlatform::Android, true),
+        (TextShortcutPlatform::Ios, true),
+        (TextShortcutPlatform::Linux, false),
+    ] {
+        let controller = TextEditingController::with_text("alpha beta gamma");
+        let geometry = Rc::new(Cell::new(MagnifierInfo::EMPTY));
+        let editor = EditableText::new(controller)
+            .text_direction(TextDirection::Ltr)
+            .magnifier_configuration(TextMagnifierConfiguration::new({
+                let geometry = geometry.clone();
+                move |info| {
+                    geometry.set(info);
+                    Some(Widget::from(SizedBox::shrink()).with_key("long press lens"))
+                }
+            }));
+        let mut runtime = Runtime::new(editor.into()).unwrap();
+        runtime.set_text_shortcut_platform(platform);
+        let viewport = Constraints::tight(Size::new(200., 50.));
+        let clock = Instant::now();
+        runtime.run_frame_at(viewport, clock).unwrap();
+        let field = runtime.tree().text_field_elements().next().unwrap();
+        assert!(runtime.request_text_input_focus_for(field));
+        runtime.run_frame_at(viewport, clock).unwrap();
+        let at = |milliseconds| clock + Duration::from_millis(milliseconds);
+        let visible = |runtime: &Runtime| {
+            runtime
+                .tree()
+                .element_with_key(&Key::from("long press lens"))
+                .is_some()
+        };
+
+        let down = Offset::new(18., 22.);
+        pointer(&mut runtime, PointerPhase::Down, down, at(20));
+        runtime.run_frame_at(viewport, at(519)).unwrap();
+        assert!(!visible(&runtime));
+        runtime.run_frame_at(viewport, at(520)).unwrap();
+        assert_eq!(visible(&runtime), expected);
+        if expected {
+            assert_eq!(geometry.get().global_gesture_position, down);
+        }
+        let moved = Offset::new(70., 22.);
+        pointer(&mut runtime, PointerPhase::Move, moved, at(560));
+        runtime.run_frame_at(viewport, at(560)).unwrap();
+        assert_eq!(visible(&runtime), expected);
+        if expected {
+            assert_eq!(geometry.get().global_gesture_position, moved);
+        }
+        pointer(&mut runtime, PointerPhase::Up, moved, at(580));
+        runtime.run_frame_at(viewport, at(580)).unwrap();
+        assert!(!visible(&runtime));
     }
 }

@@ -3188,7 +3188,7 @@ impl Runtime {
             }
             PointerPhase::Cancel => {
                 self.captured_text_field = None;
-                self.text_long_press = None;
+                self.cancel_text_long_press();
                 self.cancel_text_handle_drag();
                 self.captured_selectable_text = None;
                 if let Some(element) = self.pressed_button.take() {

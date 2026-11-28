@@ -661,6 +661,32 @@ impl Runtime {
         menu.show_spell_check(anchors, buttons, span)
     }
 
+    /// Shows or moves a configured editor magnifier at a point in the view.
+    /// This is independent of handle visibility and does not change focus.
+    pub fn show_editable_magnifier(&mut self, field: ElementId, position: Offset) -> bool {
+        if !self.tree.text_field_has_magnifier(field) {
+            return false;
+        }
+        self.hide_text_field_toolbar_only(field);
+        let changed = self.tree.update_text_field_magnifier(field, position, position);
+        self.frame_requested |= changed;
+        changed
+    }
+
+    /// Dismisses the editor magnifier without changing selection or focus.
+    pub fn hide_editable_magnifier(&mut self, field: ElementId) -> bool {
+        let changed = self.tree.hide_text_field_magnifier(field);
+        self.frame_requested |= changed;
+        changed
+    }
+
+    fn should_magnify_long_press(&self, field: ElementId, touch: bool) -> bool {
+        touch && self.focused == Some(field) && matches!(
+            self.text_shortcut_platform,
+            TextShortcutPlatform::Android | TextShortcutPlatform::Ios
+        )
+    }
+
     /// Closes the field's touch toolbar and selection handles, as Flutter's
     /// keyboard edits do through `hideToolbar`, and a mouse press does.
     pub(super) fn hide_text_field_overlays(&mut self, field: ElementId) {
@@ -1502,6 +1528,10 @@ impl Runtime {
                     self.text_field_select_word_at(field, press.down_position, now);
                 }
                 self.report_editor_selection_delta(field, previous, SelectionChangedCause::LongPress);
+                if self.should_magnify_long_press(field, press.touch) {
+                    self.show_editable_magnifier(field, press.down_position);
+                }
+
             }
             LongPressTarget::Label(label) => {
                 if self.captured_selectable_text != Some(label) {
@@ -1563,6 +1593,10 @@ impl Runtime {
                     );
                 }
                 self.report_editor_selection_delta(field, previous, SelectionChangedCause::LongPress);
+                if self.should_magnify_long_press(field, press.touch) {
+                    self.show_editable_magnifier(field, position);
+                }
+
             }
             LongPressTarget::Label(label) => {
                 if let Some(anchor) = press.anchor_word
@@ -1730,6 +1764,7 @@ impl Runtime {
         }
         match press.target {
             LongPressTarget::Field(field) => {
+                self.hide_editable_magnifier(field);
                 if !press.touch {
                     return;
                 }
@@ -1745,6 +1780,15 @@ impl Runtime {
         }
         self.frame_requested = true;
     }
+    pub(super) fn cancel_text_long_press(&mut self) {
+        if let Some(press) = self.text_long_press.take()
+            && press.started
+            && let LongPressTarget::Field(field) = press.target
+        {
+            self.hide_editable_magnifier(field);
+        }
+    }
+
 }
 
 /// A press on one of the focused field's visible selection handles, from

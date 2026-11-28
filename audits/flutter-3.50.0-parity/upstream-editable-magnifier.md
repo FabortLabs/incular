@@ -20,3 +20,19 @@ Enabling, disabling, and re-enabling the builder does not remount a
 field with configured handles. The three native magnifier tests and
 19 handle regression tests passed. No design-system styling or physical
 touch-device screenshot is claimed.
+
+## Handle-free presentation and updated builder
+
+Pinned `widgets/text_selection_test.dart:1740` and
+`widgets/editable_text_test.dart:16005` passed. A configured native
+lens opens in a mounted 200 × 50 editor with no handle overlay;
+its builder receives the gesture (10, 10) and the editor's actual
+bounds. Opening it does not request focus. When a retained rebuild
+changes the builder's output key, the overlay replaces that child
+without remounting the editor, and explicit hide removes it.
+
+A native control also verifies that iOS and Android long presses
+open the lens at the 500 ms threshold, update it at the moved
+pointer, and dismiss it on release. The Linux policy does not
+open a touch long-press lens. All five magnifier and 19 selection
+handle tests passed. The long-press control adds no registration row.

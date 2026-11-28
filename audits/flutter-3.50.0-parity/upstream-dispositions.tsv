@@ -4178,3 +4178,5 @@ packages/flutter/test/widgets/editable_text_test.dart	18171	should notify on siz
 packages/flutter/test/widgets/editable_text_test.dart	18516	showToolbar does nothing and returns false when already shown	paired-match	upstream-editable-defaults.md#duplicate-toolbar-request-after-autofocus
 packages/flutter/test/widgets/editable_text_test.dart	17058	should build nothing by default	paired-match	upstream-editable-magnifier.md#default-and-scaled-handle-drag
 packages/flutter/test/widgets/editable_text_test.dart	17088	magnifier is in correct position when EditableText is scaled	paired-match	upstream-editable-magnifier.md#default-and-scaled-handle-drag
+packages/flutter/test/widgets/editable_text_test.dart	16005	magnifierConfiguration can be updated to display a new magnifier	paired-match	upstream-editable-magnifier.md#handle-free-presentation-and-updated-builder
+packages/flutter/test/widgets/text_selection_test.dart	1740	can show magnifier when no handles exist	paired-match	upstream-editable-magnifier.md#handle-free-presentation-and-updated-builder
