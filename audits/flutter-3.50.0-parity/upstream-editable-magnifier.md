@@ -62,3 +62,16 @@ that the lens's backdrop capture precedes the higher child's paint.
 Replacing a showing lens never starts a reverse animation, and a
 canceled old exit cannot remove the new lens. All four focused
 mounted native tests passed.
+
+## Translated focal-point pixels
+
+The pinned authored Flutter probe renders an 8 × 8 scene into an image
+and checks four exact RGBA samples before and after inserting a
+translated lens. At (3, 3) and (3, 4) the lens changes the blue
+background to the black focal region; the outside samples do not
+change. The Incular wgpu test uses the production device-space
+backdrop matrix and the embedded linear resample shader. Actual
+offscreen readback through surfaceless GL verifies the same two focal
+pixels. That test isolates the GPU resample pass rather than the complete
+native view. The original magnifier golden (:45), including its shadow,
+opacity, and full native clip composition, remains open.
