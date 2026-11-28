@@ -21,3 +21,15 @@ logical. A callback-only transport remains asynchronous.
 The bundle cache retains only the requested decoded size. This is not
 evidence that the native decoder avoids a temporary full-size source
 buffer, or that memory/custom providers share the same global cache.
+
+## Shared provider value and hash
+
+Pinned `painting/image_provider_resize_image_test.dart:25` and both
+neighboring equality controls passed. The new native test constructs
+separate erased wrappers around the same encoded memory image at
+100 × 200 with Fit and upscaling enabled. They compare equal and hash
+equally; a different width remains a separate set entry. Native erased
+provider hashing includes the concrete type and the equality-compatible
+identity supplied by its implementation. Built-in providers contribute
+their content or canonical keys, and opaque custom providers may use
+the type-only fallback. The 52 focused native resize and cache tests passed.

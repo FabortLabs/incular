@@ -352,6 +352,16 @@ impl PartialEq for AssetImage {
 impl Eq for AssetImage {}
 
 impl ImageProvider for AssetImage {
+    fn hash_identity(&self, state: &mut impl Hasher) {
+        self.bundle.hash(state);
+        let canonical_name = self.key_name();
+        canonical_name.hash(state);
+        if canonical_name.is_none() {
+            self.path.hash(state);
+            self.package.hash(state);
+        }
+    }
+
     fn load(&self) -> Result<ImageHandle, ImageError> {
         self.load_with(&ImageConfiguration::empty())
     }
@@ -485,6 +495,12 @@ impl PartialEq for ExactAssetImage {
 impl Eq for ExactAssetImage {}
 
 impl ImageProvider for ExactAssetImage {
+    fn hash_identity(&self, state: &mut impl Hasher) {
+        self.key_name().hash(state);
+        self.bundle.hash(state);
+        comparable_scale(self.scale).hash(state);
+    }
+
     fn load(&self) -> Result<ImageHandle, ImageError> {
         self.load_with(&ImageConfiguration::empty())
     }

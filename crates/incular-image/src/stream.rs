@@ -14,6 +14,7 @@ use std::{
     cell::{Cell, OnceCell, RefCell},
     collections::{BTreeMap, VecDeque},
     fmt,
+    hash::{Hash, Hasher},
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     rc::{Rc, Weak},
     sync::Arc,
@@ -926,6 +927,7 @@ impl ImageStreamCompleter {
 pub struct AnyImageProvider {
     provider: Rc<dyn Any>,
     eq: fn(&dyn Any, &dyn Any) -> bool,
+    hash_identity: fn(&dyn Any, &mut dyn Hasher),
     resolve: fn(&dyn Any, &ImageConfiguration, Option<ImageResizeOptions>) -> ImageStream,
     load: fn(
         &dyn Any,
@@ -940,6 +942,12 @@ fn eq_erased<P: ImageProvider + 'static>(left: &dyn Any, right: &dyn Any) -> boo
     match (left.downcast_ref::<P>(), right.downcast_ref::<P>()) {
         (Some(left), Some(right)) => left == right,
         _ => false,
+    }
+}
+
+fn hash_erased<P: ImageProvider + 'static>(provider: &dyn Any, mut state: &mut dyn Hasher) {
+    if let Some(provider) = provider.downcast_ref::<P>() {
+        provider.hash_identity(&mut state);
     }
 }
 
@@ -998,6 +1006,7 @@ impl AnyImageProvider {
         Self {
             provider: Rc::new(provider),
             eq: eq_erased::<P>,
+            hash_identity: hash_erased::<P>,
             resolve: resolve_erased::<P>,
             load: load_erased::<P>,
             cached: cached_erased::<P>,
@@ -1076,6 +1085,13 @@ impl PartialEq for AnyImageProvider {
 
 // Erased equality compares providers of one type with their own `Eq`.
 impl Eq for AnyImageProvider {}
+
+impl Hash for AnyImageProvider {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.provider.as_ref().type_id().hash(state);
+        (self.hash_identity)(self.provider.as_ref(), state);
+    }
+}
 
 impl fmt::Debug for AnyImageProvider {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {

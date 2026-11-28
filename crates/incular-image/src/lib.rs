@@ -184,6 +184,11 @@ pub type ImageLoadCallback = Box<dyn FnOnce(Result<ImageHandle, ImageError>) + S
 pub trait ImageProvider: Clone + fmt::Debug + PartialEq + Eq {
     fn load(&self) -> Result<ImageHandle, ImageError>;
 
+    /// Supplies equality-compatible data for hashing an erased provider.
+    /// Providers with opaque equality can keep the default type-only hash.
+    /// Equal values of this provider type must write the same hash data.
+    fn hash_identity(&self, _state: &mut impl std::hash::Hasher) {}
+
     /// Resolves this provider for a target environment. Providers with
     /// density- or locale-specific sources can override this; the common
     /// single-source case remains a zero-cost compatibility default.
@@ -321,6 +326,10 @@ impl MemoryImage {
 }
 
 impl ImageProvider for MemoryImage {
+    fn hash_identity(&self, state: &mut impl std::hash::Hasher) {
+        std::hash::Hash::hash(self, state);
+    }
+
     fn load(&self) -> Result<ImageHandle, ImageError> {
         ImageHandle::from_bytes(&*self.bytes).map(|image| image.with_scale(self.image_scale()))
     }
@@ -353,7 +362,7 @@ impl ImageProvider for MemoryImage {
 }
 
 /// Loads an image from a filesystem path.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FileImage {
     path: PathBuf,
     scale_bits: u64,
@@ -387,6 +396,10 @@ impl FileImage {
 }
 
 impl ImageProvider for FileImage {
+    fn hash_identity(&self, state: &mut impl std::hash::Hasher) {
+        std::hash::Hash::hash(self, state);
+    }
+
     fn load(&self) -> Result<ImageHandle, ImageError> {
         ImageHandle::from_file(&self.path).map(|image| image.with_scale(self.image_scale()))
     }

@@ -180,7 +180,7 @@ impl<K> ResizeImageKey<K> {
 
 /// Flutter's resizing provider. It wraps any Incular provider, including
 /// ones whose first image is delivered asynchronously.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ResizeImage {
     pub image_provider: AnyImageProvider,
     pub options: ImageResizeOptions,
@@ -302,6 +302,10 @@ fn label_resize(stream: ImageStream, options: ImageResizeOptions) -> ImageStream
 }
 
 impl ImageProvider for ResizeImage {
+    fn hash_identity(&self, state: &mut impl std::hash::Hasher) {
+        std::hash::Hash::hash(self, state);
+    }
+
     fn resolve_cached(
         &self,
         configuration: &ImageConfiguration,

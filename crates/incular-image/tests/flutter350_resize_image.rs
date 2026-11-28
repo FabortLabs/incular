@@ -482,3 +482,32 @@ fn resizing_a_deferred_asset_key_waits_and_uses_the_original_configuration() {
         (Some(246), Some(642))
     );
 }
+
+#[test]
+fn equal_resizing_providers_hash_equally_across_separate_erased_wrappers() {
+    use std::{
+        collections::{HashSet, hash_map::DefaultHasher},
+        hash::{Hash, Hasher},
+        sync::Arc,
+    };
+
+    let bytes: Arc<[u8]> = Arc::from(UNIT);
+    let build = |width| {
+        ResizeImage::new(MemoryImage::new(bytes.clone()), Some(width), Some(200))
+            .policy(ResizeImagePolicy::Fit)
+            .allow_upscaling(true)
+    };
+    let (first, second, different) = (build(100), build(100), build(150));
+    let hash = |value: &ResizeImage| {
+        let mut state = DefaultHasher::new();
+        value.hash(&mut state);
+        state.finish()
+    };
+    assert_eq!(first, second);
+    assert_eq!(hash(&first), hash(&second));
+    assert_ne!(first, different);
+    assert_eq!(HashSet::from([first.clone(), second, different]).len(), 2);
+
+    let wrap = |image| ResizeImage::new(image, Some(50), Some(50));
+    assert_eq!(hash(&wrap(first.clone())), hash(&wrap(first)));
+}
