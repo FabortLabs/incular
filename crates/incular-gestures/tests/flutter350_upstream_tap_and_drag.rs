@@ -304,3 +304,61 @@ fn horizontal_drag_end_reports_the_actual_release_position() {
     }
     assert_eq!(point.get(), Some(Offset::new(120., 45.)));
 }
+
+#[test]
+fn horizontal_and_pan_updates_keep_both_components_and_no_primary_delta() {
+    use incular_core::Transform;
+
+    for mut recognizer in [
+        TapAndDragGestureRecognizer::horizontal_drag(),
+        TapAndDragGestureRecognizer::pan(),
+    ] {
+        let updates = Rc::new(RefCell::new(Vec::new()));
+        recognizer = recognizer
+            .drag_start_behavior(DragStartBehavior::Down)
+            .on_drag_update({
+                let updates = Rc::clone(&updates);
+                move |details| updates.borrow_mut().push(details)
+            });
+        let transform = Transform::scale(0.5);
+        recognizer.set_local_transform(transform);
+        let base = Instant::now();
+        for (ms, phase, point) in [
+            (0, Down, (32., 28.)),
+            (11, Move, (72., 48.)),
+            (27, Move, (80., 42.)),
+            (32, Up, (80., 42.)),
+        ] {
+            recognizer.handle_raw(event(base, ms, 1, phase, point).transformed(Some(transform)));
+        }
+
+        let updates = updates.borrow();
+        assert_eq!(updates.len(), 2);
+        for (details, ms, position, delta, travel) in [
+            (
+                updates[0],
+                11,
+                Offset::new(72., 48.),
+                Offset::new(20., 10.),
+                Offset::new(40., 20.),
+            ),
+            (
+                updates[1],
+                27,
+                Offset::new(80., 42.),
+                Offset::new(4., -3.),
+                Offset::new(48., 14.),
+            ),
+        ] {
+            assert_eq!(details.source_time, Some(base + Duration::from_millis(ms)));
+            assert_eq!(details.global_position, position);
+            assert_eq!(details.local_position, transform.transform_point(position));
+            assert_eq!(details.delta, delta);
+            assert_eq!(details.primary_delta, None);
+            assert_eq!(details.offset_from_origin, travel);
+            assert_eq!(details.local_offset_from_origin, transform.transform_vector(travel));
+            assert_eq!(details.kind, PointerDeviceKind::Touch);
+            assert_eq!(details.consecutive_tap_count, 1);
+        }
+    }
+}

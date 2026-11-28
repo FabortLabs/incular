@@ -50,6 +50,9 @@ pub struct TapDragUpdateDetails {
     pub local_position: Offset,
     pub source_time: Option<Instant>,
     pub delta: Offset,
+    /// An optional axis-only displacement. Flutter 3.50.0's tap-and-drag
+    /// recognizers leave this unset for both horizontal drags and pans.
+    pub primary_delta: Option<f32>,
     pub kind: PointerDeviceKind,
     pub offset_from_origin: Offset,
     pub local_offset_from_origin: Offset,
@@ -725,6 +728,7 @@ impl TapAndDragGestureRecognizer {
             local_position: local,
             source_time: Some(event.time),
             delta: event.local_delta,
+            primary_delta: None,
             kind: self.kind_for_pointer(event.pointer),
             offset_from_origin: global - self.initial_position.global,
             local_offset_from_origin: local - self.initial_position.local,

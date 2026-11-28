@@ -29,3 +29,14 @@ before the first is accepted without interfering in either release order.
 An acceptance delivered before the down event is routed still emits
 both expected tap callbacks. This uses the public external-arena hooks
 to deliver the same acceptance order, not an inferred callback.
+
+## Update metadata: horizontal tap-drag versus pan
+
+The pinned framework retains the full local motion vector and leaves
+`primaryDelta` null even for horizontal tap-drags, despite the general
+description of axis-constrained updates. Incular now exposes that
+optional field without zeroing the cross-axis motion. Both recognizers
+are checked under 2× scaling on two successive diagonal moves, including
+the source timestamp, global and local position, accumulated travel in
+both spaces, touch kind, and tap count. Both authored Flutter cases and
+all 18 native cases passed. The probe adds no original registrations.
