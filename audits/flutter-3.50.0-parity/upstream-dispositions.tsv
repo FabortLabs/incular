@@ -3980,3 +3980,9 @@ packages/flutter/test/rendering/view_test.dart	41	does not replace the root laye
 packages/flutter/test/rendering/view_test.dart	57	does not replace the root layer unnecessarily when view resizes	paired-match	upstream-view-configuration.md#resizing-and-pre-layout-configuration
 packages/flutter/test/rendering/view_test.dart	104	Config can be set and changed after instantiation without calling prepareInitialFrame first	paired-match	upstream-view-configuration.md#resizing-and-pre-layout-configuration
 packages/flutter/test/rendering/view_test.dart	121	Constraints are derived from configuration	partial-match	upstream-view-configuration.md#resizing-and-pre-layout-configuration
+packages/flutter/test/rendering/multi_view_binding_test.dart	13	Adding/removing renderviews updates renderViews getter	paired-match	upstream-multi-view-binding.md
+packages/flutter/test/rendering/multi_view_binding_test.dart	30	illegal add/remove renderviews	partial-match	upstream-multi-view-binding.md
+packages/flutter/test/rendering/multi_view_binding_test.dart	52	changing metrics updates configuration	paired-match	upstream-multi-view-binding.md
+packages/flutter/test/rendering/multi_view_binding_test.dart	72	semantics actions are performed on the right view	paired-match	upstream-multi-view-binding.md
+packages/flutter/test/rendering/multi_view_binding_test.dart	107	all registered renderviews are asked to composite frame	partial-match	upstream-multi-view-binding.md
+packages/flutter/test/rendering/multi_view_binding_test.dart	147	hit-testing reaches the right view	partial-match	upstream-multi-view-binding.md
