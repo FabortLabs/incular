@@ -822,6 +822,16 @@ impl SemanticNode {
     }
 }
 
+/// Which retained child order to show in a semantics diagnostic.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DebugSemanticsDumpOrder {
+    /// The order used by assistive technology for traversal.
+    #[default]
+    Traversal,
+    /// The inverse of hit-test order: back to front, as painted.
+    InverseHitTest,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SemanticsDiagnostics {
     pub nodes_created: u64,
@@ -1132,6 +1142,19 @@ impl SemanticsTree {
         max_depth: usize,
         max_text_chars: usize,
     ) -> String {
+        self.debug_dump_limited_ordered(max_nodes, max_depth, max_text_chars, |_| None)
+    }
+
+    /// Runtime-owned paint order is optional and supplied only to the
+    /// diagnostic. None uses the portable tree's existing traversal order.
+    #[doc(hidden)]
+    pub fn debug_dump_limited_ordered(
+        &self,
+        max_nodes: usize,
+        max_depth: usize,
+        max_text_chars: usize,
+        children_in_order: impl Fn(Option<SemanticNodeId>) -> Option<Vec<SemanticNodeId>>,
+    ) -> String {
         fn truncate(value: Option<&str>, max_chars: usize) -> Option<String> {
             let value = value?;
             if value.chars().count() <= max_chars {
@@ -1195,7 +1218,8 @@ impl SemanticsTree {
         for id in extra.into_iter().rev() {
             stack.push((id, 0usize, None));
         }
-        for &root in self.roots.iter().rev() {
+        let ordered_roots = children_in_order(None);
+        for &root in ordered_roots.as_deref().unwrap_or(&self.roots).iter().rev() {
             stack.push((root, 0usize, None));
         }
         let mut visited = std::collections::HashSet::new();
@@ -1259,7 +1283,9 @@ impl SemanticsTree {
                 &node.state.custom_actions,
                 max_text_chars,
             );
-            for (index, &child) in node.children.iter().enumerate().rev() {
+            let ordered_children = children_in_order(Some(id));
+            let children = ordered_children.as_deref().unwrap_or(&node.children);
+            for (index, &child) in children.iter().enumerate().rev() {
                 stack.push((child, depth.saturating_add(1), Some(index)));
             }
         }

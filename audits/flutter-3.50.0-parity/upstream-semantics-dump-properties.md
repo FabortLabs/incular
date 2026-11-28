@@ -33,3 +33,21 @@ observers see the replacement only. The adjacent AccessKit test confirms
 that a delayed action for the old native ID cannot hit the replacement.
 Both focused native checks passed. This is partial: Incular does not
 reproduce the Flutter engine's 16-bit numeric reuse contract.
+
+## Selectable child order in semantic dumps
+
+Pinned `semantics/semantics_test.dart:580` passed. The additional pinned
+`semantic_dump_child_order_test.dart` exercises two overlapping nodes
+whose explicit traversal keys reverse their paint order. Default
+diagnostics list traversal order; the inverse hit-test variant lists
+paint order.
+
+Incular exposes the two orders through the mounted tree and
+application diagnostics. It reuses the permutation already used by
+point dispatch, without storing a second tree or changing what native
+adapters receive. The native test verifies both orderings at the root
+and within a semantic container, including changing sort keys, actually
+swapping paint order, and dispatching the resulting topmost action.
+The three adjacent rendering pipeline checks passed as well. Text
+format and generational identifiers are native, not Flutter's dump
+syntax.

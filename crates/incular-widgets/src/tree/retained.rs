@@ -1070,6 +1070,28 @@ impl WidgetTree {
     pub fn semantics_debug_dump(&self) -> String {
         self.semantics.debug_dump()
     }
+    /// Reports the retained semantics in traversal or inverse hit-test order.
+    #[must_use]
+    pub fn semantics_debug_dump_in_order(
+        &self,
+        order: incular_semantics::DebugSemanticsDumpOrder,
+    ) -> String {
+        use incular_semantics::DebugSemanticsDumpOrder;
+        match order {
+            DebugSemanticsDumpOrder::Traversal => self.semantics.debug_dump(),
+            DebugSemanticsDumpOrder::InverseHitTest => self.semantics.debug_dump_limited_ordered(
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                |parent| {
+                    self.semantic_point_order
+                        .get(&parent)
+                        .map(|order| order.iter().map(|&(_, child)| child).collect())
+                },
+            ),
+        }
+    }
+
     /// Bounded semantic diagnostics for in-app debuggers. The limit is
     /// applied before formatting labels or traversing descendants.
     #[must_use]

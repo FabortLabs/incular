@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use incular_config::{Constraints, TextDirection};
 use incular_core::{Offset, Size};
 use incular_runtime::Runtime;
-use incular_semantics::{OrdinalSortKey, SemanticAction};
+use incular_semantics::{DebugSemanticsDumpOrder, OrdinalSortKey, SemanticAction};
 use incular_widgets::{Directionality, Semantics, SizedBox, Stack, Widget};
 
 #[test]
@@ -77,6 +77,20 @@ fn point_actions_use_inverse_paint_order_even_when_traversal_is_sorted_different
                 } else {
                     ["painted last", "painted first"]
                 }
+            );
+            let first_precedes_last = |order| {
+                let dump = runtime.tree().semantics_debug_dump_in_order(order);
+                let first = dump.find("label=Some(\"painted first\")").expect("first node in dump");
+                let last = dump.find("label=Some(\"painted last\")").expect("last node in dump");
+                first < last
+            };
+            assert_eq!(
+                first_precedes_last(DebugSemanticsDumpOrder::Traversal),
+                bottom < top,
+            );
+            assert_eq!(
+                first_precedes_last(DebugSemanticsDumpOrder::InverseHitTest),
+                !swap_paint,
             );
             if nested {
                 let inspected = runtime.flutter_semantics_node_json(tree.root().unwrap()).unwrap();

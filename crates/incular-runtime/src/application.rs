@@ -1969,6 +1969,15 @@ impl Application {
     /// even when several views have not produced nodes.
     #[must_use]
     pub fn debug_dump_semantics(&self) -> String {
+        self.debug_dump_semantics_in_order(incular_semantics::DebugSemanticsDumpOrder::Traversal)
+    }
+
+    /// Reports each collected view using the requested diagnostic child order.
+    #[must_use]
+    pub fn debug_dump_semantics_in_order(
+        &self,
+        order: incular_semantics::DebugSemanticsDumpOrder,
+    ) -> String {
         let registry = self.registry.borrow();
         let mut explained = false;
         let trees = registry
@@ -1978,7 +1987,10 @@ impl Application {
                 let record = registry.get(id)?;
                 let tree = record.runtime.tree().semantics();
                 if !tree.roots().is_empty() {
-                    return Some(format!("Window {id}:\n{}", tree.debug_dump()));
+                    return Some(format!(
+                        "Window {id}:\n{}",
+                        record.runtime.tree().semantics_debug_dump_in_order(order),
+                    ));
                 }
                 let mut notice = format!("Semantics not generated for window {id}.");
                 if !explained {

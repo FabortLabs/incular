@@ -4011,3 +4011,4 @@ packages/flutter/test/semantics/semantics_test.dart	807	blocked actions debug pr
 packages/flutter/test/semantics/semantics_test.dart	831	validation result debug properties	paired-match	upstream-semantics-dump-properties.md
 packages/flutter/test/semantics/semantics_test.dart	848	Custom actions debug properties	paired-match	upstream-semantics-dump-properties.md
 packages/flutter/test/semantics/semantics_test.dart	928	Semantics id does not repeat	partial-match	upstream-semantics-dump-properties.md#identity-at-the-flutter-allocation-limit
+packages/flutter/test/semantics/semantics_test.dart	580	toStringDeep respects childOrder parameter	paired-match	upstream-semantics-dump-properties.md#selectable-child-order-in-semantic-dumps
