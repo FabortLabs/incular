@@ -9,14 +9,15 @@ use std::{
     sync::Arc,
 };
 
+use futures_channel::oneshot;
 use incular_assets::{
     AssetBundle, AssetManifest, AssetManifestFormat, AssetMetadata, configured_root_asset_bundle,
     root_asset_bundle,
 };
 
 use crate::{
-    ImageConfiguration, ImageError, ImageHandle, ImageLoadCallback, ImageProvider,
-    ImageResizeOptions, ImageSource, ImageStream, finite_positive_or_one,
+    BundleImageCacheStatus, ImageConfiguration, ImageError, ImageHandle, ImageLoadCallback,
+    ImageProvider, ImageResizeOptions, ImageSource, ImageStream, finite_positive_or_one,
     shared_bundle_image_cache,
 };
 
@@ -207,6 +208,28 @@ impl AssetImage {
     /// image pixels. A warm manifest can complete before this call returns.
     pub fn obtain_key(&self, config: &ImageConfiguration, done: AssetImageKeyCallback) {
         self.obtain_key_from_bundle(select_bundle(self.bundle.as_ref(), config), config, done);
+    }
+
+    /// Resolves the bundle key and reports its state in the current UI
+    /// thread's image cache. Resolving a cold manifest can wait for I/O;
+    /// this does not start an image load or affect the key's eviction order.
+    /// Unlike Flutter's global error hook, key failures are returned to the
+    /// caller as typed errors.
+    pub async fn obtain_cache_status(
+        &self,
+        configuration: &ImageConfiguration,
+    ) -> Result<BundleImageCacheStatus, ImageError> {
+        let (complete, result) = oneshot::channel();
+        self.obtain_key(
+            configuration,
+            Box::new(move |key| {
+                let _ = complete.send(key);
+            }),
+        );
+        let key = result.await.map_err(|_| {
+            ImageError::Io("image key loader disconnected before delivering a result".into())
+        })??;
+        Ok(shared_bundle_image_cache().status_for_key(&key))
     }
 
     fn obtain_key_from_bundle(
@@ -481,6 +504,13 @@ impl ExactAssetImage {
             self.key_name(),
             self.scale,
         )
+    }
+
+    /// Reports the exact key in the current UI thread's image cache without
+    /// reading its file or changing its eviction order.
+    #[must_use]
+    pub fn obtain_cache_status(&self, configuration: &ImageConfiguration) -> BundleImageCacheStatus {
+        shared_bundle_image_cache().status_for_key(&self.obtain_key(configuration))
     }
 }
 

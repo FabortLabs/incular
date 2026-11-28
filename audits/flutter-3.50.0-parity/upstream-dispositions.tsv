@@ -4558,3 +4558,5 @@ packages/flutter/test/widgets/scrollbar_test.dart	2244	Scrollbar thumb can be dr
 packages/flutter/test/painting/image_provider_test.dart	65	File image with empty file throws expected error and evicts from cache	partial-match	upstream-file-image-errors.md
 packages/flutter/test/painting/image_provider_test.dart	87	File image with empty file throws expected error (load)	partial-match	upstream-file-image-errors.md
 packages/flutter/test/painting/image_provider_test.dart	155	File image throws error when given a real but non-image file	partial-match	upstream-file-image-errors.md
+packages/flutter/test/painting/image_provider_test.dart	34	obtainKey errors will be caught	paired-match	upstream-asset-image-cache-status.md
+packages/flutter/test/painting/image_provider_test.dart	54	obtainKey errors will be caught - check location	partial-match	upstream-asset-image-cache-status.md

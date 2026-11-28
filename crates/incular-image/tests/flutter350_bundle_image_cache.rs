@@ -1078,3 +1078,133 @@ fn direct_bundle_callback_remains_retryable_after_invalid_bytes() {
     finish_pending_streams();
     assert!(matches!(retry.state(), ImageLoadState::Ready(_)));
 }
+
+#[test]
+fn provider_cache_status_selects_the_density_key_and_never_loads_pixels() {
+    use incular_assets::CachingAssetBundle;
+    use incular_core::standard_message_codec::{MessageValue as Msg, StandardMessageCodec};
+    use incular_image::{AssetImage, BundleImageCacheStatus, ImageStreamListener};
+    use std::{
+        future::Future,
+        pin::pin,
+        rc::Rc,
+        task::{Context, Poll, Waker},
+    };
+
+    let transport = Deferred::default();
+    let bundle = Arc::new(CachingAssetBundle::new(transport.clone()));
+    let manifest = Msg::Map(vec![(
+        Msg::String("badge.png".into()),
+        Msg::List(vec![Msg::Map(vec![
+            (
+                Msg::String("asset".into()),
+                Msg::String("3.0x/badge.png".into()),
+            ),
+            (Msg::String("dpr".into()), Msg::Float(3.)),
+        ])]),
+    )]);
+    let manifest_bytes = StandardMessageCodec::encode_message(&manifest)
+        .unwrap()
+        .unwrap();
+
+    let provider = AssetImage::new("badge.png").bundle(bundle.clone());
+    let config = ImageConfiguration::new().device_pixel_ratio(3.);
+    let exact = ExactAssetImage::new("3.0x/badge.png")
+        .bundle(bundle.clone())
+        .scale(3.);
+    let other_density = ExactAssetImage::new("3.0x/badge.png").bundle(bundle);
+    let mut cx = Context::from_waker(Waker::noop());
+    let mut cold_query = pin!(provider.obtain_cache_status(&config));
+    assert_eq!(cold_query.as_mut().poll(&mut cx), Poll::Pending);
+    assert_eq!(transport.pending(), 1);
+    transport.take("AssetManifest.bin")(Ok(manifest_bytes.into()));
+    assert_eq!(
+        cold_query.as_mut().poll(&mut cx),
+        Poll::Ready(Ok(BundleImageCacheStatus::default()))
+    );
+    assert_eq!(transport.pending(), 0, "status must not open the image");
+
+    let stream = provider.resolve(&config);
+    assert!(matches!(stream.state(), ImageLoadState::Loading(_)));
+    assert!(exact.obtain_cache_status(&config).pending);
+    let mut query = pin!(provider.obtain_cache_status(&config));
+    assert_eq!(
+        query.as_mut().poll(&mut cx),
+        Poll::Ready(Ok(BundleImageCacheStatus {
+            pending: true,
+            keep_alive: false,
+            live: true,
+        }))
+    );
+    let listener = stream.listen(ImageStreamListener::new(Rc::new(|info, synchronous| {
+        assert!(!synchronous);
+        assert_eq!(info.scale(), 3.);
+    })));
+    transport.take("3.0x/badge.png")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    let mut query = pin!(provider.obtain_cache_status(&config));
+    assert_eq!(
+        query.as_mut().poll(&mut cx),
+        Poll::Ready(Ok(BundleImageCacheStatus {
+            pending: false,
+            keep_alive: true,
+            live: true,
+        }))
+    );
+    assert_eq!(
+        other_density.obtain_cache_status(&config),
+        BundleImageCacheStatus::default(),
+        "the same physical file name with a different scale is a different cache key",
+    );
+    drop(listener);
+    let status = exact.obtain_cache_status(&config);
+    assert!(status.keep_alive);
+    assert!(!status.live);
+    assert_eq!(transport.pending(), 0);
+}
+
+#[test]
+fn a_key_error_is_delivered_through_both_stream_and_cache_query_without_image_io() {
+    use incular_assets::CachingAssetBundle;
+    use incular_image::{AssetImage, ImageStreamListener};
+    use std::{
+        cell::RefCell,
+        future::Future,
+        pin::pin,
+        rc::Rc,
+        task::{Context, Poll, Waker},
+    };
+
+    let transport = Deferred::default();
+    let provider = AssetImage::new("never-load.png")
+        .bundle(Arc::new(CachingAssetBundle::new(transport.clone())));
+    let config = ImageConfiguration::empty();
+    let mut query = pin!(provider.obtain_cache_status(&config));
+    let mut cx = Context::from_waker(Waker::noop());
+    assert_eq!(query.as_mut().poll(&mut cx), Poll::Pending);
+    let stream = provider.resolve(&config);
+    assert!(matches!(stream.state(), ImageLoadState::Loading(_)));
+    let observed = Rc::new(RefCell::new(Vec::new()));
+    let _listener = stream.listen(
+        ImageStreamListener::new(Rc::new(|_, _| panic!("no image key"))).on_error({
+            let observed = observed.clone();
+            Rc::new(move |error| observed.borrow_mut().push(error.clone()))
+        }),
+    );
+    assert_eq!(
+        transport.pending(),
+        1,
+        "both routes share the manifest request"
+    );
+    transport.take("AssetManifest.bin")(Ok(Arc::from([0xff, 0xff])));
+    let Poll::Ready(Err(error)) = query.as_mut().poll(&mut cx) else {
+        panic!("cache query did not return the manifest failure");
+    };
+    assert!(
+        matches!(&error, ImageError::Asset(AssetError::Parse { key, .. }) if key == "AssetManifest.bin")
+    );
+    finish_pending_streams();
+    assert_eq!(stream.state(), ImageLoadState::Failed(error.clone()));
+    assert_eq!(observed.borrow().as_slice(), &[error]);
+    assert_eq!(transport.pending(), 0);
+}
