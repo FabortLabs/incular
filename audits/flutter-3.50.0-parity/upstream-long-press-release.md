@@ -69,3 +69,16 @@ secondary and tertiary button changes cancel at the same point when
 the hold is still pending. All 15 native direct tests pass.
 All 26 pinned registrations in `gestures/long_press_test.dart` are now
 paired individually.
+
+## Device kind and receiver-local origin on press
+
+Flutter 3.50.0 passes the initiating pointer kind to each button's
+long-press down callback. Incular used to omit it. The mounted
+comparison presses a touch, secondary and tertiary mouse buttons,
+and a stylus at global (55,65) inside 20 pixels of padding. Each
+callback receives the correct button, device kind and local (35,45),
+once and before release. An unpopulated details value defaults to
+no kind; legacy events without metadata likewise report no kind.
+The authored `long_press_down_metadata_test.dart` passed on the pin;
+all seven native `flutter350_upstream_long_press` cases passed. The
+authored probe adds no original registration to the coverage count.

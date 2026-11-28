@@ -296,3 +296,65 @@ fn buttons_changed_after_acceptance_do_not_cancel_long_press() {
     fixture.up(5);
     assert_eq!(fixture.snapshot(), [End]);
 }
+
+#[test]
+fn mounted_long_press_down_reports_device_kind_and_receiver_position() {
+    use incular_widgets::Padding;
+
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let record = |button| {
+        let seen = Rc::clone(&seen);
+        move |details| seen.borrow_mut().push((button, details))
+    };
+    let detector = GestureDetector::new(Widget::box_(SURFACE, Color::WHITE))
+        .on_long_press_down(record(PRIMARY_POINTER_BUTTON))
+        .on_secondary_long_press_down(record(SECONDARY_POINTER_BUTTON))
+        .on_tertiary_long_press_down(record(TERTIARY_POINTER_BUTTON));
+    let mut runtime = Runtime::new(Padding::all(20., detector).into()).unwrap();
+    let now = Instant::now();
+    runtime
+        .run_frame_at(Constraints::tight(SURFACE), now)
+        .unwrap();
+
+    let position = Offset::new(55., 65.);
+    for (i, (kind, button)) in [
+        (PointerDeviceKind::Touch, PRIMARY_POINTER_BUTTON),
+        (PointerDeviceKind::Mouse, SECONDARY_POINTER_BUTTON),
+        (PointerDeviceKind::Mouse, TERTIARY_POINTER_BUTTON),
+        (PointerDeviceKind::Stylus, PRIMARY_POINTER_BUTTON),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let at = now + Duration::from_millis(150 * i as u64);
+        let send = |runtime: &mut Runtime, phase, buttons, time| {
+            runtime.handle_input_at(
+                InputEvent::PointerWithMetadata {
+                    pointer: i as u64 + 1,
+                    device: i as u64 + 1,
+                    kind,
+                    buttons,
+                    button: Some(button),
+                    sample: PointerSampleMetadata::EMPTY,
+                    phase,
+                    position,
+                },
+                time,
+            );
+        };
+        send(&mut runtime, PointerPhase::Down, button, at);
+        assert_eq!(seen.borrow().len(), i + 1);
+        let (observed_button, details) = seen.borrow()[i];
+        assert_eq!(observed_button, button);
+        assert_eq!(details.global_position, position);
+        assert_eq!(details.local_position, Offset::new(35., 45.));
+        assert_eq!(details.kind, Some(kind));
+        send(
+            &mut runtime,
+            PointerPhase::Up,
+            0,
+            at + Duration::from_millis(50),
+        );
+        assert_eq!(seen.borrow().len(), i + 1);
+    }
+}

@@ -635,10 +635,12 @@ pub struct LongPressEndDetails {
 }
 
 /// Details of `onLongPressDown` (Flutter `LongPressDownDetails`).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LongPressDownDetails {
     pub global_position: Offset,
     pub local_position: Offset,
+    /// The initiating device kind, or no metadata for legacy pointer input.
+    pub kind: Option<PointerDeviceKind>,
 }
 
 /// Details of `onTapMove` (Flutter `TapMoveDetails`): one movement of a

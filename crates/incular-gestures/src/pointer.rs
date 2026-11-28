@@ -1100,7 +1100,7 @@ impl PointerGestureRecognizer {
                 }
             }
         }
-        let decision = self.observe_phase(routed, synthesized);
+        let decision = self.observe_phase(routed, synthesized, buttons.is_some());
         self.save_tap_memory();
         decision
     }
@@ -1121,7 +1121,12 @@ impl PointerGestureRecognizer {
         }
     }
 
-    fn observe_phase(&mut self, event: PointerEvent, synthesized: bool) -> GestureDecision {
+    fn observe_phase(
+        &mut self,
+        event: PointerEvent,
+        synthesized: bool,
+        has_device_metadata: bool,
+    ) -> GestureDecision {
         // This recognizer has a single contact. A second pointer must not
         // replace that contact or complete/cancel its gesture on release.
         if self.down.is_some_and(|down| down.pointer != event.pointer) {
@@ -1197,6 +1202,7 @@ impl PointerGestureRecognizer {
                     callback(LongPressDownDetails {
                         global_position: event.position,
                         local_position: self.local(event.position),
+                        kind: has_device_metadata.then_some(self.kind),
                     });
                 }
                 // Flutter's `TapGestureRecognizer` reports `onTapDown` only
