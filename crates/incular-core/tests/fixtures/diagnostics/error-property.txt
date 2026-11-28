@@ -1,0 +1,64 @@
+══╡ TESTTREE#00000 ╞════════════════════
+--- example property at max length --
+This is a very long message that must
+wrap as it cannot fit on one line. This
+is a very long message that must wrap as
+it cannot fit on one line. This is a
+very long message that must wrap as it
+cannot fit on one line.
+--- example property at max length --
+Message that is not allowed to wrap even though it is very long. Message that is not allowed to wrap even though it is very long. Message that is not allowed to wrap even though it is very long. Message that is not allowed to wrap.
+--- example property at max length --
+This property has a very long property
+name that will be allowed to wrap unlike
+most property names. This property has a
+very long property name that will be
+allowed to wrap unlike most property
+names:
+  http://someverylongurl.com/that-might-be-tempting-to-wrap-even-though-it-is-a-url-so-should-not-wrap.html
+This property has a very long property
+name that will be allowed to wrap unlike
+most property names. This property has a
+very long property name that will be
+allowed to wrap unlike most property
+names:
+  https://goo.gl/
+Click on the following url:
+  http://someverylongurl.com/that-might-be-tempting-to-wrap-even-though-it-is-a-url-so-should-not-wrap.html
+Click on the following url
+  https://goo.gl/
+--- example property at max length --
+multi-line value:
+  [1.0, 0.0, 0.0, 0.0]
+  [1.0, 1.0, 0.0, 0.0]
+  [1.0, 0.0, 1.0, 0.0]
+  [1.0, 0.0, 0.0, 1.0]
+--- example property at max length --
+This property has a very long property
+name that will be allowed to wrap unlike
+most property names. This property has a
+very long property name that will be
+allowed to wrap unlike most property
+names:
+  This is a very long message that must
+  wrap as it cannot fit on one line.
+  This is a very long message that must
+  wrap as it cannot fit on one line.
+  This is a very long message that must
+  wrap as it cannot fit on one line.
+--- example property at max length --
+This property has a very long property
+name that will be allowed to wrap unlike
+most property names. This property has a
+very long property name that will be
+allowed to wrap unlike most property
+names:
+  [1.0, 0.0, 0.0, 0.0]
+  [1.0, 1.0, 0.0, 0.0]
+  [1.0, 0.0, 1.0, 0.0]
+  [1.0, 0.0, 0.0, 1.0]
+--- example property at max length --
+diagnosis:
+  insufficient data to draw conclusion
+  (less than five repaints)
+════════════════════════════════════════

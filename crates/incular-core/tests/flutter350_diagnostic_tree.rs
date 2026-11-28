@@ -501,13 +501,13 @@ fn iterable_deep_format_respects_its_own_style_and_compact_parent_style() {
     assert_eq!(multi.to_json()["values"], json!([rect_text, white_text]));
     assert_eq!(multi.to_json()["style"], "whitespace");
     assert_eq!(
-        Node::property(&multi).to_string_deep(minimum),
+        Node::property(&multi).to_string_deep_with_widths(minimum, 100, 65),
         format!("objects:\n  {rect_text}\n  {white_text}\n")
     );
     assert_eq!(
         tree()
             .with_properties(vec![Node::property(&multi)])
-            .to_string_deep(minimum),
+            .to_string_deep_with_widths(minimum, 100, 65),
         format!("TestTree#00000\n   objects:\n     {rect_text}\n     {white_text}\n")
     );
     for property in [property, multi] {
@@ -529,13 +529,111 @@ fn iterable_deep_format_respects_its_own_style_and_compact_parent_style() {
     assert_eq!(solo.to_string(), format!("object: {white_text}"));
     assert_eq!(solo.to_json()["values"], json!([white_text]));
     assert_eq!(
-        Node::property(&solo).to_string_deep(minimum),
+        Node::property(&solo).to_string_deep_with_widths(minimum, 100, 65),
         format!("object: {white_text}\n")
     );
     assert_eq!(
         tree()
             .with_properties(vec![Node::property(&solo)])
-            .to_string_deep(minimum),
+            .to_string_deep_with_widths(minimum, 120, 65),
         format!("TestTree#00000\n   object: {white_text}\n")
+    );
+}
+
+// Adapted from Flutter's diagnostics_test.dart (see fixtures/flutter350_LICENSE).
+#[test]
+fn error_diagnostic_styles_reproduce_exact_reference_wraps_and_fixed_lines() {
+    use incular_core::DiagnosticsTreeStyle as Style;
+
+    let long_message =
+        ["This is a very long message that must wrap as it cannot fit on one line."; 3].join(" ");
+    let fixed_message = ["Message that is not allowed to wrap even though it is very long."; 3]
+        .into_iter()
+        .chain(["Message that is not allowed to wrap."])
+        .collect::<Vec<_>>()
+        .join(" ");
+    let long_label = ["This property has a very long property name that will be allowed to wrap unlike most property names"; 2].join(". ");
+    let short_url = "https://goo.gl/";
+    let long_url = "http://someverylongurl.com/that-might-be-tempting-to-wrap-even-though-it-is-a-url-so-should-not-wrap.html";
+    let matrix = concat!(
+        "[1.0, 0.0, 0.0, 0.0]\n",
+        "[1.0, 1.0, 0.0, 0.0]\n",
+        "[1.0, 0.0, 1.0, 0.0]\n",
+        "[1.0, 0.0, 0.0, 1.0]\n",
+    );
+    for (root, style, expected) in [
+        (
+            Style::Error,
+            Style::SingleLine,
+            include_str!("fixtures/diagnostics/error-inline.txt"),
+        ),
+        (
+            Style::Sparse,
+            Style::Flat,
+            include_str!("fixtures/diagnostics/sparse-flat.txt"),
+        ),
+        (
+            Style::Error,
+            Style::ErrorProperty,
+            include_str!("fixtures/diagnostics/error-property.txt"),
+        ),
+    ] {
+        let message = |text: &str| Node::property(&Property::message(text).style(style));
+        let marker = || message("--- example property at max length --");
+        let field = |name, text: &str| {
+            Node::property(&Property::new(name, Some(text.to_owned())).style(style))
+        };
+        let tree = Node::new("TestTree#00000", "DiagnosticableTreeNode")
+            .style(root)
+            .with_properties(vec![
+                marker(),
+                message(&long_message),
+                marker(),
+                Node::property(&Property::new("", Some(fixed_message.clone())).allow_wrap(false)),
+                marker(),
+                message(&format!("{long_label}:\n  {long_url}")),
+                message(&format!("{long_label}:\n  {short_url}")),
+                message(&format!("Click on the following url:\n  {long_url}")),
+                message(&format!("Click on the following url\n  {short_url}")),
+                marker(),
+                field("multi-line value", matrix),
+                marker(),
+                field(&long_label, &long_message),
+                marker(),
+                field(&long_label, matrix),
+                marker(),
+                Node::property(
+                    &Property::message_property(
+                        "diagnosis",
+                        "insufficient data to draw conclusion (less than five repaints)",
+                    )
+                    .style(style),
+                ),
+            ]);
+        assert_eq!(
+            tree.to_string_deep_with_widths(DiagnosticLevel::Debug, 40, 40),
+            expected,
+            "{style:?}"
+        );
+    }
+}
+
+#[test]
+fn wrap_budget_counts_utf16_columns_and_preserves_indivisible_text() {
+    use incular_core::DiagnosticsTreeStyle as Style;
+    let tree = Node::new("root", "Tree")
+        .style(Style::Flat)
+        .with_properties(vec![
+            Node::property(&Property::message("👋👋 aa bb").style(Style::Flat)),
+            Node::property(&Property::message("  unbreakable-url\nplain text").style(Style::Flat)),
+            Node::property(
+                &Property::message("many words stay together")
+                    .style(Style::Flat)
+                    .allow_wrap(false),
+            ),
+        ]);
+    assert_eq!(
+        tree.to_string_deep_with_widths(DiagnosticLevel::Info, 7, 7),
+        "root:\n👋👋 aa\nbb\n  unbreakable-url\nplain\ntext\nmany words stay together\n"
     );
 }

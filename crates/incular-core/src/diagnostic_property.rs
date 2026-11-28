@@ -54,6 +54,10 @@ pub enum DiagnosticsTreeStyle {
     Whitespace,
     /// Render a block without adding indentation.
     Flat,
+    /// Frame an error report with a prominent heading and footer.
+    Error,
+    /// Place a diagnostic label above its value within an error report.
+    ErrorProperty,
     /// Keep the named diagnostic and its value on one line.
     SingleLine,
 }
@@ -65,6 +69,8 @@ impl DiagnosticsTreeStyle {
             Self::Sparse => "sparse",
             Self::Whitespace => "whitespace",
             Self::Flat => "flat",
+            Self::Error => "error",
+            Self::ErrorProperty => "errorProperty",
             Self::SingleLine => "singleLine",
         }
     }
@@ -434,6 +440,8 @@ pub struct DiagnosticsProperty<T> {
     show_separator: bool,
     level: DiagnosticLevel,
     missing_if_null: bool,
+    allow_wrap: bool,
+    allow_name_wrap: bool,
     style: DiagnosticsTreeStyle,
     flag_labels: [Option<String>; 2],
     presentation: Presentation<T>,
@@ -457,6 +465,8 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             show_separator: true,
             level: DiagnosticLevel::Info,
             missing_if_null: false,
+            allow_wrap: true,
+            allow_name_wrap: true,
             style: DiagnosticsTreeStyle::Sparse,
             flag_labels: [None, None],
             presentation: Presentation::Plain,
@@ -676,6 +686,20 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         None
     }
 
+    /// Controls word wrapping of the description when rendering a tree.
+    #[must_use]
+    pub fn allow_wrap(mut self, allow: bool) -> Self {
+        self.allow_wrap = allow;
+        self
+    }
+
+    /// Controls word wrapping of the label independently of the description.
+    #[must_use]
+    pub fn allow_name_wrap(mut self, allow: bool) -> Self {
+        self.allow_name_wrap = allow;
+        self
+    }
+
     /// A display description without the property-name prefix.
     #[must_use]
     pub fn to_description(&self) -> String {
@@ -792,6 +816,12 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         }
         if !self.show_separator {
             output["showSeparator"] = json!(false);
+        }
+        if !self.allow_wrap {
+            output["allowWrap"] = json!(false);
+        }
+        if !self.allow_name_wrap {
+            output["allowNameWrap"] = json!(false);
         }
         if self.style != DiagnosticsTreeStyle::Sparse {
             output["style"] = json!(self.style.name());
