@@ -250,9 +250,10 @@ impl SliverGridDelegate {
     /// available extent and a maximum tile extent.
     #[must_use]
     pub fn max_cross_axis_extent(max_cross_axis_extent: f32) -> Self {
+        debug_assert!(max_cross_axis_extent > 0., "maxCrossAxisExtent > 0");
         Self::MaxCrossAxisExtent {
-            max_cross_axis_extent: if max_cross_axis_extent.is_finite() {
-                max_cross_axis_extent.max(1.)
+            max_cross_axis_extent: if max_cross_axis_extent > 0. {
+                max_cross_axis_extent
             } else {
                 1.
             },
@@ -311,8 +312,14 @@ impl SliverGridDelegate {
 
     #[must_use]
     pub fn main_axis_extent(mut self, extent: f32) -> Self {
+        self.set_main_axis_extent(extent);
+        self
+    }
+
+    fn set_main_axis_extent(&mut self, extent: f32) {
+        debug_assert!(extent >= 0., "mainAxisExtent == null || mainAxisExtent >= 0");
         let extent = extent.is_finite().then_some(extent.max(0.));
-        match &mut self {
+        match self {
             Self::FixedCrossAxisCount {
                 main_axis_extent, ..
             }
@@ -320,7 +327,6 @@ impl SliverGridDelegate {
                 main_axis_extent, ..
             } => *main_axis_extent = extent,
         }
-        self
     }
 
     pub(super) fn cross_axis_count(&self, available_extent: f32) -> usize {
@@ -1079,6 +1085,18 @@ impl GridView {
             SliverGridDelegate::fixed_cross_axis_count(cross_axis_count),
             children,
         )
+    }
+
+    /// Overrides the row extent (or column extent for horizontal grids)
+    /// independently of the aspect ratio, including on `count` and `extent`.
+    #[must_use]
+    pub fn main_axis_extent(mut self, extent: f32) -> Self {
+        let delegate = match self.strategy.as_mut() {
+            Some(GridViewStrategy::Count { delegate, .. } | GridViewStrategy::Builder { delegate, .. }) => delegate,
+            None => &mut self.grid_delegate,
+        };
+        delegate.set_main_axis_extent(extent);
+        self
     }
 
     /// Creates a lazily virtualized grid with a row-major builder and a

@@ -3963,3 +3963,10 @@ packages/flutter/test/widgets/list_view_test.dart	890	ListView respects clipBeha
 packages/flutter/test/widgets/list_view_test.dart	925	ListView.builder respects clipBehavior	paired-match	upstream-list-grid-viewport-clips.md
 packages/flutter/test/widgets/list_view_test.dart	940	ListView.custom respects clipBehavior	paired-match	upstream-list-grid-viewport-clips.md
 packages/flutter/test/widgets/list_view_test.dart	957	ListView.separated respects clipBehavior	paired-match	upstream-list-grid-viewport-clips.md
+packages/flutter/test/widgets/grid_view_test.dart	505	GridView in unbounded context	paired-match	upstream-grid-extents.md
+packages/flutter/test/widgets/grid_view_test.dart	799	GridView.count respects mainAxisExtent	paired-match	upstream-grid-extents.md
+packages/flutter/test/widgets/grid_view_test.dart	823	GridView.extent respects mainAxisExtent	paired-match	upstream-grid-extents.md
+packages/flutter/test/widgets/grid_view_test.dart	847	SliverGridDelegateWithFixedCrossAxisCount mainAxisExtent works as expected	paired-match	upstream-grid-extents.md
+packages/flutter/test/widgets/grid_view_test.dart	875	SliverGridDelegateWithMaxCrossAxisExtent mainAxisExtent works as expected	paired-match	upstream-grid-extents.md
+packages/flutter/test/widgets/grid_view_test.dart	903	SliverGridDelegateWithMaxCrossAxisExtent throws assertion error when maxCrossAxisExtent is 0	paired-match	upstream-grid-extents.md
+packages/flutter/test/widgets/grid_view_test.dart	961	SliverGridDelegate mainAxisExtent add assert	paired-match	upstream-grid-extents.md
