@@ -105,7 +105,11 @@ impl std::hash::Hash for TextSelectionPoint {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         for coordinate in [self.point.x, self.point.y] {
             // Positive and negative zero compare equal as coordinates.
-            state.write_u32(if coordinate == 0. { 0 } else { coordinate.to_bits() });
+            state.write_u32(if coordinate == 0. {
+                0
+            } else {
+                coordinate.to_bits()
+            });
         }
         std::hash::Hash::hash(&self.direction, state);
     }
@@ -417,11 +421,14 @@ impl SelectionAreaController {
     }
 }
 
+type SelectedContentCombiner = dyn Fn(&[&str]) -> String;
+
 /// The concrete retained delegate used by the higher-level selection container widget.
 #[derive(Clone)]
 pub struct SelectionContainerDelegate {
     controller: SelectionAreaController,
     policy: SelectableChildPolicy,
+    combine_selected_content: Option<Rc<SelectedContentCombiner>>,
 }
 
 impl std::fmt::Debug for SelectionContainerDelegate {
@@ -430,13 +437,22 @@ impl std::fmt::Debug for SelectionContainerDelegate {
             .debug_struct("SelectionContainerDelegate")
             .field("controller", &self.controller)
             .field("policy", &self.policy)
+            .field(
+                "custom_selected_content",
+                &self.combine_selected_content.is_some(),
+            )
             .finish()
     }
 }
 
 impl PartialEq for SelectionContainerDelegate {
     fn eq(&self, other: &Self) -> bool {
-        self.policy == other.policy && self.controller == other.controller
+        self.policy == other.policy
+            && self.controller == other.controller
+            && crate::util::same_rc(
+                &self.combine_selected_content,
+                &other.combine_selected_content,
+            )
     }
 }
 
@@ -452,6 +468,7 @@ impl SelectionContainerDelegate {
         Self {
             controller: SelectionAreaController::new(),
             policy: SelectableChildPolicy::All,
+            combine_selected_content: None,
         }
     }
 
@@ -460,6 +477,7 @@ impl SelectionContainerDelegate {
         Self {
             controller,
             policy: SelectableChildPolicy::All,
+            combine_selected_content: None,
         }
     }
 
@@ -471,6 +489,7 @@ impl SelectionContainerDelegate {
         Self {
             controller,
             policy: SelectableChildPolicy::None,
+            combine_selected_content: None,
         }
     }
 
@@ -492,6 +511,22 @@ impl SelectionContainerDelegate {
             self.controller.clear_selection();
         }
         self
+    }
+
+    /// Produces the plain text exposed to the enclosing selection region and
+    /// clipboard. Each fragment is the selected part of one child, in
+    /// document order. This changes content only, not hit or selection ranges.
+    #[must_use]
+    pub fn combine_selected_content_with(
+        mut self,
+        combine: impl Fn(&[&str]) -> String + 'static,
+    ) -> Self {
+        self.combine_selected_content = Some(Rc::new(combine));
+        self
+    }
+
+    pub(crate) fn content_combiner(&self) -> Option<&SelectedContentCombiner> {
+        self.combine_selected_content.as_deref()
     }
 
     #[must_use]

@@ -90,3 +90,50 @@ fn even_an_empty_paragraph_has_the_root_fonts_alphabetic_baseline() {
         .unwrap();
     assert_eq!(painter.alphabetic_baseline(), Ok(75.));
 }
+
+#[test]
+fn point_hits_follow_the_visual_neighbor_at_a_bidi_join_and_the_glyph_midpoint() {
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_BIDI_HIT_FONT_PATH") else {
+        return;
+    };
+    let mut engine = TextEngine::new();
+    let font = "Flutter exact bidi hit testing";
+    assert!(engine.register_font_bytes_as(font, std::fs::read(path).unwrap()));
+    let points = [
+        -100., 0., 4., 5., 8., 10., 12., 28., 29.9, 30., 30.1, 32., 35., 38., 42., 58., 59.9, 60.,
+        60.1, 62., 65., 88., 90., 100.,
+    ];
+    for (text, direction, reference) in [
+        (
+            "ABCאבגDEF",
+            TextDirection::Ltr,
+            "0d 0d 0d 1u 1u 1d 1d 3u 3u 6u 6u 6u 5d 5d 5u 3d 3d 6d 6d 6d 7u 9u 9u 9u",
+        ),
+        (
+            "אבגABCדהו",
+            TextDirection::Rtl,
+            "9u 9u 9u 8d 8d 8u 8u 6d 6d 3d 3d 3d 4u 4u 4d 6u 6u 3u 3u 3u 2d 0d 0d 0d",
+        ),
+    ] {
+        let span = TextSpan::new(text).style(TextStyle::new().font_family(font).font_size(10.));
+        let mut painter = TextPainter::with_span(span, direction);
+        painter
+            .layout_with_engine(&mut engine, 0., f32::INFINITY)
+            .unwrap();
+        assert_eq!(painter.width(), Ok(90.));
+        let hits: Vec<_> = points
+            .iter()
+            .map(|&x| {
+                let pos = painter.position_for_offset(Offset::new(x, 5.)).unwrap();
+                let utf16 = text[..pos.offset].encode_utf16().count();
+                let affinity = if pos.affinity == TextAffinity::Upstream {
+                    "u"
+                } else {
+                    "d"
+                };
+                format!("{utf16}{affinity}")
+            })
+            .collect();
+        assert_eq!(hits.join(" "), reference, "{direction:?}: {points:?}");
+    }
+}

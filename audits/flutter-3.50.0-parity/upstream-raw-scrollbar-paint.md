@@ -78,3 +78,20 @@ waited until release for every track tap. It now drives the
 quick tap commits, the press exceeds slop, or the press ends.
 All 18 focused native scrollbar and editor-focus tests passed.
 The authored probe does not add an upstream registration.
+
+## Custom thumb shapes
+
+`RawScrollbar.shape` fills the existing outline, then paints that shape's
+own border. It neither changes track geometry nor invents a border. The
+thumb's fill follows the scrollbar opacity; a configured shape side does
+not have this opacity applied a second time. A uniform thumb radius and a
+custom shape are mutually exclusive in debug builds.
+
+Three pinned `widgets/scrollbar_test.dart` originals and 17 targeted native
+tests passed. The mounted display-list checks cover the beveled tips at
+exact coordinates (1713), a circle centered at (782, 180) with radius 18
+and a 2-pixel stroke centered on the radius-17 contour (1779), and an
+8-pixel rounded top-left corner without changing the other corners (1843).
+The circle test also removes the shape from a live overlay and verifies
+that its retained stroke and fill disappear. A transparent Flutter track
+does not require a transparent draw command on the native display list.

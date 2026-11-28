@@ -4,6 +4,7 @@ use super::*;
 
 mod behavior;
 mod dry_baseline;
+mod flex_measure;
 mod intrinsics;
 
 use super::rendering::{
@@ -1318,6 +1319,8 @@ impl WidgetTree {
             self.content_transform(id),
             previous.object.layers.has_box_semantic_clip(&kind),
         );
+        let notify_editor_layout = matches!(kind.as_ref(), RenderKind::TextField(_))
+            && previous.constraints.is_some();
         let (size, offsets) = self.layout_kind(id, &kind, children, constraints)?;
         for (&child, offset) in children.iter().zip(offsets) {
             // The parent computes this placement after the child has completed
@@ -1421,6 +1424,17 @@ impl WidgetTree {
         }
         if matches!(kind.as_ref(), RenderKind::FittedBox { .. }) {
             self.sync_fitted_clip(id);
+        }
+        // EditableText includes Flutter's SizeChangedLayoutNotifier around
+        // its retained render editor. Use the real committed size, and do
+        // not add a proxy render or change the field's focus identity.
+        if notify_editor_layout
+            && geometry_before.0 != size
+            && let Some(element) = self.element_for_render(id).and_then(|id| self.elements.get(id.0))
+        {
+            let context = BuildContext::new(&element.build_context);
+            crate::NotificationDispatcher::of(&context)
+                .dispatch(&crate::SizeChangedLayoutNotification);
         }
         self.diagnostics.layouts += 1;
         #[cfg(feature = "devtools")]

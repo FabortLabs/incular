@@ -82,3 +82,72 @@ fn focused_desktop_replacement_and_explicit_caret_delete_different_ranges() {
     key(&mut runtime, NamedKey::Delete, Code::Delete);
     assert!(controller.text().is_empty());
 }
+
+#[test]
+fn restoring_obscuring_while_focused_repaints_every_glyph_as_a_mask() {
+    use incular_platform::{PlatformEvent, TextInputState};
+    use incular_rendering::PaintCommand;
+    use incular_widgets::{FocusNode, Widget};
+
+    for platform in [TextShortcutPlatform::Ios, TextShortcutPlatform::Android] {
+        let controller = TextEditingController::new();
+        let focus = FocusNode::new();
+        let build = |obscure| {
+            Widget::from(
+                EditableText::new(controller.clone())
+                    .focus_node(focus.clone())
+                    .text_direction(TextDirection::Ltr)
+                    .obscure_text(obscure),
+            )
+        };
+        let mut runtime = Runtime::new(build(true)).unwrap();
+        runtime.set_text_shortcut_platform(platform);
+        let size = Constraints::tight(Size::new(240., 50.));
+        let paint = |runtime: &mut Runtime| {
+            runtime
+                .run_frame(size)
+                .unwrap()
+                .0
+                .commands()
+                .iter()
+                .filter_map(|command| match command {
+                    PaintCommand::GlyphRun { run, .. } => {
+                        Some(run.glyphs.iter().map(|glyph| glyph.id))
+                    }
+                    _ => None,
+                })
+                .flatten()
+                .collect::<Vec<_>>()
+        };
+        focus.request_focus();
+        let _ = paint(&mut runtime);
+        let field = runtime.focused_element().unwrap();
+        let mut masked = Vec::new();
+        for plain in ["H", "HH", "HHH"] {
+            let _ =
+                runtime.handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+                    text: plain.to_owned(),
+                    selection_start: plain.len(),
+                    selection_end: plain.len(),
+                    composing: None,
+                }));
+            assert_eq!(controller.text(), plain);
+            masked = paint(&mut runtime);
+            assert_eq!(masked.len(), plain.len());
+            assert!(masked.iter().all(|glyph| *glyph == masked[0]));
+        }
+        let root = runtime.tree().root().unwrap();
+        runtime.schedule_update(root, build(false)).unwrap();
+        let visible = paint(&mut runtime);
+        assert_eq!(visible.len(), 3);
+        assert!(visible.iter().all(|glyph| *glyph == visible[0]));
+        assert_ne!(visible, masked);
+
+        runtime.schedule_update(root, build(true)).unwrap();
+        assert_eq!(paint(&mut runtime), masked);
+        assert_eq!(runtime.focused_element(), Some(field));
+        assert!(focus.has_primary_focus());
+        assert_eq!(controller.text(), "HHH");
+        assert_eq!(controller.selection(), TextSelection::collapsed(3));
+    }
+}

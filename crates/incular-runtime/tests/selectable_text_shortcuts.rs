@@ -116,3 +116,64 @@ fn editing_keys_do_nothing() {
         assert_eq!(controller.selected_text(), "hello");
     }
 }
+
+#[test]
+fn selection_and_clipboard_follow_screen_order_when_positioned_siblings_are_reversed() {
+    use incular_config::TextDirection;
+    use incular_core::Offset;
+    use incular_platform::{MemoryClipboard, TransferFormat, TransferReadRequest};
+    use incular_widgets::{Positioned, Stack, Text};
+    use std::{cell::RefCell, rc::Rc};
+
+    for reverse in [false, true] {
+        let controller = SelectionAreaController::new();
+        let observed = Rc::new(RefCell::new(None));
+        controller.set_selection_changed_listener({
+            let observed = observed.clone();
+            move |content| *observed.borrow_mut() = content.map(|value| value.plain_text)
+        });
+        let label = |text, x, key| {
+            Positioned::new(
+                Widget::from(Text::new(text).text_direction(TextDirection::Ltr)).with_key(key),
+            )
+            .left(x)
+            .top(16.)
+        };
+        let mut labels = vec![label("Left", 20., 1_u64), label("Right", 140., 2_u64)];
+        if reverse {
+            labels.reverse();
+        }
+        let mut runtime = Runtime::new(Widget::selection_area(
+            controller.clone(),
+            Stack::new(labels).into(),
+        ))
+        .unwrap();
+        runtime.set_text_shortcut_platform(TextShortcutPlatform::Linux);
+        runtime.set_clipboard(Box::<MemoryClipboard>::default());
+        runtime
+            .run_frame(Constraints::tight(Size::new(240., 75.)))
+            .unwrap();
+        let left = runtime.tree().element_with_key(&1_u64.into()).unwrap();
+        let bounds = runtime.tree().element_bounds(left).unwrap();
+        let position = bounds.origin + Offset::new(0.5, bounds.size.height * 0.5);
+        for phase in [PointerPhase::Down, PointerPhase::Up] {
+            let _ = runtime.handle_input(InputEvent::Pointer { phase, position });
+        }
+        assert_eq!(runtime.focused_element(), Some(left));
+        press(&mut runtime, Code::KeyA, Modifiers::CONTROL);
+        press(&mut runtime, Code::KeyC, Modifiers::CONTROL);
+        let clipboard = runtime
+            .read_clipboard(TransferReadRequest::format(TransferFormat::PlainText))
+            .unwrap();
+        assert_eq!(
+            observed.borrow().as_deref(),
+            Some("LeftRight"),
+            "reverse={reverse}"
+        );
+        assert_eq!(controller.selected_text(), "LeftRight");
+        assert_eq!(
+            clipboard.plain_text_value().unwrap().as_deref(),
+            Some("LeftRight")
+        );
+    }
+}

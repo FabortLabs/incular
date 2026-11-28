@@ -215,6 +215,7 @@ impl WidgetTree {
     /// fires only for user edits that change the text (Flutter's contract);
     /// programmatic controller updates are stored as given.
     fn sync_edit_callbacks(&mut self, id: ElementId) {
+        let errors = self.text_editing_callback_errors.clone();
         let element = self.element_live_mut(id, "editing owner must remain live");
         if let Some(auxiliary) = element.auxiliary_state.as_mut() {
             auxiliary.edit_transform_subscription = None;
@@ -227,18 +228,33 @@ impl WidgetTree {
         let transform = spec.edit_transform.clone();
         let changed = spec.edit_changed.clone();
         if let Some(transform) = transform {
+            let errors = Rc::clone(&errors);
             element
                 .auxiliary_state
                 .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
                 .edit_transform_subscription =
-                Some(controller.register_edit_transform(move |old, next| transform(old, next)));
+                Some(controller.register_edit_transform(move |old, next| {
+                    super::text::call_editing_callback(
+                        TextEditingCallback::InputFormatter,
+                        || transform(old, next),
+                        &mut |error| errors.borrow_mut().push(error),
+                    )
+                    .unwrap_or_else(|| next.clone())
+                }));
         }
         if let Some(changed) = changed {
+            let errors = Rc::clone(&errors);
             element
                 .auxiliary_state
                 .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
                 .edit_changed_subscription =
-                Some(controller.observe_user_edits(move |value| changed(&value.text)));
+                Some(controller.observe_user_edits(move |value| {
+                    super::text::call_editing_callback(
+                        TextEditingCallback::Changed,
+                        || changed(&value.text),
+                        &mut |error| errors.borrow_mut().push(error),
+                    );
+                }));
         }
         self.sync_spell_check(id);
     }
@@ -828,6 +844,7 @@ impl WidgetTree {
         if let Some(insets) = insets {
             self.semantic_bounds_insets.insert(RenderObjectId(render), insets);
         }
+        self.update_content_sensitivity_registration(None, environment_override.as_ref());
         let id = ElementId(self.elements.insert(Element {
             parent,
             children: Vec::new(),
@@ -1117,6 +1134,18 @@ impl WidgetTree {
             old_notifier.unregister();
             new_notifier.register();
         }
+        if let (
+            WidgetKind::SelectionContainer { delegate: old, .. },
+            WidgetKind::SelectionContainer { delegate: new, .. },
+        ) = (old.kind(), widget.kind())
+            && old.controller() != new.controller()
+        {
+            self.static_selections.remove(&id);
+            self.selection_paint_order.remove(&id);
+            let old = old.controller();
+            old.set_registered_child_count(0);
+            old.clear_selection();
+        }
         let (old_override, old_boundary, render_context) = {
             let element = self.element_live(id, "retained element must remain live");
             (
@@ -1189,7 +1218,15 @@ impl WidgetTree {
             ) => before != after,
             _ => false,
         };
+        let scrollbar_configuration_changed = match (old.kind(), widget.kind()) {
+            (
+                WidgetKind::RawScrollbar { cursor: old, style: old_style, .. },
+                WidgetKind::RawScrollbar { cursor: new, style: new_style, .. },
+            ) => old != new || old_style != new_style,
+            _ => false,
+        };
         if before_mouse != after_mouse
+            || scrollbar_configuration_changed
             || decoration_hit_changed
             || painter_hit_changed
             || paragraph_pointer_changed
@@ -1312,6 +1349,10 @@ impl WidgetTree {
         {
             self.mark_render_semantics(parent, SemanticsDirty::Subtree);
         }
+        self.update_content_sensitivity_registration(
+            old_override.as_ref(),
+            new_override.as_ref(),
+        );
         {
             let element = self.element_live_mut(id, "retained element must remain live");
             element.widget = widget.clone();
@@ -2930,6 +2971,10 @@ impl WidgetTree {
                     let Some(mut element) = self.elements.remove(id.0) else {
                         continue;
                     };
+                    self.update_content_sensitivity_registration(
+                        element.environment_override.as_ref(),
+                        None,
+                    );
                     if let Some(layers) = element.scrolling_state.as_mut()
                         .and_then(|state| state.sliver_layer_scopes.take())
                     {
@@ -3002,17 +3047,21 @@ impl WidgetTree {
                         } => {
                             notifier.unregister();
                             self.static_selections.remove(&id);
+                            self.selection_paint_order.remove(&id);
                             let controller = delegate.controller();
                             controller.set_registered_child_count(0);
                             controller.clear_selection();
                         }
                         WidgetKind::SelectionArea { controller, .. } => {
                             self.static_selections.remove(&id);
+                            self.selection_paint_order.remove(&id);
                             controller.set_registered_child_count(0);
                             controller.clear_selection();
                         }
                         WidgetKind::SelectionContainer { delegate, .. } => {
+                            self.selection_registrations.remove(&id);
                             self.static_selections.remove(&id);
+                            self.selection_paint_order.remove(&id);
                             let controller = delegate.controller();
                             controller.set_registered_child_count(0);
                             controller.clear_selection();

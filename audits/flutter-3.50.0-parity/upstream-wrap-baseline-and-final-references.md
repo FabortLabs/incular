@@ -45,3 +45,22 @@ anti-alias modes attach their requested rectangle only while overflowing.
 Switching mode retains the same render object; replacing two children
 with one drops the stale clip. This verifies paint commands and their
 coverage modes, not a GPU anti-aliasing pixel comparison.
+
+## Exact font and dry baseline follow-up
+
+The original at :878 now matches exactly using the extracted pinned
+FlutterTest font: 100×100 text, first baseline at 75, and 100×200
+Baseline parent at target 175. The native checks also confirm dry
+queries do not lose a Wrap's baseline before layout. Both new
+native baseline assertions reproduced a missing baseline before
+the fix and are green afterwards.
+
+An authored probe separates a pinned Wrap bug from the ordinary
+case. For two runs (40px and 20px, gap 7), down direction agrees
+at 30 in both frameworks. In up direction, pinned Flutter reports
+actual baseline 15 and dry baseline 82, counting the 67px content
+height as free space. Querying with live constraints can trigger
+Flutter's dry-vs-actual cache assertion. Incular uses the real
+positioning for the dry query and reports 15 in both paths. The
+ordinary original is paired; this authored difference is not
+counted as parity.

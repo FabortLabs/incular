@@ -901,9 +901,16 @@ impl Widget {
     }
     #[must_use]
     pub fn selection_container(delegate: SelectionContainerDelegate, child: Self) -> Self {
+        Self::selection_container_in(delegate, None, child)
+    }
+    pub(crate) fn selection_container_in(
+        delegate: SelectionContainerDelegate,
+        registrar: Option<crate::SelectionRegistrar>,
+        child: Self,
+    ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
-            kind: WidgetKind::SelectionContainer { delegate, child },
+            kind: WidgetKind::SelectionContainer { delegate, registrar, child },
             semantics: None,
         })
     }
@@ -1483,6 +1490,8 @@ impl Widget {
     pub(crate) fn raw_scrollbar_with_style(
         controller: ScrollController,
         style: RawScrollbarStyle,
+        cursor: Option<crate::advanced_scrolling::ScrollbarCursor>,
+        shape: Option<crate::advanced_scrolling::raw_scrollbar::ScrollbarThumbShape>,
         child: impl Into<Self>,
     ) -> Self {
         let child = child.into();
@@ -1491,6 +1500,8 @@ impl Widget {
             kind: WidgetKind::RawScrollbar {
                 controller,
                 style,
+                cursor,
+                shape,
                 child,
             },
             semantics: None,
@@ -2025,6 +2036,10 @@ impl Widget {
         self
     }
 
+    pub(crate) fn excludes_semantics_subtree(&self) -> bool {
+        self.semantic_properties().hidden
+    }
+
     /// Excludes this widget and its implementation-detail subtree from semantics.
     #[must_use]
     pub fn exclude_semantics(mut self) -> Self {
@@ -2083,7 +2098,13 @@ impl RawScrollbar {
     /// Lowers this stateful scrollbar model into a retained widget overlay.
     #[must_use]
     pub fn into_widget(self, child: impl Into<Widget>) -> Widget {
-        Widget::raw_scrollbar_with_style(self.controller(), self.style(), child)
+        Widget::raw_scrollbar_with_style(
+            self.controller(),
+            self.style(),
+            self.cursor_resolver(),
+            self.thumb_shape(),
+            child,
+        )
     }
 
     /// Alias for [`Self::into_widget`] with Flutter-style wrapper wording.

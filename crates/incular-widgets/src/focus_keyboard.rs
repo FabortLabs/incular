@@ -16,6 +16,38 @@ pub use incular_gestures::{
 
 use crate::{Widget, WidgetKind};
 
+/// Suppresses an enclosing shortcut and consumes the key in WidgetsApp.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct DoNothingIntent;
+
+/// Suppresses an enclosing shortcut but hands the key to the native host.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct DoNothingAndStopPropagationIntent;
+
+/// A no-op that can shadow any command without changing focus or editing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DoNothingAction {
+    consumes_key: bool,
+}
+
+impl Default for DoNothingAction {
+    fn default() -> Self {
+        Self::new(true)
+    }
+}
+
+impl DoNothingAction {
+    #[must_use]
+    pub const fn new(consumes_key: bool) -> Self {
+        Self { consumes_key }
+    }
+
+    #[must_use]
+    pub fn bind<C: CommandId>(self, command: C) -> Action<C> {
+        Action::new(command, || {}).with_key_consumption(self.consumes_key)
+    }
+}
+
 /// A required action lookup found no mapping in any enclosing scope.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("no enclosing action maps command type {command_type}")]
@@ -766,6 +798,10 @@ impl From<FocusScope> for Widget {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ActivateIntent;
 
+/// Activates a button rather than a general focused control.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ButtonActivateIntent;
+
 type RequestFocusCallback = Rc<dyn Fn(&FocusNode)>;
 
 /// Requests focus for a specific node. The node identifies the command for
@@ -904,6 +940,52 @@ impl DirectionalFocusIntent {
     pub const fn ignore_text_fields(mut self, ignore: bool) -> Self {
         self.ignore_text_fields = ignore;
         self
+    }
+}
+
+/// Moves the caret by one character, or extends the current range by one.
+/// The direction is logical, not reversed by right-to-left text.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ExtendSelectionByCharacterIntent {
+    pub forward: bool,
+    pub collapse_selection: bool,
+}
+
+impl ExtendSelectionByCharacterIntent {
+    #[must_use]
+    pub const fn new(forward: bool, collapse_selection: bool) -> Self {
+        Self { forward, collapse_selection }
+    }
+}
+
+/// Built-in typed actions whose default implementation needs the runtime.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RuntimeKeyIntent {
+    DirectionalFocus(DirectionalFocusIntent),
+    ExtendSelectionByCharacter(ExtendSelectionByCharacterIntent),
+}
+
+/// A failure reported by a passive raw keyboard listener.
+pub struct RawKeyboardListenerError {
+    pub event: crate::RawKeyEvent,
+    pub payload: Box<dyn std::any::Any + Send + 'static>,
+}
+
+impl RawKeyboardListenerError {
+    #[doc(hidden)]
+    pub fn catch(event: &crate::RawKeyEvent, listener: impl FnOnce()) -> Option<Self> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(listener))
+            .err()
+            .map(|payload| Self { event: event.clone(), payload })
+    }
+
+    /// Returns the panic's text when it was raised with a string payload.
+    #[must_use]
+    pub fn message(&self) -> &str {
+        self.payload.downcast_ref::<&str>().copied()
+            .or_else(|| self.payload.downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("non-string panic payload")
     }
 }
 

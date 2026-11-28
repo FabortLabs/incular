@@ -30,15 +30,21 @@ impl FocusKeyHandlers {
         }
     }
 
-    pub(crate) fn dispatch(&self, event: &KeyboardEvent) -> KeyEventResult {
+    pub(crate) fn dispatch(
+        &self,
+        prefixes: &[KeyboardEvent],
+        event: &KeyboardEvent,
+    ) -> KeyEventResult {
         let handlers = self.handlers.borrow().clone();
         let mut handled = false;
         let mut skip = false;
         for handler in handlers.iter() {
-            match handler(event) {
-                KeyEventResult::Handled => handled = true,
-                KeyEventResult::SkipRemainingHandlers => skip = true,
-                KeyEventResult::Ignored => {}
+            for event in prefixes.iter().chain(std::iter::once(event)) {
+                match handler(event) {
+                    KeyEventResult::Handled => handled = true,
+                    KeyEventResult::SkipRemainingHandlers => skip = true,
+                    KeyEventResult::Ignored => {}
+                }
             }
         }
         if handled {

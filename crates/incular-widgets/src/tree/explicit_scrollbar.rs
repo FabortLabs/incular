@@ -61,6 +61,59 @@ impl WidgetTree {
         found
     }
 
+    /// Resolves an overlay cursor for a physical mouse. The runtime
+    /// supplies whether this mouse owns the existing primary thumb press.
+    #[doc(hidden)]
+    pub fn explicit_scrollbar_mouse_cursor(
+        &self,
+        point: Offset,
+        hit: &PointerHitTest,
+        owns_press: bool,
+    ) -> Option<crate::MouseCursor> {
+        if self.tracked.raw_scrollbars.is_empty() {
+            return None;
+        }
+        let hovered = self.explicit_scrollbar_on_path(point, hit, |bar, size, local| {
+            bar.over_scrollbar(size, local, PointerDeviceKind::Mouse, true).then_some(())
+        }).map(|(render, _, ())| render);
+        let candidate = hovered.or_else(|| {
+            self.explicit_scrollbar_on_path(point, hit, |_, _, _| Some(()))
+                .map(|(render, _, ())| render)
+        });
+        let dragged = if let Some(ExplicitScrollbarPress::Thumb(render)) = self.input.explicit_scrollbar_press
+            && (owns_press || candidate == Some(render))
+            && let Some(node) = self.renders.get(render.0)
+            && !node.parked
+            && node.raw_scrollbar_state().and_then(|state| state.scrollbar.as_ref())
+                .is_some_and(|bar| bar.captures_cursor(node.size))
+        {
+            Some(render)
+        } else {
+            None
+        };
+        let render = dragged.or(candidate)?;
+        let element = self.elements.get(self.element_for_render(render)?.0)?;
+        let WidgetKind::RawScrollbar { cursor: Some(cursor), .. } = element.widget.kind() else {
+            return None;
+        };
+        let node = self.renders.get(render.0)?;
+        let bar = node.raw_scrollbar_state()?.scrollbar.as_ref()?;
+        let enabled = bar.style().interactive;
+        // Like a MouseRegion, a stationary pointer retains its last hover
+        // when only the thumb ceases to exist. New pointer movement will
+        // classify the updated hit area and release the stale hover.
+        let stationary_hover = enabled
+            && !bar.cursor_enabled(node.size)
+            && self.input.explicit_scrollbar_hover == Some(render);
+        let state = crate::ScrollbarCursorState {
+            hovered: hovered == Some(render) || stationary_hover,
+            dragged: dragged == Some(render),
+            disabled: !enabled,
+        };
+        let resolved = cursor.resolve(state);
+        resolved.filter(|_| !state.disabled && (state.hovered || state.dragged))
+    }
+
     fn explicit_scrollbar_mut(
         &mut self,
         render: RenderObjectId,
@@ -161,6 +214,7 @@ impl WidgetTree {
                     self.input.explicit_scrollbar_press = None;
                     match press {
                         ExplicitScrollbarPress::Thumb(render) => {
+                            self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
                             if let Some((scrollbar, _)) = self.explicit_scrollbar_mut(render) {
                                 scrollbar.pointer_up();
                             }
@@ -200,6 +254,7 @@ impl WidgetTree {
                             return false;
                         };
                         scrollbar.begin_thumb_drag(size, local);
+                        self.input.hover_hit_revision = self.input.hover_hit_revision.wrapping_add(1);
                         ExplicitScrollbarPress::Thumb(render)
                     }
                     RawScrollbarPart::Track => {
@@ -242,14 +297,17 @@ impl WidgetTree {
             bar.over_scrollbar(size, local, kind, true).then_some(())
         });
         let next = found.map(|(id, _, ())| id);
-        if self.input.explicit_scrollbar_hover == next {
-            return next.is_some();
-        }
-        let changed = self.exit_explicit_scrollbar_hover();
-        if let Some((render, local, ())) = found
-            && let Some((scrollbar, size)) = self.explicit_scrollbar_mut(render)
+        let changed = if self.input.explicit_scrollbar_hover == next {
+            false
+        } else {
+            self.exit_explicit_scrollbar_hover()
+        };
+        if let Some(render) = next
+            && let Some((scrollbar, _)) = self.explicit_scrollbar_mut(render)
         {
-            scrollbar.pointer_hover(size, local, kind);
+            // Scroll end can arm a new timer while the mouse stays inside
+            // this scrollbar. Every real hover sample must cancel it.
+            scrollbar.hold_hover();
             self.input.explicit_scrollbar_hover = Some(render);
             return true;
         }

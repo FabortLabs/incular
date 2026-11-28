@@ -136,7 +136,7 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             ));
             summarize_child(&mut out, child);
         }
-        WidgetKind::SelectionContainer { delegate, child } => {
+        WidgetKind::SelectionContainer { delegate, child, .. } => {
             out.push(prop("enabled", DebugValue::Bool(delegate.is_enabled())));
             out.push(prop(
                 "selectionRevision",

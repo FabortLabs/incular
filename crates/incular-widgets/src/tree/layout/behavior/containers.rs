@@ -37,154 +37,36 @@ impl WidgetTree {
                 }
             }
             RenderKind::Flex { flex, .. } => {
-                let cross_max = match flex.direction {
-                    Axis::Horizontal => constraints.max_height(),
-                    Axis::Vertical => constraints.max_width(),
+                use super::super::flex_measure::{
+                    flex_axis_limits, invalid_unbounded_flex, measure_flex_children, positioned_flex_baseline,
                 };
-                let main_max = match flex.direction {
-                    Axis::Horizontal => constraints.max_width(),
-                    Axis::Vertical => constraints.max_height(),
-                };
-                // Flutter's fillCrossAxis: stretch tightens the cross axis of
-                // every child to the line's cross maximum (flex.dart:883, 913).
-                let fill_cross = matches!(flex.cross_axis_alignment, CrossAxisAlignment::Stretch)
-                    && cross_max.is_finite();
-                let non_flex = match flex.direction {
-                    Axis::Horizontal => Constraints::new(
-                        0.,
-                        f32::INFINITY,
-                        if fill_cross { cross_max } else { 0. },
-                        cross_max,
-                    ),
-                    Axis::Vertical => Constraints::new(
-                        if fill_cross { cross_max } else { 0. },
-                        cross_max,
-                        0.,
-                        f32::INFINITY,
-                    ),
-                };
+                let (main_max, _) = flex_axis_limits(flex.direction, constraints);
                 let flex_meta = children
                     .iter()
-                    .map(|child| {
-                        let render_node =
-                            self.render_live(child, "retained render must remain live");
-                        match render_node.object.kind() {
-                            RenderKind::Flexible { flex: f, fit } => (*f, *fit),
-                            _ => (0, FlexFit::Loose),
-                        }
-                    })
+                    .map(|&child| self.flex_child_metadata(child))
                     .collect::<Vec<_>>();
 
-                // Flutter's RenderFlex rejects these configurations in
-                // debug builds, before laying out any child. Release keeps
-                // the intrinsic fallback, as Flutter's layout does.
-                if cfg!(debug_assertions)
-                    && !main_max.is_finite()
-                    && let Some(child_index) = flex_meta.iter().position(|(factor, fit)| {
-                        *factor > 0
-                            && (flex.main_axis_size == MainAxisSize::Max || *fit == FlexFit::Tight)
-                    })
-                {
+                // Flutter rejects these configurations in debug, before
+                // laying out any child; release uses the intrinsic fallback.
+                if let Some(child_index) = invalid_unbounded_flex(&flex, main_max, &flex_meta) {
                     return Err(TreeError::UnboundedFlex {
-                        dimension: match flex.direction {
-                            Axis::Horizontal => "width",
-                            Axis::Vertical => "height",
-                        },
+                        dimension: if flex.direction.is_horizontal() { "width" } else { "height" },
                         render: id,
                         child_index,
                     });
                 }
 
-                let mut flex_children = Vec::with_capacity(children.len());
-                let spacing =
-                    f64::from(flex.spacing.max(0.0)) * children.len().saturating_sub(1) as f64;
-                let mut occupied_non_flex = spacing;
-                for (child, (f, _)) in children.iter().zip(&flex_meta) {
-                    if *f == 0 || !main_max.is_finite() {
-                        self.layout_render(*child, non_flex)?;
-                        let render = self.render_live(child, "retained render must remain live");
-                        let size = render.size;
-                        // Baselines ride into the algorithm so
-                        // cross-axis baseline alignment resolves instead
-                        // of silently behaving as start.
-                        let mut flex_child = incular_layout::FlexChild::new(size);
-                        if let Some(baseline) = render.baseline {
-                            flex_child = flex_child.with_baseline(baseline);
-                        }
-                        occupied_non_flex += f64::from(flex.direction.main_extent(size));
-                        flex_children.push(flex_child);
-                    } else {
-                        flex_children.push(incular_layout::FlexChild::new(Size::ZERO));
-                    }
-                }
-
-                let total_flex: u64 = flex_meta.iter().map(|(f, _)| u64::from(*f)).sum();
-                if main_max.is_finite() && total_flex > 0 {
-                    let space_per_flex =
-                        (f64::from(main_max) - occupied_non_flex).max(0.0) / total_flex as f64;
-                    for (i, (child, (f, fit))) in children.iter().zip(&flex_meta).enumerate() {
-                        if *f > 0 {
-                            let allocation = (space_per_flex * f64::from(*f)) as f32;
-                            let child_constraints = match flex.direction {
-                                Axis::Horizontal => Constraints::new(
-                                    if *fit == FlexFit::Tight {
-                                        allocation
-                                    } else {
-                                        0.0
-                                    },
-                                    allocation,
-                                    if fill_cross { cross_max } else { 0.0 },
-                                    cross_max,
-                                ),
-                                Axis::Vertical => Constraints::new(
-                                    if fill_cross { cross_max } else { 0.0 },
-                                    cross_max,
-                                    if *fit == FlexFit::Tight {
-                                        allocation
-                                    } else {
-                                        0.0
-                                    },
-                                    allocation,
-                                ),
-                            };
-                            self.layout_render(*child, child_constraints)?;
-                            let render =
-                                self.render_live(child, "retained render must remain live");
-                            let size = render.size;
-                            // Placement uses measured sizes, without allocating the same
-                            // flexible shares a second time from rounded inputs.
-                            let mut flex_child = incular_layout::FlexChild::new(size);
-                            if let Some(baseline) = render.baseline {
-                                flex_child = flex_child.with_baseline(baseline);
-                            }
-                            flex_children[i] = flex_child;
-                        }
-                    }
-                }
-
-                let result = incular_layout::layout_flex(constraints, &flex_children, flex);
-                let mut baseline: Option<f32> = None;
-                let offsets = result
-                    .children
-                    .into_iter()
-                    .map(|child| {
-                        if let Some(local) = child.baseline {
-                            let positioned = child.offset.y + local;
-                            // Flutter uses the highest real baseline in a row
-                            // and the first in logical child order in a column.
-                            baseline = Some(match baseline {
-                                None => positioned,
-                                Some(current) if flex.direction == Axis::Horizontal => {
-                                    current.min(positioned)
-                                }
-                                Some(current) => current,
-                            });
-                        }
-                        child.offset
-                    })
-                    .collect();
-                self.render_live_mut(id, "flex render must remain live")
-                    .baseline = baseline;
+                let (measured, occupied_non_flex) =
+                    measure_flex_children(constraints, &flex, &flex_meta, |index, bounds| {
+                        let child = children[index];
+                        self.layout_render(child, bounds)?;
+                        let render = self.render_live(child, "flex child must remain live");
+                        Ok::<_, TreeError>((render.size, render.baseline))
+                    })?;
+                let result = incular_layout::layout_flex(constraints, &measured, flex);
+                let baseline = positioned_flex_baseline(flex.direction, &result.children);
+                let offsets = result.children.into_iter().map(|child| child.offset).collect();
+                self.render_live_mut(id, "flex render must remain live").baseline = baseline;
                 // Only unbounded non-flex children and spacing can exceed the
                 // budget. Re-summing independently rounded flexible shares
                 // can otherwise report overflow for children that fit.

@@ -345,3 +345,46 @@ identical next frame without reopening the client or emitting new
 commands. A programmatically focused editor inside a zero-size
 FittedBox still sends finite composing geometry. All 16 focused
 native runtime and platform cases passed.
+
+## Composition-only frames and late metrics
+
+Pinned `widgets/editable_text_test.dart:17235,17259` both passed.
+The mounted native editor disables its cursor and tickers and is isolated
+behind a repaint boundary. Moving its parent composition to x = 42
+publishes exactly one size/transform update for the same client after
+the very next frame. No editor pulse or extra frame supplies the update.
+
+A second native test removes a focused editor, confirms the native client
+was cleared, and then delivers both window metrics and a larger keyboard
+inset. The next frame has no focus, no reopened input connection, and no
+wire update for the old client. All five focused native geometry tests
+passed.
+
+## Partial grapheme selections
+
+Pinned `widgets/editable_text_test.dart:17194` accepts a selection from
+UTF-16 offsets 0 to 1 inside the first surrogate pair of the family emoji
+and paints without an exception. Incular's whole-editing-state transport
+rejects that broken scalar boundary with a typed error and does not mutate
+the mounted editor. Moving the endpoint to 2, still strictly inside the
+same extended grapheme but at a scalar boundary, does accept the edit,
+retains the noncollapsed selection, and paints the emoji without crashing.
+This is a partial comparison, not full UTF-16 editing-state equivalence.
+All 17 focused native whole-editing-state tests passed.
+
+## A retained editor covered by another route
+
+The original at `widgets/editable_text_test.dart:2165` is explicitly
+skipped by Flutter, so it is not counted as paired. An authored pinned
+probe removes the Material scaffolding but keeps the mounted editor,
+host connection close, and actual navigator push. In this fixture the
+pinned Flutter editor still returns true to the host's refocus request
+while another route covers it.
+
+The native mounted Navigator/RouteOutlet test keeps the same editor
+element while it is covered and checks that the host's refocus request
+is refused without sending new keyboard commands. Popping the cover
+does not invent a focus request. The next real host request refocuses
+that same editor, restores its text, and creates a fresh connection.
+The authored Flutter observation and all six focused native route tests
+passed. The native guard is kept rather than copying a skipped behavior.

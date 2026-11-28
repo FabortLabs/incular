@@ -5,7 +5,8 @@
 
 use super::*;
 use crate::text_shortcuts::{TextIntent, TextShortcutPlatform};
-use incular_core::SECONDARY_POINTER_BUTTON;
+use incular_config::Axis;
+use incular_core::{DragStartBehavior, SECONDARY_POINTER_BUTTON};
 use incular_platform::{TextSelectionAction, TextSelectionActionRequest};
 use incular_text::{SelectionChangedCause, TextAffinity, is_layout_whitespace, word_boundary_at};
 use incular_widgets::internal::{
@@ -164,7 +165,7 @@ impl Runtime {
         if let Some(menu) = self.tree.text_field_context_menu(field) {
             if show {
                 let items = self.text_field_context_menu_items(field);
-                menu.show(TextSelectionToolbarAnchors::at(press.position), items);
+                menu.show_editable(TextSelectionToolbarAnchors::at(press.position), items);
             } else {
                 menu.hide();
             }
@@ -457,6 +458,21 @@ impl Runtime {
             .unwrap_or_default()
     }
 
+    /// Builds just the buttons explicitly selected by the mounted editor's
+    /// legacy `ToolbarOptions`, without opening a toolbar or moving focus.
+    /// Unset or empty options return `None`, allowing an adaptive fallback;
+    /// nonempty options whose actions are unavailable return an empty list.
+    pub fn editable_button_items_for_toolbar_options(
+        &mut self,
+        field: ElementId,
+    ) -> Option<Vec<ContextMenuButtonItem>> {
+        let (_, options) = self.tree.text_field_toolbar_policy(field)?;
+        if options? == incular_widgets::ToolbarOptions::EMPTY {
+            return None;
+        }
+        Some(self.text_field_context_menu_items(field))
+    }
+
     fn text_field_context_menu_items(&mut self, field: ElementId) -> Vec<ContextMenuButtonItem> {
         let dispatcher = self.dispatcher();
         self.text_field_context_menu_button_types(field)
@@ -661,10 +677,37 @@ impl Runtime {
         menu.show_spell_check(anchors, buttons, span)
     }
 
+    /// Shows or moves a configured editor magnifier at a point in the view.
+    /// This is independent of handle visibility and does not change focus.
+    pub fn show_editable_magnifier(&mut self, field: ElementId, position: Offset) -> bool {
+        if !self.tree.text_field_has_magnifier(field) {
+            return false;
+        }
+        self.hide_text_field_toolbar_only(field);
+        let changed = self.tree.update_text_field_magnifier(field, position, position);
+        self.frame_requested |= changed;
+        changed
+    }
+
+    /// Dismisses the editor magnifier without changing selection or focus.
+    pub fn hide_editable_magnifier(&mut self, field: ElementId) -> bool {
+        let changed = self.tree.hide_text_field_magnifier(field);
+        self.frame_requested |= changed;
+        changed
+    }
+
+    fn should_magnify_long_press(&self, field: ElementId, touch: bool) -> bool {
+        touch && self.focused == Some(field) && matches!(
+            self.text_shortcut_platform,
+            TextShortcutPlatform::Android | TextShortcutPlatform::Ios
+        )
+    }
+
     /// Closes the field's touch toolbar and selection handles, as Flutter's
     /// keyboard edits do through `hideToolbar`, and a mouse press does.
     pub(super) fn hide_text_field_overlays(&mut self, field: ElementId) {
         self.hide_text_field_handles(field);
+        self.frame_requested |= self.tree.hide_text_field_magnifier(field);
         if let Some(menu) = self.tree.text_field_toolbar_state(field)
             && menu.hide()
         {
@@ -1501,6 +1544,10 @@ impl Runtime {
                     self.text_field_select_word_at(field, press.down_position, now);
                 }
                 self.report_editor_selection_delta(field, previous, SelectionChangedCause::LongPress);
+                if self.should_magnify_long_press(field, press.touch) {
+                    self.show_editable_magnifier(field, press.down_position);
+                }
+
             }
             LongPressTarget::Label(label) => {
                 if self.captured_selectable_text != Some(label) {
@@ -1562,6 +1609,10 @@ impl Runtime {
                     );
                 }
                 self.report_editor_selection_delta(field, previous, SelectionChangedCause::LongPress);
+                if self.should_magnify_long_press(field, press.touch) {
+                    self.show_editable_magnifier(field, position);
+                }
+
             }
             LongPressTarget::Label(label) => {
                 if let Some(anchor) = press.anchor_word
@@ -1681,7 +1732,7 @@ impl Runtime {
             return false;
         };
         let anchors = self.text_field_menu_anchors(field, snapshot.caret_rect.origin);
-        let shown = menu.show(anchors, self.text_field_context_menu_items(field));
+        let shown = menu.show_editable(anchors, self.text_field_context_menu_items(field));
         self.frame_requested |= shown;
         shown
     }
@@ -1692,7 +1743,7 @@ impl Runtime {
         if let Some(menu) = self.tree.text_field_context_menu(field) {
             let items = self.text_field_context_menu_items(field);
             let anchors = self.text_field_menu_anchors(field, position);
-            menu.show(anchors, items);
+            menu.show_editable(anchors, items);
         }
     }
 
@@ -1729,6 +1780,7 @@ impl Runtime {
         }
         match press.target {
             LongPressTarget::Field(field) => {
+                self.hide_editable_magnifier(field);
                 if !press.touch {
                     return;
                 }
@@ -1743,6 +1795,139 @@ impl Runtime {
             }
         }
         self.frame_requested = true;
+    }
+    pub(super) fn cancel_text_long_press(&mut self) {
+        if let Some(press) = self.text_long_press.take()
+            && press.started
+            && let LongPressTarget::Field(field) = press.target
+        {
+            self.hide_editable_magnifier(field);
+        }
+    }
+
+}
+
+/// A direct finger drag in an editor's private viewport.
+#[derive(Clone, Copy)]
+pub(crate) struct EditableScrollDrag {
+    field: ElementId,
+    axis: Axis,
+    down: Offset,
+    last: Offset,
+    started: bool,
+    remember_toolbar: bool,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct EditableToolbarRestore {
+    field: ElementId,
+    revisions: (u64, u64),
+    after_drag: bool,
+}
+
+impl Runtime {
+    pub(super) fn begin_editable_scroll_drag(
+        &mut self,
+        field: ElementId,
+        position: Offset,
+        toolbar_was_visible: bool,
+    ) {
+        let Some(axis) = self.tree.editable_drag_scroll_axis(field) else {
+            return;
+        };
+        // Flutter's default iOS single-line physics permits implicit caret
+        // reveals but prevents an ordinary finger drag from scrolling.
+        if axis.is_horizontal() && self.text_shortcut_platform == TextShortcutPlatform::Ios {
+            return;
+        }
+        self.editable_scroll_drag = Some(EditableScrollDrag {
+            field,
+            axis,
+            down: position,
+            last: position,
+            started: false,
+            remember_toolbar: toolbar_was_visible,
+        });
+    }
+
+    pub(super) fn move_editable_scroll_drag(&mut self, position: Offset) -> bool {
+        let Some(mut drag) = self.editable_scroll_drag.take() else {
+            return false;
+        };
+        if !drag.started {
+            let delta = position - drag.down;
+            let (main, cross) = if drag.axis.is_vertical() {
+                (delta.y.abs(), delta.x.abs())
+            } else {
+                (delta.x.abs(), delta.y.abs())
+            };
+            if self.text_long_press.is_some_and(|press| press.started)
+                || (cross >= main && cross > TOUCH_SLOP)
+            {
+                return false;
+            }
+            if main <= TOUCH_SLOP || main <= cross {
+                self.editable_scroll_drag = Some(drag);
+                return false;
+            }
+            drag.started = true;
+            if self.tree.editable_drag_start_behavior(drag.field) == Some(DragStartBehavior::Start) {
+                drag.last = position;
+            }
+            self.frame_requested = true;
+            self.cancel_pending_mobile_text_touch();
+            self.captured_text_field = None;
+            self.text_taps = None;
+            self.cancel_text_long_press();
+            if drag.remember_toolbar && let Some(controller) = self.tree.text_controller(drag.field) {
+                self.editable_toolbar_restore = Some(EditableToolbarRestore {
+                    field: drag.field,
+                    revisions: controller.revisions(),
+                    after_drag: false,
+                });
+            }
+            self.hide_text_field_toolbar_only(drag.field);
+        }
+        self.frame_requested |= self.tree.editable_drag_scroll(drag.field, drag.axis, drag.last, position);
+        drag.last = position;
+        self.editable_scroll_drag = Some(drag);
+        true
+    }
+
+    pub(super) fn editable_scroll_drag_active(&self, field: ElementId) -> bool {
+        self.editable_scroll_drag.is_some_and(|drag| drag.field == field && drag.started)
+    }
+
+    pub(super) fn finish_editable_scroll_drag(&mut self) -> bool {
+        let Some(drag) = self.editable_scroll_drag.take().filter(|drag| drag.started) else {
+            return false;
+        };
+        if let Some(restore) = self.editable_toolbar_restore.as_mut()
+            && drag.field == restore.field
+        {
+            restore.after_drag = true;
+        }
+        self.frame_requested = true;
+        true
+    }
+
+    pub(super) fn restore_editable_toolbar_after_scroll(&mut self) -> bool {
+        let Some(restore) = self.editable_toolbar_restore else {
+            return false;
+        };
+        let current = self.tree.text_controller(restore.field).map(|controller| controller.revisions());
+        if self.focused != Some(restore.field) || current != Some(restore.revisions) {
+            self.editable_toolbar_restore = None;
+            return false;
+        }
+        if !restore.after_drag || self.editable_scroll_drag.is_some_and(|drag| drag.started) {
+            return false;
+        }
+        if self.tree.editable_toolbar_selection_is_visible(restore.field) {
+            self.editable_toolbar_restore = None;
+            return self.show_flutter_editor_toolbar();
+        }
+        false
     }
 }
 
@@ -1806,8 +1991,8 @@ impl Runtime {
         kind: PointerDeviceKind,
     ) -> Option<ElementId> {
         let (field, handle) = self.text_handle_under(position, kind)?;
-        let handles = self.tree.text_field_selection_handles(field)?.handles()?;
-        let geometry = handles.endpoint(handle)?;
+        let handles_state = self.tree.text_field_selection_handles(field)?;
+        let geometry = handles_state.handles()?.endpoint(handle)?;
         // `_handleSelectionEndHandleDragStart`: aim at the centre of the line
         // the handle points to, not at the handle itself.
         let centre = geometry.anchor.y - geometry.line_height / 2.0;
@@ -1817,15 +2002,22 @@ impl Runtime {
             .map_or(TextSelection::collapsed(0), |controller| {
                 controller.selection()
             });
+        let on_knob = handles_state.knob_contains(handle, position);
+        // The padded handle region is drag-only: the drag can accept
+        // immediately when there is no competing tap on the visible knob.
+        let started = !on_knob && self.tree.text_field_has_magnifier(field);
+        if started {
+            self.start_text_handle_magnifier(field, position, centre);
+        }
         self.text_handle_drag = Some(TextHandleDrag {
             field,
             handle,
             down_position: position,
-            on_knob: geometry.rect().contains(position),
+            on_knob,
             drag_y: position.y,
             target: centre - position.y,
             start_selection,
-            started: false,
+            started,
         });
         Some(field)
     }
@@ -1843,19 +2035,40 @@ impl Runtime {
                 return;
             }
             drag.started = true;
+            if self.tree.editable_drag_start_behavior(drag.field) == Some(DragStartBehavior::Start) {
+                let center = drag.drag_y + drag.target;
+                drag.drag_y = position.y;
+                drag.target = center - position.y;
+            }
             // `_handleSelectionStartHandleDragStart` hides the toolbar while
             // the handle moves; `_handleAnyDragEnd` shows it again.
-            if let Some(menu) = self.tree.text_field_context_menu(drag.field) {
-                menu.hide();
-            }
+            self.start_text_handle_magnifier(drag.field, position, drag.drag_y + drag.target);
         }
         if let Some(next_y) = self.tree.editable_handle_drag_y(drag.field, position, drag.drag_y) {
             drag.drag_y = next_y;
             let target = Offset::new(position.x, drag.drag_y + drag.target);
             self.text_handle_select(&drag, target, self.input_now());
+            self.frame_requested |= self.tree.update_text_field_magnifier(drag.field, position, target);
         }
         self.text_handle_drag = Some(drag);
         self.frame_requested = true;
+    }
+
+    fn start_text_handle_magnifier(&mut self, field: ElementId, position: Offset, centre: f32) {
+        if let Some(menu) = self.tree.text_field_context_menu(field) {
+            self.frame_requested |= menu.hide();
+        }
+        self.frame_requested |= self.tree.update_text_field_magnifier(
+            field,
+            position,
+            Offset::new(position.x, centre),
+        );
+    }
+
+    pub(super) fn cancel_text_handle_drag(&mut self) {
+        if let Some(drag) = self.text_handle_drag.take() {
+            self.frame_requested |= self.tree.hide_text_field_magnifier(drag.field);
+        }
     }
 
     /// The selection update of `_handleSelectionEndHandleDragUpdate` and
@@ -1902,6 +2115,22 @@ impl Runtime {
         let previous = self.observed_editor_selection(drag.field);
         self.tree.text_field_select(drag.field, next, affinity, now);
         self.report_editor_selection_delta(drag.field, previous, SelectionChangedCause::Drag);
+        // On non-Apple platforms Flutter reveals whichever endpoint moved,
+        // checking the base first. The usual extent-following caret reveal
+        // would otherwise undo the scroll toward a moved leading handle.
+        if current.base != next.base
+            && !matches!(
+                self.text_shortcut_platform,
+                TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs
+            )
+            && controller.selection() == next
+            && self.tree.text_controller(drag.field).is_some_and(|mounted| mounted == controller)
+        {
+            self.frame_requested |= self.tree.text_field_bring_position_into_view(
+                drag.field, next.base, affinity,
+            );
+            self.preserve_selection_scroll(drag.field, &controller);
+        }
     }
 
     /// Ends a handle press. A tap on a collapsed handle toggles the touch
@@ -1911,6 +2140,7 @@ impl Runtime {
         let Some(drag) = self.text_handle_drag.take() else {
             return;
         };
+        let _ = self.tree.hide_text_field_magnifier(drag.field);
         self.frame_requested = true;
         if !drag.started {
             let delta = position - drag.down_position;
@@ -1918,7 +2148,11 @@ impl Runtime {
                 && drag.on_knob
                 && delta.x.hypot(delta.y) <= TOUCH_SLOP
             {
-                self.text_field_toggle_toolbar(drag.field, drag.down_position);
+                if !self.tree.dispatch_text_selection_handle_tap(drag.field, |error| {
+                    self.report_editing_callback_error(error);
+                }) {
+                    self.text_field_toggle_toolbar(drag.field, drag.down_position);
+                }
             }
             return;
         }

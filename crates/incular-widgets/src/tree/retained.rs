@@ -42,8 +42,10 @@ impl WidgetTree {
             #[cfg(debug_assertions)]
             debug_focus_boxes: None,
             unmounted: Vec::new(),
+            text_editing_callback_errors: Rc::new(RefCell::new(Vec::new())),
             autofill_registry: None,
             autofill_context_completions: Vec::new(),
+            content_sensitivity_host: SensitiveContentHost::new(),
             global_keys: super::global_keys::GlobalKeyRegistry::default(),
             departures: super::departing::Departures::default(),
             view_transitions: Vec::new(),
@@ -62,6 +64,8 @@ impl WidgetTree {
             input: InputState::default(),
             haptic_feedback_handler: None,
             semantics: SemanticsTree::new(),
+            #[cfg(debug_assertions)]
+            semantic_role_issues: Vec::new(),
             semantic_ids: FastHashMap::default(),
             semantic_point_order: FastHashMap::default(),
             semantic_bounds_insets: FastHashMap::default(),
@@ -79,6 +83,8 @@ impl WidgetTree {
             compositor_scratch: Vec::new(),
             lifted_scene: None,
             static_selections: FastHashMap::default(),
+            selection_paint_order: FastHashMap::default(),
+            selection_registrations: FastHashMap::default(),
             dependency_root,
             automatic_keep_alives,
             inherited_consumers: FastHashMap::default(),
@@ -175,23 +181,34 @@ impl WidgetTree {
             .collect()
     }
 
-    /// Returns the highest-priority capture policy contributed by all mounted
-    /// [`SensitiveContent`](crate::SensitiveContent) scopes. The calculation
-    /// intentionally counts registrations rather than using nearest-ancestor
-    /// lookup, matching the window-wide Flutter host policy.
+    /// Updates the window-wide capture policy at element mount, update, or
+    /// unmount. Reparenting a retained element adds no second request.
+    pub(super) fn update_content_sensitivity_registration(
+        &mut self,
+        before: Option<&InheritedScopeValue>,
+        after: Option<&InheritedScopeValue>,
+    ) {
+        let value = |scope: Option<&InheritedScopeValue>| {
+            scope.and_then(|value| value.value.downcast_ref::<ContentSensitivity>().copied())
+        };
+        let (before, after) = (value(before), value(after));
+        if before == after {
+            return;
+        }
+        if let Some(before) = before {
+            let existed = self.content_sensitivity_host.unregister(before);
+            debug_assert!(existed, "mounted sensitive policy must have a registration");
+        }
+        if let Some(after) = after {
+            self.content_sensitivity_host.register(after);
+        }
+    }
+
+    /// Highest-priority capture policy from all mounted sensitivity scopes.
+    /// This is a constant-time window lookup, not an arena scan on each frame.
     #[must_use]
     pub fn calculated_content_sensitivity(&self) -> Option<ContentSensitivity> {
-        let mut host = SensitiveContentHost::new();
-        for (_, element) in self.elements.iter() {
-            if let Some(sensitivity) = element
-                .environment_override
-                .as_ref()
-                .and_then(|value| value.value.downcast_ref::<ContentSensitivity>())
-            {
-                host.register(*sensitivity);
-            }
-        }
-        host.calculated_content_sensitivity()
+        self.content_sensitivity_host.calculated_content_sensitivity()
     }
 
     /// Returns the normalized policy emitted at the platform window boundary.
@@ -1041,6 +1058,14 @@ impl WidgetTree {
     #[must_use]
     pub fn semantics(&self) -> &SemanticsTree {
         &self.semantics
+    }
+    /// Role issues from the most recent semantics update in a debug build.
+    #[must_use]
+    pub fn debug_semantic_role_issues(&self) -> &[incular_semantics::SemanticRoleIssue] {
+        #[cfg(debug_assertions)]
+        return &self.semantic_role_issues;
+        #[cfg(not(debug_assertions))]
+        return &[];
     }
     #[must_use]
     pub fn semantics_diagnostics(&self) -> SemanticsDiagnostics {

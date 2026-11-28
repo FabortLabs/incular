@@ -190,7 +190,7 @@ impl Runtime {
         true
     }
 
-    fn preserve_selection_scroll(&mut self, field: ElementId, controller: &TextEditingController) {
+    pub(super) fn preserve_selection_scroll(&mut self, field: ElementId, controller: &TextEditingController) {
         // The window's enclosing viewport and the field's own text viewport
         // have separate reveal keys. A deferred pass must not turn this
         // command into an ordinary change that reveals the selected end.
@@ -379,6 +379,44 @@ impl Runtime {
         true
     }
 
+    pub(super) fn override_character_action(
+        &self,
+        field: ElementId,
+        intent: TextIntent,
+    ) -> incular_widgets::KeyEventResult {
+        let TextIntent::ExtendByCharacter { forward, collapse } = intent else {
+            return incular_widgets::KeyEventResult::Ignored;
+        };
+        self.tree.dispatch_default_keyboard_intent(
+            field,
+            incular_widgets::ExtendSelectionByCharacterIntent::new(forward, collapse),
+        )
+    }
+
+    pub(super) fn run_focused_character_intent(
+        &mut self,
+        intent: incular_widgets::ExtendSelectionByCharacterIntent,
+    ) {
+        let Some(field) = self.focused else {
+            return;
+        };
+        let Some(controller) = self.tree.text_controller(field) else {
+            return;
+        };
+        let previous = self.observed_editor_selection(field);
+        let editable = self.tree.text_field_is_editable(field);
+        let command = TextIntent::ExtendByCharacter {
+            forward: intent.forward,
+            collapse: intent.collapse_selection,
+        };
+        if self.run_text_shortcut_intent(field, &controller, command, editable).is_some() {
+            self.report_editor_selection_delta(field, previous, SelectionChangedCause::Keyboard);
+            self.hide_text_field_overlays(field);
+            controller.reset_caret(self.input_now());
+            self.frame_requested = true;
+        }
+    }
+
     /// Runs the text-editing intent that `event` is bound to on the focused
     /// field. A handled shortcut returns its overlay policy; the caller
     /// resets the caret blink and requests a frame.
@@ -387,14 +425,14 @@ impl Runtime {
         field: ElementId,
         controller: &TextEditingController,
         event: &KeyboardEvent,
-        effective_modifiers: Modifiers,
+        intent: Option<TextIntent>,
     ) -> Option<ShortcutOverlays> {
         let editable = self.tree.text_field_is_editable(field);
         // Enter is not a text shortcut (Flutter maps it to
         // `DoNothingAndStopPropagationTextIntent` and relies on the IME's
         // newline/submit action); desktop key events have no IME action, so
         // the key itself performs the field's input action.
-        if event.code == Code::Enter {
+        if matches!(event.code, Code::Enter | Code::NumpadEnter) {
             if !editable {
                 return None;
             }
@@ -413,8 +451,7 @@ impl Runtime {
             }
             return Some(ShortcutOverlays::HideAll);
         }
-        let intent = resolve(self.text_shortcut_platform, event.code, effective_modifiers)?;
-        self.run_text_shortcut_intent(field, controller, intent, editable)
+        self.run_text_shortcut_intent(field, controller, intent?, editable)
     }
 
     /// Selection actions from keyboard shortcuts (including platform

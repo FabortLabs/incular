@@ -274,3 +274,377 @@ fn the_mounted_flutter_keyboard_configuration_tracks_its_view_without_leaking_to
     frame(&runtime);
     assert!(runtime.borrow_mut().take_text_input_commands().is_empty());
 }
+
+#[test]
+fn only_selection_changes_during_a_live_scribble_interaction_report_handwriting() {
+    use incular_runtime::TextShortcutPlatform;
+    use incular_text::{SelectionChangedCause, TextSelection};
+
+    let text = TextEditingController::with_text("Lorem ipsum dolor sit amet");
+    let focus = FocusNode::new();
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Rc::new(RefCell::new(
+        Runtime::new(
+            EditableText::new(text.clone())
+                .text_direction(TextDirection::Ltr)
+                .focus_node(focus.clone())
+                .on_selection_changed({
+                    let changes = changes.clone();
+                    move |selection, cause| changes.borrow_mut().push((selection, cause))
+                })
+                .into(),
+        )
+        .unwrap(),
+    ));
+    runtime
+        .borrow_mut()
+        .set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    let host = Host::new();
+    let _binding = FlutterTextInputBinding::install(&host.inbound, &runtime);
+    let layout = || {
+        runtime
+            .borrow_mut()
+            .run_frame(Constraints::tight(Size::new(300., 100.)))
+            .unwrap();
+    };
+    focus.request_focus();
+    layout();
+    let client = runtime
+        .borrow()
+        .flutter_text_input_configuration()
+        .unwrap()
+        .0
+        .get();
+    changes.borrow_mut().clear();
+    let set = |value, base, extent| {
+        assert_eq!(
+            host.send(
+                "TextInputClient.updateEditingState",
+                json!([client, {"text": value, "selectionBase": base, "selectionExtent": extent}])
+            )
+            .unwrap(),
+            b"[null]"
+        );
+        layout();
+    };
+
+    set("Lorem ipsum dolor sit amet", 2, 3);
+    assert_eq!(
+        changes.take(),
+        [(TextSelection::new(2, 3), SelectionChangedCause::Keyboard)]
+    );
+    assert_eq!(
+        host.send("TextInputClient.scribbleInteractionBegan", Value::Null)
+            .unwrap(),
+        b"[null]"
+    );
+    set("Lorem ipsum dolor sit amet", 3, 4);
+    assert_eq!(
+        changes.take(),
+        [(
+            TextSelection::new(3, 4),
+            SelectionChangedCause::StylusHandwriting
+        )]
+    );
+    set("Lorem ipsum dolor sit amet", 3, 4);
+    assert!(
+        changes.borrow().is_empty(),
+        "repeating the value has no selection event"
+    );
+
+    // Replacing actual text stays a keyboard edit even inside Scribble.
+    set("Lorem ipsum dolor sit amet!", 5, 5);
+    assert_eq!(
+        changes.take(),
+        [(TextSelection::collapsed(5), SelectionChangedCause::Keyboard)]
+    );
+    assert_eq!(
+        host.send("TextInputClient.scribbleInteractionFinished", Value::Null)
+            .unwrap(),
+        b"[null]"
+    );
+    set("Lorem ipsum dolor sit amet!", 6, 7);
+    assert_eq!(
+        changes.take(),
+        [(TextSelection::new(6, 7), SelectionChangedCause::Keyboard)]
+    );
+}
+
+#[test]
+fn repeated_toolbar_show_keeps_the_same_mounted_overlay_during_handwriting() {
+    assert_duplicate_toolbar_show_is_inert(true);
+}
+
+#[test]
+fn repeated_toolbar_show_keeps_the_same_mounted_overlay_after_autofocus() {
+    assert_duplicate_toolbar_show_is_inert(false);
+}
+
+fn assert_duplicate_toolbar_show_is_inert(handwriting: bool) {
+    use incular_runtime::TextShortcutPlatform;
+    use incular_widgets::{Widget, internal::Key};
+
+    const TOOLBAR: &str = "scribble-toolbar";
+    let text = TextEditingController::with_text("Lorem ipsum dolor sit amet");
+    let focus = FocusNode::new();
+    let runtime = Rc::new(RefCell::new(
+        Runtime::new(
+            EditableText::new(text)
+                .text_direction(TextDirection::Ltr)
+                .focus_node(focus.clone())
+                .autofocus(!handwriting)
+                .context_menu_builder(|_, _| {
+                    Widget::from(SizedBox::new().width(20.).height(10.)).with_key(TOOLBAR)
+                })
+                .into(),
+        )
+        .unwrap(),
+    ));
+    runtime
+        .borrow_mut()
+        .set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    let host = Host::new();
+    let _binding = FlutterTextInputBinding::install(&host.inbound, &runtime);
+    let layout = || {
+        runtime
+            .borrow_mut()
+            .run_frame(Constraints::tight(Size::new(300., 100.)))
+            .unwrap();
+    };
+    let toolbar = || {
+        runtime
+            .borrow()
+            .tree()
+            .element_with_key(&Key::from(TOOLBAR))
+    };
+    layout();
+    assert!(toolbar().is_none());
+    if handwriting {
+        focus.request_focus();
+        layout();
+    }
+    assert!(focus.has_primary_focus());
+    let client = runtime
+        .borrow()
+        .flutter_text_input_configuration()
+        .unwrap()
+        .0
+        .get();
+    if handwriting {
+        assert_eq!(
+            host.send("TextInputClient.scribbleInteractionBegan", Value::Null)
+                .unwrap(),
+            b"[null]"
+        );
+        assert_eq!(
+            host.send(
+                "TextInputClient.updateEditingState",
+                json!([client, {"text": "Lorem ipsum dolor sit amet", "selectionBase": 3, "selectionExtent": 4}])
+            ).unwrap(),
+            b"[null]"
+        );
+        layout();
+        assert!(
+            toolbar().is_none(),
+            "handwriting selection does not open the toolbar by itself"
+        );
+    }
+
+    let show = JsonMethodCodec::encode_method_call(&MethodCall {
+        method: "TextInputClient.showToolbar".into(),
+        arguments: json!([client]),
+    })
+    .unwrap();
+    assert_eq!(
+        runtime
+            .borrow_mut()
+            .handle_flutter_text_toolbar_call(&show)
+            .unwrap(),
+        Some(true)
+    );
+    layout();
+    let mounted = toolbar().unwrap();
+    assert_eq!(
+        runtime
+            .borrow_mut()
+            .handle_flutter_text_toolbar_call(&show)
+            .unwrap(),
+        Some(false)
+    );
+    layout();
+    assert_eq!(toolbar(), Some(mounted));
+    layout();
+    assert_eq!(toolbar(), Some(mounted));
+    if handwriting {
+        assert_eq!(
+            host.send("TextInputClient.scribbleInteractionFinished", Value::Null)
+                .unwrap(),
+            b"[null]"
+        );
+    }
+}
+
+#[test]
+fn native_handwriting_discovers_only_touchable_mounted_editors_and_focuses_their_caret() {
+    use incular_core::Color;
+    use incular_runtime::TextShortcutPlatform;
+    use incular_text::{SelectionChangedCause, TextSelection};
+    use incular_widgets::{ColoredBox, Positioned, Stack, Widget};
+
+    let controller = TextEditingController::with_text("Lorem ipsum dolor sit amet");
+    let focus = FocusNode::new();
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let root = |read_only, handwriting, covered| {
+        let editor = EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .focus_node(focus.clone())
+            .read_only(read_only)
+            .stylus_handwriting_enabled(handwriting)
+            .on_selection_changed({
+                let changes = changes.clone();
+                move |selection, cause| changes.borrow_mut().push((selection, cause))
+            });
+        let mut children = vec![Widget::from(Positioned::fill(editor))];
+        if covered {
+            children.push(Widget::from(Positioned::fill(ColoredBox::new(
+                Color::rgba(0, 0, 0, 255),
+                SizedBox::expand(),
+            ))));
+        }
+        Widget::from(Stack::new(children))
+    };
+    let runtime = Rc::new(RefCell::new(
+        Runtime::new(root(false, true, false)).unwrap(),
+    ));
+    runtime
+        .borrow_mut()
+        .set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    let host = Host::new();
+    let _binding = FlutterTextInputBinding::install(&host.inbound, &runtime);
+    let layout = || {
+        runtime
+            .borrow_mut()
+            .run_frame(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+    };
+    let query = |rect| {
+        let response = host
+            .send("TextInputClient.requestElementsInRect", rect)
+            .unwrap();
+        JsonMethodCodec::decode_envelope(&response).unwrap()
+    };
+    let replace = |widget| {
+        let mut runtime = runtime.borrow_mut();
+        let id = runtime.tree().root().unwrap();
+        runtime.schedule_update(id, widget).unwrap();
+    };
+    layout();
+    assert!(!focus.has_focus());
+    let found = query(json!([0, 0, 1, 1]));
+    assert_eq!(found.as_array().unwrap().len(), 1);
+    let first = found[0][0].as_str().unwrap();
+    assert_eq!(found[0], json!([first, 0., 0., 800., 600.]));
+    assert_eq!(query(json!([-1, -1, 1, 1])), json!([]));
+
+    assert_eq!(
+        host.send("TextInputClient.focusElement", json!([first, 0, 0]))
+            .unwrap(),
+        b"[null]"
+    );
+    layout();
+    assert!(focus.has_primary_focus());
+    assert_eq!(controller.selection(), TextSelection::collapsed(0));
+    assert_eq!(
+        changes.take(),
+        [(
+            TextSelection::collapsed(0),
+            SelectionChangedCause::StylusHandwriting
+        )]
+    );
+    assert!(
+        runtime
+            .borrow()
+            .flutter_text_input_configuration()
+            .is_some()
+    );
+
+    for widget in [
+        root(true, true, false),
+        root(false, true, true),
+        root(false, false, false),
+    ] {
+        replace(widget);
+        layout();
+        assert_eq!(query(json!([0, 0, 1, 1])), json!([]));
+    }
+    replace(Stack::new([] as [Widget; 0]).into());
+    layout();
+    replace(root(false, true, false));
+    layout();
+    let replacement = query(json!([0, 0, 1, 1]));
+    assert_ne!(replacement[0][0].as_str().unwrap(), first);
+    assert_eq!(
+        host.send("TextInputClient.focusElement", json!([first, 0, 0]))
+            .unwrap(),
+        b"[null]"
+    );
+    layout();
+    assert!(
+        !focus.has_focus(),
+        "a retired target must not focus the replacement"
+    );
+}
+
+#[test]
+fn macos_read_only_binding_dispatches_selectors_but_rejects_text_updates() {
+    use incular_runtime::TextShortcutPlatform;
+    use incular_text::TextSelection;
+
+    let text = TextEditingController::with_text("read only");
+    text.set_selection(TextSelection::collapsed(0));
+    let runtime = Rc::new(RefCell::new(
+        Runtime::new(
+            EditableText::new(text.clone())
+                .read_only(true)
+                .autofocus(true)
+                .text_direction(TextDirection::Ltr)
+                .into(),
+        )
+        .unwrap(),
+    ));
+    runtime
+        .borrow_mut()
+        .set_text_shortcut_platform(TextShortcutPlatform::MacOs);
+    let host = Host::new();
+    let _binding = FlutterTextInputBinding::install(&host.inbound, &runtime);
+    runtime
+        .borrow_mut()
+        .run_frame(Constraints::tight(Size::new(320., 120.)))
+        .unwrap();
+    let (client, config) = runtime.borrow().flutter_text_input_configuration().unwrap();
+    assert!(config.read_only);
+    let reply = host
+        .send(
+            "TextInputClient.performSelectors",
+            json!([client.get(), ["moveRight:", "deleteBackward:"]]),
+        )
+        .unwrap();
+    assert_eq!(
+        JsonMethodCodec::decode_envelope(&reply).unwrap(),
+        Value::Null
+    );
+    assert_eq!(text.selection(), TextSelection::collapsed(1));
+    assert_eq!(text.text(), "read only");
+    let reply = host
+        .send(
+            "TextInputClient.updateEditingState",
+            json!([client.get(), {"text":"no","selectionBase":0,"selectionExtent":2}]),
+        )
+        .unwrap();
+    assert_eq!(
+        JsonMethodCodec::decode_envelope(&reply).unwrap(),
+        Value::Null
+    );
+    assert_eq!(text.selection(), TextSelection::collapsed(1));
+    assert_eq!(text.text(), "read only");
+}

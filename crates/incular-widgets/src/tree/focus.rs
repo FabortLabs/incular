@@ -251,10 +251,30 @@ impl WidgetTree {
     /// Returns the node installed by a mounted focus or editing widget.
     #[must_use]
     pub fn focus_node_at(&self, id: ElementId) -> Option<incular_gestures::FocusNode> {
-        self.elements
-            .get(id.0)
-            .and_then(|element| external_node(element.widget.kind()))
-            .cloned()
+        let element = self.elements.get(id.0)?;
+        external_node(element.widget.kind()).cloned().or_else(|| {
+            self.navigation_scope_anchor_at(id)
+                .and_then(|anchor| self.focus_boundary_at(anchor))
+                .cloned()
+        })
+    }
+
+    /// The app builder receives the navigation scope's semantic wrapper.
+    /// Its autofocus marker is on that public widget, but requests must
+    /// target the retained scope node below the annotation.
+    fn navigation_scope_anchor_at(&self, id: ElementId) -> Option<ElementId> {
+        let element = self.elements.get(id.0)?;
+        if !element.widget.semantic_properties().navigation_scope_autofocus {
+            return None;
+        }
+        let anchor = match element.widget.kind() {
+            WidgetKind::ProxyLayout { mode: ChildLayoutMode::SemanticAnnotation, .. } => {
+                *element.children.first()?
+            }
+            _ => id,
+        };
+        self.focus_boundary_at(anchor)?.scope_owner()?;
+        Some(anchor)
     }
 
     pub(crate) fn focus_boundary_at(&self, id: ElementId) -> Option<&incular_gestures::FocusNode> {
@@ -1342,9 +1362,74 @@ impl WidgetTree {
     ) -> (KeyEventResult, Option<crate::DirectionalFocusIntent>) {
         let mut intent = None;
         let result = self.dispatch_keyboard_where(
-            focused, event, lock_modes, raw_delivery, keyboard, |_| true, Some(&mut intent),
+            focused, event, lock_modes, raw_delivery, keyboard, |_| true, Some((&mut intent, false)),
+        );
+        (result, intent.and_then(|intent| match intent {
+            crate::RuntimeKeyIntent::DirectionalFocus(intent) => Some(intent),
+            _ => None,
+        }))
+    }
+
+    /// Routes explicit typed shortcut intents backed by runtime actions.
+    #[doc(hidden)]
+    pub fn route_keyboard_with_runtime_intent(
+        &self,
+        focused: Option<ElementId>,
+        event: KeyboardEvent,
+        lock_modes: incular_core::Modifiers,
+        raw_delivery: incular_gestures::RawKeyDelivery<'_>,
+        keyboard: Option<&incular_core::HardwareKeyboardState>,
+    ) -> (KeyEventResult, Option<crate::RuntimeKeyIntent>) {
+        self.route_keyboard_with_runtime_intent_and_prefix(
+            focused, &[], event, lock_modes, raw_delivery, keyboard,
+        )
+    }
+
+    /// Routes one raw-key packet's generated typed prefixes and actual event
+    /// as a batch. A focused node handles all typed events before its one
+    /// legacy callback, and only then can it stop bubbling to its parent.
+    #[doc(hidden)]
+    pub fn route_keyboard_with_runtime_intent_and_prefix(
+        &self,
+        focused: Option<ElementId>,
+        prefixes: &[KeyboardEvent],
+        event: KeyboardEvent,
+        lock_modes: incular_core::Modifiers,
+        raw_delivery: incular_gestures::RawKeyDelivery<'_>,
+        keyboard: Option<&incular_core::HardwareKeyboardState>,
+    ) -> (KeyEventResult, Option<crate::RuntimeKeyIntent>) {
+        let mut intent = None;
+        let result = self.dispatch_keyboard_where_with_prefix(
+            focused, prefixes, event, lock_modes, raw_delivery, keyboard, |_| true,
+            Some((&mut intent, true)),
         );
         (result, intent)
+    }
+
+    /// Routes a default keyboard intent through the actual focused context,
+    /// including its scoped dispatcher, before using the runtime fallback.
+    #[doc(hidden)]
+    pub fn dispatch_default_keyboard_intent<C: incular_gestures::CommandId>(
+        &self,
+        focused: ElementId,
+        command: C,
+    ) -> KeyEventResult {
+        // Most editors have no application action scopes. Do not allocate
+        // an erased command for their ordinary arrow keys.
+        let mut current = Some(focused);
+        while let Some(id) = current {
+            let Some(entry) = self.elements.get(id.0) else {
+                break;
+            };
+            if matches!(entry.widget.kind(), WidgetKind::Gesture { callbacks, .. } if callbacks.action_scope.is_some()) {
+                let intent = incular_gestures::ErasedIntent::from_intent(
+                    &incular_gestures::Intent::<C>::new(command),
+                );
+                return self.dispatch_shortcut_action(focused, &intent);
+            }
+            current = entry.parent;
+        }
+        KeyEventResult::Ignored
     }
 
     /// Shared ancestor walk behind keyboard dispatch. The `serve`
@@ -1361,9 +1446,29 @@ impl WidgetTree {
         lock_modes: incular_core::Modifiers,
         raw_delivery: incular_gestures::RawKeyDelivery<'_>,
         keyboard: Option<&incular_core::HardwareKeyboardState>,
-        mut serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
-        mut directional_intent: Option<&mut Option<crate::DirectionalFocusIntent>>,
+        serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
+        runtime_intent: Option<(&mut Option<crate::RuntimeKeyIntent>, bool)>,
     ) -> KeyEventResult {
+        self.dispatch_keyboard_where_with_prefix(
+            focused, &[], event, lock_modes, raw_delivery, keyboard, serve, runtime_intent,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn dispatch_keyboard_where_with_prefix(
+        &self,
+        focused: Option<ElementId>,
+        prefixes: &[KeyboardEvent],
+        event: KeyboardEvent,
+        lock_modes: incular_core::Modifiers,
+        raw_delivery: incular_gestures::RawKeyDelivery<'_>,
+        keyboard: Option<&incular_core::HardwareKeyboardState>,
+        mut serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
+        mut runtime_intent: Option<(&mut Option<crate::RuntimeKeyIntent>, bool)>,
+    ) -> KeyEventResult {
+        for key in prefixes {
+            self.notify_key_observers(focused, key);
+        }
         self.notify_key_observers(focused, &event);
         let menu_escape = event.key == KeyboardKey::Named(NamedKey::Escape)
             && incular_gestures::SingleActivator::new(
@@ -1380,44 +1485,22 @@ impl WidgetTree {
                 && callbacks.has_keyboard_listener()
                 && serve(callbacks)
             {
-                let find_shortcut = || {
-                    callbacks
-                        .shortcut_scope
-                        .as_ref()
-                        .and_then(|scope| scope.find_with_keyboard(&event, keyboard))
-                };
-                let retained_match = (callbacks.on_shortcut.is_none()
-                    && callbacks.on_shortcut_with_lock_modes.is_none()
-                    && callbacks.on_shortcut_with_keyboard_state.is_none())
-                    .then(find_shortcut);
-                if let Some(Some(matched)) = &retained_match {
-                    use incular_gestures::ShortcutMatch;
-                    let result = match matched {
-                        ShortcutMatch::Callback(callback) => {
-                            callback();
-                            KeyEventResult::Handled
-                        }
-                        ShortcutMatch::Intent(intent) => focused.map_or(KeyEventResult::Ignored, |focused| {
-                            self.dispatch_shortcut_action(focused, intent)
-                        }),
-                    };
-                    if result != KeyEventResult::Ignored {
-                        return result;
+                let keys = prefixes.iter()
+                    .map(|event| (event, incular_gestures::RawKeyDelivery::Absent))
+                    .chain(std::iter::once((&event, raw_delivery)));
+                let mut combined = None;
+                for (key, raw) in keys {
+                    if let Some(result) = self.dispatch_key_at_focus_node(
+                        focused, callbacks, key, lock_modes, raw, keyboard, &mut runtime_intent,
+                    ) {
+                        combined = Some(match combined {
+                            None => result,
+                            Some(previous) => incular_gestures::combine_key_event_results([previous, result]),
+                        });
                     }
                 }
-                let result = callbacks.route_keyboard_with_keyboard_state(
-                    event.clone(), lock_modes, raw_delivery, keyboard,
-                );
-                if result != KeyEventResult::Ignored {
+                if let Some(result) = combined {
                     return result;
-                }
-                if let Some(slot) = directional_intent.as_deref_mut()
-                    && let Some(incular_gestures::ShortcutMatch::Intent(matched)) =
-                        retained_match.unwrap_or_else(find_shortcut)
-                    && let Some(intent) = matched.downcast_command::<crate::DirectionalFocusIntent>()
-                {
-                    *slot = Some(*intent);
-                    return KeyEventResult::Handled;
                 }
             }
             if menu_escape
@@ -1434,6 +1517,80 @@ impl WidgetTree {
             current = self.mounted_focus_parent(id);
         }
         KeyEventResult::Ignored
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn dispatch_key_at_focus_node(
+        &self,
+        focused: Option<ElementId>,
+        callbacks: &incular_gestures::GestureCallbacks,
+        event: &KeyboardEvent,
+        lock_modes: incular_core::Modifiers,
+        raw_delivery: incular_gestures::RawKeyDelivery<'_>,
+        keyboard: Option<&incular_core::HardwareKeyboardState>,
+        runtime_intent: &mut Option<(&mut Option<crate::RuntimeKeyIntent>, bool)>,
+    ) -> Option<KeyEventResult> {
+        let find_shortcut = || {
+            callbacks
+                .shortcut_scope
+                .as_ref()
+                .and_then(|scope| scope.find_with_keyboard(event, keyboard))
+        };
+        let retained_match = (callbacks.on_shortcut.is_none()
+            && callbacks.on_shortcut_with_lock_modes.is_none()
+            && callbacks.on_shortcut_with_keyboard_state.is_none())
+            .then(find_shortcut);
+        if let Some(Some(matched)) = &retained_match {
+            use incular_gestures::ShortcutMatch;
+            let result = match matched {
+                ShortcutMatch::Callback(callback) => {
+                    callback();
+                    KeyEventResult::Handled
+                }
+                ShortcutMatch::Intent(intent) => {
+                    let Some(focused) = focused else {
+                        return Some(KeyEventResult::Ignored);
+                    };
+                    if self.is_text_field(focused)
+                        && (intent.downcast_command::<crate::ActivateIntent>().is_some()
+                            || intent.downcast_command::<crate::ButtonActivateIntent>().is_some())
+                    {
+                        // EditableText shadows these two intents.
+                        // Stop the ancestor walk, but let the key
+                        // continue to the native editing/IME path.
+                        return Some(KeyEventResult::Ignored);
+                    }
+                    self.dispatch_shortcut_action(focused, intent)
+                }
+            };
+            if result != KeyEventResult::Ignored {
+                return Some(result);
+            }
+        }
+        let result = callbacks.route_keyboard_with_keyboard_state(
+            event.clone(), lock_modes, raw_delivery, keyboard,
+        );
+        if result != KeyEventResult::Ignored {
+            return Some(result);
+        }
+        if let Some((slot, editing)) = runtime_intent.as_mut()
+            && let Some(incular_gestures::ShortcutMatch::Intent(matched)) =
+                retained_match.unwrap_or_else(find_shortcut)
+        {
+            use crate::RuntimeKeyIntent;
+            if let Some(intent) = matched.downcast_command::<crate::DirectionalFocusIntent>() {
+                slot.get_or_insert(RuntimeKeyIntent::DirectionalFocus(*intent));
+                return Some(KeyEventResult::Handled);
+            }
+            if *editing
+                && focused.is_some_and(|field| self.is_text_field(field))
+                && let Some(intent) = matched.downcast_command::<crate::ExtendSelectionByCharacterIntent>()
+            {
+                slot.get_or_insert(RuntimeKeyIntent::ExtendSelectionByCharacter(*intent));
+                return Some(KeyEventResult::Handled);
+            }
+        }
+        None
     }
 
     /// Routes a native accessibility increment/decrement through the same
@@ -1475,7 +1632,10 @@ impl WidgetTree {
                 return false;
             };
             if let Some(explicit) = entry.widget.semantic_properties().explicit.as_ref() {
-                return explicit.role == SemanticRole::MenuItem;
+                return matches!(
+                    explicit.role,
+                    SemanticRole::MenuItem | SemanticRole::MenuItemCheckbox | SemanticRole::MenuItemRadio
+                );
             }
             let Some(parent) = entry.parent else {
                 return false;
@@ -2225,11 +2385,11 @@ impl WidgetTree {
                 autofocusing_scopes.push(id);
             }
             if navigation_anchor.is_none()
-                && element.widget.semantic_properties().navigation_scope_autofocus
-                && includes(id)
-                && self.can_request_focus(id)
+                && let Some(anchor) = self.navigation_scope_anchor_at(id)
+                && includes(anchor)
+                && self.can_request_focus(anchor)
             {
-                navigation_anchor = Some(id);
+                navigation_anchor = Some(anchor);
             }
             pending.extend(element.children.iter().rev().copied());
         }
@@ -2403,8 +2563,11 @@ impl WidgetTree {
         let explicit = requests.into_iter().find_map(|id| {
             let element = self.elements.get(id.0)?;
             if element.widget.semantic_properties().navigation_scope_autofocus {
-                if navigation_anchor.is_none() && self.can_request_focus(id) {
-                    navigation_anchor = Some(id);
+                if navigation_anchor.is_none()
+                    && let Some(anchor) = self.navigation_scope_anchor_at(id)
+                    && self.can_request_focus(anchor)
+                {
+                    navigation_anchor = Some(anchor);
                 }
                 return None;
             }
@@ -2660,6 +2823,19 @@ impl WidgetTree {
         event: &KeyboardEvent,
         delivery: incular_gestures::RawKeyDelivery<'_>,
     ) {
+        self.notify_raw_keyboard_observers_with_report(focused, event, delivery, |error| {
+            eprintln!("raw keyboard listener failed: {}", error.message());
+        });
+    }
+
+    #[doc(hidden)]
+    pub fn notify_raw_keyboard_observers_with_report(
+        &self,
+        focused: Option<ElementId>,
+        event: &KeyboardEvent,
+        delivery: incular_gestures::RawKeyDelivery<'_>,
+        mut report: impl FnMut(crate::RawKeyboardListenerError),
+    ) {
         use incular_gestures::RawKeyDelivery;
         if matches!(delivery, RawKeyDelivery::Absent) {
             return;
@@ -2676,7 +2852,11 @@ impl WidgetTree {
                     RawKeyDelivery::Supplied(raw) => raw.clone(),
                     RawKeyDelivery::Absent => unreachable!("typed-only records are excluded"),
                 });
-                observer(raw.clone());
+                if let Some(error) =
+                    crate::RawKeyboardListenerError::catch(raw, || observer(raw.clone()))
+                {
+                    report(error);
+                }
             }
             current = self.mounted_focus_parent(id);
         }

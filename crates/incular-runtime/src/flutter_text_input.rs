@@ -376,7 +376,7 @@ impl crate::Runtime {
     pub fn flutter_text_input_configuration(
         &self,
     ) -> Option<(TextInputClientId, FlutterTextInputConfiguration)> {
-        let client = self.active_flutter_editable_client()?;
+        let client = self.active_flutter_text_input_client()?;
         let editor = self
             .text_input_configuration
             .as_ref()
@@ -388,6 +388,24 @@ impl crate::Runtime {
                 self.flutter_text_input_view_id,
             ),
         ))
+    }
+
+    /// Publishes the mounted editor's configuration to a host that already
+    /// attached its client. Supply the same host overrides used on attachment,
+    /// such as the delta model or scoped autofill configuration.
+    pub fn publish_flutter_text_input_configuration(
+        &self,
+        controls: &mut incular_platform::FlutterTextInputControls,
+        apply_host_options: impl FnOnce(&mut FlutterTextInputConfiguration),
+    ) -> Result<bool, incular_platform::FlutterTextInputControlsError> {
+        let Some((client, mut configuration)) = self.flutter_text_input_configuration() else {
+            return Ok(false);
+        };
+        if !controls.is_attached(client) {
+            return Ok(false);
+        }
+        apply_host_options(&mut configuration);
+        controls.publish_configuration(client, configuration)
     }
 
     /// Sends resolved style to an attached Flutter text input control after
@@ -418,7 +436,7 @@ impl crate::Runtime {
         scribble: &mut FlutterScribbleRegistry,
     ) -> FlutterJsonMethodResult {
         use FlutterJsonMethodResult::{NotImplemented, Success};
-        match scribble.handle_method(call) {
+        match scribble.handle_method_with_mounted_targets(call, Some(self)) {
             Ok(None) => {}
             result => return method_result(result, std::convert::identity),
         }
@@ -426,7 +444,18 @@ impl crate::Runtime {
         if call.method == "TextInputClient.onFocusReceived" {
             return method_result(self.handle_flutter_text_input_lifecycle_method(call), Value::Bool);
         }
-        if self.active_flutter_editable_client().is_none() {
+        let accepts_read_only = matches!(
+            call.method.as_str(),
+            "TextInputClient.performSelectors"
+                | "TextInputClient.requestExistingInputState"
+                | "TextInputClient.onConnectionClosed"
+        );
+        let active = if accepts_read_only {
+            self.active_flutter_text_input_client()
+        } else {
+            self.active_flutter_editable_client()
+        };
+        if active.is_none() {
             // The installed channel acknowledges delivery even before an
             // editor attaches. Encoded Success(null) is not a missing plugin.
             return Success(Value::Null);
@@ -438,7 +467,10 @@ impl crate::Runtime {
                 Success(Value::Null)
             }
             "TextInputClient.updateEditingState" => {
-                method_result(self.handle_flutter_text_input_editing_method(call), unit)
+                method_result(
+                    self.handle_flutter_text_input_editing_method(call, scribble.in_progress()),
+                    unit,
+                )
             }
             "TextInputClient.performPrivateCommand" => {
                 method_result(self.handle_flutter_text_input_private_command_method(call), unit)
@@ -476,12 +508,13 @@ impl crate::Runtime {
         &mut self,
         data: &[u8],
     ) -> Result<Option<bool>, FlutterTextInputEditingError> {
-        self.handle_flutter_text_input_editing_method(&JsonMethodCodec::decode_method_call(data)?)
+        self.handle_flutter_text_input_editing_method(&JsonMethodCodec::decode_method_call(data)?, false)
     }
 
     fn handle_flutter_text_input_editing_method(
         &mut self,
         call: &MethodCall<Value>,
+        scribble_in_progress: bool,
     ) -> Result<Option<bool>, FlutterTextInputEditingError> {
         use FlutterTextInputEditingError::InvalidArguments;
         if call.method != "TextInputClient.updateEditingState" {
@@ -497,7 +530,11 @@ impl crate::Runtime {
         }
         let (state, affinity, directional) =
             decode_full_editing_state(args.get(1).ok_or(InvalidArguments)?)?;
-        self.handle_text_editing_state_with_metadata(state, Some((affinity, directional)));
+        self.handle_text_editing_state_with_metadata(
+            state,
+            Some((affinity, directional)),
+            scribble_in_progress,
+        );
         Ok(Some(true))
     }
 
@@ -701,7 +738,7 @@ impl crate::Runtime {
             return Ok(None);
         }
         self.adopt_external_focus_change();
-        let Some(active) = self.active_flutter_editable_client() else {
+        let Some(active) = self.active_flutter_text_input_client() else {
             return Ok(Some(false));
         };
         let args = call.arguments.as_array().ok_or(InvalidArguments)?;
@@ -719,7 +756,7 @@ impl crate::Runtime {
             }
         }
         for selector in selectors.iter().filter_map(Value::as_str) {
-            if self.active_flutter_editable_client() != Some(active) {
+            if self.active_flutter_text_input_client() != Some(active) {
                 break;
             }
             self.dispatch_flutter_text_selector(selector);

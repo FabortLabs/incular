@@ -370,3 +370,140 @@ fn two_downs_before_a_deferred_award_only_schedule_the_first_taps_deadline() {
     ));
     assert!(trace.borrow().is_empty());
 }
+
+#[test]
+fn arena_and_tap_callback_traces_are_independent_and_keep_routing_order() {
+    use incular_gestures::{
+        GestureArenaTracePhase as Phase, GestureArenaWinCause, TapCallbackKind,
+        TapCallbackTraceHandler, set_tap_callback_trace_handler,
+    };
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Trace {
+        Arena(Phase),
+        Tap(TapCallbackKind),
+    }
+
+    struct RestoreTrace(Option<TapCallbackTraceHandler>);
+    impl Drop for RestoreTrace {
+        fn drop(&mut self) {
+            set_tap_callback_trace_handler(self.0.take());
+        }
+    }
+
+    for (arena_trace, callback_trace) in
+        [(true, false), (false, true), (true, true), (false, false)]
+    {
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let arena = GestureArenaManager::new();
+        let key = GestureArenaKey::pointer(0, 1);
+        if arena_trace {
+            let log = log.clone();
+            arena.set_trace_handler(Some(Rc::new(move |event| {
+                assert_eq!(event.key, key);
+                log.borrow_mut().push(Trace::Arena(event.phase));
+            })));
+        }
+        let trace = callback_trace.then(|| {
+            let log = log.clone();
+            Rc::new(move |kind| log.borrow_mut().push(Trace::Tap(kind))) as TapCallbackTraceHandler
+        });
+        let _trace = RestoreTrace(set_tap_callback_trace_handler(trace));
+        let invoked = Rc::new(RefCell::new(Vec::new()));
+        let down = Offset::new(10., 10.);
+        let up = Offset::new(12., 8.);
+        let tap = Rc::new(SimpleTap::new(GestureCallbacks {
+            on_tap_down: Some(Rc::new({
+                let invoked = invoked.clone();
+                move |details| {
+                    assert_eq!(details.global_position, down);
+                    invoked.borrow_mut().push(TapCallbackKind::Down);
+                }
+            })),
+            on_tap_up: Some(Rc::new({
+                let invoked = invoked.clone();
+                move |details| {
+                    assert_eq!(details.global_position, up);
+                    invoked.borrow_mut().push(TapCallbackKind::Up);
+                }
+            })),
+            on_tap: Some(Rc::new({
+                let invoked = invoked.clone();
+                move || invoked.borrow_mut().push(TapCallbackKind::Tap)
+            })),
+            ..GestureCallbacks::default()
+        }));
+        assert!(log.borrow().is_empty());
+
+        let entry = arena.add(key, tap.clone());
+        let mut expected = Vec::new();
+        if arena_trace {
+            expected.extend([
+                Trace::Arena(Phase::Opened),
+                Trace::Arena(Phase::Added { member: 1 }),
+            ]);
+        }
+        assert_eq!(*log.borrow(), expected);
+        arena.close(key);
+        if arena_trace {
+            expected.push(Trace::Arena(Phase::Closed { members: 1 }));
+        }
+        assert_eq!(*log.borrow(), expected);
+
+        let start = Instant::now();
+        tap.route(
+            &entry,
+            RawPointerEvent::new(
+                1,
+                0,
+                PointerDeviceKind::Touch,
+                1,
+                down,
+                PointerPhase::Down,
+                start,
+            ),
+        );
+        tap.route(
+            &entry,
+            RawPointerEvent::new(
+                1,
+                0,
+                PointerDeviceKind::Touch,
+                0,
+                up,
+                PointerPhase::Up,
+                start + Duration::from_millis(10),
+            ),
+        );
+        assert_eq!(
+            *log.borrow(),
+            expected,
+            "no arena result while routing input"
+        );
+        assert!(invoked.borrow().is_empty());
+
+        arena.sweep(key);
+        if arena_trace {
+            expected.extend([
+                Trace::Arena(Phase::Swept { members: 1 }),
+                Trace::Arena(Phase::Winner {
+                    member: 1,
+                    cause: GestureArenaWinCause::Sweep,
+                }),
+            ]);
+        }
+        let callbacks = [
+            TapCallbackKind::Down,
+            TapCallbackKind::Up,
+            TapCallbackKind::Tap,
+        ];
+        if callback_trace {
+            expected.extend(callbacks.map(Trace::Tap));
+        }
+        assert_eq!(*log.borrow(), expected);
+        assert_eq!(&*invoked.borrow(), &callbacks);
+        arena.flush_deferred_resolutions();
+        drop(tap);
+        assert_eq!(*log.borrow(), expected);
+    }
+}

@@ -36,6 +36,7 @@ mod flutter_inbound_messenger;
 mod flutter_event_channel;
 mod flutter_floating_cursor;
 mod flutter_platform_channel;
+mod flutter_mock_messenger;
 mod flutter_text_input_config;
 mod flutter_text_input_controls;
 mod flutter_text_input_style;
@@ -136,12 +137,15 @@ pub use flutter_inbound_messenger::{
     FlutterBinaryPayload, FlutterBinaryReply, FlutterChannelMicrotask, FlutterInboundMessenger,
 };
 pub use flutter_floating_cursor::{FloatingCursorDragState, FlutterFloatingCursorPoint, FlutterFloatingCursorPointError};
-pub use flutter_scribble::{FlutterScribbleClient, FlutterScribbleError, FlutterScribbleRegistry};
+pub use flutter_scribble::{
+    FlutterMountedScribbleTargets, FlutterScribbleClient, FlutterScribbleError, FlutterScribbleRegistry,
+};
 pub use deferred_component::{DeferredComponent, DeferredComponentError};
 pub use flutter_event_channel::{
     FlutterEventOperation, FlutterEventSubscription, FlutterEventTask, FlutterJsonBroadcast,
     FlutterJsonEventChannel, FlutterJsonStreamEvent,
 };
+pub use flutter_mock_messenger::{FlutterMockHandler, FlutterMockMessenger, FlutterMockNullTransport};
 pub use flutter_platform_channel::{
     FlutterJsonMethodChannel, FlutterJsonMethodReply, FlutterJsonMethodResult,
     FlutterPlatformChannelError, FlutterPlatformMessenger,

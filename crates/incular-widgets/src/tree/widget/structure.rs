@@ -525,11 +525,15 @@ impl std::fmt::Debug for WidgetKind {
             Self::RawScrollbar {
                 controller,
                 style,
+                cursor,
+                shape,
                 child,
             } => f
                 .debug_struct("RawScrollbar")
                 .field("controller", controller)
                 .field("style", style)
+                .field("cursor", cursor)
+                .field("shape", shape)
                 .field("child", child)
                 .finish(),
             Self::ListWheelScrollView { config } => f
@@ -772,6 +776,7 @@ impl PartialEq for TextFieldSpec {
             && self.focused_border_outset == other.focused_border_outset
             && self.content_padding == other.content_padding
             && self.clip_behavior == other.clip_behavior
+            && self.drag_start_behavior == other.drag_start_behavior
             && self.fixed_scroll_offset == other.fixed_scroll_offset
             && self.allow_implicit_caret_scrolling == other.allow_implicit_caret_scrolling
             && self.multiline == other.multiline
@@ -810,6 +815,7 @@ impl PartialEq for TextFieldSpec {
             && same_rc(&self.on_submit, &other.on_submit)
             && same_rc(&self.on_tap_outside, &other.on_tap_outside)
             && same_rc(&self.on_tap_up_outside, &other.on_tap_up_outside)
+            && same_rc(&self.on_selection_handle_tapped, &other.on_selection_handle_tapped)
             && same_rc(&self.on_app_private_command, &other.on_app_private_command)
             && self.content_insertion == other.content_insertion
             && same_rc(&self.edit_transform, &other.edit_transform)
@@ -823,6 +829,7 @@ impl PartialEq for TextFieldSpec {
             && self.spell_check == other.spell_check
             && self.spell_check_suppressed == other.spell_check_suppressed
             && self.stylus_handwriting_enabled == other.stylus_handwriting_enabled
+            && same_rc(&self.text_magnifier, &other.text_magnifier)
     }
 }
 
@@ -910,12 +917,14 @@ impl PartialEq for WidgetKind {
                 Self::SelectionContainer {
                     delegate: a,
                     child: b,
+                    registrar: e,
                 },
                 Self::SelectionContainer {
                     delegate: c,
                     child: d,
+                    registrar: f,
                 },
-            ) => a == c && b == d,
+            ) => a == c && b == d && e == f,
             (
                 Self::SelectionListener {
                     notifier: a,
@@ -1427,14 +1436,18 @@ impl PartialEq for WidgetKind {
                 Self::RawScrollbar {
                     controller: a,
                     style: b,
-                    child: c,
+                    cursor: c,
+                    shape: i,
+                    child: d,
                 },
                 Self::RawScrollbar {
-                    controller: d,
-                    style: e,
-                    child: f,
+                    controller: e,
+                    style: f,
+                    cursor: g,
+                    shape: j,
+                    child: h,
                 },
-            ) => a == d && b == e && c == f,
+            ) => a == e && b == f && c == g && d == h && i == j,
             (Self::ListWheelScrollView { config: a }, Self::ListWheelScrollView { config: b }) => {
                 a == b
             }

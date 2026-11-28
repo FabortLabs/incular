@@ -51,6 +51,7 @@ impl WidgetTree {
                 ref controller,
                 style,
                 text_direction,
+                ..
             } => {
                 let (size, offsets) = if let Some(&child) = children.first() {
                     self.layout_render(child, constraints)?;

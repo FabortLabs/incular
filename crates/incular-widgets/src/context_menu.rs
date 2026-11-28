@@ -576,6 +576,17 @@ impl TextContextMenuState {
         self.show_menu(anchors, button_items, None)
     }
 
+    /// Opens the editable custom builder even when there are no default
+    /// editing actions. A builder may provide its own content entirely.
+    #[doc(hidden)]
+    pub fn show_editable(
+        self: &Rc<Self>,
+        anchors: TextSelectionToolbarAnchors,
+        button_items: Vec<ContextMenuButtonItem>,
+    ) -> bool {
+        self.show_menu(anchors, button_items, None)
+    }
+
     /// Shows a spell-check toolbar using the same retained selection portal.
     pub fn show_spell_check(
         self: &Rc<Self>,

@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 
 use std::collections::{HashMap, HashSet};
@@ -30,6 +31,7 @@ pub type FocusKeyEventHandler = Rc<dyn Fn(&crate::FocusNode, KeyboardEvent) -> K
 pub struct RawKeyEvent {
     portable: KeyboardEvent,
     data: Option<Rc<crate::RawKeyPlatformData>>,
+    android_character: Option<Rc<str>>,
 }
 
 impl RawKeyEvent {
@@ -38,7 +40,22 @@ impl RawKeyEvent {
         portable: KeyboardEvent,
         data: crate::RawKeyPlatformData,
     ) -> Self {
-        Self { portable, data: Some(Rc::new(data)) }
+        Self {
+            portable,
+            data: Some(Rc::new(data)),
+            android_character: None,
+        }
+    }
+
+    pub(crate) fn with_android_platform_data(
+        portable: KeyboardEvent,
+        data: crate::RawKeyPlatformData,
+        character: Option<String>,
+    ) -> Self {
+        Self {
+            android_character: character.map(Rc::from),
+            ..Self::with_platform_data(portable, data)
+        }
     }
 
     #[must_use]
@@ -65,11 +82,50 @@ impl RawKeyEvent {
     pub fn is_key_down(&self) -> bool {
         self.portable.state.is_down()
     }
+
+    /// Character from the raw keydown packet, separate from a named key's label.
+    #[must_use]
+    pub fn character(&self) -> Option<Cow<'_, str>> {
+        if !self.is_key_down() {
+            return None;
+        }
+        match self.data() {
+            Some(crate::RawKeyPlatformData::Android(_)) => {
+                self.android_character.as_deref().map(Cow::Borrowed)
+            }
+            Some(crate::RawKeyPlatformData::Fuchsia(data)) => {
+                data.key_label().map(|ch| Cow::Owned(ch.to_string()))
+            }
+            Some(crate::RawKeyPlatformData::Windows(data)) => {
+                data.key_label().map(|ch| Cow::Owned(ch.to_string()))
+            }
+            Some(crate::RawKeyPlatformData::Web(data)) => data.key_label().map(Cow::Borrowed),
+            None => match self.logical_key() {
+                KeyboardKey::Character(text) => Some(Cow::Borrowed(text)),
+                _ => None,
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn repeat(&self) -> bool {
+        self.is_key_down() && self.portable.repeat
+    }
+
+    /// Override the embedder's repeat hint with the key manager's state.
+    #[doc(hidden)]
+    pub fn set_repeat(&mut self, repeat: bool) {
+        self.portable.repeat = repeat;
+    }
 }
 
 impl From<KeyboardEvent> for RawKeyEvent {
     fn from(portable: KeyboardEvent) -> Self {
-        Self { portable, data: None }
+        Self {
+            portable,
+            data: None,
+            android_character: None,
+        }
     }
 }
 
@@ -78,12 +134,16 @@ pub type FocusRawKeyEventHandler = Rc<dyn Fn(&crate::FocusNode, RawKeyEvent) -> 
 
 /// Combines outcomes from handlers on the same focus node. Handled takes
 /// precedence over a request to skip the remaining framework handlers.
-pub fn combine_key_event_results(results: impl IntoIterator<Item = KeyEventResult>) -> KeyEventResult {
+pub fn combine_key_event_results(
+    results: impl IntoIterator<Item = KeyEventResult>,
+) -> KeyEventResult {
     let mut combined = KeyEventResult::Ignored;
     for result in results {
         match result {
             KeyEventResult::Handled => return KeyEventResult::Handled,
-            KeyEventResult::SkipRemainingHandlers => combined = KeyEventResult::SkipRemainingHandlers,
+            KeyEventResult::SkipRemainingHandlers => {
+                combined = KeyEventResult::SkipRemainingHandlers
+            }
             KeyEventResult::Ignored => {}
         }
     }
@@ -214,16 +274,21 @@ impl GestureCallbacks {
             return KeyEventResult::Handled;
         }
         if let Some(node) = &self.focus_node {
-            let result = if self.focus_key_handler_owner != FocusKeyHandlerOwner::CallbackContainer {
-                let typed = node.on_key_event().map(|handler| handler(node, event.clone()));
-                let raw = node.on_key().and_then(|handler| {
-                    raw_delivery.payload(&event).map(|raw| handler(node, raw))
-                });
+            let result = if self.focus_key_handler_owner != FocusKeyHandlerOwner::CallbackContainer
+            {
+                let typed = node
+                    .on_key_event()
+                    .map(|handler| handler(node, event.clone()));
+                let raw = node
+                    .on_key()
+                    .and_then(|handler| raw_delivery.payload(&event).map(|raw| handler(node, raw)));
                 combine_key_event_results(typed.into_iter().chain(raw))
             } else {
-                self.on_focus_key_event.as_ref().map_or(KeyEventResult::Ignored, |handler| {
-                    handler(node, event.clone())
-                })
+                self.on_focus_key_event
+                    .as_ref()
+                    .map_or(KeyEventResult::Ignored, |handler| {
+                        handler(node, event.clone())
+                    })
             };
             if result != KeyEventResult::Ignored {
                 return result;
@@ -432,13 +497,19 @@ impl ActionOutput {
     /// Returns a handled result with an application-defined payload.
     #[must_use]
     pub fn handled_with_value<T: Any>(value: T) -> Self {
-        Self { result: ActionResult::Handled, value: Some(Box::new(value)) }
+        Self {
+            result: ActionResult::Handled,
+            value: Some(Box::new(value)),
+        }
     }
 }
 
 impl From<ActionResult> for ActionOutput {
     fn from(result: ActionResult) -> Self {
-        Self { result, value: None }
+        Self {
+            result,
+            value: None,
+        }
     }
 }
 
@@ -570,7 +641,9 @@ impl<C: CommandId> Action<C> {
     where
         R: Into<ActionResult> + 'static,
     {
-        Self::with_context(command, move |intent, _| ActionOutput::from(callback(intent).into()))
+        Self::with_context(command, move |intent, _| {
+            ActionOutput::from(callback(intent).into())
+        })
     }
 
     /// Creates a handled action that returns an application-defined value.
@@ -579,7 +652,9 @@ impl<C: CommandId> Action<C> {
         command: impl Into<Intent<C>>,
         callback: impl Fn(&Intent<C>) -> T + 'static,
     ) -> Self {
-        Self::with_context(command, move |intent, _| ActionOutput::handled_with_value(callback(intent)))
+        Self::with_context(command, move |intent, _| {
+            ActionOutput::handled_with_value(callback(intent))
+        })
     }
 
     /// Creates an action that can inspect the calling element's context.
@@ -669,7 +744,10 @@ impl<C: CommandId> Action<C> {
     ) -> bool {
         self.is_enabled()
             && self.intent.command() == intent.command()
-            && self.enabled_in_context.as_ref().is_none_or(|check| check(intent, context))
+            && self
+                .enabled_in_context
+                .as_ref()
+                .is_none_or(|check| check(intent, context))
     }
 
     /// Registers a callback that observes state changes published by this
@@ -835,7 +913,9 @@ pub struct CallbackAction<I, R = ActionResult> {
 impl<I, R> CallbackAction<I, R> {
     #[must_use]
     pub fn new(callback: impl Fn(&I) -> R + 'static) -> Self {
-        Self { callback: Rc::new(callback) }
+        Self {
+            callback: Rc::new(callback),
+        }
     }
 
     pub fn invoke(&self, intent: &I) -> R {
@@ -860,7 +940,9 @@ pub struct VoidCallbackIntent {
 impl VoidCallbackIntent {
     #[must_use]
     pub fn new(callback: impl Fn() + 'static) -> Self {
-        Self { callback: Rc::new(callback) }
+        Self {
+            callback: Rc::new(callback),
+        }
     }
 }
 
@@ -889,7 +971,11 @@ impl ActionDispatcher {
     }
 
     #[must_use]
-    pub fn invoke_action<C: CommandId>(&self, action: &Action<C>, intent: &Intent<C>) -> ActionResult {
+    pub fn invoke_action<C: CommandId>(
+        &self,
+        action: &Action<C>,
+        intent: &Intent<C>,
+    ) -> ActionResult {
         action.invoke(intent)
     }
 }
@@ -992,7 +1078,12 @@ fn dispatch_bound_action_output<C: CommandId>(
         *invocation_output.borrow_mut() = Some(output);
         result
     };
-    let dispatched = dispatcher(ActionDispatchInvocation { intent: erased, action, context, invoke: &invoke });
+    let dispatched = dispatcher(ActionDispatchInvocation {
+        intent: erased,
+        action,
+        context,
+        invoke: &invoke,
+    });
     invocation_output
         .into_inner()
         .filter(|output| output.result() == dispatched)
@@ -1008,7 +1099,8 @@ impl ActionDispatcher {
         intent: &Intent<C>,
         dispatcher: Option<Rc<ScopedActionDispatcher>>,
     ) -> ActionResult {
-        self.invoke_action_with_context(action, intent, dispatcher, None).result()
+        self.invoke_action_with_context(action, intent, dispatcher, None)
+            .result()
     }
 
     /// Dispatches through the supplied caller context and optional interceptor.
@@ -1083,7 +1175,9 @@ impl<C: CommandId> ActionRegistry for Actions<C> {
         let command = erased.downcast_command::<C>()?;
         let action = self.action_ref(command)?;
         let intent: Intent<C> = Intent::new(command.clone());
-        Some(dispatch_bound_action_output(action, &intent, erased, dispatcher, context))
+        Some(dispatch_bound_action_output(
+            action, &intent, erased, dispatcher, context,
+        ))
     }
 
     fn invoke_shortcut(
@@ -1095,7 +1189,8 @@ impl<C: CommandId> ActionRegistry for Actions<C> {
         let command = erased.downcast_command::<C>()?;
         let action = self.action_ref(command)?;
         let intent: Intent<C> = Intent::new(command.clone());
-        let result = dispatch_bound_action_output(action, &intent, erased, dispatcher, context).result();
+        let result =
+            dispatch_bound_action_output(action, &intent, erased, dispatcher, context).result();
         Some(match result {
             ActionResult::Handled => action.to_key_event_result(&intent),
             ActionResult::Ignored => KeyEventResult::Ignored,
@@ -1112,7 +1207,10 @@ pub struct ErasedActionScope {
 impl ErasedActionScope {
     #[must_use]
     pub fn from_actions<C: CommandId>(actions: Rc<Actions<C>>) -> Rc<Self> {
-        Rc::new(Self { registry: actions, dispatcher: None })
+        Rc::new(Self {
+            registry: actions,
+            dispatcher: None,
+        })
     }
 
     #[must_use]
@@ -1152,7 +1250,10 @@ impl ErasedActionScope {
     /// Reads a typed mapping without invoking the action or dispatcher.
     #[must_use]
     pub fn action<C: CommandId>(&self, intent: &Intent<C>) -> Option<Action<C>> {
-        self.registry.action_for(intent.command())?.downcast_ref::<Action<C>>().cloned()
+        self.registry
+            .action_for(intent.command())?
+            .downcast_ref::<Action<C>>()
+            .cloned()
     }
 
     #[must_use]
@@ -1351,7 +1452,10 @@ impl<C: CommandId> Actions<C> {
     }
 
     fn action_ref(&self, command: &C) -> Option<&Action<C>> {
-        self.scopes.iter().rev().find_map(|scope| scope.actions.get(command))
+        self.scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.actions.get(command))
     }
 
     fn current_scope_mut(&mut self) -> &mut ActionScope<C> {
@@ -1816,7 +1920,10 @@ impl LogicalKeySet {
     ) -> bool {
         event.state.is_down()
             && self.keys.binary_search(&event.key).is_ok()
-            && self.keys.iter().all(|key| keyboard.is_logical_key_pressed(key))
+            && self
+                .keys
+                .iter()
+                .all(|key| keyboard.is_logical_key_pressed(key))
             && keyboard
                 .pressed_logical_values()
                 .all(|key| self.keys.binary_search(key).is_ok())

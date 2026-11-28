@@ -4,10 +4,50 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
+    panic::{AssertUnwindSafe, catch_unwind},
     rc::{Rc, Weak},
 };
 
 use crate::{GestureArenaKey, GestureDisposition};
+
+/// The operation that determined the winner of an explicitly managed arena.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GestureArenaWinCause {
+    Sweep,
+    OnlyRemainingMember,
+    Accepted,
+}
+
+/// A committed arena transition. The ID is the registration ID within the
+/// manager, not a pointer address or a recognizer debug string.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GestureArenaTracePhase {
+    Opened,
+    Added {
+        member: u64,
+    },
+    Closed {
+        members: usize,
+    },
+    Swept {
+        members: usize,
+    },
+    Rejected {
+        member: u64,
+    },
+    Winner {
+        member: u64,
+        cause: GestureArenaWinCause,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GestureArenaTrace {
+    pub key: GestureArenaKey,
+    pub phase: GestureArenaTracePhase,
+}
+
+pub type GestureArenaTraceHandler = Rc<dyn Fn(GestureArenaTrace)>;
 
 /// Callbacks of a contender registered in an explicitly managed arena.
 pub trait GestureArenaClient {
@@ -40,7 +80,11 @@ impl GestureArenaRegistration {
 
     fn live_round(&self) -> Option<Rc<RefCell<State>>> {
         self.manager.upgrade().filter(|inner| {
-            inner.borrow().rounds.get(&self.key).is_some_and(|round| round.epoch == self.epoch)
+            inner
+                .borrow()
+                .rounds
+                .get(&self.key)
+                .is_some_and(|round| round.epoch == self.epoch)
         })
     }
 
@@ -92,6 +136,7 @@ struct State {
     next_member: u64,
     rounds: HashMap<GestureArenaKey, Round>,
     defaults: VecDeque<(GestureArenaKey, u64)>,
+    trace: Option<GestureArenaTraceHandler>,
 }
 
 /// Flutter-style ordered arena lifecycle: collect, close, resolve or sweep.
@@ -108,6 +153,24 @@ impl GestureArenaManager {
         Self::default()
     }
 
+    /// Observes arena changes without changing their decisions. No trace
+    /// events are sent by default. The callback runs outside the arena borrow.
+    pub fn set_trace_handler(
+        &self,
+        handler: Option<GestureArenaTraceHandler>,
+    ) -> Option<GestureArenaTraceHandler> {
+        std::mem::replace(&mut self.inner.borrow_mut().trace, handler)
+    }
+
+    fn trace(&self, key: GestureArenaKey, phase: GestureArenaTracePhase) {
+        let handler = self.inner.borrow().trace.clone();
+        if let Some(handler) = handler {
+            let _ = catch_unwind(AssertUnwindSafe(move || {
+                handler(GestureArenaTrace { key, phase })
+            }));
+        }
+    }
+
     /// Adds a contender. The first add for a stream opens its arena.
     ///
     /// # Panics
@@ -118,37 +181,45 @@ impl GestureArenaManager {
         key: GestureArenaKey,
         client: Rc<dyn GestureArenaClient>,
     ) -> GestureArenaRegistration {
-        let mut state = self.inner.borrow_mut();
-        state.next_member = state
-            .next_member
-            .checked_add(1)
-            .expect("arena registration IDs exhausted");
-        let member = state.next_member;
-        let round = state
-            .rounds
-            .entry(key)
-            .or_insert_with(|| Round::new(member));
-        assert!(round.open, "cannot add to a closed gesture arena");
-        round.members.push(Member { id: member, client });
+        let (member, epoch, opened) = {
+            let mut state = self.inner.borrow_mut();
+            state.next_member = state
+                .next_member
+                .checked_add(1)
+                .expect("arena registration IDs exhausted");
+            let member = state.next_member;
+            let round = state
+                .rounds
+                .entry(key)
+                .or_insert_with(|| Round::new(member));
+            assert!(round.open, "cannot add to a closed gesture arena");
+            round.members.push(Member { id: member, client });
+            (member, round.epoch, member == round.epoch)
+        };
+        if opened {
+            self.trace(key, GestureArenaTracePhase::Opened);
+        }
+        self.trace(key, GestureArenaTracePhase::Added { member });
         GestureArenaRegistration {
             manager: Rc::downgrade(&self.inner),
             key,
             member,
-            epoch: round.epoch,
+            epoch,
         }
     }
 
     /// Closes registration and settles an eager winner if there is still
     /// competition. A sole default winner is deferred, not called inline.
     pub fn close(&self, key: GestureArenaKey) {
-        let epoch = {
+        let (epoch, members) = {
             let mut state = self.inner.borrow_mut();
             let Some(round) = state.rounds.get_mut(&key) else {
                 return;
             };
             round.open = false;
-            round.epoch
+            (round.epoch, round.members.len())
         };
+        self.trace(key, GestureArenaTracePhase::Closed { members });
         self.try_settle(key, epoch);
     }
 
@@ -194,8 +265,21 @@ impl GestureArenaManager {
             state.rounds.remove(&key)
         };
         if let Some(round) = round {
+            self.trace(
+                key,
+                GestureArenaTracePhase::Swept {
+                    members: round.members.len(),
+                },
+            );
             let mut members = round.members.into_iter();
             if let Some(winner) = members.next() {
+                self.trace(
+                    key,
+                    GestureArenaTracePhase::Winner {
+                        member: winner.id,
+                        cause: GestureArenaWinCause::Sweep,
+                    },
+                );
                 winner.client.accept_gesture(key);
                 for loser in members {
                     loser.client.reject_gesture(key);
@@ -226,6 +310,13 @@ impl GestureArenaManager {
                 }
             };
             if let Some(winner) = winner {
+                self.trace(
+                    key,
+                    GestureArenaTracePhase::Winner {
+                        member: winner.id,
+                        cause: GestureArenaWinCause::OnlyRemainingMember,
+                    },
+                );
                 winner.client.accept_gesture(key);
             }
         }
@@ -262,6 +353,7 @@ impl GestureArenaManager {
             }
             (round.members.remove(index).client, round.epoch)
         };
+        self.trace(key, GestureArenaTracePhase::Rejected { member });
         client.reject_gesture(key);
         self.try_settle(key, epoch);
     }
@@ -310,6 +402,13 @@ impl GestureArenaManager {
         };
         // Explicit acceptance rejects the other members before calling the
         // winner. Sweep has the opposite order. No callback borrows State.
+        self.trace(
+            key,
+            GestureArenaTracePhase::Winner {
+                member: winner.id,
+                cause: GestureArenaWinCause::Accepted,
+            },
+        );
         for loser in losers {
             loser.client.reject_gesture(key);
         }

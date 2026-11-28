@@ -6,16 +6,17 @@
 //! only derives a track/thumb pair and maps pointer motion back to its offset.
 
 use incular_core::time::Instant;
-use std::time::Duration;
+use std::{fmt, rc::Rc, time::Duration};
 
 use incular_animation::Curve;
-use incular_config::{Axis, TextDirection};
-use incular_core::finite_non_negative;
+use incular_config::{Axis, EdgeInsets, EdgeInsetsGeometry, TextDirection};
 use incular_core::{Color, Offset, Rect, Size};
+use incular_core::{finite_non_negative, finite_or_zero};
 use incular_scroll::{ActivityOrigin, OwnedActivity, ScrollController};
 use smart_default::SmartDefault;
 
 use crate::gestures::PointerDeviceKind;
+use crate::{MouseCursor, Radius, ShapeBorder};
 
 /// Flutter `_kScrollbarFadeDuration` (`widgets/scrollbar.dart:43`).
 pub(crate) const SCROLLBAR_FADE_DURATION: Duration = Duration::from_millis(300);
@@ -247,8 +248,22 @@ pub struct RawScrollbarStyle {
     pub main_axis_margin: f32,
     /// Empty space inset from the overlay edge in the cross axis.
     pub cross_axis_margin: f32,
-    /// Track paint color. A transparent track is the default overlay style.
+    /// Insets around the track. When absent, mounted bars inherit the
+    /// nearest MediaQuery's safe-area padding.
+    pub padding: Option<EdgeInsetsGeometry>,
+    /// Legacy track fill: nontransparent ink opts into painting a track
+    /// without a border unless `track_visibility` is explicitly set.
     pub track_color: Color,
+    /// With a permanently visible thumb, opts into Flutter's track and border.
+    pub track_visibility: Option<bool>,
+    /// Overrides the track fill when `track_visibility` is true.
+    pub track_fill_color: Option<Color>,
+    /// Overrides the one-pixel inner track edge when `track_visibility` is true.
+    pub track_border_color: Option<Color>,
+    /// Rounded track corners, independent of the thumb's radius.
+    pub track_radius: Option<Radius>,
+    /// Rounded thumb corners. An omitted radius draws a square thumb.
+    pub radius: Option<Radius>,
     /// Thumb paint color.
     #[default(Color::rgba(188, 188, 188, 102))]
     pub thumb_color: Color,
@@ -272,12 +287,21 @@ pub struct RawScrollbarStyle {
 }
 
 impl RawScrollbarStyle {
+    fn assert_valid_visibility(self) {
+        debug_assert!(
+            !(self.thumb_visibility == Some(false) && self.track_visibility == Some(true)),
+            "RawScrollbar: a visible track requires a visible thumb",
+        );
+    }
+
     fn normalized(self) -> Self {
         Self {
             thickness: finite_positive(self.thickness, 1.0),
-            min_thumb_extent: finite_positive(self.min_thumb_extent, 1.0),
-            min_overscroll_thumb_extent: finite_positive(self.min_overscroll_thumb_extent, 1.0),
-            main_axis_margin: finite_non_negative(self.main_axis_margin),
+            // Zero is a valid configured floor; infinity is capped by
+            // the available track when calculating its geometry.
+            min_thumb_extent: self.min_thumb_extent.max(0.0),
+            min_overscroll_thumb_extent: self.min_overscroll_thumb_extent.max(0.0),
+            main_axis_margin: finite_or_zero(self.main_axis_margin),
             cross_axis_margin: finite_non_negative(self.cross_axis_margin),
             ..self
         }
@@ -350,6 +374,65 @@ struct ThumbDrag {
     activity: OwnedActivity,
 }
 
+/// Interaction state for resolving the cursor of an explicit scrollbar.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ScrollbarCursorState {
+    pub hovered: bool,
+    pub dragged: bool,
+    pub disabled: bool,
+}
+
+#[derive(Clone)]
+pub(crate) enum ScrollbarCursor {
+    Fixed(MouseCursor),
+    Resolved(Rc<dyn Fn(ScrollbarCursorState) -> Option<MouseCursor>>),
+}
+
+impl fmt::Debug for ScrollbarCursor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Fixed(cursor) => f.debug_tuple("Fixed").field(cursor).finish(),
+            Self::Resolved(_) => f.write_str("Resolved(..)"),
+        }
+    }
+}
+
+impl PartialEq for ScrollbarCursor {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Fixed(a), Self::Fixed(b)) => a == b,
+            (Self::Resolved(a), Self::Resolved(b)) => Rc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+
+impl ScrollbarCursor {
+    pub(crate) fn resolve(&self, state: ScrollbarCursorState) -> Option<MouseCursor> {
+        match self {
+            Self::Fixed(cursor) => Some(*cursor),
+            Self::Resolved(resolve) => resolve(state),
+        }
+        .filter(|cursor| *cursor != MouseCursor::Defer)
+    }
+}
+
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct ScrollbarThumbShape(pub(crate) Rc<dyn ShapeBorder>);
+
+impl PartialEq for ScrollbarThumbShape {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.as_ref() == other.0.as_ref()
+    }
+}
+
+impl fmt::Debug for ScrollbarThumbShape {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ScrollbarThumbShape").finish_non_exhaustive()
+    }
+}
+
 /// A stateful raw scrollbar overlay attached to an existing scroll controller.
 ///
 /// Pointer methods use viewport coordinates and preserve Flutter's thumb
@@ -366,6 +449,8 @@ struct ThumbDrag {
 #[derive(Debug)]
 pub struct RawScrollbar {
     controller: ScrollController,
+    cursor: Option<ScrollbarCursor>,
+    shape: Option<ScrollbarThumbShape>,
     style: RawScrollbarStyle,
     text_direction: TextDirection,
     drag: Option<ThumbDrag>,
@@ -384,6 +469,8 @@ impl Clone for RawScrollbar {
         fade.set_durations(self.style.fade_duration, self.style.time_to_fade);
         Self {
             controller: self.controller.clone(),
+            cursor: self.cursor.clone(),
+            shape: self.shape.clone(),
             style: self.style,
             text_direction: self.text_direction,
             drag: None,
@@ -401,6 +488,8 @@ impl RawScrollbar {
     pub fn new(controller: ScrollController) -> Self {
         Self {
             controller,
+            cursor: None,
+            shape: None,
             style: RawScrollbarStyle::default(),
             text_direction: TextDirection::Ltr,
             drag: None,
@@ -408,6 +497,166 @@ impl RawScrollbar {
             hover_active: false,
             last_offset: None,
             was_active: false,
+        }
+    }
+
+    /// Overrides the mouse cursor over this bar or during its thumb drag.
+    #[must_use]
+    pub fn mouse_cursor(mut self, cursor: MouseCursor) -> Self {
+        self.cursor = Some(ScrollbarCursor::Fixed(cursor));
+        self
+    }
+
+    /// Resolves an optional cursor from current scrollbar interaction.
+    /// Returning None or Defer leaves ordinary pointer cursor routing intact.
+    #[must_use]
+    pub fn mouse_cursor_with_states(
+        mut self,
+        resolve: impl Fn(ScrollbarCursorState) -> Option<MouseCursor> + 'static,
+    ) -> Self {
+        self.cursor = Some(ScrollbarCursor::Resolved(Rc::new(resolve)));
+        self
+    }
+
+    pub(crate) fn cursor_resolver(&self) -> Option<ScrollbarCursor> {
+        self.cursor.clone()
+    }
+
+    pub(crate) fn captures_cursor(&self, size: Size) -> bool {
+        self.drag.is_some() && self.cursor_enabled(size)
+    }
+
+    pub(crate) fn cursor_enabled(&self, size: Size) -> bool {
+        self.style.interactive && self.scrollable_geometry(size).is_some()
+    }
+
+    /// Overrides the inherited inset. Directional edges follow reading order.
+    #[must_use]
+    pub fn padding(mut self, padding: impl Into<EdgeInsetsGeometry>) -> Self {
+        self.style.padding = Some(padding.into());
+        self
+    }
+
+    /// Configures the thumb minimum and uses it during overscroll as well.
+    #[must_use]
+    pub fn min_thumb_length(self, minimum: f32) -> Self {
+        self.min_lengths(minimum, None)
+    }
+
+    /// Sets both Flutter minimum length inputs atomically. When no overscroll
+    /// minimum is supplied, it inherits the configured normal minimum.
+    #[must_use]
+    pub fn min_lengths(mut self, minimum: f32, overscroll_minimum: Option<f32>) -> Self {
+        let floor = overscroll_minimum.unwrap_or(minimum);
+        debug_assert!(
+            minimum >= 0.0,
+            "the thumb minimum length cannot be negative"
+        );
+        debug_assert!(
+            floor >= 0.0 && floor <= minimum,
+            "the overscroll minimum must be nonnegative and no greater than the thumb minimum",
+        );
+        self.style.min_thumb_extent = minimum;
+        self.style.min_overscroll_thumb_extent = floor;
+        self
+    }
+
+    /// Keeps the thumb visible at rest. An explicitly hidden thumb cannot
+    /// be combined with an explicitly visible track.
+    #[must_use]
+    pub fn thumb_visibility(mut self, visible: bool) -> Self {
+        self.style.thumb_visibility = Some(visible);
+        self.style.assert_valid_visibility();
+        self
+    }
+
+    /// Shows the track and its inner edge when the thumb is always visible.
+    #[must_use]
+    pub fn track_visibility(mut self, visible: bool) -> Self {
+        self.style.track_visibility = Some(visible);
+        self.style.assert_valid_visibility();
+        self
+    }
+
+    /// Overrides the opted-in track fill, including fully transparent ink.
+    #[must_use]
+    pub fn track_color(mut self, color: Color) -> Self {
+        self.style.track_fill_color = Some(color);
+        self
+    }
+
+    /// Overrides the opted-in inner track edge.
+    #[must_use]
+    pub fn track_border_color(mut self, color: Color) -> Self {
+        self.style.track_border_color = Some(color);
+        self
+    }
+
+    /// Sets the rounded corners of the track.
+    #[must_use]
+    pub fn track_radius(mut self, radius: Radius) -> Self {
+        self.style.track_radius = Some(radius);
+        self
+    }
+
+    /// Sets the rounded corners of the thumb.
+    #[must_use]
+    pub fn radius(mut self, radius: Radius) -> Self {
+        debug_assert!(
+            self.shape.is_none(),
+            "a scrollbar thumb cannot have both a shape and radius",
+        );
+        self.style.radius = Some(radius);
+        self
+    }
+
+    /// Sets the thumb outline and optionally paints the shape's own border.
+    /// This is mutually exclusive with a separately configured thumb radius.
+    #[must_use]
+    pub fn shape(mut self, shape: impl ShapeBorder + 'static) -> Self {
+        debug_assert!(
+            self.style.radius.is_none(),
+            "a scrollbar thumb cannot have both a shape and radius",
+        );
+        self.shape = Some(ScrollbarThumbShape(Rc::new(shape)));
+        self
+    }
+
+    pub(crate) fn thumb_shape(&self) -> Option<ScrollbarThumbShape> {
+        self.shape.clone()
+    }
+
+    pub(crate) fn track_paint_colors(&self) -> (Color, Color) {
+        match self.style.track_visibility {
+            Some(true) if self.show_scrollbar() => (
+                self.style.track_fill_color.unwrap_or_else(|| {
+                    if self.style.track_color.alpha == 0 {
+                        Color::rgba(0, 0, 0, 8)
+                    } else {
+                        self.style.track_color
+                    }
+                }),
+                self.style
+                    .track_border_color
+                    .unwrap_or(Color::rgba(0, 0, 0, 26)),
+            ),
+            None => (self.style.track_color, Color::TRANSPARENT),
+            _ => (Color::TRANSPARENT, Color::TRANSPARENT),
+        }
+    }
+
+    /// Inner edge of the physical track, centered on the boundary.
+    pub(crate) fn track_inner_edge(&self, track: Rect) -> (Offset, Offset) {
+        let axis = self.controller.metrics().axis_direction.axis();
+        let (orientation, _) = self.style.orientation.resolve(axis, self.text_direction);
+        let (x, y) = (track.origin.x, track.origin.y);
+        let (right, bottom) = (x + track.size.width, y + track.size.height);
+        match orientation {
+            RawScrollbarOrientation::Left => (Offset::new(right, y), Offset::new(right, bottom)),
+            RawScrollbarOrientation::Right => (track.origin, Offset::new(x, bottom)),
+            RawScrollbarOrientation::Top => (Offset::new(x, bottom), Offset::new(right, bottom)),
+            RawScrollbarOrientation::Bottom => (track.origin, Offset::new(right, y)),
+            RawScrollbarOrientation::Auto => unreachable!("orientation already resolved"),
         }
     }
 
@@ -441,7 +690,9 @@ impl RawScrollbar {
             self.fade.queue(ScrollbarFadeCommand::StartTimer);
         }
         self.was_active = active;
-        let scrollable = self.controller.max_offset() > 0.0;
+        // A centered sliver viewport can have a zero maximum and a negative
+        // minimum. Its scrollbar is governed by the span, not the sign.
+        let scrollable = self.controller.max_offset() > self.controller.min_offset();
         let show = self.show_scrollbar();
         self.fade.advance(now, show, scrollable)
     }
@@ -450,13 +701,17 @@ impl RawScrollbar {
     /// brings it into view and holds it; leaving restarts the fade-out timer.
     pub fn pointer_hover(&mut self, viewport_size: Size, point: Offset, kind: PointerDeviceKind) {
         if self.over_scrollbar(viewport_size, point, kind, true) {
-            self.hover_active = true;
-            self.fade.queue(ScrollbarFadeCommand::Forward);
-            self.fade.queue(ScrollbarFadeCommand::CancelTimer);
+            self.hold_hover();
         } else if self.hover_active {
             self.hover_active = false;
             self.fade.queue(ScrollbarFadeCommand::StartTimer);
         }
+    }
+
+    pub(crate) fn hold_hover(&mut self) {
+        self.hover_active = true;
+        self.fade.queue(ScrollbarFadeCommand::Forward);
+        self.fade.queue(ScrollbarFadeCommand::CancelTimer);
     }
 
     /// `RawScrollbarState.handleHoverExit`.
@@ -518,6 +773,11 @@ impl RawScrollbar {
     /// still-current token emits `End`, so a taken-over bracket stays
     /// silent here.
     pub fn set_style(&mut self, style: RawScrollbarStyle) {
+        style.assert_valid_visibility();
+        debug_assert!(
+            style.radius.is_none() || self.shape.is_none(),
+            "a scrollbar thumb cannot have both a shape and radius",
+        );
         self.end_drag_activity();
         self.style = style.normalized();
         self.fade
@@ -531,7 +791,10 @@ impl RawScrollbar {
     fn resolved_axis(&self) -> Axis {
         self.style
             .orientation
-            .resolve(self.controller.metrics().axis_direction.axis(), self.text_direction)
+            .resolve(
+                self.controller.metrics().axis_direction.axis(),
+                self.text_direction,
+            )
             .1
     }
 
@@ -567,24 +830,36 @@ impl RawScrollbar {
         let max_scroll_extent = self.controller.max_offset().max(0.0);
         let scroll_range = max_scroll_extent - min_scroll_extent;
         let cross_extent = axis.cross_extent(viewport_size);
-        let travel_extent = (viewport_extent - style.main_axis_margin * 2.0).max(0.0);
-        let track_cross = style.thickness + style.cross_axis_margin * 2.0;
+        let padding = style.padding.map_or(EdgeInsets::ZERO, |padding| {
+            padding.resolve(self.text_direction)
+        });
+        let (track_start, main_padding) = if axis.is_horizontal() {
+            (padding.left, padding.horizontal())
+        } else {
+            (padding.top, padding.vertical())
+        };
+        let track_extent = (viewport_extent - main_padding).max(0.);
+        let travel_extent = (track_extent - style.main_axis_margin * 2.).max(0.);
+        let track_cross = style.thickness + style.cross_axis_margin * 2.;
         let cross_start = match orientation {
-            RawScrollbarOrientation::Left | RawScrollbarOrientation::Top => style.cross_axis_margin,
-            RawScrollbarOrientation::Auto
-            | RawScrollbarOrientation::Right
-            | RawScrollbarOrientation::Bottom => {
-                cross_extent - style.cross_axis_margin - style.thickness
+            RawScrollbarOrientation::Left => padding.left + style.cross_axis_margin,
+            RawScrollbarOrientation::Top => padding.top + style.cross_axis_margin,
+            RawScrollbarOrientation::Bottom => {
+                cross_extent - padding.bottom - style.cross_axis_margin - style.thickness
+            }
+            RawScrollbarOrientation::Auto | RawScrollbarOrientation::Right => {
+                cross_extent - padding.right - style.cross_axis_margin - style.thickness
             }
         };
-        // As in Flutter, the track has the scroll metrics' viewport length,
-        // not the canvas length. Main-axis margins inset the thumb only.
-        let track_origin = axis.offset(0., cross_start - style.cross_axis_margin);
-        let track = Rect::from_origin_size(track_origin, axis.size(viewport_extent, track_cross));
+        // Padding offsets the track and the thumb; the main-axis margin
+        // additionally insets the thumb without shortening track paint.
+        let track_origin = axis.offset(track_start, cross_start - style.cross_axis_margin);
+        let track = Rect::from_origin_size(track_origin, axis.size(track_extent, track_cross));
 
         if cross_extent <= 0.0
             || content_extent <= viewport_extent
             || viewport_extent <= 0.0
+            || track_extent <= 0.0
             || travel_extent <= 0.0
         {
             return RawScrollbarGeometry {
@@ -607,7 +882,8 @@ impl RawScrollbar {
             - (metrics.min_scroll_extent - metrics.pixels).clamp(0.0, viewport_extent)
             - (metrics.pixels - metrics.max_scroll_extent).clamp(0.0, viewport_extent);
         let fraction_overscrolled = 1.0 - extent_inside / viewport_extent;
-        let fraction = (extent_inside / content_extent).clamp(0.0, 1.0);
+        let fraction =
+            ((extent_inside - main_padding) / (content_extent - main_padding)).clamp(0.0, 1.0);
         let min_extent = style.min_thumb_extent.min(travel_extent)
             * (1.0 - fraction_overscrolled.clamp(0.0, 0.2) / 0.2);
         let thumb_main = (travel_extent * fraction)
@@ -625,7 +901,7 @@ impl RawScrollbar {
             offset_fraction
         };
         let thumb_origin = axis.offset(
-            style.main_axis_margin + thumb_travel * offset_fraction,
+            track_start + style.main_axis_margin + thumb_travel * offset_fraction,
             cross_start,
         );
         RawScrollbarGeometry {
@@ -689,7 +965,9 @@ impl RawScrollbar {
         let grab = axis.main_extent_of(point) - axis.main_extent_of(thumb.origin);
         self.drag = Some(ThumbDrag {
             grab_offset: grab.clamp(0., axis.main_extent(thumb.size)),
-            activity: self.controller.start_owned_activity(ActivityOrigin::Scrollbar),
+            activity: self
+                .controller
+                .start_owned_activity(ActivityOrigin::Scrollbar),
         });
         // An owned thumb press holds the scrollbar in view until it ends.
         self.fade.queue(ScrollbarFadeCommand::CancelTimer);
@@ -748,13 +1026,12 @@ impl RawScrollbar {
             return false;
         }
         let axis = self.resolved_axis();
-        let track_start = self.style.main_axis_margin;
+        let track_start = axis.main_extent_of(geometry.track.origin) + self.style.main_axis_margin;
         let point_main = axis.main_extent_of(point);
         let desired_thumb =
             (point_main - drag.grab_offset - track_start).clamp(0.0, geometry.thumb_travel);
         let mut fraction = desired_thumb / geometry.thumb_travel;
-        if self.controller.metrics().axis_direction.is_reversed()
-        {
+        if self.controller.metrics().axis_direction.is_reversed() {
             fraction = 1.0 - fraction;
         }
         self.controller.jump_to(geometry.offset_at(fraction))
@@ -789,13 +1066,12 @@ impl RawScrollbar {
             return false;
         }
         let axis = self.resolved_axis();
-        let track_start = self.style.main_axis_margin;
+        let track_start = axis.main_extent_of(geometry.track.origin) + self.style.main_axis_margin;
         let mut fraction =
             (main_position - track_start - axis.main_extent_of(geometry.thumb.size) / 2.0)
                 .clamp(0.0, geometry.thumb_travel)
                 / geometry.thumb_travel;
-        if self.controller.metrics().axis_direction.is_reversed()
-        {
+        if self.controller.metrics().axis_direction.is_reversed() {
             fraction = 1.0 - fraction;
         }
         self.controller.jump_to(geometry.offset_at(fraction))

@@ -353,6 +353,8 @@ impl WidgetTree {
     pub fn set_semantics_enabled(&mut self, enabled: bool) {
         self.semantics_enabled = enabled;
         if !enabled {
+            #[cfg(debug_assertions)]
+            self.semantic_role_issues.clear();
             // Removing nodes one by one keeps the revision monotonic, so a
             // re-enabled projection never mistakes a rebuilt graph for an
             // unchanged one.
@@ -459,6 +461,8 @@ impl WidgetTree {
             .and_then(|root| self.elements.get(root.0).map(|entry| (root, entry.render)));
         let full = std::mem::take(&mut self.semantics_full_pass);
         let Some((root, root_render)) = root else {
+            #[cfg(debug_assertions)]
+            self.semantic_role_issues.clear();
             self.semantics.set_root(None);
             self.semantic_point_order.clear();
             return;
@@ -477,6 +481,13 @@ impl WidgetTree {
         let mut scratch = std::mem::take(&mut self.semantics_scratch);
         self.collect_semantics(root, full, &mut scratch);
         self.apply_semantics(&mut scratch);
+        #[cfg(debug_assertions)]
+        {
+            self.semantic_role_issues = self.semantics.role_issues_with_action_blocks(|node| {
+                self.element_for_semantic_node(node)
+                    .is_some_and(|element| self.pointer_actions_blocked(element))
+            });
+        }
         self.semantics_scratch = scratch;
         #[cfg(feature = "devtools")]
         self.devtools_trace_end(trace);
@@ -3681,6 +3692,27 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
         increased_value,
         decreased_value,
     );
+    // Textual declarations override the corresponding base limit, even
+    // when blank or invalid. The other bound stays inherited.
+    if overlay.value_bounds_text.is_some() || base.value_bounds_text.is_some() {
+        let overlay_bounds = overlay.value_bounds_text.as_deref();
+        let bounds = Arc::make_mut(base.value_bounds_text.get_or_insert_with(Arc::default));
+        if let Some(min) = overlay_bounds.and_then(|bounds| bounds.min.as_ref()) {
+            bounds.min = Some(min.clone());
+            base.numeric_min = overlay.numeric_min;
+        } else if overlay.numeric_min.is_some() {
+            bounds.min = None;
+        }
+        if let Some(max) = overlay_bounds.and_then(|bounds| bounds.max.as_ref()) {
+            bounds.max = Some(max.clone());
+            base.numeric_max = overlay.numeric_max;
+        } else if overlay.numeric_max.is_some() {
+            bounds.max = None;
+        }
+        if bounds.min.is_none() && bounds.max.is_none() {
+            base.value_bounds_text = None;
+        }
+    }
     let alternate_attributes = |replace: bool| {
         if replace {
             overlay.text_attributes.as_deref()

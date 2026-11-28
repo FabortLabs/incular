@@ -52,7 +52,7 @@ impl PlatformMenuCommandModel {
 // path available to sibling implementation crates without creating a second
 // retained controller type in Widgets.
 pub use incular_gestures::{
-    ConvertedPointerEvent, ConvertedPointerKind, PointerData, PointerDataChange, PointerEventConverter,
+    ConvertedPointerEvent, ConvertedPointerKind, PointerData, PointerDataChange, PointerDataSignal, PointerEventConverter,
     PointerEventResampler, PointerRouter,
 };
 pub use incular_text::{TextEditingController, TextEditingValue, TextRange, TextSelection};

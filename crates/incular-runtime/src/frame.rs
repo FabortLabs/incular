@@ -26,7 +26,7 @@ use incular_config::{Constraints, RuntimeEnvironment, TargetPlatform};
 use incular_core::IdGenerator;
 use incular_core::time::Instant;
 use incular_core::{
-    Code, ImeEvent, InputEvent, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
+    Code, HardwareKeyOrigin, ImeEvent, InputEvent, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
     PointerSampleMetadata, Rect, Size,
 };
 use incular_platform::{
@@ -347,11 +347,16 @@ pub struct Runtime {
     pub(crate) text_long_press: Option<text_gestures::TextLongPress>,
     /// A press on the focused field's selection handles, until it lifts.
     pub(crate) text_handle_drag: Option<text_gestures::TextHandleDrag>,
+    editable_scroll_drag: Option<text_gestures::EditableScrollDrag>,
+    editable_toolbar_restore: Option<text_gestures::EditableToolbarRestore>,
     /// Modifier keys held, from the latest key event (`HardwareKeyboard`).
     pub(crate) keyboard_modifiers: incular_core::Modifiers,
     hardware_keyboard: incular_core::HardwareKeyboardState,
     hardware_key_handlers: incular_core::HardwareKeyHandlers,
     hardware_key_error_handler: Option<Box<dyn Fn(HardwareKeyHandlerError)>>,
+    raw_keyboard_listeners: crate::raw_keyboard::RawKeyboardListeners,
+    legacy_raw_keyboard: crate::LegacyRawKeyboardState,
+    raw_keyboard_error_handler: Option<Box<dyn Fn(crate::RawKeyboardListenerError)>>,
     key_message_route: KeyMessageRoute,
     key_message_error_handler: Option<Box<dyn Fn(KeyMessageHandlerError)>>,
     early_focus_key_handlers: FocusKeyHandlers,
@@ -396,6 +401,8 @@ pub struct Runtime {
     pub(crate) frame_requested: bool,
     warm_up_frame: Option<incular_animation::scheduler::WarmUpFrame>,
     pub(crate) scheduler: Rc<RefCell<tasks::TaskScheduler>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    file_image_worker: incular_image::FileImageWorker,
     semantics_activation: Option<Rc<crate::semantics_activation::SemanticsActivation>>,
     pub(crate) environment: Rc<RefCell<RuntimeEnvironment>>,
     lifecycle: ApplicationLifecycle,
@@ -567,6 +574,19 @@ impl Runtime {
         tree.install_image_playback_loader(incular_widgets::internal::ImagePlaybackLoader::new(
             move |bytes, resize| image_spawner.load_animated_webp_in(&image_scope, bytes, resize),
         ));
+        #[cfg(not(target_arch = "wasm32"))]
+        let file_image_worker = {
+            let scheduler = Rc::downgrade(&scheduler);
+            incular_image::FileImageWorker::new(move |read| {
+                if let Some(scheduler) = scheduler.upgrade() {
+                    // Starting the executor is lazy; runtimes that load
+                    // no file images need not create worker threads.
+                    drop(scheduler.borrow().tokio_handle().spawn_blocking(read));
+                }
+            })
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let _file_image_scope = file_image_worker.enter();
         tree.enable_hosted_focus();
         let mut handlers = HashMap::new();
         root.bind_callbacks(&mut |callback| {
@@ -627,10 +647,15 @@ impl Runtime {
             text_taps: None,
             text_long_press: None,
             text_handle_drag: None,
+            editable_scroll_drag: None,
+            editable_toolbar_restore: None,
             keyboard_modifiers: incular_core::Modifiers::empty(),
             hardware_keyboard: incular_core::HardwareKeyboardState::default(),
             hardware_key_handlers: incular_core::HardwareKeyHandlers::default(),
             hardware_key_error_handler: None,
+            raw_keyboard_listeners: crate::raw_keyboard::RawKeyboardListeners::default(),
+            legacy_raw_keyboard: crate::LegacyRawKeyboardState::default(),
+            raw_keyboard_error_handler: None,
             key_message_route: KeyMessageRoute::default(),
             key_message_error_handler: None,
             early_focus_key_handlers: FocusKeyHandlers::default(),
@@ -666,6 +691,8 @@ impl Runtime {
             semantics_activation: None,
             warm_up_frame: None,
             scheduler,
+            #[cfg(not(target_arch = "wasm32"))]
+            file_image_worker,
             environment: Rc::new(RefCell::new(RuntimeEnvironment::default())),
             lifecycle,
             frame_availability,
@@ -1127,6 +1154,28 @@ impl Runtime {
             return false;
         }
         let changed = environment_change_mask(&previous, &environment);
+        if let Some(field) = self.focused.filter(|&field| self.tree.is_text_field(field))
+            && matches!(
+                self.text_shortcut_platform,
+                TextShortcutPlatform::Android | TextShortcutPlatform::Ios
+            )
+        {
+            let landscape = |size: Size| {
+                (size.width.is_finite() && size.height.is_finite()
+                    && size.width > 0. && size.height > 0.)
+                    .then_some(size.width > size.height)
+            };
+            if landscape(previous.viewport).zip(landscape(environment.viewport))
+                .is_some_and(|(before, after)| before != after)
+            {
+                self.editable_toolbar_restore = None;
+                if self.text_shortcut_platform == TextShortcutPlatform::Ios {
+                    self.hide_text_field_toolbar_only(field);
+                } else {
+                    self.hide_text_field_overlays(field);
+                }
+            }
+        }
         if environment.view_insets.bottom > previous.view_insets.bottom
             && self.focused.is_some_and(|field| self.tree.is_text_field(field))
         {
@@ -2271,10 +2320,17 @@ impl Runtime {
         match input.kind {
             ConvertedPointerKind::Contact { event, .. } => self.dispatch_packet_contact(event),
             ConvertedPointerKind::Scroll(event) => {
-                let _ = self.handle_input_at(
-                    InputEvent::ScrollAt { position: event.position, delta: event.scroll_delta },
-                    event.time,
-                );
+                let started = Instant::now();
+                let diagnostic = InputEvent::ScrollAt {
+                    position: event.position,
+                    delta: event.scroll_delta,
+                };
+                self.tree.set_diagnostic_input_trigger(None, &diagnostic, diagnostic_input_trigger);
+                self.advance_text_history_clock(event.time);
+                self.frame_requested |= self.tree.scroll_signal_at(event, self.keyboard_modifiers.shift());
+                self.settle_drag_keyboard_dismissal();
+                self.pending_event_processing_us = self.pending_event_processing_us
+                    .saturating_add(us_since_instant(started));
             }
             ConvertedPointerKind::PanZoom { event, pan_delta } => {
                 let traced_at = Instant::now();
@@ -2285,9 +2341,16 @@ impl Runtime {
                 self.pending_event_processing_us = self.pending_event_processing_us
                     .saturating_add(us_since_instant(traced_at));
             }
-            // The retained window does not yet consume these signal kinds;
-            // direct embedders can still observe them from the converter.
-            ConvertedPointerKind::ScrollInertiaCancel(_) | ConvertedPointerKind::Scale { .. } => {}
+            ConvertedPointerKind::Scale { event, scale } => {
+                let started = Instant::now();
+                self.advance_text_history_clock(event.time);
+                self.frame_requested |= self.tree.scale_signal_at(event, scale);
+                self.pending_event_processing_us = self.pending_event_processing_us
+                    .saturating_add(us_since_instant(started));
+            }
+            // Scroll inertia-cancel is observable by embedders through
+            // the converter but is not consumed by the retained window.
+            ConvertedPointerKind::ScrollInertiaCancel(_) => {}
         }
     }
 
@@ -2740,6 +2803,11 @@ impl Runtime {
             // deadlines that fire on the frame clock, so a frame must run.
             self.frame_requested = true;
         }
+        let focused_toolbar_before_down = (phase == PointerPhase::Down).then_some(self.focused)
+            .flatten()
+            .filter(|&field| self.tree.text_field_toolbar_state(field).is_some_and(|menu| {
+                menu.is_showing() && !menu.is_spell_check_showing()
+            }));
         let text_menu_was_showing = phase == PointerPhase::Down
             && (button == Some(incular_core::SECONDARY_POINTER_BUTTON)
                 || (self.text_shortcut_platform == TextShortcutPlatform::Ios
@@ -2760,17 +2828,26 @@ impl Runtime {
         let hit = self.hit_for_pointer_event(gesture_window, raw_event, hover_capable);
         // Outside notifications observe physical down/up independently of
         // whether a different gesture recognizer later wins the contact.
-        let notified_text_outside = matches!(phase, PointerPhase::Down | PointerPhase::Up)
-            && !on_text_handle
-            && self.focused.is_some_and(|focused| {
-                self.tree.dispatch_editable_tap_outside(gesture_window, focused, raw_event, &hit)
-            });
+        let outside_editor = match phase {
+            PointerPhase::Down
+                if !on_text_handle && !self.tree.has_raw_pointer_contact(gesture_window, raw_event) =>
+            {
+                self.focused.filter(|&field| {
+                    self.tree.is_text_field(field)
+                        && !self.tree.preserves_editable_group_with_hit(field, &hit)
+                })
+            }
+            PointerPhase::Up => self.tree.take_editable_outside_press(gesture_window, raw_event),
+            _ => None,
+        };
+        let notified_text_outside = outside_editor
+            .is_some_and(|field| self.tree.dispatch_editable_tap_outside(field, raw_event));
         self.frame_requested |= notified_text_outside;
         let raw_target = self
             .tree
             .dispatch_raw_pointer_with_motion_source(gesture_window, raw_event, &hit, measured_delta);
-        if hover_capable && !matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
-            self.update_mouse_cursor(raw_event, &hit);
+        if phase == PointerPhase::Down && let Some(field) = outside_editor {
+            self.tree.remember_editable_outside_press(gesture_window, raw_event, field);
         }
         if metadata_rich
             && self.text_secondary_pointer(
@@ -2825,10 +2902,16 @@ impl Runtime {
                 now,
             )
         {
+            if hover_capable {
+                self.update_mouse_cursor(raw_event, &hit);
+            }
             self.cancel_pending_mobile_text_touch();
             self.frame_requested = true;
             self.release_legacy_pointer(device, pointer, phase, primary_changed);
             return None;
+        }
+        if hover_capable {
+            self.update_mouse_cursor(raw_event, &hit);
         }
 
         if let Some(element) = raw_target
@@ -2917,6 +3000,9 @@ impl Runtime {
                 unreachable!("pointer boundary handled above")
             }
             PointerPhase::Move => {
+                if self.move_editable_scroll_drag(position) {
+                    return None;
+                }
                 self.text_handle_drag_move(position);
                 if let Some(press) = self.pending_mobile_text_touch
                     && !press.within_slop(position)
@@ -3084,6 +3170,9 @@ impl Runtime {
                     && !ignores_text_pointer
                 {
                     let shift = self.keyboard_modifiers.shift();
+                    if mobile_touch {
+                        self.begin_editable_scroll_drag(field, position, focused_toolbar_before_down == Some(field));
+                    }
                     if deferred_text_touch {
                         self.pending_mobile_text_touch = Some(text_gestures::PendingMobileTextTouch {
                             field,
@@ -3131,6 +3220,10 @@ impl Runtime {
                 target.map(|(element, action)| EventTarget { element, action })
             }
             PointerPhase::Up => {
+                if self.finish_editable_scroll_drag() {
+                    self.release_legacy_pointer(device, pointer, phase, primary_changed);
+                    return None;
+                }
                 if let Some(press) = self.pending_mobile_text_touch {
                     if press.within_slop(position)
                         && text_target == Some(press.field)
@@ -3188,8 +3281,9 @@ impl Runtime {
             }
             PointerPhase::Cancel => {
                 self.captured_text_field = None;
-                self.text_long_press = None;
-                self.text_handle_drag = None;
+                self.cancel_text_long_press();
+                self.cancel_text_handle_drag();
+                self.finish_editable_scroll_drag();
                 self.captured_selectable_text = None;
                 if let Some(element) = self.pressed_button.take() {
                     let _ = self
@@ -3303,7 +3397,14 @@ impl Runtime {
     }
 
     fn update_mouse_cursor(&mut self, event: RawPointerEvent, hit: &PointerHitTest) {
-        let cursor = match self.tree.mouse_cursor_for_hit(hit) {
+        let scrollbar = if event.kind == incular_core::PointerDeviceKind::Mouse {
+            self.tree.explicit_scrollbar_mouse_cursor(
+                event.position, hit, self.legacy_pointer == Some((event.device, event.pointer)),
+            )
+        } else {
+            None
+        };
+        let cursor = match scrollbar.unwrap_or_else(|| self.tree.mouse_cursor_for_hit(hit)) {
             MouseCursor::Defer => MouseCursor::Basic,
             cursor => cursor,
         };
@@ -3392,6 +3493,7 @@ impl Runtime {
             self.tree.set_keyboard_focus(previous, false);
             let _ = self.tree.set_focused(previous, false, self.input_now());
             self.hide_text_field_overlays(previous);
+            self.cancel_text_handle_drag();
         }
         self.focused = next;
         self.primary_focus_node = next_node;
@@ -3750,8 +3852,16 @@ impl Runtime {
                 )
             })
         });
+        // macOS selectors and the web need a connection even for
+        // read-only selection and traversal; other native targets do not.
         let snapshot = self
             .focused
+            .filter(|&id| {
+                self.tree.text_field_is_editable(id)
+                    || ((cfg!(target_arch = "wasm32")
+                        || self.text_shortcut_platform == TextShortcutPlatform::MacOs)
+                        && self.tree.text_field_is_read_only(id))
+            })
             .and_then(|id| self.tree.text_field_ime_snapshot(id, !unchanged));
         let Some((target, snapshot)) = self.focused.zip(snapshot) else {
             if let Some(MountedTextInputConnection { client, .. }) = self.text_input_client.take() {
@@ -4096,6 +4206,17 @@ impl Runtime {
         &self.hardware_keyboard
     }
 
+    /// Pressed state of supported, explicitly supplied raw platform packets.
+    #[must_use]
+    pub const fn legacy_raw_keyboard(&self) -> &crate::LegacyRawKeyboardState {
+        &self.legacy_raw_keyboard
+    }
+
+    /// Clears only the legacy raw state, without dispatching releases.
+    pub fn clear_legacy_raw_keyboard(&mut self) {
+        self.legacy_raw_keyboard.clear();
+    }
+
     /// Adds a window-wide hardware key handler. Keep the subscription to
     /// receive events before focused widgets and fallback editing actions.
     pub fn add_hardware_key_handler(
@@ -4103,6 +4224,16 @@ impl Runtime {
         handler: impl Fn(&KeyboardEvent) -> bool + 'static,
     ) -> incular_core::HardwareKeySubscription {
         self.hardware_key_handlers.add(handler)
+    }
+
+    /// Adds a hardware handler receiving the origin of the key transition.
+    /// Raw-only packets can reconstruct missing modifier events; paired
+    /// and portable events retain their supplied origin.
+    pub fn add_hardware_key_handler_with_origin(
+        &self,
+        handler: impl Fn(&KeyboardEvent, HardwareKeyOrigin) -> bool + 'static,
+    ) -> incular_core::HardwareKeySubscription {
+        self.hardware_key_handlers.add_with_origin(handler)
     }
 
     /// Reports caught hardware-key callback failures with their original
@@ -4117,6 +4248,36 @@ impl Runtime {
 
     pub fn clear_hardware_key_error_handler(&mut self) {
         self.hardware_key_error_handler = None;
+    }
+
+    /// Adds a passive raw keyboard listener after the mounted raw route.
+    /// Its return cannot consume the event or stop other raw listeners.
+    pub fn add_raw_keyboard_listener(
+        &mut self,
+        listener: impl Fn(&incular_widgets::RawKeyEvent) + 'static,
+    ) -> crate::RawKeyboardSubscription {
+        self.raw_keyboard_listeners.add(listener)
+    }
+
+    /// Receives caught raw listener failures with the original event and
+    /// Rust panic payload. Without a reporter the error is logged.
+    pub fn set_raw_keyboard_error_handler(
+        &mut self,
+        handler: impl Fn(crate::RawKeyboardListenerError) + 'static,
+    ) {
+        self.raw_keyboard_error_handler = Some(Box::new(handler));
+    }
+
+    pub fn clear_raw_keyboard_error_handler(&mut self) {
+        self.raw_keyboard_error_handler = None;
+    }
+
+    fn report_raw_keyboard_error(&self, error: crate::RawKeyboardListenerError) {
+        if let Some(handler) = &self.raw_keyboard_error_handler {
+            handler(error);
+        } else {
+            tracing::error!(message = %error.message(), "raw keyboard listener failed");
+        }
     }
 
     /// Replaces the default focus and editing route for key messages.
@@ -4208,12 +4369,29 @@ impl Runtime {
     /// counterpart. Keys sent through the existing portable ingress keep
     /// their ordinary mirrored view.
     pub fn dispatch_key_message(&mut self, message: KeyMessage) -> bool {
-        let (event, message_source) = match message {
-            KeyMessage::Typed(event) => (event, KeyMessageSource::Typed),
-            KeyMessage::Raw(ref raw) => (raw.portable().clone(), KeyMessageSource::Raw(raw)),
-            KeyMessage::TypedAndRaw { typed, ref raw } => (typed, KeyMessageSource::Paired(raw)),
-        };
-        self.dispatch_keyboard_event_parts(event, KeyboardInputSource::Physical, message_source)
+        let source = KeyboardInputSource::Physical;
+        match message {
+            KeyMessage::Typed(event) => {
+                self.dispatch_keyboard_event_parts(event, source, KeyMessageSource::Typed)
+            }
+            KeyMessage::Raw(mut raw) => {
+                !self.legacy_raw_keyboard.prepare_raw(&mut raw)
+                    || self.dispatch_keyboard_event_parts(
+                        raw.portable().clone(),
+                        source,
+                        KeyMessageSource::Raw(&raw),
+                    )
+            }
+            KeyMessage::TypedAndRaw { typed, mut raw } => {
+                let message_source = if self.legacy_raw_keyboard.prepare_raw(&mut raw) {
+                    KeyMessageSource::Paired(&raw)
+                } else {
+                    // The independently supplied modern packet remains valid.
+                    KeyMessageSource::Typed
+                };
+                self.dispatch_keyboard_event_parts(typed, source, message_source)
+            }
+        }
     }
 
     fn dispatch_keyboard_event_from(
@@ -4224,22 +4402,14 @@ impl Runtime {
         self.dispatch_keyboard_event_parts(event, source, KeyMessageSource::Portable)
     }
 
-    fn dispatch_keyboard_event_parts(
-        &mut self,
-        event: KeyboardEvent,
-        source: KeyboardInputSource,
-        message_source: KeyMessageSource<'_>,
-    ) -> bool {
-        if source == KeyboardInputSource::Physical {
-            FocusHighlightManager::new().note_keyboard_input();
-        }
+    fn observe_hardware_key_state(&mut self, event: &KeyboardEvent) {
         if let Some(debug) = &self.keyboard_event_debug_listener {
             debug(&format!("KEYBOARD: Key event received: {event:?}"));
             debug(&format!(
                 "KEYBOARD: Pressed state before processing the event: {:?}",
                 self.hardware_keyboard
             ));
-            let irregularity = self.hardware_keyboard.observe_checked(&event);
+            let irregularity = self.hardware_keyboard.observe_checked(event);
             if let Some(irregularity) = irregularity {
                 debug(&format!("KEYBOARD: ERROR: {irregularity:?}: {event:?}"));
             }
@@ -4248,9 +4418,9 @@ impl Runtime {
                 self.hardware_keyboard
             ));
         } else {
-            self.hardware_keyboard.observe(&event);
+            self.hardware_keyboard.observe(event);
         }
-        self.track_keyboard_modifiers(&event);
+        self.track_keyboard_modifiers(event);
         // Widgets that show held modifiers (menu accelerator underlines)
         // rebuild when one is pressed or released.
         if matches!(
@@ -4271,14 +4441,10 @@ impl Runtime {
         } else {
             self.editing_diagnostics.key_up_received += 1;
         }
+    }
 
-        // A FocusNode may be requested by application code or a FocusScopeNode
-        // without going through runtime pointer/Tab handling. Adopt that
-        // external selection before routing the event through retained parents.
-        self.adopt_external_focus_change();
-        self.tree.notify_raw_keyboard_observers(self.focused, &event, message_source.raw_delivery());
-
-        let hardware = self.hardware_key_handlers.dispatch(&event);
+    fn dispatch_hardware_callbacks(&self, event: &KeyboardEvent, origin: HardwareKeyOrigin) -> bool {
+        let hardware = self.hardware_key_handlers.dispatch_with_origin(event, origin);
         for failure in hardware.failures {
             if let Some(handler) = &self.hardware_key_error_handler {
                 handler(HardwareKeyHandlerError {
@@ -4294,8 +4460,64 @@ impl Runtime {
                 .unwrap_or("non-string hardware key handler panic");
             tracing::error!(?event, %message, "hardware key handler failed");
         }
+        hardware.handled
+    }
+
+    fn dispatch_keyboard_event_parts(
+        &mut self,
+        event: KeyboardEvent,
+        source: KeyboardInputSource,
+        message_source: KeyMessageSource<'_>,
+    ) -> bool {
+        use incular_widgets::{RawKeyDelivery, RawKeyPlatformData};
+        let raw_delivery = message_source.raw_delivery();
+        let virtual_android = matches!(
+            raw_delivery,
+            RawKeyDelivery::Supplied(raw)
+                if matches!(raw.data(), Some(RawKeyPlatformData::Android(data)) if data.is_virtual_keyboard())
+        );
+        if source == KeyboardInputSource::Physical && !virtual_android {
+            FocusHighlightManager::new().note_keyboard_input();
+        }
+        let raw_platform_only = matches!(
+            message_source,
+            KeyMessageSource::Raw(raw) if raw.data().is_some()
+        );
+        if !raw_platform_only {
+            self.observe_hardware_key_state(&event);
+        }
+
+        // A FocusNode may be requested by application code or a FocusScopeNode
+        // without going through runtime pointer/Tab handling. Adopt that
+        // external selection before routing the event through retained parents.
+        self.adopt_external_focus_change();
+        if let RawKeyDelivery::Supplied(raw) = raw_delivery {
+            self.legacy_raw_keyboard.observe(raw);
+        }
+        self.tree.notify_raw_keyboard_observers_with_report(
+            self.focused, &event, raw_delivery, |error| self.report_raw_keyboard_error(error),
+        );
+        self.raw_keyboard_listeners.dispatch(&event, raw_delivery, |error| {
+            self.report_raw_keyboard_error(error);
+        });
+
+        let mut hardware_handled = false;
+        let corrections = if raw_platform_only {
+            let corrections = self.legacy_raw_keyboard.modifier_corrections(&self.hardware_keyboard, &event);
+            for correction in &corrections {
+                self.observe_hardware_key_state(correction);
+                hardware_handled |= self.dispatch_hardware_callbacks(
+                    correction, HardwareKeyOrigin::LegacyModifierReconciliation,
+                );
+            }
+            self.observe_hardware_key_state(&event);
+            corrections
+        } else {
+            Vec::new()
+        };
+        hardware_handled |= self.dispatch_hardware_callbacks(&event, HardwareKeyOrigin::Supplied);
         if !matches!(self.key_message_route, KeyMessageRoute::Focus) {
-            let mut handled = hardware.handled;
+            let mut handled = hardware_handled;
             if let KeyMessageRoute::Custom(callback) = &self.key_message_route {
                 let message = message_source.into_message(event);
                 match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(&message))) {
@@ -4322,7 +4544,7 @@ impl Runtime {
         // Flutter's implicit root scope receives focus-manager key stages
         // even when no application widget has input focus.
         let has_focus_root = self.tree.root().is_some();
-        if has_focus_root && self.early_focus_key_handlers.dispatch(&event) == KeyEventResult::Handled
+        if has_focus_root && self.early_focus_key_handlers.dispatch(&corrections, &event) == KeyEventResult::Handled
         {
             self.frame_requested = true;
             return true;
@@ -4337,22 +4559,29 @@ impl Runtime {
             return true;
         }
         let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
-        let (focus_result, directional_intent) = self.tree.route_keyboard_with_focus_intent_and_state(
+        let (focus_result, runtime_intent) = self.tree.route_keyboard_with_runtime_intent_and_prefix(
             self.focused,
+            &corrections,
             event.clone(),
             lock_modes,
             message_source.raw_delivery(),
             Some(&self.hardware_keyboard),
         );
         let late_result = if has_focus_root && focus_result != KeyEventResult::Handled {
-            self.late_focus_key_handlers.dispatch(&event)
+            self.late_focus_key_handlers.dispatch(&corrections, &event)
         } else {
             KeyEventResult::Ignored
         };
-        if let Some(intent) = directional_intent {
-            self.invoke_directional_focus(intent);
+        match runtime_intent {
+            Some(incular_widgets::RuntimeKeyIntent::DirectionalFocus(intent)) => {
+                self.invoke_directional_focus(intent);
+            }
+            Some(incular_widgets::RuntimeKeyIntent::ExtendSelectionByCharacter(intent)) => {
+                self.run_focused_character_intent(intent);
+            }
+            None => {}
         }
-        if hardware.handled
+        if hardware_handled
             || focus_result == KeyEventResult::Handled
             || late_result == KeyEventResult::Handled
         {
@@ -4440,13 +4669,25 @@ impl Runtime {
         let Some(controller) = self.tree.text_controller(field) else {
             return false;
         };
-        // Flutter's `DefaultTextEditingShortcuts` pick the intent for the
-        // chord on the target platform and the field's actions run it.
+        // Flutter's default character-movement action is overridable from
+        // the focused context, whether the key binding is custom or built-in.
+        let intent = crate::text_shortcuts::resolve(self.text_shortcut_platform, event.code, lock_modes);
+        if let Some(intent) = intent {
+            match self.override_character_action(field, intent) {
+                KeyEventResult::Handled => {
+                    self.frame_requested = true;
+                    return true;
+                }
+                KeyEventResult::SkipRemainingHandlers => return false,
+                KeyEventResult::Ignored => {}
+            }
+        }
+        // The platform's default shortcut resolves to the focused editor.
         let previous = self.observed_editor_selection(field);
         let _notifications = previous
             .is_some()
             .then(|| controller.batch_user_edit_notifications());
-        let Some(overlays) = self.run_text_field_key(field, &controller, &event, lock_modes) else {
+        let Some(overlays) = self.run_text_field_key(field, &controller, &event, intent) else {
             return false;
         };
         self.report_editor_selection_delta(
@@ -4762,6 +5003,12 @@ impl Runtime {
         }
     }
 
+    fn flush_text_editing_callback_errors(&self) {
+        for error in self.tree.take_text_editing_callback_errors() {
+            self.report_editing_callback_error(error);
+        }
+    }
+
     pub(crate) fn dispatch_flutter_keyboard_content(
         &self,
         content: incular_platform::KeyboardInsertedContent,
@@ -4796,6 +5043,11 @@ impl Runtime {
                 self.dismiss_transients(incular_widgets::TransientDismissReason::Escape);
             }
             SelectorIntent::Edit(intent) => {
+                let overridden = self.override_character_action(field, intent);
+                if overridden != KeyEventResult::Ignored {
+                    self.frame_requested |= overridden == KeyEventResult::Handled;
+                    return;
+                }
                 self.advance_text_history_clock(self.input_now());
                 let Some(controller) = self.tree.text_controller(field) else {
                     return;
@@ -4878,6 +5130,12 @@ impl Runtime {
         })
     }
 
+    pub(crate) fn active_flutter_text_input_client(&self) -> Option<TextInputClientId> {
+        let active = self.text_input_client?;
+        (self.focused == Some(active.target) && self.tree.is_text_field(active.target))
+            .then_some(active.client)
+    }
+
     pub(crate) fn active_flutter_editable_client(&self) -> Option<TextInputClientId> {
         let active = self.text_input_client?;
         (self.focused == Some(active.target) && self.tree.text_field_is_editable(active.target))
@@ -4947,13 +5205,14 @@ impl Runtime {
     /// [`TextInputCommand::Update`] goes out only when an input formatter
     /// changed it.
     pub fn handle_text_editing_state(&mut self, state: TextInputState) {
-        self.handle_text_editing_state_with_metadata(state, None);
+        self.handle_text_editing_state_with_metadata(state, None, false);
     }
 
     pub(crate) fn handle_text_editing_state_with_metadata(
         &mut self,
         state: TextInputState,
         metadata: Option<(incular_text::TextAffinity, bool)>,
+        scribble_in_progress: bool,
     ) {
         self.editing_diagnostics.ime_events += 1;
         let had_preedit = self.ime_composition.is_some();
@@ -5013,8 +5272,16 @@ impl Runtime {
                 text: value.text,
             });
         }
+        let handwriting_selection = scribble_in_progress && !text_changed && refresh_caret;
+        if handwriting_selection {
+            // Flutter treats this like a selection gesture, not a key, so
+            // it can ask the already attached control to show again.
+            self.text_input_show_requested = true;
+        }
         if previous_selection.is_some() {
-            let cause = if self.has_floating_caret_for(owner.field) {
+            let cause = if handwriting_selection {
+                incular_text::SelectionChangedCause::StylusHandwriting
+            } else if self.has_floating_caret_for(owner.field) {
                 incular_text::SelectionChangedCause::ForcePress
             } else {
                 incular_text::SelectionChangedCause::Keyboard
@@ -5025,6 +5292,8 @@ impl Runtime {
             controller.reset_caret(self.input_now());
             self.frame_requested = true;
         }
+        drop(_notifications);
+        self.flush_text_editing_callback_errors();
     }
     pub fn run_frame(
         &mut self,
@@ -5123,6 +5392,8 @@ impl Runtime {
         now: Instant,
         warm_up: bool,
     ) -> Result<(DisplayList, FrameStats), TreeError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _file_image_scope = self.file_image_worker.enter();
         self.hover_press_hit = None;
         let message_guard = tracing::info_span!("incular.messages").entered();
         let message_span = profiling::PhaseSpan::start();
@@ -5153,6 +5424,7 @@ impl Runtime {
         // rebuilding so a stationary press shows a tooltip on the due frame.
         let gesture_timers_live = self.tree.pump_gesture_timers(now);
         let tooltip_timers_live = self.tree.pump_tooltip_timers(now);
+        self.flush_text_editing_callback_errors();
         let runtime_messages = message_span.elapsed_us();
         drop(message_guard);
         let before = self.tree.diagnostics();
@@ -5332,12 +5604,14 @@ impl Runtime {
         // A focused field whose value or selection changed scrolls its
         // ancestors to show the caret; the next frame lays that out.
         let caret_revealed = self.show_focused_caret_on_screen();
+        let editor_toolbar_restored = self.restore_editable_toolbar_after_scroll();
         // End-of-frame reset: recomputed from every demand source, not
         // blindly cleared. `fling_live` above is one source — a write
         // before layout alone would not survive this assignment, so it
         // is ORed back in. Nothing else in this frame clears the flag:
         // intermediate paths only ever set it.
         self.frame_requested = fling_live
+            || editor_toolbar_restored
             || caret_revealed
             || gesture_timers_live
             || tooltip_timers_live
@@ -5412,6 +5686,8 @@ impl Runtime {
     /// outlets use this to refresh mounted content deterministically
     /// before framing, rather than only when reactive dependencies fire.
     pub(crate) fn rebuild_from_builder(&mut self, id: ElementId) -> Result<(), TreeError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _file_image_scope = self.file_image_worker.enter();
         self.reactive.borrow_mut().refresh(id);
         let widget = {
             let _build_scope = BuildScopeGuard::enter(BuildScope {

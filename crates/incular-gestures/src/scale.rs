@@ -12,7 +12,7 @@ use crate::slop::{compute_pan_slop, compute_scale_slop};
 use crate::velocity::VelocityTracker;
 
 /// Metadata for scale start events (Flutter `ScaleStartDetails`).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ScaleStartDetails {
     pub focal_point: Offset,
     /// [`Self::focal_point`] in the recognizing widget's coordinates.
@@ -49,13 +49,19 @@ pub struct ScaleUpdateDetails {
 }
 
 /// Metadata for scale end events (Flutter `ScaleEndDetails`).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ScaleEndDetails {
     /// The velocity of the contact that lifted, when it was a fling.
     pub velocity: Velocity,
     /// The rate the scale was changing at, per second; `-1.0` when unknown.
     pub scale_velocity: f32,
     pub pointer_count: usize,
+}
+
+impl Default for ScaleUpdateDetails {
+    fn default() -> Self {
+        Self { pointer_count: 0, ..Self::new(Offset::ZERO, 1.0) }
+    }
 }
 
 impl ScaleUpdateDetails {

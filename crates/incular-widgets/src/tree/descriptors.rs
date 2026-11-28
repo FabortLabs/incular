@@ -1199,6 +1199,7 @@ pub struct EditableText {
     focused_border_outset: incular_config::EdgeInsets,
     content_padding: incular_config::EdgeInsets,
     clip_behavior: incular_config::Clip,
+    drag_start_behavior: incular_core::DragStartBehavior,
     fixed_scroll_offset: Option<f32>,
     allow_implicit_caret_scrolling: bool,
     on_editing_complete: Option<Rc<dyn Fn()>>,
@@ -1260,6 +1261,8 @@ pub struct EditableText {
     renderer_ignores_pointer: bool,
     context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
     selection_handles_builder: Option<crate::TextSelectionHandlesBuilder>,
+    on_selection_handle_tapped: Option<Rc<dyn Fn()>>,
+    magnifier_configuration: crate::TextMagnifierConfiguration,
     collapsed_selection_handle_layout: Option<crate::TextSelectionHandleLayout>,
     edit_transform: Option<super::specs::EditTransform>,
     edit_changed: Option<super::specs::EditChanged>,
@@ -1288,6 +1291,7 @@ impl EditableText {
             focused_border_outset: incular_config::EdgeInsets::ZERO,
             content_padding: incular_config::EdgeInsets::ZERO,
             clip_behavior: incular_config::Clip::HardEdge,
+            drag_start_behavior: incular_core::DragStartBehavior::Start,
             fixed_scroll_offset: None,
             allow_implicit_caret_scrolling: true,
             on_editing_complete: None,
@@ -1348,6 +1352,8 @@ impl EditableText {
             renderer_ignores_pointer: false,
             context_menu_builder: None,
             selection_handles_builder: None,
+            on_selection_handle_tapped: None,
+            magnifier_configuration: crate::TextMagnifierConfiguration::disabled(),
             collapsed_selection_handle_layout: None,
             edit_transform: None,
             edit_changed: None,
@@ -1397,6 +1403,14 @@ impl EditableText {
         self
     }
 
+    /// Chooses whether editor scrolling and handle drags measure from
+    /// the press or from the point where the gesture wins. Defaults to Start.
+    #[must_use]
+    pub fn drag_start_behavior(mut self, behavior: incular_core::DragStartBehavior) -> Self {
+        self.drag_start_behavior = behavior;
+        self
+    }
+
     /// Sets a caller-controlled viewport offset in logical pixels, like
     /// Flutter's `ViewportOffset.fixed`. It is horizontal for a single line
     /// and vertical for multiline text. Automatic caret reveal and scrolling
@@ -1420,6 +1434,28 @@ impl EditableText {
     pub fn select_all_on_focus(mut self, select: bool) -> Self {
         self.select_all_on_focus = Some(select);
         self
+    }
+
+    /// Handles taps on the collapsed selection knob. The editor keeps
+    /// the callback current when the widget is rebuilt.
+    #[must_use]
+    pub fn on_selection_handle_tapped(mut self, callback: impl Fn() + 'static) -> Self {
+        self.on_selection_handle_tapped = Some(Rc::new(callback));
+        self
+    }
+
+    /// Configures the editor's selection magnifier. By default the neutral
+    /// editor has no magnifier builder.
+    #[must_use]
+    pub fn magnifier_configuration(mut self, configuration: crate::TextMagnifierConfiguration) -> Self {
+        self.magnifier_configuration = configuration;
+        self
+    }
+
+    /// The configured magnifier, including the disabled default.
+    #[must_use]
+    pub const fn configured_magnifier(&self) -> &crate::TextMagnifierConfiguration {
+        &self.magnifier_configuration
     }
 
     /// Enables stylus handwriting for this editor. Defaults to true.
@@ -2215,6 +2251,7 @@ impl From<EditableText> for Widget {
             .cloned();
         let selection_handles_builder = value.selection_handles_builder.clone();
         let collapsed_selection_handle_layout = value.collapsed_selection_handle_layout;
+        let magnifier_configuration = value.magnifier_configuration;
         let legacy_selection_controls = context_menu_builder.is_none()
             && selection_handles_builder.is_none();
         let edit_transform = compose_edit_transform(
@@ -2236,6 +2273,8 @@ impl From<EditableText> for Widget {
             legacy_selection_controls,
             toolbar_options: value.toolbar_options,
             selection_handles: None,
+            on_selection_handle_tapped: value.on_selection_handle_tapped,
+            text_magnifier: None,
             spell_check: value.spell_check,
             stylus_handwriting_enabled: value.stylus_handwriting_enabled,
             spell_check_suppressed,
@@ -2257,6 +2296,7 @@ impl From<EditableText> for Widget {
             focused_border_outset: value.focused_border_outset,
             content_padding: value.content_padding,
             clip_behavior: value.clip_behavior,
+            drag_start_behavior: value.drag_start_behavior,
             fixed_scroll_offset: value.fixed_scroll_offset,
             allow_implicit_caret_scrolling: value.allow_implicit_caret_scrolling,
             on_editing_complete: value.on_editing_complete,
@@ -2339,18 +2379,30 @@ impl From<EditableText> for Widget {
                 spell_toolbar_builder.clone(),
             )
         };
-        match selection_handles_builder {
-            Some(builder) => crate::text_selection_handles::with_text_selection_handles(
+        if let Some(builder) = selection_handles_builder {
+            return crate::text_selection_handles::with_text_selection_handles(
                 move |state| {
                     let mut spec = spec.clone();
+                    spec.text_magnifier = state.magnifier();
                     spec.selection_handles = Some(state);
                     with_menu(spec)
                 },
                 builder,
                 collapsed_selection_handle_layout,
-            ),
-            None => with_menu(spec),
+                magnifier_configuration,
+            );
         }
+        if !magnifier_configuration.has_builder() {
+            return with_menu(spec);
+        }
+        crate::magnifier::with_text_magnifier(
+            move |state| {
+                let mut spec = spec.clone();
+                spec.text_magnifier = Some(state);
+                with_menu(spec)
+            },
+            magnifier_configuration,
+        )
     }
 }
 

@@ -1375,6 +1375,8 @@ fn carries_enabled_state(role: incular_semantics::Role) -> bool {
             | Role::Switch
             | Role::Slider
             | Role::MenuItem
+            | Role::MenuItemCheckbox
+            | Role::MenuItemRadio
             | Role::Tab
             | Role::Link
     )

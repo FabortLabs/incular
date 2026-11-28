@@ -600,6 +600,26 @@ impl Semantics {
     pub fn numeric_range(mut self, minimum: f64, maximum: f64) -> Self {
         self.state.numeric_min = minimum.is_finite().then_some(minimum);
         self.state.numeric_max = maximum.is_finite().then_some(maximum);
+        self.state.value_bounds_text = None;
+        self
+    }
+
+    /// Announces a textual lower bound and publishes its numeric value to
+    /// native adapters when it represents a finite number.
+    #[must_use]
+    pub fn min_value(mut self, value: impl Into<String>) -> Self {
+        let value = value.into();
+        self.state.numeric_min = value.trim().parse::<f64>().ok().filter(|number| number.is_finite());
+        Arc::make_mut(self.state.value_bounds_text.get_or_insert_with(Arc::default)).min = Some(value);
+        self
+    }
+
+    /// Announces a textual upper bound, preserving the original declaration.
+    #[must_use]
+    pub fn max_value(mut self, value: impl Into<String>) -> Self {
+        let value = value.into();
+        self.state.numeric_max = value.trim().parse::<f64>().ok().filter(|number| number.is_finite());
+        Arc::make_mut(self.state.value_bounds_text.get_or_insert_with(Arc::default)).max = Some(value);
         self
     }
 
@@ -1043,9 +1063,14 @@ impl From<Semantics> for Widget {
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         let tags_children = value.tag_for_children.is_some();
-        if tags_children || (explicit.is_some() && widget.has_explicit_semantics()) {
-            // Keep the tagging annotation outside its child, including
-            // children that contribute implicit semantics such as Text.
+        if tags_children
+            || (explicit.is_some()
+                && (value.state.explicit_child_nodes
+                    || widget.has_explicit_semantics()
+                    || widget.excludes_semantics_subtree()))
+        {
+            // An excluded child does not exclude its parent's annotation.
+            // Preserve that boundary, just as for tags and nested metadata.
             widget = Widget::from_kind(WidgetKind::ProxyLayout {
                 mode: ChildLayoutMode::SemanticAnnotation,
                 child: Some(widget),

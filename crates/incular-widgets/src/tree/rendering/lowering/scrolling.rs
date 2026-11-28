@@ -33,17 +33,21 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
                 behavior: resolved,
             }
         }
-        WidgetKind::RawScrollbar {
-            controller, style, ..
-        } => RenderKind::RawScrollbar {
-            controller: controller.clone(),
-            style: *style,
-            text_direction: if style.orientation == crate::RawScrollbarOrientation::Auto {
-                context.depend::<TextDirection>().unwrap_or(TextDirection::Ltr)
-            } else {
-                TextDirection::Ltr
-            },
-        },
+        WidgetKind::RawScrollbar { controller, style, shape, .. } => {
+            let text_direction = context.depend::<TextDirection>().unwrap_or(TextDirection::Ltr);
+            let mut style = *style;
+            if style.padding.is_none() {
+                let insets = context.depend::<crate::tree::context::RuntimeSafeInsets>()
+                    .map_or(EdgeInsets::ZERO, |padding| padding.0);
+                style.padding = Some(insets.into());
+            }
+            RenderKind::RawScrollbar {
+                controller: controller.clone(),
+                style,
+                shape: shape.clone(),
+                text_direction,
+            }
+        }
         WidgetKind::ListWheelScrollView { config } => RenderKind::ListWheelScrollView {
             config: config.clone(),
         },

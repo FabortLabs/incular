@@ -13,16 +13,56 @@ fn lookup(t: f32) -> vec4<f32> { let p=textureSampleLevel(gradient_lut,gradient_
 fn tile(t: f32, mode: f32) -> f32 { if (mode == 1.) { return fract(t); } if (mode == 2.) { let p = fract(t * .5); return 1. - abs(p * 2. - 1.); } return clamp(t, 0., 1.); }
 fn conical(p: vec2<f32>, f: vec2<f32>, fr: f32, c: vec2<f32>, r: f32) -> vec2<f32> { let cd=c-f; let dr=r-fr; let pd=p-f; let a=dot(cd,cd)-dr*dr; let b=dot(pd,cd)+fr*dr; let cc=dot(pd,pd)-fr*fr; if (abs(a) <= 1.1920929e-7) { if (b == 0.) { return vec2(0.,0.); } let t=cc/(2.*b); return vec2(t, select(0.,1.,fr+t*dr>=0.)); } let disc=b*b-a*cc; if (disc < 0.) { return vec2(0.,0.); } let root=sqrt(disc); let hi=max((b+root)/a,(b-root)/a); let lo=min((b+root)/a,(b-root)/a); if (fr+hi*dr >= 0.) { return vec2(hi,1.); } if (fr+lo*dr >= 0.) { return vec2(lo,1.); } return vec2(0.,0.); }
 fn gradient_sample(p: vec2<f32>, kind: f32, g: vec4<f32>, ext: vec4<f32>) -> vec4<f32> { var t=0.; var valid=true; if(kind==1.) { let d=g.zw-g.xy; t=dot(p-g.xy,d)/max(dot(d,d),.0001); } else if(kind==2.) { t=length(p-g.xy)/max(g.z,.0001); } else if(kind==3.) { t=fract((atan2(p.y-g.y,p.x-g.x)-g.z)/6.2831853); } else if(kind==4.) { let r=conical(p,ext.yz,ext.w,g.xy,g.z); t=r.x; valid=r.y>0.; } else if(kind==5.) { let angle=fract((atan2(p.y-g.y,p.x-g.x)-ext.y)/6.2831853)*6.2831853; let span=g.w-g.z; if(span>0.) { t=(angle-g.z)/span; } else { t=select(-1.,2.,angle>=g.z); } } if(kind!=3.) { valid=valid && !(ext.x==3. && (t<0. || t>1.)); t=tile(t,ext.x); } return select(vec4(0.),lookup(t),valid); }
-// Coverage of a signed distance: a linear ramp one device pixel wide centred
-// on the edge, so pixel-aligned edges are fully covered or empty.
-fn coverage(d: f32) -> f32 { let g=vec2(dpdx(d),dpdy(d)); let unit=max(length(g),1e-4); return clamp(.5-d/unit,0.,1.); }
+// Signed distance in device pixels along the local normal. Use the
+// derivative of the outer contour for both edges of a concentric stroke.
+fn normal_pixel_size(d: f32) -> f32 {
+    return max(length(vec2(dpdx(d), dpdy(d))), 1e-4);
+}
+fn ring_coverage(outer: f32, inner: f32) -> f32 {
+    let width = max(inner - outer, 0.);
+    if (width < 1.) {
+        // Both antialiased edges describe the same band. Multiplying their
+        // ramps would still leave a visible outline as the width tends to
+        // zero. Spread the subpixel band around its center, scaled by width.
+        return width * clamp(1. - abs((inner + outer) * .5), 0., 1.);
+    }
+    return min(clamp(.5 - outer, 0., 1.), clamp(.5 + inner, 0., 1.));
+}
 // Skia's analytic rect coverage along one axis: a one-pixel ramp at each
 // edge; an extent under one pixel is drawn one pixel wide at its centre with
 // coverage scaled by the extent.
 fn axis_coverage(c: f32, extent: f32, unit: f32) -> f32 { let lo=-c/unit; let hi=(extent-c)/unit; let w=hi-lo; if (w >= 1.) { return min(clamp(.5-lo,0.,1.),clamp(hi+.5,0.,1.)); } let m=(lo+hi)*.5; return w*min(clamp(1.-m,0.,1.),clamp(m+1.,0.,1.)); }
-fn draw_color(i: Out) -> vec4<f32> { let size=i.options.zw; let width=i.options.y; let unit=max(length(fwidth(i.local))*.70710678,1e-4); let square=all(i.radii==vec4(0.)); let box_cov=axis_coverage(i.local.x,size.x,unit)*axis_coverage(i.local.y,size.y,unit); let inner_size=max(size-vec2(2.*width),vec2(0.)); let inner_box=axis_coverage(i.local.x-width,inner_size.x,unit)*axis_coverage(i.local.y-width,inner_size.y,unit); let outer=rounded_distance(i.local,size,i.radii); let inner=rounded_distance(i.local-vec2(width), max(size-vec2(2.*width),vec2(0.)), max(i.radii-vec4(width),vec4(0.))); let outer_cov=coverage(outer); let inner_cov=coverage(-inner); var edge=outer_cov; if(width>0.) { edge*=inner_cov; } if(square) { edge=select(box_cov,max(box_cov-inner_box,0.),width>0.); }
-  // Solid fills, the common case, never touch the gradient texture.
-  var color=i.a; if(i.options.x>0.) { color=gradient_sample(i.local,i.options.x,i.gradient,i.gradient_ext); }
-  return vec4(color.rgb,color.a*edge); }
+fn draw_color(i: Out) -> vec4<f32> {
+    let size = i.options.zw;
+    let width = i.options.y;
+    let unit = max(length(fwidth(i.local)) * .70710678, 1e-4);
+    let square = all(i.radii == vec4(0.));
+    let box_cov = axis_coverage(i.local.x, size.x, unit) *
+        axis_coverage(i.local.y, size.y, unit);
+    let inner_size = max(size - vec2(2. * width), vec2(0.));
+    let inner_box = axis_coverage(i.local.x - width, inner_size.x, unit) *
+        axis_coverage(i.local.y - width, inner_size.y, unit);
+
+    let outer_d = rounded_distance(i.local, size, i.radii);
+    let normal_unit = normal_pixel_size(outer_d);
+    let outer = outer_d / normal_unit;
+    var edge = clamp(.5 - outer, 0., 1.);
+    if (width > 0. && all(inner_size > vec2(0.))) {
+        let inner_d = rounded_distance(
+            i.local - vec2(width), inner_size, max(i.radii - vec4(width), vec4(0.))
+        );
+        edge = ring_coverage(outer, inner_d / normal_unit);
+    }
+    if (square) {
+        edge = select(box_cov, max(box_cov - inner_box, 0.), width > 0.);
+    }
+
+    // Solid fills, the common case, never touch the gradient texture.
+    var color = i.a;
+    if (i.options.x > 0.) {
+        color = gradient_sample(i.local, i.options.x, i.gradient, i.gradient_ext);
+    }
+    return vec4(color.rgb, color.a * edge);
+}
 
 @fragment fn fs_main(input: Out) -> @location(0) vec4<f32> { return draw_color(input); }

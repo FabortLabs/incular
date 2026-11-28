@@ -4,21 +4,35 @@ use super::*;
 use incular_assets::AssetBundle;
 
 #[derive(Hash, PartialEq, Eq)]
+enum SourceKey {
+    Bundle {
+        identity: usize,
+        name: String,
+        scale: u64,
+    },
+    File(FileImage),
+}
+
+#[derive(Hash, PartialEq, Eq)]
 struct Key {
     owner: usize,
-    bundle: usize,
-    name: String,
-    scale: u64,
+    source: SourceKey,
     resize: Option<ImageResizeOptions>,
 }
 
 impl Key {
     fn new(cache: &BundleImageCache, key: &BundleDecodeKey) -> Self {
+        let source = match &key.source {
+            DecodeSource::Bundle(asset) => SourceKey::Bundle {
+                identity: Arc::as_ptr(asset.bundle.shared()) as *const () as usize,
+                name: asset.name.clone(),
+                scale: crate::asset_image::comparable_scale(asset.scale),
+            },
+            DecodeSource::File(file) => SourceKey::File(file.clone()),
+        };
         Self {
             owner: Arc::as_ptr(&cache.0) as usize,
-            bundle: Arc::as_ptr(key.asset.bundle.shared()) as *const () as usize,
-            name: key.asset.name.clone(),
-            scale: crate::asset_image::comparable_scale(key.asset.scale),
+            source,
             resize: key.resize,
         }
     }
@@ -26,7 +40,7 @@ impl Key {
 
 struct Entry {
     owner: Weak<Mutex<State>>,
-    bundle: Weak<dyn AssetBundle>,
+    bundle: Option<Weak<dyn AssetBundle>>,
     stream: crate::stream::WeakImageStream,
     pending: Option<Weak<PendingDecode>>,
 }
@@ -54,7 +68,10 @@ pub(super) fn remember(
         if memo.entries.len() >= memo.next_sweep {
             memo.entries.retain(|_, entry| {
                 entry.owner.strong_count() != 0
-                    && entry.bundle.strong_count() != 0
+                    && entry
+                        .bundle
+                        .as_ref()
+                        .is_none_or(|bundle| bundle.strong_count() != 0)
                     && (entry.stream.is_live()
                         || entry
                             .pending
@@ -67,7 +84,10 @@ pub(super) fn remember(
             Key::new(cache, key),
             Entry {
                 owner: Arc::downgrade(&cache.0),
-                bundle: Arc::downgrade(key.asset.bundle.shared()),
+                bundle: match &key.source {
+                    DecodeSource::Bundle(asset) => Some(Arc::downgrade(asset.bundle.shared())),
+                    DecodeSource::File(_) => None,
+                },
                 stream: stream.downgrade(),
                 pending: pending.map(Arc::downgrade),
             },
@@ -83,9 +103,7 @@ pub(super) fn stream(cache: &BundleImageCache, key: &BundleDecodeKey) -> Option<
             .stream
             .upgrade()
     })?;
-    (stream.has_live_listeners()
-        && !matches!(stream.untracked_state(), crate::ImageLoadState::Failed(_)))
-    .then_some(stream)
+    stream.has_live_image_observers().then_some(stream)
 }
 
 pub(super) fn is_live(
@@ -108,7 +126,7 @@ pub(super) fn is_live(
             || entry
                 .stream
                 .upgrade()
-                .is_some_and(|stream| stream.has_live_listeners())
+                .is_some_and(|stream| stream.has_live_image_observers())
     })
 }
 
@@ -127,7 +145,7 @@ pub(super) fn count(cache: &BundleImageCache, pending: &HashSet<usize>) -> usize
                         || entry
                             .stream
                             .upgrade()
-                            .is_some_and(|stream| stream.has_live_listeners()))
+                            .is_some_and(|stream| stream.has_live_image_observers()))
             })
             .count()
     })

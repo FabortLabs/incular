@@ -126,7 +126,7 @@ pub use advanced_scrolling::{
     DraggableScrollableSheet, DraggableScrollableState, DraggableSheetDelta, DraggableSheetExtent,
     DraggableSizeAnimation, DraggableSnap, DraggableSnapTarget, FixedExtentScrollController,
     ListWheelScrollView, ListWheelViewport, RawScrollbar, RawScrollbarGeometry,
-    RawScrollbarOrientation, RawScrollbarStyle, TwoDimensionalChildDelegate,
+    RawScrollbarOrientation, RawScrollbarStyle, ScrollbarCursorState, TwoDimensionalChildDelegate,
     TwoDimensionalChildLayout, TwoDimensionalConfigError, TwoDimensionalConstraints,
     TwoDimensionalScrollDelta, TwoDimensionalScrollView, TwoDimensionalScrollable,
     TwoDimensionalViewport, TwoDimensionalViewportLayout, WheelChildDelegate, WheelChildLayout,
@@ -221,28 +221,31 @@ pub use explicit_animations::{
 pub use fade_in_image::FadeInImage;
 pub use flutter_logo::{FlutterLogo, FlutterLogoLayout, FlutterLogoStyle};
 pub use incular_gestures::{
-    FocusExtent, FocusKeyEventHandler, FocusRawKeyEventHandler, FocusRect, FuchsiaRawKeyData, RawKeyEvent,
-    RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide, WebRawKeyData,
+    AndroidRawKeyData, FocusExtent, FocusKeyEventHandler, FocusRawKeyEventHandler, FocusRect, FuchsiaRawKeyData, RawKeyEvent,
+    RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide, WebRawKeyData, WindowsRawKeyData,
     TapCallbackError, TapCallbackErrorHandler, TapCallbackKind, TapCancelReason, TraversalDirection, TraversalEdgeBehavior,
     set_tap_callback_error_handler,
 };
 #[doc(hidden)]
 pub use incular_gestures::RawKeyDelivery;
 pub use focus_keyboard::{
-    ActivateIntent,
+    DoNothingAction, DoNothingAndStopPropagationIntent, DoNothingIntent,
+    ActivateIntent, ButtonActivateIntent,
     Action, ActionContext, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase, ActionListener,
     ActionLookupError, ActionOutput, ActionResult, ActionScope, Actions, CallbackAction, CallbackShortcuts,
-    Command, CommandId, CustomFocusTraversalPolicy, DirectionalFocusIntent, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
+    Command, CommandId, CustomFocusTraversalPolicy, DirectionalFocusIntent, ExcludeFocus, ExcludeFocusTraversal, ExtendSelectionByCharacterIntent, Focus, FocusManager, FocusNode,
     FocusOrder, FocusScope, FocusScopeNode, FocusScopeSubscription, FocusTraversalCandidate, FocusTraversalGroup,
     FocusTraversalOrder, FocusTraversalPolicy, FocusTraversalPolicyKind, FocusTraversalRequest, FocusableActionDetector,
     Intent, KeyEventResult, KeyboardListener, LockState, LogicalKeySet, LogicalShortcutKey,
     NextFocusAction, NextFocusIntent, PreviousFocusAction, PreviousFocusIntent,
-    RawKeyboardListener, RequestFocusAction, RequestFocusIntent, SequentialFocusHost,
+    RawKeyboardListener, RawKeyboardListenerError, RequestFocusAction, RequestFocusIntent, SequentialFocusHost,
     OrderedTraversalPolicy, ReadingOrderTraversalPolicy, ScopedActionDispatcher, ShortcutActivator,
     ShortcutKey, ShortcutScope, ShortcutTrigger, Shortcuts, SingleActivator, VoidCallbackAction, VoidCallbackIntent,
     WidgetOrderTraversalPolicy,
     UnfocusDisposition,
 };
+#[doc(hidden)]
+pub use focus_keyboard::RuntimeKeyIntent;
 pub use forms::{
     AutocompleteFieldViewBuilder, AutocompleteHighlightedOption, AutocompleteOnSelected,
     AutocompleteOptionsBuilder, AutocompleteOptionsViewBuilder, AutofillGroup, AutovalidateMode,
@@ -319,7 +322,7 @@ pub use inherited_data::{
     CapturedThemes, InheritedModel, InheritedModelData, InheritedNotifier, SharedAppData,
     SharedAppDataKey, SharedAppDataStore,
 };
-pub use interactive_viewer::{InteractiveViewer, PanAxis, TransformationController};
+pub use interactive_viewer::{InteractiveViewer, InteractiveViewerViewport, PanAxis, TransformationController};
 pub use layout::{
     Align, AspectRatio, Baseline, Builder, Center, ClipOval, ClipPath, ClipRRect, ClipReclip,
     ClipRect, ClipShape, ColoredBox, Column, ConstrainedBox, ConstraintsTransformBox, Container,
@@ -379,9 +382,9 @@ pub use platform_widgets::{
 pub use provider_image::{
     ImageErrorBuilder, ImageFrameBuilder, ImageLoadingBuilder, ProviderImage,
 };
-pub use radio_selection::{RadioGroup, RawRadio, SelectableRegion};
+pub use radio_selection::{RadioGroup, RadioGroupRegistry, RawRadio, RawRadioState, SelectableRegion};
 pub use raw_input::{
-    ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
+    EditableTextTapOutsideIntent, EditableTextTapUpOutsideIntent, ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers, Listener,
     ListenerCallbacks, MetaData, MouseCursor, MouseRegion, MouseRegionCallbacks, PointerDeviceKind,
     PointerPanZoomDetails, PointerSignalResolver, RawGestureDetector, RawPointerEvent, TapRegion, TapRegionCallbacks,
@@ -435,7 +438,7 @@ pub use selection::{
     SelectionContainerDelegate, SelectionDetails, SelectionGeometry, SelectionHandleType,
     SelectionListenerNotifier, SelectionPoint, SelectionStatus, TextSelectionPoint,
 };
-pub use selection_container::SelectionContainer;
+pub use selection_container::{SelectionContainer, SelectionRegistrar, SelectionRegistrarScope};
 pub use selection_listener::SelectionListener;
 pub use semantics::{BlockSemantics, ExcludeSemantics, MergeSemantics, Semantics};
 pub use semantics_debugger::{DEFAULT_SEMANTICS_DEBUGGER_NODE_LIMIT, SemanticsDebugger};

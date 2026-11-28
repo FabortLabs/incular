@@ -502,18 +502,37 @@ impl WidgetTree {
             .any(|(hit_surface, hit_group)| hit_surface == surface && hit_group == group)
     }
 
-    /// Dispatches Flutter's focused EditableText tap-outside notification.
-    /// The caller supplies the currently focused element and the live hit.
+    /// Retains an outside press's editor on the same raw contact that
+    /// owns the matching release. Focus can change while it is held.
     #[doc(hidden)]
-    pub fn dispatch_editable_tap_outside(
-        &self,
+    pub fn remember_editable_outside_press(
+        &mut self,
         window: u64,
-        focused: ElementId,
         event: RawPointerEvent,
-        hit: &PointerHitTest,
-    ) -> bool {
+        editor: ElementId,
+    ) {
+        let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
+        if let Some(route) = self.input.raw_pointer_routes.get_mut(&key) {
+            route.editable_outside_owner = Some(editor);
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn take_editable_outside_press(
+        &mut self,
+        window: u64,
+        event: RawPointerEvent,
+    ) -> Option<ElementId> {
+        let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
+        self.input.raw_pointer_routes.get_mut(&key)?.editable_outside_owner.take()
+    }
+
+    /// Dispatches a tap-outside notification to the editor identified
+    /// when the pointer went down. A stale element does not receive it.
+    #[doc(hidden)]
+    pub fn dispatch_editable_tap_outside(&self, editor: ElementId, event: RawPointerEvent) -> bool {
         let Some(WidgetKind::TextField(spec)) =
-            self.elements.get(focused.0).map(|element| element.widget.kind())
+            self.elements.get(editor.0).map(|element| element.widget.kind())
         else {
             return false;
         };
@@ -523,22 +542,26 @@ impl WidgetTree {
             _ => None,
         };
         if let Some(callback) = callback {
-            let inside = if event.phase == PointerPhase::Up {
-                let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
-                let Some(press) = self.input.raw_pointer_routes.get(&key) else {
-                    return false;
-                };
-                press.editable_groups.contains(self.nearest_tap_surface(focused), &spec.group_id)
-            } else {
-                self.preserves_editable_group_with_hit(focused, hit)
-            };
-            if inside {
-                return false;
-            }
             callback(event);
             return true;
         }
-        false
+        let focus = self.focus_node_at(editor);
+        let result = match event.phase {
+            PointerPhase::Down => self.invoke_action_at(
+                editor,
+                &incular_gestures::Intent::<crate::EditableTextTapOutsideIntent>::new(
+                    crate::EditableTextTapOutsideIntent::for_event(focus, event),
+                ),
+            ),
+            PointerPhase::Up => self.invoke_action_at(
+                editor,
+                &incular_gestures::Intent::<crate::EditableTextTapUpOutsideIntent>::new(
+                    crate::EditableTextTapUpOutsideIntent::for_event(focus, event),
+                ),
+            ),
+            _ => return false,
+        };
+        result == Some(incular_gestures::ActionResult::Handled)
     }
 
     /// Returns the deepest/frontmost custom-chrome interaction annotation at
@@ -771,16 +794,13 @@ impl WidgetTree {
             } else {
                 Vec::new()
             };
-            // Like TapRegionSurface, release uses membership at press time.
-            // Keep the common zero/one group inline, and snapshot names so a
-            // rebuild cannot retroactively change the contact's group.
-            let mut editable_groups = EditablePressGroups::default();
-            for (surface, group) in self.hit_editable_groups(pointer_hit) {
-                editable_groups.insert(surface, group);
-            }
             self.input.raw_pointer_routes.insert(
                 key,
-                RawPointerRoute { listeners, tap_path, editable_groups },
+                RawPointerRoute {
+                    listeners,
+                    tap_path,
+                    editable_outside_owner: None,
+                },
             );
         }
         let finished;
@@ -852,18 +872,9 @@ impl WidgetTree {
         }
     }
 
-    /// Delivers a wheel scroll to the `on_pointer_signal` listeners under
-    /// `point`, innermost first. Returns whether any listener received it.
-    pub(super) fn dispatch_pointer_signal(&self, point: Offset, scroll_delta: Offset) -> bool {
-        let hit = self.pointer_hit_test(point);
-        let event = RawPointerEvent::scroll(
-            0,
-            0,
-            crate::raw_input::PointerDeviceKind::Mouse,
-            point,
-            scroll_delta,
-            incular_core::time::Instant::now(),
-        );
+    /// Delivers the pointer signal innermost first, preserving device and time.
+    pub(super) fn dispatch_pointer_signal(&self, event: RawPointerEvent) -> bool {
+        let hit = self.pointer_hit_test(event.position);
         let listeners = self
             .listener_ids(hit.raw())
             .into_iter()

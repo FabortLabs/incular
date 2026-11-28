@@ -47,6 +47,7 @@ pub use arena::{
 };
 #[doc(hidden)]
 pub use details::{ActionListenerRegistrations, MountActionListener};
+pub use details::GestureDetailDiagnostics;
 pub use details::{
     ButtonGestureCallbacks, DragCallbacks, DragDownDetails, DragEndDetails, DragStartDetails, FocusKeyHandlerOwner,
     DragUpdateDetails, GestureAction, GestureCallbacks, GestureDecision, LongPressDownDetails,
@@ -81,7 +82,10 @@ pub use keyboard::{
 };
 pub use least_squares::{LeastSquaresSolver, PolynomialFit};
 pub use long_press::LongPressGestureRecognizer;
-pub use managed_arena::{GestureArenaClient, GestureArenaManager, GestureArenaRegistration};
+pub use managed_arena::{
+    GestureArenaClient, GestureArenaManager, GestureArenaRegistration, GestureArenaTrace,
+    GestureArenaTraceHandler, GestureArenaTracePhase, GestureArenaWinCause,
+};
 pub use mouse::MouseRegion;
 pub use multidrag::{Drag, MultiDragGestureRecognizer, MultiDragStartCallback};
 pub use multitap::{
@@ -91,13 +95,15 @@ pub use multitap::{
 pub use tap_callback_error::{
     TapCallbackError, TapCallbackErrorHandler, TapCallbackKind, TapCancelReason,
     invoke_retained_tap, set_tap_callback_error_handler,
+    TapCallbackTraceHandler, set_tap_callback_trace_handler,
 };
 #[doc(hidden)]
 pub use pointer::DragBoundaryFrame;
 pub use pointer::{
     DragAxis, DragGestureDetector, FlingLimits, GestureDetector, MonodragGestureRecognizer,
     MultitouchDragStrategy,
-    PendingTapRelease, PointerGestureRecognizer, TapMemory, TapSlopTolerance, TrackpadDragAxis,
+    PendingTapRelease, PointerGestureRecognizer, TapMemory, TapRecognizerDiagnostics,
+    TapSlopTolerance, TapTrackingState, TrackpadDragAxis,
     TrackpadDragRecognizer,
 };
 pub use signal::{PointerSignalError, PointerSignalEvent, PointerSignalResolver};
@@ -111,7 +117,7 @@ pub use pointer_router::{
     PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter, RoutedPointerEvent,
     WeakPointerRouter,
 };
-pub use raw_key_data::{FuchsiaRawKeyData, RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide, WebRawKeyData};
+pub use raw_key_data::{AndroidRawKeyData, FuchsiaRawKeyData, RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide, WebRawKeyData, WindowsRawKeyData};
 pub use raw::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers,

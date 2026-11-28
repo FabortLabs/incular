@@ -772,3 +772,49 @@ fn bounded_blur_masks_in_local_coordinates_and_normalizes_only_after_filtering()
     }
     assert_eq!(pixel(&filtered, 7, 3), [0, 0, 0, 0]);
 }
+
+#[test]
+fn translated_magnifier_matrix_samples_its_focal_backdrop_on_the_gpu() {
+    use incular_core::{Offset, Transform};
+    use incular_rendering::backdrop_matrix_sampling;
+
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    // The 4-by-4 lens is at (2,2); its (1,1) focal offset and 2x
+    // magnification make a backdrop point (5,5) land at the lens center
+    // (4,4). This uses the production conversion to device sample space.
+    let stage = Transform::translation(Offset::new(2., 2.));
+    let lens = Transform::translation(Offset::new(-4., -4.)).then(Transform::scale(2.));
+    let sampling = backdrop_matrix_sampling(stage, lens, 1.).unwrap();
+    assert_eq!(
+        sampling.transform_point(Offset::new(4., 4.)),
+        Offset::new(5., 5.)
+    );
+
+    let mut params = [0_u32; PARAM_WORDS];
+    for (index, value) in [(2, 8_f32), (3, 8.), (4, 8.), (5, 8.), (6, 1.), (7, 1.)] {
+        params[index] = value.to_bits();
+    }
+    params[9] = 2; // The production matrix backdrop pass uses linear resampling.
+    for (bits, coefficient) in params[12..18].iter_mut().zip(sampling.coefficients()) {
+        *bits = (coefficient as f32).to_bits();
+    }
+    let blue = [0, 0, 255, 255];
+    let black = [0, 0, 0, 255];
+    let pixels: Vec<u8> = (0..8)
+        .flat_map(|y| (0..8).flat_map(move |x| if x >= 4 && y >= 4 { black } else { blue }))
+        .collect();
+    let raster = identity_pass(
+        &device,
+        &queue,
+        built_in_shaders::RESAMPLE_SHADER,
+        bytemuck::cast_slice(&params),
+        &pixels,
+    );
+    for (x, y) in [(3, 3), (3, 4)] {
+        let index = (y * 8 + x) * 4;
+        assert_eq!(&pixels[index..index + 4], &blue);
+        assert_eq!(&raster[index..index + 4], &black);
+    }
+}

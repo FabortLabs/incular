@@ -20,7 +20,7 @@ pub use draggable::{
     DraggableSizeAnimation, DraggableSnap, DraggableSnapTarget,
 };
 pub use raw_scrollbar::{
-    RawScrollbar, RawScrollbarGeometry, RawScrollbarOrientation, RawScrollbarStyle,
+    RawScrollbar, RawScrollbarGeometry, RawScrollbarOrientation, RawScrollbarStyle, ScrollbarCursorState,
 };
 pub(crate) use raw_scrollbar::{RawScrollbarPart, ScrollbarFade, ScrollbarFadeCommand};
 pub use two_dimensional::{
@@ -34,3 +34,5 @@ pub use wheel::{
     WheelChildDelegate, WheelChildLayout, WheelConfigError, WheelLayout, WheelMatrix,
     WheelProjection,
 };
+
+pub(crate) use raw_scrollbar::ScrollbarCursor;

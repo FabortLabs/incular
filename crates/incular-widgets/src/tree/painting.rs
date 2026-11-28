@@ -1137,8 +1137,13 @@ impl WidgetTree {
                 border.paint(&mut canvas, rect, &geometry.rows, &geometry.columns);
                 picture.extend_from(&canvas.finish());
                 foreground_bounds = painted_bounds(picture.commands(), size);
-            } else if matches!(&*kind, RenderKind::RawScrollbar { .. }) {
-                self.paint_explicit_scrollbar(id, size, &mut picture);
+            } else if let RenderKind::RawScrollbar { shape, .. } = &*kind {
+                self.paint_explicit_scrollbar(
+                    id,
+                    size,
+                    shape.as_ref().map(|shape| shape.0.as_ref()),
+                    &mut picture,
+                );
                 foreground_bounds = painted_bounds(picture.commands(), size);
             } else if let Some(focus_ring) = focus_ring.filter(|color| color.alpha > 0) {
                 let inset = 1.0;
@@ -1381,7 +1386,13 @@ impl WidgetTree {
         }
     }
 
-    fn paint_explicit_scrollbar(&self, id: RenderObjectId, size: Size, cache: &mut DisplayList) {
+    fn paint_explicit_scrollbar(
+        &self,
+        id: RenderObjectId,
+        size: Size,
+        shape: Option<&dyn crate::ShapeBorder>,
+        cache: &mut DisplayList,
+    ) {
         let Some(scrollbar) = self
             .renders
             .get(id.0)
@@ -1395,14 +1406,63 @@ impl WidgetTree {
             return;
         }
         let style = scrollbar.style();
-        for (rect, mut color) in [
-            (geometry.track, style.track_color),
-            (geometry.thumb, style.thumb_color),
-        ] {
+        let faded = |mut color: Color| {
             color.alpha = (f32::from(color.alpha) * geometry.opacity).round() as u8;
-            if color.alpha > 0 {
-                cache.push(PaintCommand::Rect { rect, color });
+            color
+        };
+        let (track, border) = scrollbar.track_paint_colors();
+        let paint_fill = |cache: &mut DisplayList, rect, radius: Option<crate::Radius>, color| {
+            let color = faded(color);
+            if color.alpha == 0 {
+                return;
             }
+            match radius {
+                None => cache.push(PaintCommand::Rect { rect, color }),
+                Some(radius) if radius.x == radius.y => cache.push(PaintCommand::RRect {
+                    rrect: RRect::uniform(rect, radius.x),
+                    brush: color.into(),
+                }),
+                Some(radius) => cache.push(PaintCommand::FillPath {
+                    path: Arc::new(crate::painting_effects::rrect_path(
+                        rect,
+                        crate::BorderRadius::all(radius),
+                    )),
+                    brush: color.into(),
+                    fill_rule: FillRule::NonZero,
+                }),
+            }
+        };
+        paint_fill(cache, geometry.track, style.track_radius, track);
+        let border = faded(border);
+        if border.alpha > 0 {
+            let (start, end) = scrollbar.track_inner_edge(geometry.track);
+            let mut line = Path::builder();
+            line.move_to(start);
+            line.line_to(end);
+            cache.push(PaintCommand::StrokePath {
+                path: Arc::new(line.build()),
+                brush: border.into(),
+                stroke: Stroke::default(),
+            });
+        }
+        if let Some(shape) = shape.filter(|_| style.radius.is_none()) {
+            let mut canvas = incular_rendering::Canvas::default();
+            let fill = faded(style.thumb_color);
+            if fill.alpha > 0 {
+                let paint = incular_rendering::Paint::default().color(fill);
+                if shape.prefer_paint_interior() {
+                    shape.paint_interior(&mut canvas, geometry.thumb, &paint, None);
+                } else {
+                    let path = Arc::new(shape.outer_path(geometry.thumb));
+                    canvas.draw_path(path, &paint, FillRule::NonZero);
+                }
+            }
+            // Flutter fades the fill, but leaves a configured side unchanged
+            // while the scrollbar is visible.
+            shape.paint(&mut canvas, geometry.thumb);
+            cache.extend_from(&canvas.finish());
+        } else {
+            paint_fill(cache, geometry.thumb, style.radius, style.thumb_color);
         }
     }
     pub(super) fn hit_test_render(
@@ -1844,14 +1904,21 @@ fn semantic_role_name(role: SemanticRole) -> &'static str {
         SemanticRole::GenericContainer => "container",
         SemanticRole::Checkbox => "checkbox",
         SemanticRole::Radio => "radio",
+        SemanticRole::RadioGroup => "radio group",
         SemanticRole::Switch => "switch",
         SemanticRole::Slider => "slider",
         SemanticRole::Menu => "menu",
+        SemanticRole::MenuBar => "menu bar",
         SemanticRole::Dialog => "dialog",
         SemanticRole::AlertDialog => "alert dialog",
         SemanticRole::Alert => "alert",
         SemanticRole::Status => "status",
         SemanticRole::Form => "form",
+        SemanticRole::Complementary => "complementary",
+        SemanticRole::ContentInfo => "content information",
+        SemanticRole::Main => "main",
+        SemanticRole::Navigation => "navigation",
+        SemanticRole::Region => "region",
         SemanticRole::Image => "image",
         SemanticRole::Heading => "heading",
         SemanticRole::Link => "link",
@@ -1860,6 +1927,8 @@ fn semantic_role_name(role: SemanticRole) -> &'static str {
         SemanticRole::TabList => "tab list",
         SemanticRole::TabPanel => "tab panel",
         SemanticRole::MenuItem => "menu item",
+        SemanticRole::MenuItemCheckbox => "menu item checkbox",
+        SemanticRole::MenuItemRadio => "menu item radio",
         SemanticRole::ProgressBar => "progress bar",
         SemanticRole::Meter => "meter",
         SemanticRole::SearchField => "search field",
@@ -1879,6 +1948,8 @@ fn semantic_role_is_interactive(role: SemanticRole) -> bool {
             | SemanticRole::Link
             | SemanticRole::Tab
             | SemanticRole::MenuItem
+            | SemanticRole::MenuItemCheckbox
+            | SemanticRole::MenuItemRadio
             | SemanticRole::SearchField
     )
 }

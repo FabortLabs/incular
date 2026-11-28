@@ -147,6 +147,10 @@ impl ImageStream {
         self.cell.live_listeners.get() != 0
     }
 
+    pub(crate) fn has_live_image_observers(&self) -> bool {
+        self.has_live_listeners() && !matches!(&*self.cell.state.borrow(), ImageLoadState::Failed(_))
+    }
+
     fn adjust_live_listeners(&self, amount: usize, add: bool) {
         let mut cell = self.cell.clone();
         loop {
@@ -319,11 +323,28 @@ impl ImageStream {
     }
 
     pub(crate) fn from_load_receiver(
+        receive: oneshot::Receiver<Result<ImageHandle, ImageError>>,
+    ) -> Self {
+        Self::from_load_receiver_with_failure(receive, None)
+    }
+
+    pub(crate) fn from_load_receiver_with_failure(
         mut receive: oneshot::Receiver<Result<ImageHandle, ImageError>>,
+        on_failure: Option<Box<dyn FnOnce()>>,
     ) -> Self {
         match receive.try_recv() {
-            Ok(Some(result)) => return Self::from_result(result),
-            Err(_) => return Self::failed(abandoned_image_load()),
+            Ok(Some(result)) => {
+                if result.is_err() && let Some(notify) = on_failure {
+                    notify();
+                }
+                return Self::from_result(result);
+            }
+            Err(_) => {
+                if let Some(notify) = on_failure {
+                    notify();
+                }
+                return Self::failed(abandoned_image_load());
+            }
             Ok(None) => {}
         }
 
@@ -336,6 +357,9 @@ impl ImageStream {
                 let result = receive
                     .await
                     .unwrap_or_else(|_| Err(abandoned_image_load()));
+                if result.is_err() && let Some(notify) = on_failure {
+                    notify();
+                }
                 if let Some(cell) = owner.upgrade() {
                     let state = match result {
                         Ok(image) => ImageLoadState::Ready(image),

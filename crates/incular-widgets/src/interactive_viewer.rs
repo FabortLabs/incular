@@ -11,8 +11,8 @@ use incular_gestures::constants::MIN_FLING_VELOCITY;
 
 use crate::gestures::{ScaleEndDetails, ScaleStartDetails, ScaleUpdateDetails, Velocity};
 use crate::{
-    ClipRect, GestureDetector, HitTestBehavior, Listener, OverflowBox, RawPointerEvent, Transform,
-    Widget,
+    BuildContext, ClipRect, GestureDetector, HitTestBehavior, LayoutBuilder, Listener, OverflowBox,
+    RawPointerEvent, Transform, Widget,
 };
 
 /// `_kDrag`: the default `interactionEndFrictionCoefficient`.
@@ -226,6 +226,64 @@ type StartCallback = Rc<dyn Fn(ScaleStartDetails)>;
 type UpdateCallback = Rc<dyn Fn(ScaleUpdateDetails)>;
 type EndCallback = Rc<dyn Fn(ScaleEndDetails)>;
 
+/// The four viewport corners in scene coordinates, clockwise from top left.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InteractiveViewerViewport {
+    pub corners: [Offset; 4],
+}
+
+impl InteractiveViewerViewport {
+    /// The smallest axis-aligned rectangle containing the viewport.
+    #[must_use]
+    pub fn bounds(self) -> Rect {
+        let [left, top, right, bottom] = self.extents();
+        Rect::from_origin_size(
+            Offset::new(left, top),
+            Size::new(right - left, bottom - top),
+        )
+    }
+
+    fn extents(self) -> [f32; 4] {
+        let [first, rest @ ..] = self.corners;
+        let (mut left, mut top, mut right, mut bottom) = (first.x, first.y, first.x, first.y);
+        for corner in rest {
+            left = left.min(corner.x);
+            top = top.min(corner.y);
+            right = right.max(corner.x);
+            bottom = bottom.max(corner.y);
+        }
+        [left, top, right, bottom]
+    }
+
+    fn edges(&self) -> impl Iterator<Item = (Offset, Offset)> + '_ {
+        self.corners
+            .iter()
+            .copied()
+            .zip(self.corners.iter().copied().cycle().skip(1))
+    }
+
+    fn from_transform(size: Size, transform: CoreTransform) -> Self {
+        let inverse = transform.inverse();
+        Self {
+            corners: [
+                Offset::ZERO,
+                Offset::new(size.width, 0.),
+                Offset::new(size.width, size.height),
+                Offset::new(0., size.height),
+            ]
+            .map(|corner| inverse.map_or(corner, |value| value.transform_point(corner))),
+        }
+    }
+}
+
+type ViewportBuilder = Rc<dyn for<'a> Fn(&BuildContext<'a>, InteractiveViewerViewport) -> Widget>;
+
+#[derive(Clone)]
+enum ViewerChild {
+    Fixed(Widget),
+    Builder(ViewportBuilder),
+}
+
 /// A widget that pans and zooms its child.
 ///
 /// Flutter's defaults: scale between 0.8 and 2.5, panning and scaling
@@ -234,7 +292,7 @@ type EndCallback = Rc<dyn Fn(ScaleEndDetails)>;
 /// scale factor of 200.
 #[derive(Clone)]
 pub struct InteractiveViewer {
-    child: Widget,
+    child: ViewerChild,
     controller: Option<TransformationController>,
     min_scale: f32,
     max_scale: f32,
@@ -256,8 +314,21 @@ pub struct InteractiveViewer {
 impl InteractiveViewer {
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
+        Self::with_child(ViewerChild::Fixed(child.into()), true)
+    }
+
+    /// Builds content for the visible scene quadrilateral after layout.
+    /// The child itself is unconstrained, as in Flutter's builder variant.
+    #[must_use]
+    pub fn builder(
+        build: impl for<'a> Fn(&BuildContext<'a>, InteractiveViewerViewport) -> Widget + 'static,
+    ) -> Self {
+        Self::with_child(ViewerChild::Builder(Rc::new(build)), false)
+    }
+
+    fn with_child(child: ViewerChild, constrained: bool) -> Self {
         Self {
-            child: child.into(),
+            child,
             controller: None,
             min_scale: 0.8,
             max_scale: 2.5,
@@ -265,7 +336,7 @@ impl InteractiveViewer {
             scale_enabled: true,
             pan_axis: PanAxis::Free,
             boundary_margin: EdgeInsets::ZERO,
-            constrained: true,
+            constrained,
             clip_behavior: Clip::HardEdge,
             alignment: None,
             interaction_end_friction_coefficient: DRAG,
@@ -275,6 +346,85 @@ impl InteractiveViewer {
             on_interaction_update: None,
             on_interaction_end: None,
         }
+    }
+
+    /// Finds the closest point on a finite line segment, including endpoints.
+    #[must_use]
+    pub fn nearest_point_on_line(point: Offset, start: Offset, end: Offset) -> Offset {
+        let dx = f64::from(end.x) - f64::from(start.x);
+        let dy = f64::from(end.y) - f64::from(start.y);
+        let squared = dx * dx + dy * dy;
+        if squared == 0. {
+            return start;
+        }
+        let x = f64::from(point.x) - f64::from(start.x);
+        let y = f64::from(point.y) - f64::from(start.y);
+        let fraction = ((x * dx + y * dy) / squared).clamp(0., 1.);
+        Offset::new(
+            (f64::from(start.x) + dx * fraction) as f32,
+            (f64::from(start.y) + dy * fraction) as f32,
+        )
+    }
+
+    /// Returns the bounding rectangle as a clockwise viewport quad.
+    #[must_use]
+    pub fn axis_aligned_bounding_box(quad: InteractiveViewerViewport) -> InteractiveViewerViewport {
+        let [left, top, right, bottom] = quad.extents();
+        InteractiveViewerViewport {
+            corners: [
+                Offset::new(left, top),
+                Offset::new(right, top),
+                Offset::new(right, bottom),
+                Offset::new(left, bottom),
+            ],
+        }
+    }
+
+    /// Tests a point against a convex viewport, including its edges.
+    /// Affine transforms may produce either winding or a skewed parallelogram.
+    #[must_use]
+    pub fn point_is_inside(point: Offset, quad: InteractiveViewerViewport) -> bool {
+        let mut positive = false;
+        let mut negative = false;
+        for (start, end) in quad.edges() {
+            let edge_x = f64::from(end.x) - f64::from(start.x);
+            let edge_y = f64::from(end.y) - f64::from(start.y);
+            let x = f64::from(point.x) - f64::from(start.x);
+            let y = f64::from(point.y) - f64::from(start.y);
+            let cross = edge_x * y - edge_y * x;
+            positive |= cross > 0.;
+            negative |= cross < 0.;
+            if positive && negative {
+                return false;
+            }
+        }
+        positive
+            || negative
+            || quad
+                .edges()
+                .any(|(a, b)| Self::nearest_point_on_line(point, a, b) == point)
+    }
+
+    /// Returns the nearest point in a convex viewport, leaving interior
+    /// and boundary points unchanged.
+    #[must_use]
+    pub fn nearest_point_inside(point: Offset, quad: InteractiveViewerViewport) -> Offset {
+        if Self::point_is_inside(point, quad) {
+            return point;
+        }
+        let mut best = quad.corners[0];
+        let mut min_squared = f64::INFINITY;
+        for (start, end) in quad.edges() {
+            let projected = Self::nearest_point_on_line(point, start, end);
+            let x = f64::from(projected.x) - f64::from(point.x);
+            let y = f64::from(projected.y) - f64::from(point.y);
+            let squared = x * x + y * y;
+            if squared < min_squared {
+                best = projected;
+                min_squared = squared;
+            }
+        }
+        best
     }
 
     /// Shares the transform with the application.
@@ -317,6 +467,12 @@ impl InteractiveViewer {
     /// Extends the boundary beyond the child; infinite margins remove it.
     #[must_use]
     pub fn boundary_margin(mut self, margin: EdgeInsets) -> Self {
+        let sides = [margin.left, margin.top, margin.right, margin.bottom];
+        debug_assert!(
+            sides.iter().all(|side| side.is_finite())
+                || sides.iter().all(|&side| side == f32::INFINITY),
+            "InteractiveViewer boundary margins must be finite or fully unbounded",
+        );
         self.boundary_margin = margin;
         self
     }
@@ -325,7 +481,7 @@ impl InteractiveViewer {
     /// unconstrained at the top-left.
     #[must_use]
     pub fn constrained(mut self, constrained: bool) -> Self {
-        self.constrained = constrained;
+        self.constrained = constrained && matches!(self.child, ViewerChild::Fixed(_));
         self
     }
 
@@ -357,7 +513,7 @@ impl InteractiveViewer {
 
     /// Flutter `trackpadScrollCausesScale` (default `false`): whether trackpad
     /// scrolling scales the child like a mouse wheel. By default a trackpad
-    /// scroll is ignored here, as Flutter ignores it.
+    /// scroll pans instead.
     #[must_use]
     pub fn trackpad_scroll_causes_scale(mut self, causes_scale: bool) -> Self {
         self.trackpad_scroll_causes_scale = causes_scale;
@@ -425,16 +581,19 @@ struct ViewerState {
 }
 
 impl ViewerState {
-    fn boundary_rect(&self) -> Rect {
+    fn boundary_rect(&self) -> Option<Rect> {
         let size = self.child_size.get();
         let margin = self.config.boundary_margin;
-        Rect::from_origin_size(
+        // Infinity means no boundary, not a real Size with infinite
+        // dimensions. The unbounded path must skip geometry entirely.
+        let extent = Size::maybe_new(
+            size.width + margin.left + margin.right,
+            size.height + margin.top + margin.bottom,
+        )?;
+        Some(Rect::from_origin_size(
             Offset::new(-margin.left, -margin.top),
-            Size::new(
-                size.width + margin.left + margin.right,
-                size.height + margin.top + margin.bottom,
-            ),
-        )
+            extent,
+        ))
     }
 
     fn viewport_rect(&self) -> Rect {
@@ -468,14 +627,9 @@ impl ViewerState {
             }
         };
         let next = matrix.translated(aligned);
-        let boundary = self.boundary_rect();
-        let infinite = !(boundary.origin.x.is_finite()
-            && boundary.origin.y.is_finite()
-            && boundary.size.width.is_finite()
-            && boundary.size.height.is_finite());
-        if infinite {
+        let Some(boundary) = self.boundary_rect() else {
             return next;
-        }
+        };
         let viewport = self.viewport_rect();
         let offending = exceeds_by(boundary, next.scene_viewport(viewport));
         if offending == Offset::ZERO {
@@ -519,10 +673,10 @@ impl ViewerState {
         }
         let current = self.matrix().scale;
         let viewport = self.viewport.get();
-        let boundary = self.boundary_rect();
-        let total = (current * scale).max(
-            (viewport.width / boundary.size.width).max(viewport.height / boundary.size.height),
-        );
+        let boundary_minimum = self.boundary_rect().map_or(0., |boundary| {
+            (viewport.width / boundary.size.width).max(viewport.height / boundary.size.height)
+        });
+        let total = (current * scale).max(boundary_minimum);
         let clamped_total = total.clamp(self.config.min_scale, self.config.max_scale);
         Matrix {
             scale: matrix.scale * (clamped_total / current),
@@ -686,17 +840,15 @@ impl ViewerState {
         }
     }
 
-    /// `_receivedPointerSignal` for a mouse wheel: scales about the pointer.
+    /// Discrete trackpad scroll pans by default. Mouse-wheel input and
+    /// opt-in trackpad scrolling zoom around the viewport-local pointer.
     fn pointer_signal(&self, event: RawPointerEvent) {
-        if event.scroll_delta.y == 0.0 {
+        let trackpad_pan = event.scale_signal.is_none()
+            && event.kind == incular_gestures::PointerDeviceKind::Trackpad
+            && !self.config.trackpad_scroll_causes_scale;
+        if event.scale_signal.is_none() && !trackpad_pan && event.scroll_delta.y == 0.0 {
             return;
         }
-        if event.kind == incular_gestures::PointerDeviceKind::Trackpad
-            && !self.config.trackpad_scroll_causes_scale
-        {
-            return;
-        }
-        let scale_change = (-event.scroll_delta.y / self.config.scale_factor).exp();
         let (global, local) = (event.position, event.local_position);
         if let Some(callback) = &self.config.on_interaction_start {
             callback(ScaleStartDetails {
@@ -707,10 +859,11 @@ impl ViewerState {
                 kind: None,
             });
         }
-        let update = ScaleUpdateDetails {
+
+        let mut update = ScaleUpdateDetails {
             focal_point: global,
             local_focal_point: local,
-            scale: scale_change,
+            scale: 1.0,
             horizontal_scale: 1.0,
             vertical_scale: 1.0,
             rotation: 0.0,
@@ -718,11 +871,27 @@ impl ViewerState {
             pointer_count: 0,
             source_time: None,
         };
-        if self.gesture_is_supported(Some(GestureType::Scale)) {
-            let focal_point_scene = self.to_scene(local);
-            self.set_matrix(self.matrix_scale(self.matrix(), scale_change));
-            let scaled = self.to_scene(local);
-            self.set_matrix(self.matrix_translate(self.matrix(), scaled - focal_point_scene));
+        if trackpad_pan {
+            let delta = event.local_scroll_delta;
+            let supported = self.gesture_is_supported(Some(GestureType::Pan));
+            if supported {
+                let from = self.to_scene(local);
+                let to = self.to_scene(local - delta);
+                self.set_matrix(self.matrix_translate(self.matrix(), to - from));
+            }
+            update.focal_point = global - event.scroll_delta;
+            update.local_focal_point = local - if supported { delta } else { event.scroll_delta };
+            update.focal_point_delta = Offset::ZERO - delta;
+        } else {
+            update.scale = event
+                .scale_signal
+                .unwrap_or_else(|| (-event.scroll_delta.y / self.config.scale_factor).exp());
+            if self.gesture_is_supported(Some(GestureType::Scale)) {
+                let focal_point_scene = self.to_scene(local);
+                self.set_matrix(self.matrix_scale(self.matrix(), update.scale));
+                let scaled = self.to_scene(local);
+                self.set_matrix(self.matrix_translate(self.matrix(), scaled - focal_point_scene));
+            }
         }
         self.notify_update(update);
         if let Some(callback) = &self.config.on_interaction_end {
@@ -780,14 +949,41 @@ impl ViewerState {
     }
 }
 
+impl ViewerState {
+    fn build_viewer_content(self: &Rc<Self>, matrix: CoreTransform, child: Widget) -> Widget {
+        let observed = {
+            let state = self.clone();
+            Widget::size_observer(move |size| state.child_size.set(size), child)
+        };
+        let transform = Transform::new(matrix, observed);
+        // Keep the policy until layout resolves it against the current
+        // child size, including the very first frame and later resizes.
+        let transformed: Widget = match self.config.alignment {
+            None => transform.into(),
+            Some(alignment) => transform.alignment(alignment).into(),
+        };
+        let content: Widget = if self.config.constrained {
+            transformed
+        } else {
+            OverflowBox::builder()
+                .min_width(0.0)
+                .min_height(0.0)
+                .max_width(f32::INFINITY)
+                .max_height(f32::INFINITY)
+                .child(transformed)
+                .build()
+                .into()
+        };
+        ClipRect::new(content)
+            .clip_behavior(self.config.clip_behavior)
+            .into()
+    }
+}
+
 impl From<InteractiveViewer> for Widget {
     fn from(value: InteractiveViewer) -> Self {
         let transformer = value.controller.clone().unwrap_or_default();
         let inertia_controller = AnimationController::new(Duration::ZERO);
-        let constrained = value.constrained;
-        let clip_behavior = value.clip_behavior;
-        let alignment = value.alignment;
-        let child = value.child.clone();
         let state = Rc::new(ViewerState {
             config: value,
             transformer: transformer.clone(),
@@ -813,44 +1009,37 @@ impl From<InteractiveViewer> for Widget {
             let state = state.clone();
             move |_| {
                 let matrix = state.transformer.value();
-                let observed = {
-                    let state = state.clone();
-                    Widget::size_observer(move |size| state.child_size.set(size), child.clone())
-                };
-                let transformed: Widget = match alignment {
-                    None => Transform::new(matrix, observed).into(),
-                    Some(alignment) => {
-                        let size = state.child_size.get();
-                        Transform::new(matrix, observed)
-                            .origin(Offset::new(
-                                size.width * (alignment.x + 1.0) / 2.0,
-                                size.height * (alignment.y + 1.0) / 2.0,
-                            ))
-                            .into()
-                    }
-                };
-                let content: Widget = if constrained {
-                    transformed
-                } else {
-                    OverflowBox::builder()
-                        .min_width(0.0)
-                        .min_height(0.0)
-                        .max_width(f32::INFINITY)
-                        .max_height(f32::INFINITY)
-                        .child(transformed)
-                        .build()
+                match &state.config.child {
+                    ViewerChild::Fixed(child) => state.build_viewer_content(matrix, child.clone()),
+                    ViewerChild::Builder(builder) => {
+                        let builder = builder.clone();
+                        let state = state.clone();
+                        LayoutBuilder::new(move |context, constraints| {
+                            let size = Size::new(
+                                if constraints.is_width_bounded() {
+                                    constraints.max_width()
+                                } else {
+                                    constraints.min_width()
+                                },
+                                if constraints.is_height_bounded() {
+                                    constraints.max_height()
+                                } else {
+                                    constraints.min_height()
+                                },
+                            );
+                            let viewport = InteractiveViewerViewport::from_transform(size, matrix);
+                            state.build_viewer_content(matrix, builder(context, viewport))
+                        })
                         .into()
-                };
-                if clip_behavior == Clip::None {
-                    content
-                } else {
-                    ClipRect::new(content).clip_behavior(clip_behavior).into()
+                    }
                 }
             }
         });
         let last_focal_point = Rc::new(Cell::new(Offset::ZERO));
         let detector = GestureDetector::new(Widget::animation_ticker(inertia_controller, built))
             .behavior(HitTestBehavior::Opaque)
+            .trackpad_scroll_causes_scale(state.config.trackpad_scroll_causes_scale)
+            .trackpad_scroll_to_scale_factor(Offset::new(0., -1. / state.config.scale_factor))
             .on_scale_start({
                 let state = state.clone();
                 move |details| state.scale_start(details)

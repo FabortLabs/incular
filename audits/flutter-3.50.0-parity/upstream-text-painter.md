@@ -342,3 +342,32 @@ writing direction. The empty paragraph still reports the root font's
 75 px alphabetic baseline. The nine upstream-disabled registrations
 were not counted. The final focused native run passed 59 tests and
 left the known Unicode-separator regression ignored.
+
+## Hit testing a bidi join by its visual side
+
+The authored Flutter `mixed_bidi_hit_edges_test.dart` probe fixes 24
+position/affinity samples in each base direction, including values just
+before, exactly on, and just after both mixed-direction boundaries. For
+example, at x=30 in the LTR paragraph Flutter selects UTF-16 6 upstream
+(the leading visual edge of the Hebrew run), not 3 upstream (the end of
+the Latin run). At x=5 in an ordinary glyph, a midpoint tie goes to the
+right-hand caret. Before the correction Incular returned 3 and 0,
+respectively, for those two points.
+
+The native text engine preserves visual ordering for coincident stops,
+then the painter and editable pointer hit paths share one binary search.
+Actual mouse presses in a focused editor now choose the expected offset
+and affinity on either side of both bidi joins. Tests use the pinned
+test face with guaranteed Hebrew fixture advances, not host font
+substitution. The 63 focused painter/direction tests plus 41 focused
+runtime checks passed. The known Unicode whitespace regression remains
+ignored. The separate nine upstream-disabled registrations were not
+counted based on this authored comparison.
+
+```sh
+python3 audits/flutter-3.50.0-parity/extract-flutter-test-font.py \
+  --bidi-hit-fixture .tmp/flutter .tmp/FlutterTest-bidi-hit.ttf
+export INCULAR_FLUTTER_BIDI_HIT_FONT_PATH="$PWD/.tmp/FlutterTest-bidi-hit.ttf"
+cargo test --locked --offline -j1 -p incular-text \
+  --test flutter350_text_painter_bidi point_hits_follow -- --test-threads=1
+```

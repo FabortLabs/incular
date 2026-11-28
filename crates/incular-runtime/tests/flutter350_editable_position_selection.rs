@@ -239,3 +239,97 @@ fn platform_word_selection_at_the_second_space_matches_read_only_and_ios_rules()
         assert_eq!(controller.text(), text);
     }
 }
+
+#[test]
+fn actual_mouse_taps_in_a_mixed_run_keep_the_caret_on_the_clicked_side() {
+    let Ok(path) = std::env::var("INCULAR_FLUTTER_BIDI_HIT_FONT_PATH") else {
+        return;
+    };
+    use incular_text::TextAlign;
+    const FONT: &str = "Flutter editable bidi hit testing";
+    register_application_font_as(FONT, std::fs::read(path).unwrap());
+    for (source, direction, reference) in [
+        (
+            "ABCאבגDEF",
+            TextDirection::Ltr,
+            [
+                (3, true),
+                (6, true),
+                (6, true),
+                (3, false),
+                (6, false),
+                (6, false),
+            ],
+        ),
+        (
+            "אבגABCדהו",
+            TextDirection::Rtl,
+            [
+                (6, false),
+                (3, false),
+                (3, false),
+                (6, true),
+                (3, true),
+                (3, true),
+            ],
+        ),
+    ] {
+        let text = TextEditingController::with_text(source);
+        let editor = EditableText::new(text.clone())
+            .text_direction(direction)
+            .text_align(TextAlign::Left)
+            .style(TextStyle::new().font_family(FONT).font_size(10.))
+            .size(Size::new(100., 16.))
+            .select_all_on_focus(false);
+        let mut runtime = Runtime::new(editor.into()).unwrap();
+        runtime.set_text_shortcut_platform(TextShortcutPlatform::Linux);
+        let start = Instant::now();
+        let _ = frame(&mut runtime, start);
+        for (i, (x, (utf16, upstream))) in [29.9, 30., 30.1, 59.9, 60., 60.1]
+            .into_iter()
+            .zip(reference)
+            .enumerate()
+        {
+            let time = start + Duration::from_millis(100 + 600 * i as u64);
+            for (phase, at) in [
+                (PointerPhase::Down, time),
+                (PointerPhase::Up, time + Duration::from_millis(30)),
+            ] {
+                let _ = runtime.handle_input_at(
+                    InputEvent::PointerWithMetadata {
+                        pointer: 2,
+                        device: 1,
+                        kind: PointerDeviceKind::Mouse,
+                        position: Offset::new(x, 5.),
+                        phase,
+                        buttons: if phase == PointerPhase::Up {
+                            0
+                        } else {
+                            PRIMARY_POINTER_BUTTON
+                        },
+                        button: Some(PRIMARY_POINTER_BUTTON),
+                        sample: Default::default(),
+                    },
+                    at,
+                );
+            }
+            let _ = frame(&mut runtime, time + Duration::from_millis(50));
+            let byte = incular_text::byte_offset_at_utf16_boundary(source, utf16);
+            assert_eq!(
+                text.selection(),
+                TextSelection::collapsed(byte),
+                "{direction:?} at {x}"
+            );
+            assert_eq!(
+                text.caret_affinity(),
+                if upstream {
+                    TextAffinity::Upstream
+                } else {
+                    TextAffinity::Downstream
+                },
+                "{direction:?} at {x}"
+            );
+            assert!(runtime.focused_element().is_some());
+        }
+    }
+}

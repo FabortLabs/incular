@@ -563,12 +563,14 @@ pub struct TextFieldSpec {
     pub(crate) focused_border_outset: incular_config::EdgeInsets,
     pub(crate) content_padding: incular_config::EdgeInsets,
     pub(crate) clip_behavior: incular_config::Clip,
+    pub(crate) drag_start_behavior: incular_core::DragStartBehavior,
     pub(crate) fixed_scroll_offset: Option<f32>,
     pub(crate) allow_implicit_caret_scrolling: bool,
     pub(crate) on_editing_complete: Option<Rc<dyn Fn()>>,
     pub(crate) on_submit: Option<Rc<dyn Fn(String)>>,
     pub(crate) on_tap_outside: Option<EditableOutsideTap>,
     pub(crate) on_tap_up_outside: Option<EditableOutsideTap>,
+    pub(crate) on_selection_handle_tapped: Option<Rc<dyn Fn()>>,
     pub(crate) on_app_private_command: Option<AppPrivateCommandCallback>,
     pub(crate) content_insertion: Option<crate::ContentInsertionConfiguration>,
     pub(crate) multiline: bool,
@@ -606,6 +608,7 @@ pub struct TextFieldSpec {
     /// Flutter `spellCheckConfiguration`.
     pub(crate) spell_check: Option<crate::SpellCheckConfiguration>,
     pub(crate) spell_check_suppressed: bool,
+    pub(crate) text_magnifier: Option<Rc<crate::magnifier::TextMagnifierState>>,
     pub(crate) stylus_handwriting_enabled: bool,
     pub(crate) has_context_menu_builder: bool,
     pub(crate) legacy_selection_controls: bool,
@@ -805,6 +808,7 @@ pub(crate) enum WidgetKind {
     },
     SelectionContainer {
         delegate: SelectionContainerDelegate,
+        registrar: Option<crate::SelectionRegistrar>,
         child: Widget,
     },
     SelectionListener {
@@ -1103,6 +1107,8 @@ pub(crate) enum WidgetKind {
     RawScrollbar {
         controller: ScrollController,
         style: RawScrollbarStyle,
+        cursor: Option<crate::advanced_scrolling::ScrollbarCursor>,
+        shape: Option<crate::advanced_scrolling::raw_scrollbar::ScrollbarThumbShape>,
         child: Widget,
     },
     ListWheelScrollView {

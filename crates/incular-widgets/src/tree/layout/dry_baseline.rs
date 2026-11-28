@@ -44,7 +44,7 @@ impl WidgetTree {
         }
     }
 
-    fn dry_size_and_baseline(
+    pub(super) fn dry_size_and_baseline(
         &self,
         id: RenderObjectId,
         constraints: Constraints,
@@ -67,6 +67,52 @@ impl WidgetTree {
             RenderKind::Constrained {
                 constraints: bounds,
             } => child(enforced_constraints(constraints, *bounds)),
+            RenderKind::Flex { flex, .. } => {
+                self.dry_flex_metrics(&node.children, flex, constraints, measure_baseline)
+            }
+            RenderKind::Wrap { wrap, .. } if measure_baseline => {
+                use super::intrinsics::{strict_wrap_size, wrap_child_constraints};
+
+                let child_bounds = wrap_child_constraints(wrap.direction, constraints);
+                let measured = node
+                    .children
+                    .iter()
+                    .map(|&child| {
+                        with_recursive_tree_stack(|| {
+                            let (size, baseline) =
+                                self.dry_size_and_baseline(child, child_bounds, true)?;
+                            Some(incular_layout::WrapChild { size, baseline })
+                        })
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                // Flutter uses strict run fitting for getDryLayout, but
+                // uses the real run positions for getDryBaseline.
+                let size = strict_wrap_size(
+                    wrap,
+                    constraints,
+                    measured.iter().map(|child| Some(child.size)),
+                )?;
+                let placed = incular_layout::layout_wrap(constraints, &measured, wrap);
+                let baseline = placed
+                    .children
+                    .iter()
+                    .filter_map(|child| child.baseline.map(|baseline| baseline + child.offset.y))
+                    .reduce(f32::min);
+                Some((size, baseline))
+            }
+            RenderKind::AspectRatio { ratio } => {
+                let size = incular_layout::aspect_ratio_size(
+                    constraints,
+                    incular_layout::AspectRatio::new(*ratio),
+                )?;
+                if measure_baseline {
+                    let (_, baseline) = child(Constraints::tight(size))?;
+                    Some((size, baseline))
+                } else {
+                    Some((size, None))
+                }
+            }
+
             RenderKind::Align {
                 alignment,
                 width_factor,
@@ -171,6 +217,11 @@ impl WidgetTree {
                     *height_factor,
                 ))?;
                 Some(shifted(result, *alignment, constraints.constrain(result.0)))
+            }
+            RenderKind::LayoutBuilder
+                if self.layout_builder_uses_constraints(id) == Some(false) =>
+            {
+                node.children.first().and_then(|_| child(constraints))
             }
             kind if super::intrinsics::forwards_intrinsic_child(kind) => child(constraints),
             _ => Some((self.dry_layout_size(id, constraints)?, None)),

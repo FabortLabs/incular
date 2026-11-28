@@ -234,3 +234,34 @@ the same text with the caret at 5. Replacing forward range (4,5)
 yields `123412345` with the caret at 9. Selecting all and pasting
 the shorter value returns `12345` and caret 5. The test compares
 the retained editing action, not Material toolbar styling.
+
+## Multiline size notification
+
+Pinned `widgets/editable_text_test.dart:18171` passed. A mounted native
+multiline editor with limits 1–3 receives a newline through the normal
+platform editing event. Before the fix the editor changed height but
+its enclosing listener received no notification. It now receives exactly
+one `SizeChangedLayoutNotification` when the height changes and none
+on mount, focus, or a subsequent unchanged frame. Width and retained
+focus identity stay unchanged. The focused native regression passed.
+
+## Duplicate toolbar request after autofocus
+
+Pinned iOS `widgets/editable_text_test.dart:18516` passed. A neutral
+native toolbar starts hidden after autofocus. The host's first request
+returns true and mounts it. A second request returns false and preserves
+the exact same retained overlay across subsequent frames. The same
+test fixture still verifies this during a handwriting interaction.
+All seven focused binding and five font-pinned keyboard geometry tests
+passed.
+
+## Editor activation keys do not activate ancestor controls
+
+Pinned `widgets/editable_text_test.dart:15021` passed. The native
+mounted check initially fired the enclosing ActivateIntent action
+when the focused target was an editor. EditableText now shadows both
+generic and button activation while leaving Space on the native text
+input path and preserving desktop newline input from Enter and
+keypad Enter. An outer activation is never invoked for those editor
+inputs, and ordinary focused controls still receive activation.
+All four application activation and 19 editing shortcut tests passed.

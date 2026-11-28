@@ -80,9 +80,11 @@ impl fmt::Display for TapCallbackError {
 impl std::error::Error for TapCallbackError {}
 
 pub type TapCallbackErrorHandler = Rc<dyn Fn(TapCallbackError)>;
+pub type TapCallbackTraceHandler = Rc<dyn Fn(TapCallbackKind)>;
 
 thread_local! {
     static HANDLER: RefCell<Option<TapCallbackErrorHandler>> = const { RefCell::new(None) };
+    static TRACE: RefCell<Option<TapCallbackTraceHandler>> = const { RefCell::new(None) };
 }
 
 /// Replaces the current UI thread's tap error reporter and returns the
@@ -94,7 +96,18 @@ pub fn set_tap_callback_error_handler(
     HANDLER.with(|current| current.replace(handler))
 }
 
+/// Observes tap callbacks immediately before invocation on the current UI
+/// thread. Tracing is off by default and independent of error reporting.
+pub fn set_tap_callback_trace_handler(
+    handler: Option<TapCallbackTraceHandler>,
+) -> Option<TapCallbackTraceHandler> {
+    TRACE.with(|current| current.replace(handler))
+}
+
 pub(crate) fn invoke(kind: TapCallbackKind, callback: impl FnOnce()) {
+    if let Some(trace) = TRACE.with(|current| current.borrow().clone()) {
+        let _ = catch_unwind(AssertUnwindSafe(|| trace(kind)));
+    }
     let Err(panic) = catch_unwind(AssertUnwindSafe(callback)) else {
         return;
     };

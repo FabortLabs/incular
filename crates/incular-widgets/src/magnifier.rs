@@ -7,7 +7,7 @@
 //! a matrix [`crate::BackdropFilter`] and clipped to the decoration's shape,
 //! under the decoration's shadows and border.
 
-use std::{rc::Rc, sync::Arc};
+use std::{cell::{Cell, RefCell}, rc::Rc, sync::Arc};
 
 use incular_config::{Alignment, Clip};
 use incular_core::{Offset, Rect, Size, Transform};
@@ -52,6 +52,33 @@ impl MagnifierInfo {
         caret_rect: ZERO_RECT,
         field_bounds: ZERO_RECT,
     };
+}
+
+impl std::fmt::Display for MagnifierInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn write_rect(f: &mut std::fmt::Formatter<'_>, rect: Rect) -> std::fmt::Result {
+            write!(
+                f,
+                "Rect.fromLTRB({:.1}, {:.1}, {:.1}, {:.1})",
+                rect.origin.x,
+                rect.origin.y,
+                rect.origin.x + rect.size.width,
+                rect.origin.y + rect.size.height,
+            )
+        }
+
+        write!(
+            f,
+            "MagnifierInfo(position: Offset({:.1}, {:.1}), line: ",
+            self.global_gesture_position.x, self.global_gesture_position.y
+        )?;
+        write_rect(f, self.current_line_boundaries)?;
+        f.write_str(", caret: ")?;
+        write_rect(f, self.caret_rect)?;
+        f.write_str(", field: ")?;
+        write_rect(f, self.field_bounds)?;
+        f.write_str(")")
+    }
 }
 
 /// Builds a text magnifier for the gesture, or `None` for no magnifier.
@@ -111,10 +138,231 @@ impl TextMagnifierConfiguration {
     }
 }
 
-/// Flutter `MagnifierController`'s geometry.
-pub struct MagnifierController;
+impl TextMagnifierConfiguration {
+    pub(crate) fn has_builder(&self) -> bool {
+        self.magnifier_builder.is_some()
+    }
+}
+
+/// The active magnifier geometry of an editor whose builder is enabled.
+#[doc(hidden)]
+pub struct TextMagnifierState {
+    info: Cell<Option<MagnifierInfo>>,
+    revision: RefCell<Rc<Cell<u64>>>,
+}
+
+impl crate::tree::RetainedState for TextMagnifierState {
+    fn rebind_revision(&self, revision: Rc<Cell<u64>>) {
+        self.revision.replace(revision);
+    }
+}
+
+impl TextMagnifierState {
+    pub(crate) fn new(revision: Rc<Cell<u64>>) -> Self {
+        Self {
+            info: Cell::new(None),
+            revision: RefCell::new(revision),
+        }
+    }
+
+    pub(crate) fn overlay(&self, configuration: &TextMagnifierConfiguration) -> Option<Widget> {
+        let info = self.info.get()?;
+        configuration.build(info).map(|widget| IgnorePointer::new(widget).into())
+    }
+
+    /// Updates the position, or removes the magnifier with `None`.
+    pub fn set_info(&self, info: Option<MagnifierInfo>) -> bool {
+        if self.info.replace(info) == info {
+            return false;
+        }
+        let revision = self.revision.borrow();
+        revision.set(revision.get().wrapping_add(1));
+        true
+    }
+}
+
+pub(crate) fn with_text_magnifier(
+    child: impl Fn(Rc<TextMagnifierState>) -> Widget + 'static,
+    configuration: TextMagnifierConfiguration,
+) -> Widget {
+    use crate::{OverlayPortal, Positioned, StackFit, TransientRole};
+
+    Widget::retained_builder(
+        TextMagnifierState::new,
+        move |state, _, _| {
+            let overlay = state.overlay(&configuration);
+            let mut portal = OverlayPortal::new(SizedBox::shrink())
+                .role(TransientRole::Tooltip)
+                .show(overlay.is_some());
+            if let Some(overlay) = overlay {
+                portal = portal.overlay_child_layout_builder(move |_, _| overlay.clone());
+            }
+            Stack::new([
+                child(state.clone()),
+                Positioned::new(portal).left(0.).top(0.).width(0.).height(0.).into(),
+            ])
+            .fit(StackFit::Passthrough)
+            .clip_behavior(Clip::None)
+            .into()
+        },
+        false,
+    )
+}
+
+type MagnifierOverlayBuilder = Rc<dyn for<'a> Fn(&crate::BuildContext<'a>) -> Widget>;
+
+#[derive(Default)]
+struct MagnifierControllerState {
+    overlay: RefCell<Option<MagnifierOverlayBuilder>>,
+    animation: Option<incular_animation::AnimationController>,
+    revision: Rc<Cell<u64>>,
+    entry: Cell<u64>,
+}
+
+impl MagnifierControllerState {
+    fn invalidate(&self) {
+        self.revision.set(self.revision.get().wrapping_add(1));
+        incular_animation::scheduler::schedule_frame();
+    }
+
+    fn remove(&self) {
+        if self.overlay.borrow_mut().take().is_some() {
+            self.invalidate();
+        }
+    }
+}
+
+/// Controls an optional magnifier overlay and its entry and exit animation.
+#[derive(Clone, Default)]
+pub struct MagnifierController(Rc<MagnifierControllerState>);
 
 impl MagnifierController {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Starts an optional transition at its dismissed value. The caller
+    /// can observe or drive the same animation controller.
+    #[must_use]
+    pub fn with_animation(animation: incular_animation::AnimationController) -> Self {
+        animation.set_value(0.);
+        Self(Rc::new(MagnifierControllerState {
+            animation: Some(animation),
+            ..MagnifierControllerState::default()
+        }))
+    }
+
+    /// Supplies the retained host for this controller's overlay.
+    #[must_use]
+    pub fn host(&self, child: impl Into<Widget>) -> Widget {
+        self.host_with_foreground(child.into(), None)
+    }
+
+    /// Supplies a host with another overlay child above the magnifier.
+    /// A backdrop lens does not sample pixels drawn by that higher child.
+    #[must_use]
+    pub fn host_below(
+        &self,
+        child: impl Into<Widget>,
+        foreground: impl Into<Widget>,
+    ) -> Widget {
+        self.host_with_foreground(child.into(), Some(foreground.into()))
+    }
+
+    fn host_with_foreground(&self, child: Widget, foreground: Option<Widget>) -> Widget {
+        let state = self.0.clone();
+        Widget::stateful_builder(state.revision.clone(), move |_| {
+            let lens = state.overlay.borrow().clone().map(|builder| {
+                let root = Widget::from(crate::Builder::new(move |context| builder(context)));
+                Widget::from(IgnorePointer::new(root)).with_key(state.entry.get())
+            });
+            let overlay = if let Some(foreground) = foreground.clone() {
+                let lens = lens.unwrap_or_else(|| SizedBox::shrink().into());
+                Some(Stack::new([lens, foreground])
+                    .fit(crate::StackFit::Passthrough)
+                    .clip_behavior(Clip::None)
+                    .into())
+            } else {
+                lens
+            };
+            let mut portal = crate::OverlayPortal::new(child.clone())
+                .role(crate::TransientRole::Tooltip)
+                .root_overlay(true)
+                .show(overlay.is_some());
+            if let Some(overlay) = overlay {
+                portal = portal.overlay_child(overlay);
+            }
+            portal.into()
+        })
+    }
+
+    /// Whether the lens has an overlay entry, even during its exit animation.
+    #[must_use]
+    pub fn has_overlay(&self) -> bool {
+        self.0.overlay.borrow().is_some()
+    }
+
+    /// True when a lens exists and is entering or fully shown.
+    #[must_use]
+    pub fn shown(&self) -> bool {
+        self.has_overlay()
+            && self.0.animation.as_ref().is_none_or(|animation| animation.is_forward_or_completed())
+    }
+
+    /// Shows a new overlay entry. Replacement does not play an exit
+    /// animation; a prior hide cannot remove the replacement.
+    pub fn show(
+        &self,
+        now: incular_core::time::Instant,
+        builder: impl for<'a> Fn(&crate::BuildContext<'a>) -> Widget + 'static,
+    ) -> incular_animation::TickerFuture {
+        self.0.overlay.replace(Some(Rc::new(builder)));
+        self.0.entry.set(self.0.entry.get().wrapping_add(1));
+        self.0.invalidate();
+        self.0.animation.as_ref().map_or_else(
+            incular_animation::TickerFuture::complete,
+            |animation| animation.forward(now),
+        )
+    }
+
+    /// Reverses the transition, optionally retaining its dismissed overlay.
+    /// Without a transition, an ordinary hide removes it immediately.
+    pub fn hide(
+        &self,
+        now: incular_core::time::Instant,
+        remove_from_overlay: bool,
+    ) -> incular_animation::TickerFuture {
+        if !self.has_overlay() {
+            return incular_animation::TickerFuture::complete();
+        }
+        let Some(animation) = self.0.animation.as_ref() else {
+            if remove_from_overlay {
+                self.remove_from_overlay();
+            }
+            return incular_animation::TickerFuture::complete();
+        };
+        let exit = animation.reverse(now);
+        if remove_from_overlay {
+            let state = Rc::downgrade(&self.0);
+            let entry = self.0.entry.get();
+            exit.when_complete(move || {
+                if let Some(state) = state.upgrade()
+                    && state.entry.get() == entry
+                {
+                    state.remove();
+                }
+            });
+        }
+        exit
+    }
+
+    /// Immediately removes the current overlay without animating out.
+    pub fn remove_from_overlay(&self) {
+        self.0.remove();
+    }
+
+
     /// Flutter `shiftWithinBounds`: moves `rect`, which must fit, the least
     /// distance that puts it inside `bounds`.
     #[must_use]

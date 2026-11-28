@@ -118,6 +118,10 @@ pub struct RawPointerEvent {
     /// pointer signal, positive when content scrolls down or right. Zero for
     /// other events.
     pub scroll_delta: Offset,
+    /// Wheel movement mapped into the receiving widget's coordinates.
+    pub local_scroll_delta: Offset,
+    /// Multiplicative scale for a discrete pointer scale signal.
+    pub scale_signal: Option<f32>,
 }
 
 impl RawPointerEvent {
@@ -147,6 +151,8 @@ impl RawPointerEvent {
             down: pointer_is_down(phase, buttons),
             synthesized: false,
             scroll_delta: Offset::ZERO,
+            local_scroll_delta: Offset::ZERO,
+            scale_signal: None,
         }
     }
 
@@ -245,6 +251,8 @@ impl RawPointerEvent {
             },
             button: None,
             scroll_delta: Offset::ZERO,
+            local_scroll_delta: Offset::ZERO,
+            scale_signal: None,
             ..self
         }
     }
@@ -285,6 +293,7 @@ impl RawPointerEvent {
     ) -> Self {
         Self {
             scroll_delta,
+            local_scroll_delta: scroll_delta,
             ..Self::new(pointer, device, kind, 0, position, PointerPhase::Move, time)
         }
     }
@@ -364,6 +373,13 @@ impl RawPointerEvent {
         let coordinates = self.projection(Some(&transform)).coordinates();
         self.local_position = coordinates.position.local;
         self.local_delta = coordinates.delta.local;
+        if self.scroll_delta != Offset::ZERO {
+            self.local_scroll_delta = project_motion(
+                transform,
+                self.position + self.scroll_delta,
+                self.scroll_delta,
+            ).1;
+        }
         self
     }
 
@@ -387,6 +403,7 @@ impl RawPointerEvent {
     pub const fn in_global_coordinates(mut self) -> Self {
         self.local_position = self.position;
         self.local_delta = self.delta;
+        self.local_scroll_delta = self.scroll_delta;
         self
     }
 
@@ -398,6 +415,9 @@ impl RawPointerEvent {
         if let Some(transform) = transform {
             self.local_position = transform.transform_point(self.position);
             self.local_delta = transform.transform_vector(self.delta);
+            if self.scroll_delta != Offset::ZERO {
+                self.local_scroll_delta = transform.transform_vector(self.scroll_delta);
+            }
         }
         self
     }
@@ -1115,4 +1135,7 @@ impl GestureCallbacks {
     }
 }
 
-mod drag_diagnostics;
+mod callback_diagnostics;
+pub use callback_diagnostics::GestureDetailDiagnostics;
+pub(crate) mod drag_diagnostics;
+mod pointer_diagnostics;

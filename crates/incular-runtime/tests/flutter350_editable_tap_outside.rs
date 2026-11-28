@@ -277,3 +277,161 @@ fn only_the_current_editors_companion_prevents_default_desktop_blur() {
     tap(&mut runtime, Offset::new(250., 60.), mouse, || {});
     assert!(!node.has_focus());
 }
+
+#[test]
+fn an_outside_release_goes_to_the_editor_that_owned_the_press_even_after_default_blur() {
+    let node = FocusNode::new();
+    let releases = Rc::new(RefCell::new(Vec::new()));
+    let editor = field(&node, true).on_tap_up_outside({
+        let releases = releases.clone();
+        move |event| releases.borrow_mut().push((event.phase, event.position))
+    });
+    let mut runtime = mount([box_(), editor.into()], TextShortcutPlatform::Linux);
+    assert!(node.has_primary_focus());
+    sample(
+        &mut runtime,
+        PointerPhase::Down,
+        OUTSIDE,
+        PointerDeviceKind::Mouse,
+    );
+    assert!(
+        !node.has_primary_focus(),
+        "default outside press should blur"
+    );
+    assert!(releases.borrow().is_empty());
+    sample(
+        &mut runtime,
+        PointerPhase::Up,
+        OUTSIDE,
+        PointerDeviceKind::Mouse,
+    );
+    assert_eq!(*releases.borrow(), [(PointerPhase::Up, OUTSIDE)]);
+}
+
+#[test]
+fn an_editor_focused_after_an_outside_press_does_not_inherit_that_release() {
+    let node = FocusNode::new();
+    let releases = Rc::new(RefCell::new(Vec::new()));
+    let editor = field(&node, false).on_tap_up_outside({
+        let releases = releases.clone();
+        move |event| releases.borrow_mut().push(event.position)
+    });
+    let mut runtime = mount([box_(), editor.into()], TextShortcutPlatform::Linux);
+    sample(
+        &mut runtime,
+        PointerPhase::Down,
+        OUTSIDE,
+        PointerDeviceKind::Mouse,
+    );
+    node.request_focus();
+    frame(&mut runtime);
+    assert!(node.has_primary_focus());
+    sample(
+        &mut runtime,
+        PointerPhase::Up,
+        OUTSIDE,
+        PointerDeviceKind::Mouse,
+    );
+    assert!(releases.borrow().is_empty());
+}
+
+#[test]
+fn scoped_outside_press_action_receives_pointer_and_prevents_default_blur() {
+    use incular_widgets::{Actions, EditableTextTapOutsideIntent, FocusableActionDetector};
+
+    let node = FocusNode::new();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let mut actions = Actions::<EditableTextTapOutsideIntent>::typed();
+    actions.register_handler(EditableTextTapOutsideIntent::default(), {
+        let node = node.clone();
+        let log = log.clone();
+        move |intent| {
+            let payload = intent.command();
+            assert!(payload.focus_node() == Some(&node));
+            let event = payload.pointer_event().unwrap();
+            log.borrow_mut().push((event.phase, event.position));
+            true
+        }
+    });
+    let editor = FocusableActionDetector::new(field(&node, true)).actions(Rc::new(actions));
+    let mut runtime = mount([box_(), editor.into()], TextShortcutPlatform::Linux);
+    tap(&mut runtime, OUTSIDE, PointerDeviceKind::Mouse, || {
+        assert!(node.has_primary_focus());
+        assert_eq!(*log.borrow(), [(PointerPhase::Down, OUTSIDE)]);
+    });
+    assert_eq!(*log.borrow(), [(PointerPhase::Down, OUTSIDE)]);
+    assert!(node.has_primary_focus());
+}
+
+#[test]
+fn scoped_outside_release_action_still_gets_the_original_editor_after_blur() {
+    use incular_widgets::{Actions, EditableTextTapUpOutsideIntent, FocusableActionDetector};
+
+    let node = FocusNode::new();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let mut actions = Actions::<EditableTextTapUpOutsideIntent>::typed();
+    actions.register_handler(EditableTextTapUpOutsideIntent::default(), {
+        let node = node.clone();
+        let log = log.clone();
+        move |intent| {
+            let payload = intent.command();
+            assert!(payload.focus_node() == Some(&node));
+            let event = payload.pointer_event().unwrap();
+            log.borrow_mut().push((event.phase, event.position));
+            true
+        }
+    });
+    let editor = FocusableActionDetector::new(field(&node, true)).actions(Rc::new(actions));
+    let mut runtime = mount([box_(), editor.into()], TextShortcutPlatform::Linux);
+    tap(&mut runtime, OUTSIDE, PointerDeviceKind::Mouse, || {
+        assert!(!node.has_primary_focus());
+        assert!(log.borrow().is_empty());
+    });
+    assert_eq!(*log.borrow(), [(PointerPhase::Up, OUTSIDE)]);
+    assert!(!node.has_primary_focus());
+}
+
+#[test]
+fn the_authored_outside_callback_takes_precedence_over_a_scoped_default_action() {
+    use incular_widgets::{Actions, EditableTextTapOutsideIntent, FocusableActionDetector};
+    use std::cell::Cell;
+
+    let node = FocusNode::new();
+    let explicit = Rc::new(Cell::new(0));
+    let scoped = Rc::new(Cell::new(0));
+    let mut actions = Actions::<EditableTextTapOutsideIntent>::typed();
+    actions.register(EditableTextTapOutsideIntent::default(), {
+        let scoped = scoped.clone();
+        move || scoped.set(scoped.get() + 1)
+    });
+    let editor = field(&node, true).on_tap_outside({
+        let explicit = explicit.clone();
+        move |_| explicit.set(explicit.get() + 1)
+    });
+    let editor = FocusableActionDetector::new(editor).actions(Rc::new(actions));
+    let mut runtime = mount([box_(), editor.into()], TextShortcutPlatform::Linux);
+    tap(&mut runtime, OUTSIDE, PointerDeviceKind::Mouse, || {});
+    assert_eq!(explicit.get(), 1);
+    assert_eq!(scoped.get(), 0);
+    assert!(node.has_primary_focus());
+}
+
+#[test]
+fn cancel_releases_capture_without_delivering_the_outside_up_action() {
+    let node = FocusNode::new();
+    let releases = Rc::new(RefCell::new(Vec::new()));
+    let editor = field(&node, true).on_tap_up_outside({
+        let releases = releases.clone();
+        move |event| releases.borrow_mut().push(event.position)
+    });
+    let mut runtime = mount([box_(), editor.into()], TextShortcutPlatform::Linux);
+    let mouse = PointerDeviceKind::Mouse;
+    sample(&mut runtime, PointerPhase::Down, OUTSIDE, mouse);
+    sample(&mut runtime, PointerPhase::Cancel, OUTSIDE, mouse);
+    sample(&mut runtime, PointerPhase::Up, OUTSIDE, mouse);
+    assert!(releases.borrow().is_empty());
+    node.request_focus();
+    frame(&mut runtime);
+    tap(&mut runtime, OUTSIDE, mouse, || {});
+    assert_eq!(*releases.borrow(), [OUTSIDE]);
+}

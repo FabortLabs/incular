@@ -119,6 +119,7 @@ mod retained;
 mod retained_state;
 pub(crate) use retained_state::RetainedState;
 mod semantics;
+mod selection_order;
 mod specs;
 mod text;
 pub use text::FloatingCaretGeometry;
@@ -921,6 +922,7 @@ pub enum RenderKind {
     RawScrollbar {
         controller: ScrollController,
         style: RawScrollbarStyle,
+        shape: Option<crate::advanced_scrolling::raw_scrollbar::ScrollbarThumbShape>,
         text_direction: TextDirection,
     },
     ListWheelScrollView {
@@ -1404,37 +1406,8 @@ struct RawPointerRoute {
     listeners: Vec<RawPointerRouteEntry>,
     /// The press hit path for TapRegionSurface, retained until release.
     tap_path: Vec<ElementId>,
-    editable_groups: EditablePressGroups,
-}
-
-#[derive(Default)]
-struct EditablePressGroups {
-    first: Option<EditableTapGroup>,
-    additional: Vec<EditableTapGroup>,
-}
-
-struct EditableTapGroup {
-    surface: Option<ElementId>,
-    id: crate::TapRegionGroupId,
-}
-
-impl EditablePressGroups {
-    fn contains(&self, surface: Option<ElementId>, id: &crate::TapRegionGroupId) -> bool {
-        self.first.iter().chain(&self.additional)
-            .any(|group| group.surface == surface && &group.id == id)
-    }
-
-    fn insert(&mut self, surface: Option<ElementId>, id: &crate::TapRegionGroupId) {
-        if self.contains(surface, id) {
-            return;
-        }
-        let group = EditableTapGroup { surface, id: id.clone() };
-        if self.first.is_none() {
-            self.first = Some(group);
-        } else {
-            self.additional.push(group);
-        }
-    }
+    /// The editor focused when this contact began outside its group.
+    editable_outside_owner: Option<ElementId>,
 }
 
 struct DeferredSingleTap {
@@ -1606,8 +1579,11 @@ pub struct WidgetTree {
     #[cfg(debug_assertions)]
     debug_focus_boxes: Option<Box<debug_focus_boxes::DebugFocusBoxes>>,
     unmounted: Vec<ElementId>,
+    text_editing_callback_errors: Rc<RefCell<Vec<TextEditingCallbackError>>>,
     autofill_registry: Option<Box<autofill::AutofillRegistry>>,
     autofill_context_completions: Vec<incular_platform::autofill::AutofillContextAction>,
+    /// Window-wide capture policy counted at element mutation boundaries.
+    content_sensitivity_host: crate::SensitiveContentHost,
     /// Live elements keyed by a [`GlobalKey`], those parked for a move,
     /// and the keys claimed by the running reconciliation.
     global_keys: global_keys::GlobalKeyRegistry,
@@ -1645,6 +1621,8 @@ pub struct WidgetTree {
     input: InputState,
     haptic_feedback_handler: Option<Rc<dyn Fn(incular_platform::HapticFeedbackType)>>,
     semantics: SemanticsTree,
+    #[cfg(debug_assertions)]
+    semantic_role_issues: Vec<incular_semantics::SemanticRoleIssue>,
     semantic_ids: FastHashMap<ElementId, SemanticNodeId>,
     /// A semantic parent (or the forest root) gets a separate point order
     /// only when its traversal children were sorted away from paint order.
@@ -1687,6 +1665,9 @@ pub struct WidgetTree {
     /// them lifted above everything else. Empty while no popup is open.
     lifted_scene: Option<(DisplayList, DisplayList)>,
     static_selections: FastHashMap<ElementId, StaticSelection>,
+    /// Last command order for paint; it avoids sorting every selected leaf.
+    selection_paint_order: FastHashMap<ElementId, Vec<ElementId>>,
+    selection_registrations: FastHashMap<ElementId, crate::selection_container::SelectionRegistration>,
     dependency_root: DependencyContext,
     automatic_keep_alives: crate::advanced_slivers::AutomaticKeepAliveQueue,
     inherited_consumers: FastHashMap<ConsumerId, (ElementId, InheritedDependencyKind)>,

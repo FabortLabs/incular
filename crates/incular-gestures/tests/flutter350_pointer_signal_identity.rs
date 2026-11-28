@@ -92,3 +92,19 @@ fn unclaimed_resolution_allows_the_original_native_default() {
     assert_eq!(resolver.resolve(&first), Ok(true));
     assert_eq!(*responses.borrow(), [true]);
 }
+
+#[test]
+fn transformed_scroll_keeps_original_delta_and_projects_a_local_delta() {
+    let source = PointerSignalEvent::new(raw());
+    let transformed = source.transformed(Some(
+        Transform::translation(Offset::new(80., 40.)).then(Transform::scale(0.5)),
+    ));
+    let sample = transformed.raw();
+    assert_eq!(sample.scroll_delta, Offset::new(0., 12.));
+    assert_eq!(sample.local_scroll_delta, Offset::new(0., 6.));
+    assert_eq!(sample.local_delta, Offset::ZERO);
+    assert_eq!(
+        sample.in_global_coordinates().local_scroll_delta,
+        sample.scroll_delta
+    );
+}

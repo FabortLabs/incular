@@ -458,7 +458,7 @@ packages/flutter/test/widgets/wrap_test.dart	134	Basic Wrap test (RTL)	paired-ma
 packages/flutter/test/widgets/wrap_test.dart	251	Empty wrap	paired-match	upstream-wrap-baseline-and-final-references.md
 packages/flutter/test/widgets/wrap_test.dart	851	RenderWrap toStringShallow control test	reference-ran-incular-open	upstream-wrap-baseline-and-final-references.md
 packages/flutter/test/widgets/wrap_test.dart	858	RenderWrap toString control test	reference-ran-incular-open	upstream-wrap-baseline-and-final-references.md
-packages/flutter/test/widgets/wrap_test.dart	878	Wrap baseline control test	partial-match	upstream-wrap-baseline-and-final-references.md#current-baseline-behavior
+packages/flutter/test/widgets/wrap_test.dart	878	Wrap baseline control test	paired-match	upstream-wrap-baseline-and-final-references.md#exact-font-and-dry-baseline-follow-up
 packages/flutter/test/widgets/wrap_test.dart	962	Wrap can set and update clipBehavior	paired-match	upstream-wrap-baseline-and-final-references.md
 packages/flutter/test/widgets/table_test.dart	136	Table widget - column offset (LTR)	paired-match	upstream-table-direction-rows-and-intrinsics.md
 packages/flutter/test/widgets/table_test.dart	194	Table widget - column offset (RTL)	paired-match	upstream-table-direction-rows-and-intrinsics.md
@@ -4162,3 +4162,415 @@ packages/flutter/test/widgets/editable_text_test.dart	14881	pasting with the key
 packages/flutter/test/widgets/editable_text_test.dart	14154	Cursor does not jump after undo	paired-match	undo-history-comparisons.md#immediate-undo-after-the-first-insertion
 packages/flutter/test/widgets/editable_text_test.dart	16888	replacing puts cursor at the end of the word	paired-match	upstream-spell-check-toolbar.md#replacement-caret-policy
 packages/flutter/test/widgets/editable_text_scribble_test.dart	34	selection rects re-sent when refocused	paired-match	upstream-scribble-selection-geometry.md#focus-and-connection-lifetime
+packages/flutter/test/widgets/editable_text_scribble_test.dart	496	selection rects are sent when they change	partial-match	upstream-scribble-selection-geometry.md#visibility-platform-gates-and-geometry-changes
+packages/flutter/test/widgets/editable_text_scribble_test.dart	654	selection rects are not sent if stylusHandwritingEnabled is false	paired-match	upstream-scribble-selection-geometry.md#visibility-platform-gates-and-geometry-changes
+packages/flutter/test/widgets/editable_text_scribble_test.dart	700	selection rects sent even when character corners are outside of paintBounds	paired-match	upstream-scribble-selection-geometry.md#visibility-platform-gates-and-geometry-changes
+packages/flutter/test/widgets/editable_text_scribble_test.dart	134	Selection changes during Scribble interaction should have the scribble cause	paired-match	upstream-scribble-selection-geometry.md#selection-change-cause-during-a-handwriting-interaction
+packages/flutter/test/widgets/editable_text_scribble_test.dart	795	showToolbar does nothing and returns false when already shown during Scribble selection	paired-match	upstream-scribble-selection-geometry.md#toolbar-stays-mounted-across-duplicate-show-requests
+packages/flutter/test/widgets/editable_text_scribble_test.dart	186	Requests focus and changes the selection when onScribbleFocus is called	paired-match	upstream-scribble-selection-geometry.md#discovering-and-focusing-mounted-editors
+packages/flutter/test/widgets/editable_text_scribble_test.dart	225	Declares itself for Scribble interaction if the bounds overlap the scribble rect and the widget is touchable	paired-match	upstream-scribble-selection-geometry.md#discovering-and-focusing-mounted-editors
+packages/flutter/test/widgets/editable_text_test.dart	17235	does not crash when didChangeMetrics is called after unmounting	paired-match	upstream-text-input-reattach.md#composition-only-frames-and-late-metrics
+packages/flutter/test/widgets/editable_text_test.dart	17259	_CompositionCallback widget does not skip frames	paired-match	upstream-text-input-reattach.md#composition-only-frames-and-late-metrics
+packages/flutter/test/widgets/editable_text_test.dart	17194	can handle the partial selection of a multi-code-unit glyph	partial-match	upstream-text-input-reattach.md#partial-grapheme-selections
+packages/flutter/test/widgets/editable_text_test.dart	17710	EditableText respects MediaQuery.boldText	paired-match	upstream-editable-input-styles.md#mounted-text-and-strut-accessibility-overrides
+packages/flutter/test/widgets/editable_text_test.dart	17733	EditableText respects MediaQueryData.lineHeightScaleFactorOverride, MediaQueryData.letterSpacingOverride, and MediaQueryData.wordSpacingOverride	paired-match	upstream-editable-input-styles.md#mounted-text-and-strut-accessibility-overrides
+packages/flutter/test/widgets/editable_text_test.dart	18171	should notify on size change	paired-match	upstream-editable-defaults.md#multiline-size-notification
+packages/flutter/test/widgets/editable_text_test.dart	18516	showToolbar does nothing and returns false when already shown	paired-match	upstream-editable-defaults.md#duplicate-toolbar-request-after-autofocus
+packages/flutter/test/widgets/editable_text_test.dart	17058	should build nothing by default	paired-match	upstream-editable-magnifier.md#default-and-scaled-handle-drag
+packages/flutter/test/widgets/editable_text_test.dart	17088	magnifier is in correct position when EditableText is scaled	paired-match	upstream-editable-magnifier.md#default-and-scaled-handle-drag
+packages/flutter/test/widgets/editable_text_test.dart	16005	magnifierConfiguration can be updated to display a new magnifier	paired-match	upstream-editable-magnifier.md#handle-free-presentation-and-updated-builder
+packages/flutter/test/widgets/text_selection_test.dart	1740	can show magnifier when no handles exist	paired-match	upstream-editable-magnifier.md#handle-free-presentation-and-updated-builder
+packages/flutter/test/widgets/magnifier_test.dart	302	'should shift ${inputRects[i]} to ${outputRects[i]} for bounds ${boundsRects[i]}'	paired-match	upstream-editable-magnifier.md#magnifier-diagnostics-and-geometry-limits
+packages/flutter/test/widgets/magnifier_test.dart	313	MagnifierInfo.toString	paired-match	upstream-editable-magnifier.md#magnifier-diagnostics-and-geometry-limits
+packages/flutter/test/widgets/magnifier_test.dart	123	should immediately remove from overlay on no animation controller	paired-match	upstream-editable-magnifier.md#magnifier-controller-lifecycle-and-ordering
+packages/flutter/test/widgets/magnifier_test.dart	151	should update shown based on animation status	paired-match	upstream-editable-magnifier.md#magnifier-controller-lifecycle-and-ordering
+packages/flutter/test/widgets/magnifier_test.dart	205	should insert below below widget	paired-match	upstream-editable-magnifier.md#magnifier-controller-lifecycle-and-ordering
+packages/flutter/test/widgets/magnifier_test.dart	240	should insert newly built widget without animating out if overlay != null	paired-match	upstream-editable-magnifier.md#magnifier-controller-lifecycle-and-ordering
+packages/flutter/test/widgets/editable_text_test.dart	18939	Prevent last character visibility in obscure text when obscureText is toggled on mobile	partial-match	upstream-editable-focus-selection.md#obscuring-restored-on-a-focused-mobile-editor
+packages/flutter/test/widgets/editable_text_test.dart	19006	context menu reappears after a non-fling scroll that keeps selection in view while semantics are disabled	paired-match	upstream-editable-scroll-toolbar.md#short-touch-scroll-with-semantics-off
+packages/flutter/test/widgets/editable_text_test.dart	18773	Does not crash when editing value changes between consecutive scrolls	paired-match	upstream-editable-scroll-toolbar.md#editing-value-invalidation-and-returning-to-view
+packages/flutter/test/widgets/editable_text_test.dart	18846	toolbar should not reappear when editing value changes during a scroll	paired-match	upstream-editable-scroll-toolbar.md#editing-value-invalidation-and-returning-to-view
+packages/flutter/test/widgets/editable_text_test.dart	15932	dragStartBehavior can be updated	paired-match	upstream-editable-scroll-toolbar.md#live-drag-origin
+packages/flutter/test/widgets/editable_text_test.dart	15866	onSelectionHandleTapped can be updated	paired-match	upstream-editable-scroll-toolbar.md#live-selection-handle-tap-callback
+packages/flutter/test/widgets/editable_text_test.dart	15633	contextMenuBuilder is used in place of the default text selection toolbar	paired-match	upstream-editable-scroll-toolbar.md#custom-builders-and-retained-menu-content
+packages/flutter/test/widgets/editable_text_test.dart	15679	contextMenuBuilder can be updated to display a new menu	paired-match	upstream-editable-scroll-toolbar.md#custom-builders-and-retained-menu-content
+packages/flutter/test/widgets/editable_text_test.dart	15746	contextMenuBuilder can be updated with inline lambda without crash	paired-match	upstream-editable-scroll-toolbar.md#custom-builders-and-retained-menu-content
+packages/flutter/test/widgets/editable_text_test.dart	15069	can paste and remove field	paired-match	upstream-editable-scroll-toolbar.md#cut-and-paste-may-remove-their-editor
+packages/flutter/test/widgets/editable_text_test.dart	15120	can cut and remove field	paired-match	upstream-editable-scroll-toolbar.md#cut-and-paste-may-remove-their-editor
+packages/flutter/test/widgets/editable_text_test.dart	15021	EditableText consumes ActivateIntent and ButtonActivateIntent	paired-match	upstream-editable-defaults.md#editor-activation-keys-do-not-activate-ancestor-controls
+packages/flutter/test/widgets/editable_text_test.dart	15172	ctrl-A/E	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	15247	ctrl-F/B	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	15316	ctrl-N/P	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	15395	with normal characters	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	15494	with extended grapheme clusters	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	15582	macOS selectors work	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	6056	onChanged callback only invoked on text changes	paired-match	upstream-editable-callback-contracts.md#accepted-changes-and-formatter-boundaries
+packages/flutter/test/widgets/editable_text_test.dart	6100	Formatters are skipped if text has not changed	paired-match	upstream-editable-callback-contracts.md#accepted-changes-and-formatter-boundaries
+packages/flutter/test/widgets/editable_text_test.dart	12117	onSelectionChanged can throw errors	paired-match	upstream-editable-callback-contracts.md#callback-error-recovery
+packages/flutter/test/widgets/editable_text_test.dart	12146	onChanged can throw errors	paired-match	upstream-editable-callback-contracts.md#callback-error-recovery
+packages/flutter/test/widgets/editable_text_test.dart	12240	input formatters can throw errors	paired-match	upstream-editable-callback-contracts.md#callback-error-recovery
+packages/flutter/test/widgets/editable_text_test.dart	11188	updateEditingValue filters multiple calls from formatter	paired-match	upstream-editable-callback-contracts.md#repeated-proposals-and-composition-commits
+packages/flutter/test/widgets/editable_text_test.dart	11261	formatter logic handles repeat filtering	paired-match	upstream-editable-callback-contracts.md#repeated-proposals-and-composition-commits
+packages/flutter/test/widgets/editable_text_test.dart	11362	formatter logic handles initial repeat edge case	paired-match	upstream-editable-callback-contracts.md#repeated-proposals-and-composition-commits
+packages/flutter/test/widgets/editable_text_test.dart	3557	Handles the read-only flag correctly	partial-match	upstream-editable-read-only-connection.md#native-input-connection-closes-independently-of-focus
+packages/flutter/test/widgets/editable_text_test.dart	3596	Does not accept updates when read-only	partial-match	upstream-editable-read-only-connection.md#native-input-connection-closes-independently-of-focus
+packages/flutter/test/widgets/editable_text_test.dart	3639	Read-only fields do not format text	partial-match	upstream-editable-read-only-connection.md#native-input-connection-closes-independently-of-focus
+packages/flutter/test/widgets/editable_text_test.dart	3679	Read-only fields can be traversed on all platforms	paired-match	upstream-editable-read-only-connection.md#read-only-fields-remain-in-native-tab-order
+packages/flutter/test/widgets/editable_text_test.dart	3735	Sends "updateConfig" when read-only flag is flipped	partial-match	upstream-editable-read-only-connection.md#native-input-connection-closes-independently-of-focus
+packages/flutter/test/widgets/editable_text_test.dart	3777	Sends "updateConfig" when obscureText is flipped	paired-match	upstream-editable-host-configuration.md#obscuring-and-view-changes-update-an-existing-client
+packages/flutter/test/widgets/editable_text_test.dart	3859	Sends viewId and updates config when it changes	paired-match	upstream-editable-host-configuration.md#obscuring-and-view-changes-update-an-existing-client
+packages/flutter/test/widgets/editable_text_test.dart	10423	input imm channel calls are ordered correctly	partial-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
+packages/flutter/test/widgets/editable_text_test.dart	10584	setEditingState is not called when text changes	partial-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
+packages/flutter/test/widgets/editable_text_test.dart	10625	setEditingState is called when text changes on controller	partial-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
+packages/flutter/test/widgets/editable_text_test.dart	10672	Synchronous test of local and remote editing values	paired-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
+packages/flutter/test/widgets/editable_text_test.dart	9693	single-line field cannot be scrolled with touch on iOS	paired-match	upstream-editable-scroll-toolbar.md#private-scroll-axis-on-mobile
+packages/flutter/test/widgets/editable_text_test.dart	9767	multi-line field can scroll with touch on iOS	paired-match	upstream-editable-scroll-toolbar.md#private-scroll-axis-on-mobile
+packages/flutter/test/widgets/editable_text_test.dart	10174	batch editing works	paired-match	upstream-editable-host-configuration.md#nested-batches-do-not-leak-intermediate-text-to-the-host
+packages/flutter/test/widgets/editable_text_test.dart	10218	batch edits need to be nested properly	partial-match	upstream-editable-host-configuration.md#nested-batches-do-not-leak-intermediate-text-to-the-host
+packages/flutter/test/widgets/editable_text_test.dart	10238	catch unfinished batch edits on disposal	partial-match	upstream-editable-host-configuration.md#nested-batches-do-not-leak-intermediate-text-to-the-host
+packages/flutter/test/widgets/editable_text_test.dart	4226	Dragging selection base handle upwards scrolls the viewport	paired-match	upstream-editable-scroll-toolbar.md#upward-reverse-selections-track-the-actively-dragged-end
+packages/flutter/test/widgets/editable_text_test.dart	4275	Mouse drag selection from bottom to top does not snap to extent	paired-match	upstream-editable-scroll-toolbar.md#upward-reverse-selections-track-the-actively-dragged-end
+packages/flutter/test/widgets/editable_text_test.dart	2736	toolbar hidden on mobile when orientation changes	paired-match	upstream-editable-scroll-toolbar.md#mobile-orientation-and-mounted-paste-action
+packages/flutter/test/widgets/editable_text_test.dart	3908	Fires onChanged when text changes via TextSelectionOverlay	paired-match	upstream-editable-scroll-toolbar.md#mobile-orientation-and-mounted-paste-action
+packages/flutter/test/widgets/editable_text_test.dart	3264	returns null when toolbarOptions are empty	paired-match	upstream-editable-scroll-toolbar.md#explicit-toolbar-action-options
+packages/flutter/test/widgets/editable_text_test.dart	3285	returns empty array when only cut is selected in toolbarOptions but cut is not enabled	paired-match	upstream-editable-scroll-toolbar.md#explicit-toolbar-action-options
+packages/flutter/test/widgets/editable_text_test.dart	3311	returns only cut button when only cut is selected in toolbarOptions and cut is enabled	paired-match	upstream-editable-scroll-toolbar.md#explicit-toolbar-action-options
+packages/flutter/test/widgets/editable_text_test.dart	3354	returns empty array when only copy is selected in toolbarOptions but copy is not enabled	paired-match	upstream-editable-scroll-toolbar.md#explicit-toolbar-action-options
+packages/flutter/test/widgets/editable_text_test.dart	3380	returns only copy button when only copy is selected in toolbarOptions and copy is enabled	paired-match	upstream-editable-scroll-toolbar.md#explicit-toolbar-action-options
+packages/flutter/test/widgets/editable_text_test.dart	3423	returns empty array when only paste is selected in toolbarOptions but paste is not enabled	paired-match	upstream-editable-scroll-toolbar.md#explicit-toolbar-action-options
+packages/flutter/test/widgets/editable_text_test.dart	3449	returns only paste button when only paste is selected in toolbarOptions and paste is enabled	paired-match	upstream-editable-scroll-toolbar.md#explicit-toolbar-action-options
+packages/flutter/test/widgets/editable_text_test.dart	3492	returns empty array when only selectAll is selected in toolbarOptions but selectAll is not enabled	paired-match	upstream-editable-scroll-toolbar.md#explicit-toolbar-action-options
+packages/flutter/test/widgets/editable_text_test.dart	3519	returns only selectAll button when only selectAll is selected in toolbarOptions and selectAll is enabled	paired-match	upstream-editable-scroll-toolbar.md#explicit-toolbar-action-options
+packages/flutter/test/painting/box_painter_test.dart	343	BoxShadow BoxStyle.outer.wide_radius	partial-match	upstream-box-shadow-edges.md
+packages/flutter/test/painting/box_painter_test.dart	424	BoxShadow BoxStyle.inner.wide_radius	partial-match	upstream-box-shadow-edges.md
+packages/flutter/test/widgets/editable_text_test.dart	12307	can change behavior by overriding text editing shortcuts	paired-match	upstream-editable-directional-shortcuts.md#character-movement-shortcut-and-action-overrides
+packages/flutter/test/widgets/editable_text_test.dart	13053	can change text editing behavior by overriding actions	paired-match	upstream-editable-directional-shortcuts.md#character-movement-shortcut-and-action-overrides
+packages/flutter/test/widgets/editable_text_test.dart	13106	can change tap outside behavior by overriding actions	paired-match	upstream-editable-outside-actions.md#scoped-press-and-release-overrides
+packages/flutter/test/widgets/editable_text_test.dart	13142	can change tap up outside behavior by overriding actions	paired-match	upstream-editable-outside-actions.md#scoped-press-and-release-overrides
+packages/flutter/test/services/raw_keyboard_test.dart	1546	modifier keys are recognized individually	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1574	modifier keys are recognized when combined	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1610	Printable keyboard keys are correctly translated	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1624	Control keyboard keys are correctly translated	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1636	Modifier keyboard keys are correctly translated	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1648	data.toString	partial-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1664	data.equality	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1018	Dispatch events to all handlers	paired-match	upstream-raw-keyboard.md#passive-listener-ordering-and-error-recovery
+packages/flutter/test/services/raw_keyboard_test.dart	1080	Exceptions from RawKeyboard listeners are caught and reported	paired-match	upstream-raw-keyboard.md#passive-listener-ordering-and-error-recovery
+packages/flutter/test/services/raw_keyboard_test.dart	3017	modifier keys are recognized individually	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3044	modifier keys are recognized when combined	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3079	modifier keys with no location are mapped to left	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3092	Lower letter keys are correctly translated	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3109	Upper letter keys are correctly translated	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3126	Control keyboard keys are correctly translated	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3143	Modifier keyboard keys are correctly translated	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3160	Esc keys generated by older browsers are correctly translated	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3177	Arrow keys from a keyboard give correct physical key mappings	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3194	Unrecognized keys are mapped to Web plane	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3214	data.toString	partial-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	3246	data.equality	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
+packages/flutter/test/services/raw_keyboard_test.dart	338	keysPressed modifiers are synchronized with key events on fuchsia	paired-match	upstream-raw-keyboard.md#pressed-key-reconciliation-from-raw-modifier-flags
+packages/flutter/test/services/raw_keyboard_test.dart	520	keysPressed modifiers are synchronized with key events on web	paired-match	upstream-raw-keyboard.md#pressed-key-reconciliation-from-raw-modifier-flags
+packages/flutter/test/services/raw_keyboard_test.dart	2247	modifier keys are recognized individually	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2277	modifier keys are recognized when combined	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2319	Printable keyboard keys are correctly translated	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2335	Control keyboard keys are correctly translated	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2350	Modifier keyboard keys are correctly translated	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2365	Unprintable keyboard keys are correctly translated	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2432	data.toString	partial-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2448	data.equality	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	276	keysPressed modifiers are synchronized with key events on Windows	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state
+packages/flutter/test/services/raw_keyboard_test.dart	709	repeat events	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state
+packages/flutter/test/services/raw_keyboard_test.dart	750	sided modifiers without a side set return all sides on Windows	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state
+packages/flutter/test/services/raw_keyboard_test.dart	2379	Win32 VK_PROCESSKEY events are skipped	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state
+packages/flutter/test/rendering/flex_test.dart	979	main axis intrinsics with RenderAspectRatio 1	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
+packages/flutter/test/rendering/flex_test.dart	1003	main/cross axis intrinsics in horizontal direction and RenderFlex.spacing	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
+packages/flutter/test/rendering/flex_test.dart	1027	main/cross axis intrinsics in vertical direction and RenderFlex.spacing	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
+packages/flutter/test/rendering/flex_test.dart	1055	cross axis intrinsics, with ascending flex flow layout	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
+packages/flutter/test/rendering/flex_test.dart	1095	cross axis intrinsics, with descending flex flow layout	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
+packages/flutter/test/rendering/flex_test.dart	1133	baseline aligned flex flow computeDryLayout	paired-match	upstream-render-flex-intrinsics.md#reflowing-baseline-aligned-children
+packages/flutter/test/rendering/flex_test.dart	1167	baseline aligned children cross intrinsic size	paired-match	upstream-render-flex-intrinsics.md#reflowing-baseline-aligned-children
+packages/flutter/test/rendering/flex_test.dart	1200	children with no baselines do not affect the baseline location	paired-match	upstream-render-flex-intrinsics.md#reflowing-baseline-aligned-children
+packages/flutter/test/rendering/flex_test.dart	99	Vertical Overflow	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
+packages/flutter/test/rendering/flex_test.dart	119	Vertical Overflow with RenderFlex.spacing	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
+packages/flutter/test/rendering/flex_test.dart	140	Horizontal Overflow	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
+packages/flutter/test/rendering/flex_test.dart	160	Horizontal Overflow with RenderFlex.spacing	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
+packages/flutter/test/rendering/flex_test.dart	181	Vertical Flipped Constraints	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
+packages/flutter/test/widgets/interactive_viewer_test.dart	792	Can scale with mouse	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	809	Cannot scale with mouse when scale is disabled	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	827	Scale with mouse returns onInteraction properties	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	1540	discrete scroll pointer events	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	1611	trackpadScrollCausesScale	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	1648	trackpad pointer scroll events cause scale	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	874	Scaling amount is equal forth and back with a mouse scroll	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom
+packages/flutter/test/widgets/interactive_viewer_test.dart	906	onInteraction can be used to get scene point	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom
+packages/flutter/test/widgets/interactive_viewer_test.dart	1579	discrete scale pointer event	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom
+packages/flutter/test/services/hardware_keyboard_test.dart	139	KeyboardManager synthesizes modifier keys in rawKeyData mode	paired-match	upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard
+packages/flutter/test/services/raw_keyboard_test.dart	1171	modifier keys are recognized individually	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1204	modifier keys are recognized when combined	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1249	Printable keyboard keys are correctly translated	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1268	Control keyboard keys are correctly translated	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1285	Modifier keyboard keys are correctly translated	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1303	DPAD keys from a joystick give physical key mappings	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1321	Arrow keys from a keyboard give correct physical key mappings	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1338	DPAD center from a game pad gives physical key mappings	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1356	Device id is read from message	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1372	Repeat count is passed correctly	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1436	data.toString	partial-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	1458	data.equality	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	307	keysPressed modifiers are synchronized with key events on android	paired-match	upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard
+packages/flutter/test/services/raw_keyboard_test.dart	591	sided modifiers without a side set return all sides on Android	paired-match	upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard
+packages/flutter/test/services/raw_keyboard_test.dart	929	Allows inconsistent modifier for Android	paired-match	upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard
+packages/flutter/test/services/raw_keyboard_test.dart	1389	Key events are responded to correctly.	paired-match	upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard
+packages/flutter/test/widgets/interactive_viewer_test.dart	29	child fits in viewport	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	72	boundary slightly bigger than child	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	215	no boundary	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	263	PanAxis.free allows panning in all directions for diagonal gesture	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	295	PanAxis.aligned allows panning in one direction only for diagonal gesture	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	328	PanAxis.aligned allows panning in one direction only for horizontal leaning gesture	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	362	PanAxis.horizontal allows panning in the horizontal direction only for diagonal gesture	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	396	PanAxis.horizontal allows panning in the horizontal direction only for horizontal leaning gesture	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	430	PanAxis.horizontal does not allow panning in vertical direction on vertical gesture	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	464	PanAxis.vertical allows panning in the vertical direction only for diagonal gesture	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	498	PanAxis.vertical allows panning in the vertical direction only for vertical leaning gesture	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	532	PanAxis.vertical does not allow panning in horizontal direction on vertical gesture	paired-match	upstream-interactive-viewer-signals.md#finite-and-unbounded-touch-boundaries
+packages/flutter/test/widgets/interactive_viewer_test.dart	1091	viewport changes size	paired-match	upstream-interactive-viewer-signals.md#viewport-aware-builder-clip-retention-and-resize
+packages/flutter/test/widgets/interactive_viewer_test.dart	1279	Check if ClipRect is present in the tree	paired-match	upstream-interactive-viewer-signals.md#viewport-aware-builder-clip-retention-and-resize
+packages/flutter/test/widgets/interactive_viewer_test.dart	1309	builder can change widgets that are off-screen	paired-match	upstream-interactive-viewer-signals.md#viewport-aware-builder-clip-retention-and-resize
+packages/flutter/test/widgets/interactive_viewer_test.dart	1386	LayoutBuilder is only used for InteractiveViewer.builder	paired-match	upstream-interactive-viewer-signals.md#viewport-aware-builder-clip-retention-and-resize
+packages/flutter/test/widgets/interactive_viewer_test.dart	1764	does not modify parameters	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1777	simple example	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1785	closest to a	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1793	closest to b	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1801	point already on the line returns the point	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1809	real example	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1822	rectangle already axis aligned returns the rectangle	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1838	rectangle rotated by 45 degrees	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1854	rectangle rotated very slightly	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1870	example from hexagon board	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1888	inside	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1900	outside	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1912	on the edge	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1926	point already inside quad	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1940	axis aligned quad	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1954	not axis aligned quad	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1970	InteractiveViewer does not crash at zero area	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1408	scaleFactor	paired-match	upstream-interactive-viewer-signals.md#alignment-pivot-and-wheel-sensitivity
+packages/flutter/test/widgets/interactive_viewer_test.dart	1483	alignment argument is used properly	paired-match	upstream-interactive-viewer-signals.md#alignment-pivot-and-wheel-sensitivity
+packages/flutter/test/widgets/scrollbar_test.dart	3767	RawScrollbar.mouseCursor only applies while the pointer is over the scrollbar	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	3834	RawScrollbar.mouseCursor resolves a WidgetStateProperty.fromMap	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	3912	RawScrollbar without mouseCursor preserves the ancestor cursor over the scrollbar	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	3952	RawScrollbar.mouseCursor updates when the property changes while hovered	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	4005	RawScrollbar.mouseCursor stays applied while a thumb drag is active even when the pointer leaves the scrollbar	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	4076	RawScrollbar.mouseCursor is released when a mouse drag ends off the scrollbar	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	4145	RawScrollbar.mouseCursor is released when the scrollbar stops being interactive	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	4232	RawScrollbar.mouseCursor is released when the child stops being scrollable	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	4303	RawScrollbar.mouseCursor clears dragged state when thumb drag is cancelled	paired-match	upstream-scrollbar-cursor.md
+packages/flutter/test/widgets/scrollbar_test.dart	173	mainAxisMargin is respected	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	211	crossAxisMargin & text direction are respected	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	355	down	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	379	up	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	411	left	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	443	right	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	476	thumb resizes gradually on overscroll	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	2602	Track offset respects MediaQuery padding	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	2633	RawScrollbar.padding replaces MediaQueryData.padding	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	3626	with EdgeInsetsDirectional	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	570	trackRadius and radius is respected	partial-match	upstream-scrollbar-track-paint.md
+packages/flutter/test/widgets/scrollbar_test.dart	2423	Scrollbar track can be drawn	paired-match	upstream-scrollbar-track-paint.md
+packages/flutter/test/widgets/scrollbar_test.dart	2459	RawScrollbar correctly assigns colors	paired-match	upstream-scrollbar-track-paint.md
+packages/flutter/test/widgets/scrollbar_test.dart	2498	trackRadius and radius properties of RawScrollbar can draw RoundedRectangularRect	paired-match	upstream-scrollbar-track-paint.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	53	one SenstiveContent widget sets content sensitivity for tree as expected	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	64	disposing only SensitiveContent widget in the tree sets content sensitivity back to the default as expected	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	82	with another sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	104	when it gets disposed with another sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	130	with two other sensitive widgets	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	144	with two other sensitive widgets and one gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	174	with one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	190	when it gets disposed with one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	227	with one auto sensitive widget that gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	254	with two auto sensitive widgets and one gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	288	with one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	304	when it gets disposed with one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	338	with one not sensitive widget that gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	364	with two not sensitive widgets and one gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	397	with one not sensitive widget and one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	419	when it gets disposed with one not sensitive widget and one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	460	with one not sensitive widget and one auto sensitive widget and auto sensitive widget gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	493	with one not sensitive widget and one auto sensitive widget and not sensitive widget gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	527	with another sensitive widget, one not sensitive widget, and one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	551	when it gets disposed with another sensitive widget, one not sensitive widget, and one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	588	with another sensitive widget, one not sensitive widget, and one auto sensitive widget and the auto sensitive widget is disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	622	with another sensitive widget, one not sensitive widget, and one auto sensitive widget and the not sensitive widget is disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	657	with two auto sensitive widgets and one not sensitive widget and one auto sensitive widget gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	695	with one auto sensitive widgets and two not sensitive widgets and one not sensitive widget gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	735	with another auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	754	when it gets disposed with another auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	786	with one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	805	when it gets disposed with one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	834	with one not sensitive widget that gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	863	with two not sensitive widgets and one gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	899	with another auto sensitive widget and one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	924	when it gets disposed with another auto sensitive widget and one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	960	with another auto sensitive widget and one not sensitive widget and the not sensitive widget gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	998	with another not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1017	when it gets disposed with one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1051	when one sensitive SensitiveContent widget changes to sensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1082	when one sensitive SensitiveContent widget changes to autoSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1116	when one sensitive SensitiveContent widget changes to notSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1150	when one autoSensitive SensitiveContent widget changes to sensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1181	when one autoSensitive SensitiveContent widget changes to autoSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1212	when one autoSensitive SensitiveContent widget changes to notSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1243	when one notSensitive SensitiveContent widget changes to sensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1277	when one notSensitive SensitiveContent widget changes to autoSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1311	when one notSensitive SensitiveContent widget changes to notSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2037	when a sensitive SensitiveContent widget has any SensitiveContent children	reference-ran-incular-open	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2060	when an autoSensitive SensitiveContent widget has a sensitive SensitiveContent child	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2079	when an autoSensitive SensitiveContent widget has an autoSensitive SensitiveContent child	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2101	when an autoSensitive SensitiveContent widget has an notSensitive SensitiveContent child	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2123	when an notSensitive SensitiveContent widget has a sensitive SensitiveContent child	partial-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2146	when an notSensitive SensitiveContent widget has an autoSensitive SensitiveContent child	partial-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1343	when one sensitive SensitiveContent widget changes to autoSensitive with another sensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1379	when one sensitive SensitiveContent widget changes to notSensitive with another sensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1415	when one sensitive SensitiveContent widget changes to autoSensitive with an autoSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1454	when one sensitive SensitiveContent widget changes to notSensitive with an autoSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1493	when one sensitive SensitiveContent widget changes to autoSensitive with a notSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1532	when one sensitive SensitiveContent widget changes to notSensitive with a notSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1571	when one autoSensitive SensitiveContent widget changes to sensitive with a sensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1607	when one autoSensitive SensitiveContent widget changes to notSensitive with a sensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1643	when one autoSensitive SensitiveContent widget changes to sensitive with another autoSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1679	when one autoSensitive SensitiveContent widget changes to notSensitive with another autoSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1715	when one autoSensitive SensitiveContent widget changes to sensitive with a notSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1751	when one autoSensitive SensitiveContent widget changes to notSensitive with a notSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1787	when one notSensitive SensitiveContent widget changes to sensitive with a sensitive SensitiveContent widget	partial-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1829	when one notSensitive SensitiveContent widget changes to autoSensitive with a sensitive SensitiveContent widget	partial-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1871	when one notSensitive SensitiveContent widget changes to sensitive with an autoSensitive SensitiveContent widget	partial-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1914	when one notSensitive SensitiveContent widget changes to autoSensitive with an autoSensitive SensitiveContent widget	partial-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1956	when one notSensitive SensitiveContent widget changes to sensitive with another notSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1995	when one notSensitive SensitiveContent widget changes to autoSensitive with another notSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
+packages/flutter/test/widgets/selection_container_test.dart	14	updates its registrar and delegate based on the number of selectables	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	40	disabled container	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	65	Swapping out container delegate does not crash	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	117	Can update within one frame	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	147	selection container registers itself if there is a selectable child	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	179	selection container gets registrar from context if not provided	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	202	SelectionContainer does not crash at zero area	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selectable_region_test.dart	1006	Can extend StaticSelectionContainerDelegate	paired-match	upstream-selection-container-registration.md#custom-selected-content
+packages/flutter/test/widgets/semantics_role_checks_test.dart	16	failure case, empty	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	29	failure case, no tap	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	42	success case	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	59	failure case, list item without list parent	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	75	Success case	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	91	failure case, empty child	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	107	failure case, non tab child	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	124	Success case	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	320	failure case, empty child	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	336	Success case	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	394	failure case, no menu or menuBar as ancester	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	410	Success case with menu as an ancester	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	594	failure case, alert and live region	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	614	failure case, status and live region	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	634	success case	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1082	failure case, missing value, min, and max	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1095	failure case, has min and max but not value	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1113	failure case, has value but not min and max	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1126	failure case, valid min and max but invalid value	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1149	failure case, min and max are percentages, invalid value	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1174	failure case, invalid numbers	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1197	failure case, min >= max	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1216	failure case, value out of range (number)	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1238	failure case, value out of range (percentage)	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1257	success case, value is a valid number	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1273	success case, value is a valid percentage	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1291	failure case, missing value	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1304	failure case, missing minValue	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1321	failure case, missing maxValue	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1339	failure case, value out of range	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1358	failure case, min > max	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1377	failure case, invalid value	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1396	success case	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1412	success case with percentage format	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1428	failure case, percentage value out of range	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	357	failure case, empty child	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	373	Success case	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	428	Success case with menuBar as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	448	failure case, no checked flag	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	464	failure case, no menu or menuBar as its ancestor	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	481	Success case with menu as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	500	Success case with menuBar as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	521	failure case, no checked flag	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	537	failure case, no menu or menuBar as its ancestor	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	554	Success case with menu as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/semantics_role_checks_test.dart	573	Success case with menuBar as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
+packages/flutter/test/widgets/selectable_region_test.dart	6603	Multiple selectables on a single line should be in screen order	paired-match	upstream-selection-screen-order.md#inline-widgetspan-copy
+packages/flutter/test/widgets/semantics_role_checks_test.dart	145	success case, child is not mutually exclusive	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	164	failure case, multiple checked children	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	194	success case	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	221	success case, radio buttons with labels	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	254	success case, radio group with no checkable children	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	270	success case, radio group can have checkbox children	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	294	success case, radio group can nest	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	652	success case, radio buttons with labels	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	685	success case, radio group with no checkable children	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/radio_group_test.dart	128	Radio group can use arrow key	paired-match	upstream-radio-group-keyboard.md
+packages/flutter/test/widgets/radio_group_test.dart	182	Radio group arrow key skips disabled radio	paired-match	upstream-radio-group-keyboard.md
+packages/flutter/test/widgets/radio_group_test.dart	235	Radio group can tab in and out	paired-match	upstream-radio-group-keyboard.md
+packages/flutter/test/widgets/radio_group_test.dart	16	Radio group control test	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	65	Radio group can have disabled radio	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	104	Radio group will not merge up	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	308	Radio group throws on multiple selection	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	341	Radio group does not throw when number of children decreases	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	385	Radio group does not intercept key events when no radio is focused	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	497	RadioGroup does not crash at zero area	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/semantics_role_checks_test.dart	703	failure case, complementary role is contained by other landmark roles	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	728	failure case, multiple nodes have the same complementary role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	764	Success case, complementary role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	774	Success case, complementary role is used more than once	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	799	failure case, multiple nodes have the same contentInfo role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	835	failure case, contentInfo role is contained by other landmark roles	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	860	Success case, contentInfo role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	870	Success case, contentInfo role is used more than once	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	895	failure case, multiple nodes have the same main role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	928	failure case, main role is contained by other landmark roles	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	951	Success case, main role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	961	Success case, main role is used more than once	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	984	failure case, multiple nodes have the same navigation role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1017	Success case, navigation role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1027	Success case, navigation role is used more than once	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1052	failure case, region role without label	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1070	Success case, region role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/scheduler/scheduler_test.dart	281	Animation frame scheduled in the middle of the warm-up frame	reference-skipped	scheduler-callback-phases-comparisons.md#native-redraw-arriving-between-warm-up-phases
+packages/flutter/test/gestures/debug_test.dart	10	debugPrintGestureArenaDiagnostics	partial-match	upstream-gesture-diagnostic-traces.md
+packages/flutter/test/gestures/debug_test.dart	68	debugPrintRecognizerCallbacksTrace	partial-match	upstream-gesture-diagnostic-traces.md
+packages/flutter/test/gestures/debug_test.dart	127	debugPrintGestureArenaDiagnostics and debugPrintRecognizerCallbacksTrace	partial-match	upstream-gesture-diagnostic-traces.md
+packages/flutter/test/widgets/scrollbar_test.dart	2538	Scrollbar asserts that a visible track has a visible thumb	paired-match	upstream-scrollbar-track-paint.md#explicitly-hidden-thumbs
+packages/flutter/test/widgets/scrollbar_test.dart	522	should scroll towards the right direction	paired-match	upstream-scrollbar-padding.md#thumb-minimum-inheritance-and-viewport-cap
+packages/flutter/test/widgets/scrollbar_test.dart	1749	minThumbLength property of RawScrollbar is respected	paired-match	upstream-scrollbar-padding.md#thumb-minimum-inheritance-and-viewport-cap
+packages/flutter/test/widgets/scrollbar_test.dart	1884	minOverscrollLength property of RawScrollbar is respected	paired-match	upstream-scrollbar-padding.md#thumb-minimum-inheritance-and-viewport-cap
+packages/flutter/test/widgets/scrollbar_test.dart	1713	shape property of RawScrollbar can draw a BeveledRectangleBorder	paired-match	upstream-raw-scrollbar-paint.md#custom-thumb-shapes
+packages/flutter/test/widgets/scrollbar_test.dart	1779	shape property of RawScrollbar can draw a CircleBorder	paired-match	upstream-raw-scrollbar-paint.md#custom-thumb-shapes
+packages/flutter/test/widgets/scrollbar_test.dart	1843	shape property of RawScrollbar can draw a RoundedRectangleBorder	paired-match	upstream-raw-scrollbar-paint.md#custom-thumb-shapes
+packages/flutter/test/widgets/scrollbar_test.dart	679	Scrollbar never goes away until finger lift	paired-match	upstream-raw-scrollbar-fade.md
+packages/flutter/test/widgets/scrollbar_test.dart	728	Scrollbar does not fade away while hovering	partial-match	upstream-raw-scrollbar-fade.md
+packages/flutter/test/widgets/scrollbar_test.dart	769	Scrollbar will fade back in when hovering over known track area	paired-match	upstream-raw-scrollbar-fade.md
+packages/flutter/test/widgets/scrollbar_test.dart	1605	Scrollbar thumb can be dragged in reverse	paired-match	upstream-raw-scrollbar-drag-range.md
+packages/flutter/test/widgets/scrollbar_test.dart	2170	Scrollbar thumb can be dragged when the scrollable widget has a negative minScrollExtent - desktop	paired-match	upstream-raw-scrollbar-drag-range.md
+packages/flutter/test/widgets/scrollbar_test.dart	2244	Scrollbar thumb can be dragged when the scrollable widget has a negative minScrollExtent - mobile	paired-match	upstream-raw-scrollbar-drag-range.md
+packages/flutter/test/painting/image_provider_test.dart	65	File image with empty file throws expected error and evicts from cache	paired-match	upstream-file-image-errors.md#native-runtime-pending-and-eviction
+packages/flutter/test/painting/image_provider_test.dart	87	File image with empty file throws expected error (load)	partial-match	upstream-file-image-errors.md
+packages/flutter/test/painting/image_provider_test.dart	155	File image throws error when given a real but non-image file	paired-match	upstream-file-image-errors.md#native-runtime-pending-and-eviction
+packages/flutter/test/painting/image_provider_test.dart	34	obtainKey errors will be caught	paired-match	upstream-asset-image-cache-status.md
+packages/flutter/test/painting/image_provider_test.dart	54	obtainKey errors will be caught - check location	partial-match	upstream-asset-image-cache-status.md
+packages/flutter/test/gestures/debug_test.dart	207	TapGestureRecognizer _sentTapDown toString	paired-match	upstream-gesture-diagnostic-traces.md#pointer-descriptions-and-tap-down-state
+packages/flutter/test/gestures/events_test.dart	14	toString control tests	paired-match	upstream-gesture-diagnostic-traces.md#pointer-descriptions-and-tap-down-state
+packages/flutter/test/gestures/debug_test.dart	223	Gesture details debugFillProperties	partial-match	upstream-gesture-diagnostic-traces.md#callback-detail-properties
+packages/flutter/test/widgets/shortcuts_test.dart	865	Shortcuts passes to the next Shortcuts widget if it doesn't map the key	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/shortcuts_test.dart	908	Shortcuts can disable a shortcut with Intent.doNothing	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/shortcuts_test.dart	953	Shortcuts that aren't bound to an action don't absorb keys meant for text fields	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/shortcuts_test.dart	980	Shortcuts that are bound to an action do override text fields	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/shortcuts_test.dart	1018	Shortcuts can override intents that apply to text fields	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/shortcuts_test.dart	1058	Shortcuts can override intents that apply to text fields with DoNothingAndStopPropagationIntent	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/editable_text_test.dart	2165	does not refocus when it is hidden by a new route	reference-skipped	upstream-text-input-reattach.md#a-retained-editor-covered-by-another-route
+packages/flutter/test/services/text_input_test.dart	1497	the platform input control receives isMultiline true on attach	paired-match	upstream-text-input-controls.md#browser-keyboard-type-keeps-the-multiline-flag
+packages/flutter/test/services/default_binary_messenger_test.dart	45	can check the mock handler	paired-match	upstream-mock-messenger.md
+packages/flutter/test/services/platform_channel_test.dart	301	can check the mock handler	paired-match	upstream-mock-messenger.md
+packages/flutter/test/services/platform_messages_test.dart	14	Mock binary message handler control test	paired-match	upstream-mock-messenger.md

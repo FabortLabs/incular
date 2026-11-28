@@ -1,12 +1,16 @@
 //! Text-field editing, selectable text, caret geometry, and static selection.
 
 use super::*;
+use super::selection_order::{ScreenSelectable, sort_in_screen_order};
 use crate::selection::{
     SelectedContentRange, SelectionGeometry, SelectionHandleType, SelectionPoint, SelectionStatus,
     TextSelectionPoint,
 };
 use incular_rendering::{SelectionResult, SelectionUtils};
+use std::borrow::Cow;
 use incular_text::{LineBoundary, TextGeometry};
+
+type SelectionProxyRange = (ElementId, std::ops::Range<usize>);
 
 #[derive(Clone, Copy)]
 enum EditableCaret {
@@ -22,6 +26,9 @@ pub enum TextEditingCallback {
     AppPrivateCommand,
     ContentInserted,
     SelectionChanged,
+    SelectionHandleTapped,
+    Changed,
+    InputFormatter,
 }
 
 /// A caught Rust panic from an editor callback, preserving its message.
@@ -36,15 +43,35 @@ fn run_editing_callback(
     callback: impl FnOnce(),
     report: &mut impl FnMut(TextEditingCallbackError),
 ) {
+    call_editing_callback(kind, callback, report);
+}
+
+pub(super) fn call_editing_callback<T>(
+    kind: TextEditingCallback,
+    callback: impl FnOnce() -> T,
+    report: &mut impl FnMut(TextEditingCallbackError),
+) -> Option<T> {
     use std::panic::{AssertUnwindSafe, catch_unwind};
-    if let Err(payload) = catch_unwind(AssertUnwindSafe(callback)) {
+    match catch_unwind(AssertUnwindSafe(callback)) {
+        Ok(value) => Some(value),
+        Err(payload) => {
         let message = payload
             .downcast_ref::<&str>()
             .copied()
             .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
             .unwrap_or("non-string panic payload")
             .to_owned();
-        report(TextEditingCallbackError { callback: kind, message });
+            report(TextEditingCallbackError { callback: kind, message });
+            None
+        }
+    }
+}
+
+impl WidgetTree {
+    /// Drains errors from editor callbacks that execute within a controller edit.
+    #[doc(hidden)]
+    pub fn take_text_editing_callback_errors(&self) -> Vec<TextEditingCallbackError> {
+        std::mem::take(&mut *self.text_editing_callback_errors.borrow_mut())
     }
 }
 
@@ -393,6 +420,19 @@ impl WidgetTree {
             }
         }
         deadline
+    }
+
+    /// The typography resolved for the mounted editor's text and strut.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn editable_resolved_typography(
+        &self,
+        id: ElementId,
+    ) -> Option<(&TextStyle, Option<&incular_text::StrutStyle>)> {
+        match self.render_object_kind(self.render_id(id)?)? {
+            RenderKind::TextField(field) => Some((&field.style, field.strut.as_deref())),
+            _ => None,
+        }
     }
 
     /// Returns the optional height behavior from the retained editor.
@@ -974,6 +1014,59 @@ impl WidgetTree {
         })
     }
 
+    /// The retained editor's configured scroll and handle drag origin.
+    #[doc(hidden)]
+    pub fn editable_drag_start_behavior(&self, id: ElementId) -> Option<incular_core::DragStartBehavior> {
+        match self.elements.get(id.0)?.widget.kind() {
+            WidgetKind::TextField(spec) => Some(spec.drag_start_behavior),
+            _ => None,
+        }
+    }
+
+    /// Axis of a laid-out editor's freely scrollable private viewport.
+    #[doc(hidden)]
+    pub fn editable_drag_scroll_axis(&self, id: ElementId) -> Option<Axis> {
+        let node = self.renders.get(self.render_id(id)?.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        (field.fixed_scroll_offset.is_none() && self.editable_max_scroll_extent(id)? > 0.)
+            .then_some(if field.multiline { Axis::Vertical } else { Axis::Horizontal })
+    }
+
+    /// Applies a pointer drag in the editor's private viewport coordinates.
+    #[doc(hidden)]
+    pub fn editable_drag_scroll(&mut self, id: ElementId, axis: Axis, from: Offset, to: Offset) -> bool {
+        if self.editable_drag_scroll_axis(id) != Some(axis) {
+            return false;
+        }
+        let Some(render) = self.render_id(id) else {
+            return false;
+        };
+        let world = self.render_world_transform(render);
+        let (Some(from), Some(to)) =
+            (world.inverse_transform_point(from), world.inverse_transform_point(to))
+        else {
+            return false;
+        };
+        let delta = if axis.is_vertical() { from.y - to.y } else { from.x - to.x };
+        if !delta.is_finite() {
+            return false;
+        }
+        let Some(maximum) = self.editable_max_scroll_extent(id) else {
+            return false;
+        };
+        let state = self.text_field_state_live_mut(render);
+        let offset = if axis.is_vertical() { &mut state.scroll_y } else { &mut state.scroll_x };
+        let next = (*offset + delta).clamp(0., maximum);
+        if *offset == next {
+            return false;
+        }
+        *offset = next;
+        self.mark_render_paint(render);
+        true
+    }
+
     /// The text field's current scroll offsets in content pixels.
     #[must_use]
     pub fn text_field_scroll_offset(&self, id: ElementId) -> Option<Offset> {
@@ -1389,6 +1482,93 @@ impl WidgetTree {
             WidgetKind::TextField(spec) => Some((spec.legacy_selection_controls, spec.toolbar_options)),
             _ => None,
         }
+    }
+
+    /// Whether this editor has a custom magnifier to present.
+    #[doc(hidden)]
+    pub fn text_field_has_magnifier(&self, id: ElementId) -> bool {
+        self.text_field_magnifier(id).is_some()
+    }
+
+    fn text_field_magnifier(&self, id: ElementId) -> Option<&crate::magnifier::TextMagnifierState> {
+        match self.elements.get(id.0)?.widget.kind() {
+            WidgetKind::TextField(spec) => spec.text_magnifier.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Project the caret, line and field to the owning overlay's view.
+    /// The gesture point and the line-snapped text hit can differ.
+    #[doc(hidden)]
+    pub fn update_text_field_magnifier(
+        &self,
+        id: ElementId,
+        gesture: Offset,
+        text_hit: Offset,
+    ) -> bool {
+        let Some(state) = self.text_field_magnifier(id) else {
+            return false;
+        };
+        let info = (|| {
+            let (position, affinity) = self.text_field_position_at(id, text_hit)?;
+            let render = self.render_id(id)?;
+            let node = self.renders.get(render.0)?;
+            let RenderKind::TextField(field) = node.object.kind() else {
+                return None;
+            };
+            let layout = node.field_layout()?;
+            let (start, end) = field.controller.with_value(|value| {
+                (
+                    line_boundary(&layout, &value.text, position, affinity, false, false),
+                    line_boundary(&layout, &value.text, position, affinity, true, false),
+                )
+            });
+            let start = self.editable_local_caret_rect(id, start?.0, incular_text::TextAffinity::Downstream)?;
+            let end = self.editable_local_caret_rect(id, end?.0, incular_text::TextAffinity::Upstream)?;
+            let caret = self.editable_local_caret_rect(id, position, affinity)?;
+            let left = start.origin.x + start.size.width * 0.5;
+            let right = end.origin.x + end.size.width * 0.5;
+            let bottom = end.origin.y + end.size.height;
+            let line = Rect::from_origin_size(
+                Offset::new(left.min(right), start.origin.y.min(bottom)),
+                Size::maybe_new((right - left).abs(), (bottom - start.origin.y).abs())?,
+            );
+            let world = self.render_world_transform(render);
+            let field_bounds = Rect::from_origin_size(Offset::ZERO, node.size);
+            Some(crate::MagnifierInfo {
+                global_gesture_position: gesture,
+                current_line_boundaries: world.try_transform_rect_bbox(line)?,
+                caret_rect: world.try_transform_rect_bbox(caret)?,
+                field_bounds: world.try_transform_rect_bbox(field_bounds)?,
+            })
+        })();
+        state.set_info(info)
+    }
+
+    /// Removes any magnifier without detaching the editor or its handles.
+    #[doc(hidden)]
+    pub fn hide_text_field_magnifier(&self, id: ElementId) -> bool {
+        self.text_field_magnifier(id).is_some_and(|state| state.set_info(None))
+    }
+
+    /// Invokes the current callback on a tap, returning false when the
+    /// application has not supplied one.
+    #[doc(hidden)]
+    pub fn dispatch_text_selection_handle_tap(
+        &self,
+        field: ElementId,
+        mut report: impl FnMut(TextEditingCallbackError),
+    ) -> bool {
+        let Some(callback) = self.elements.get(field.0).and_then(|element| {
+            let WidgetKind::TextField(spec) = element.widget.kind() else {
+                return None;
+            };
+            spec.on_selection_handle_tapped.clone()
+        }) else {
+            return false;
+        };
+        run_editing_callback(TextEditingCallback::SelectionHandleTapped, || callback(), &mut report);
+        true
     }
 
     /// The shared toolbar overlay, including a currently open suggestions menu.
@@ -1952,7 +2132,7 @@ impl WidgetTree {
         }
         loop {
             if let Some(policy) = self.selection_boundary_policy(id) {
-                return policy.accepts_children().then_some(id);
+                return policy.accepts_children().then(|| self.selection_command_owner(id));
             }
             let Some(parent) = self.parent(id) else {
                 // A standalone SelectableText is its own one-label region.
@@ -1961,6 +2141,33 @@ impl WidgetTree {
             id = parent;
         }
     }
+    /// An enabled proxy shares the command owner of its registrar. An
+    /// explicit external registrar, SelectionArea or listener with its own
+    /// interaction state remains a separate command boundary.
+    fn selection_command_owner(&self, mut area: ElementId) -> ElementId {
+        while self.elements.get(area.0).is_some_and(|element| {
+            matches!(element.widget.kind(), WidgetKind::SelectionContainer { delegate, .. }
+                if delegate.is_enabled())
+        }) && self.external_selection_registrar(area).is_none()
+        {
+            let mut next = self.parent(area);
+            while let Some(parent) = next {
+                if self.selection_boundary_policy(parent).is_some() {
+                    break;
+                }
+                next = self.parent(parent);
+            }
+            let Some(parent) = next.filter(|&parent| {
+                self.selection_boundary_policy(parent)
+                    .is_some_and(SelectableChildPolicy::accepts_children)
+            }) else {
+                break;
+            };
+            area = parent;
+        }
+        area
+    }
+
     fn selection_boundary_policy(&self, id: ElementId) -> Option<SelectableChildPolicy> {
         match self.elements.get(id.0)?.widget.kind() {
             WidgetKind::SelectionArea { .. } => Some(SelectableChildPolicy::All),
@@ -1988,80 +2195,358 @@ impl WidgetTree {
             _ => None,
         }
     }
-    pub(super) fn selectable_texts_in_area(&self, area: ElementId) -> Vec<ElementId> {
-        let Some(policy) = self.selection_boundary_policy(area) else {
-            // A standalone SelectableText owns its implicit one-item
-            // selection region. It has no explicit boundary policy, but it
-            // must still participate in select-all and copy operations.
-            let standalone = self.elements.get(area.0).is_some_and(|element| {
-                matches!(element.widget.kind(), WidgetKind::SelectableText { .. })
-            });
-            return if standalone { vec![area] } else { Vec::new() };
+    /// Clipboard text for one selected byte range. A laid-out WidgetSpan
+    /// contributes its registered child text, not the U+FFFC layout marker.
+    /// Ordinary paragraphs keep a borrowed slice.
+    fn selection_fragment(&self, id: ElementId, range: TextRange) -> Option<Cow<'_, str>> {
+        let text = self.selectable_text_value(id)?;
+        let plain = text.get(range.start..range.end)?;
+        let Some(element) = self.elements.get(id.0) else {
+            return Some(Cow::Borrowed(plain));
         };
-        if !policy.accepts_children() {
-            return Vec::new();
+        let Some(render) = self.renders.get(element.render.0) else {
+            return Some(Cow::Borrowed(plain));
+        };
+        let RenderKind::Text { inline: Some(inline), .. } = render.object.kind() else {
+            return Some(Cow::Borrowed(plain));
+        };
+        let first = inline.placeholders.partition_point(|span| span.index < range.start);
+        let tail = inline.placeholders.get(first..)?;
+        if tail.first().is_none_or(|span| span.index >= range.end) {
+            return Some(Cow::Borrowed(plain));
         }
-        let mut entries = Vec::new();
-        let mut work = Vec::new();
-        if let Some(element) = self.elements.get(area.0) {
-            for child in &element.children {
-                self.collect_selectable_texts(*child, &mut entries, &mut work);
+
+        let owner = self.selection_area_ancestor(id);
+        let mut result = String::with_capacity(plain.len());
+        let mut cursor = range.start;
+        for (offset, span) in tail.iter().enumerate().take_while(|(_, span)| span.index < range.end) {
+            let after = span.index + '\u{fffc}'.len_utf8();
+            if after > range.end {
+                break;
+            }
+            result.push_str(text.get(cursor..span.index)?);
+            cursor = after;
+            let placed = render.text_layout().is_some_and(|layout| {
+                layout.placeholders.iter().any(|box_| box_.index == span.index)
+            });
+            if placed
+                && let Some(owner) = owner
+                && let Some(child) = inline.slots.iter().position(|&slot| slot == first + offset)
+                && let Some(&child) = element.children.get(child)
+            {
+                self.append_inline_selection_content(child, owner, &mut result);
             }
         }
-        entries
+        result.push_str(text.get(cursor..range.end)?);
+        Some(Cow::Owned(result))
     }
-    pub(super) fn collect_selectable_texts(
-        &self,
-        id: ElementId,
-        entries: &mut Vec<ElementId>,
-        work: &mut Vec<ElementId>,
-    ) {
-        work.clear();
-        work.push(id);
+
+    fn append_inline_selection_content(&self, child: ElementId, owner: ElementId, out: &mut String) {
+        let mut work = vec![child];
         while let Some(current) = work.pop() {
             let Some(element) = self.elements.get(current.0) else {
                 continue;
             };
-            // Inside an accepting boundary every `Text` registers, as
-            // Flutter's `Text` does with `SelectionContainer.maybeOf`.
-            if matches!(
-                element.widget.kind(),
-                WidgetKind::SelectableText { .. } | WidgetKind::Text { .. }
-            ) {
-                entries.push(current);
-                continue;
+            if let Some(text) = self.selectable_text_value(current) {
+                if self.selection_area_ancestor(current) == Some(owner)
+                    && let Some(content) = self.selection_fragment(current, TextRange::new(0, text.len()))
+                {
+                    out.push_str(&content);
+                }
+            } else if self.selection_boundary_policy(current).is_none_or(|policy| {
+                policy.accepts_children() && self.selection_command_owner(current) == owner
+            }) {
+                work.extend(element.children.iter().rev().copied());
             }
-            // A nested selection boundary owns its registrar subtree. Its
-            // leaves must not be harvested by an ancestor container, even
-            // when the nested boundary is disabled.
-            if self.selection_boundary_policy(current).is_some() {
-                continue;
-            }
-            work.extend(element.children.iter().rev().copied());
         }
     }
-    pub(super) fn sync_static_selection(&mut self, area: ElementId) {
-        let entries = self.selectable_texts_in_area(area);
-        if let Some(controller) = self.selection_area_controller(area) {
-            controller.set_registered_child_count(entries.len());
-            if let Some(selection) = self.static_selections.get(&area).copied() {
-                let selected = static_selection_text(self, &entries, selection);
-                let geometry = self.selection_geometry(area, &entries, selection);
-                let range = selection_content_range(self, &entries, selection);
-                controller.set_selection_snapshot(selected, range, geometry);
-            } else {
-                controller.clear_selection();
+
+    pub(super) fn selectable_texts_in_area(&self, area: ElementId) -> Vec<ElementId> {
+        self.selection_command_members(area, false, true).0
+    }
+
+    /// Orders only direct selectable members. A nested container is one
+    /// member here; its descendants are ordered in their own coordinate group.
+    fn selection_command_children(
+        &self,
+        area: ElementId,
+        visual_order: bool,
+    ) -> Vec<ElementId> {
+        let Some(element) = self.elements.get(area.0) else {
+            return Vec::new();
+        };
+        let mut direct = Vec::new();
+        let mut work: Vec<_> = element.children.iter().rev().copied().collect();
+        while let Some(id) = work.pop() {
+            let Some(element) = self.elements.get(id.0) else {
+                continue;
+            };
+            match element.widget.kind() {
+                WidgetKind::SelectableText { .. } | WidgetKind::Text { .. } => direct.push(id),
+                WidgetKind::SelectionContainer { delegate, .. } => {
+                    if delegate.is_enabled() && self.external_selection_registrar(id).is_none() {
+                        direct.push(id);
+                    }
+                }
+                WidgetKind::SelectionArea { .. } | WidgetKind::SelectionListener { .. } => {}
+                _ => work.extend(element.children.iter().rev().copied()),
             }
         }
+        if visual_order && direct.len() > 1 {
+            let mut spatial: Vec<_> = direct
+                .iter()
+                .map(|&id| ScreenSelectable { id, bounds: self.element_bounds(id).unwrap_or_default() })
+                .collect();
+            sort_in_screen_order(&mut spatial);
+            for (id, item) in direct.iter_mut().zip(spatial) {
+                *id = item.id;
+            }
+        }
+        direct
+    }
+
+    /// Layout order of the actual leaf targets of a selection command. A
+    /// connected child proxy is one registrar entry but forwards to its leaves.
+    /// Each proxy owns one contiguous slice, recorded at traversal exit.
+    fn selection_command_members(
+        &self,
+        area: ElementId,
+        project_to_proxies: bool,
+        visual_order: bool,
+    ) -> (Vec<ElementId>, Vec<SelectionProxyRange>) {
+        enum Work {
+            Enter(ElementId),
+            Finish(ElementId, usize),
+        }
+        let Some(element) = self.elements.get(area.0) else {
+            return (Vec::new(), Vec::new());
+        };
+        let Some(policy) = self.selection_boundary_policy(area) else {
+            let standalone = matches!(element.widget.kind(), WidgetKind::SelectableText { .. });
+            return (if standalone { vec![area] } else { Vec::new() }, Vec::new());
+        };
+        if !policy.accepts_children() {
+            return (Vec::new(), Vec::new());
+        }
+
+        let mut entries = Vec::new();
+        let mut proxies = Vec::new();
+        let mut work: Vec<_> = self.selection_command_children(area, visual_order)
+            .into_iter().rev().map(Work::Enter).collect();
+        while let Some(next) = work.pop() {
+            let id = match next {
+                Work::Enter(id) => id,
+                Work::Finish(id, start) => {
+                    proxies.push((id, start..entries.len()));
+                    continue;
+                }
+            };
+            let Some(element) = self.elements.get(id.0) else {
+                continue;
+            };
+            match element.widget.kind() {
+                WidgetKind::SelectableText { .. } | WidgetKind::Text { .. } => {
+                    entries.push(id);
+                }
+                WidgetKind::SelectionContainer { .. } => {
+                    if project_to_proxies {
+                        work.push(Work::Finish(id, entries.len()));
+                    }
+                    work.extend(self.selection_command_children(id, visual_order)
+                        .into_iter().rev().map(Work::Enter));
+                }
+                _ => {}
+            }
+        }
+        (entries, proxies)
+    }
+
+    /// Direct label entries and, optionally, child proxy containers. An owned
+    /// SelectionArea remains an independent region, and a disabled container
+    /// blocks both its own registration and its descendants.
+    fn selection_registry_members(
+        &self,
+        area: ElementId,
+    ) -> (Vec<ElementId>, Vec<ElementId>) {
+        let Some(element) = self.elements.get(area.0) else {
+            return (Vec::new(), Vec::new());
+        };
+        if !self
+            .selection_boundary_policy(area)
+            .is_some_and(SelectableChildPolicy::accepts_children)
+        {
+            return (Vec::new(), Vec::new());
+        }
+
+        let mut entries = Vec::new();
+        let mut proxies = Vec::new();
+        let mut work: Vec<_> = element.children.iter().rev().copied().collect();
+        while let Some(current) = work.pop() {
+            let Some(element) = self.elements.get(current.0) else {
+                continue;
+            };
+            match element.widget.kind() {
+                WidgetKind::SelectableText { .. } | WidgetKind::Text { .. } => {
+                    entries.push(current);
+                }
+                WidgetKind::SelectionContainer { delegate, .. }
+                | WidgetKind::SelectionListener { delegate, .. } => {
+                    if delegate.is_enabled() {
+                        proxies.push(current);
+                    }
+                }
+                WidgetKind::SelectionArea { .. } => {}
+                _ => work.extend(element.children.iter().rev().copied()),
+            }
+        }
+        (entries, proxies)
+    }
+
+    pub(super) fn sync_static_selection(&mut self, area: ElementId) {
+        let selection = self.static_selections.get(&area).copied();
+        let (entries, proxies) = self.selection_command_members(area, true, selection.is_some());
+        if selection.is_some() {
+            self.selection_paint_order.insert(area, entries.clone());
+        } else {
+            self.selection_paint_order.remove(&area);
+        }
+        let indexes = if proxies.is_empty() {
+            None
+        } else {
+            selection.and_then(|selection| {
+                let locate = |point: StaticSelectionPoint| {
+                    entries.iter().position(|&candidate| candidate == point.element)
+                };
+                Some((selection, locate(selection.anchor)?, locate(selection.extent)?))
+            })
+        };
+        let mut fragments = selection.and_then(|selection| {
+            let custom = self.selection_content_combiner(area).is_some()
+                || proxies
+                    .iter()
+                    .any(|(proxy, _)| self.selection_content_combiner(*proxy).is_some());
+            custom.then(|| {
+                entries.iter().map(|&element| {
+                    let range = static_selection_range(self, &entries, selection, element)?;
+                    self.selection_fragment(element, range)
+                }).collect::<Vec<_>>()
+            })
+        });
+        // Child delegates receive their local range, not all the parent's
+        // text, before the outer selection callback fires. Collapse each
+        // proxy's formatted fragments into one part for its own parent.
+        for (proxy, range) in proxies {
+            let children = &entries[range.clone()];
+            let local = indexes.and_then(|(selection, anchor, extent)| {
+                self.project_selection(proxy, children, range.start, anchor, extent, selection)
+            });
+            let content = fragments.as_mut().and_then(|fragments| {
+                if range.is_empty() {
+                    return None;
+                }
+                let pieces = &mut fragments[range];
+                let content = self.combine_selection_fragments(proxy, pieces);
+                pieces.fill(None);
+                if !content.is_empty() {
+                    pieces[0] = Some(Cow::Owned(content.clone()));
+                }
+                Some(content)
+            });
+            self.update_selection_snapshot(proxy, children, local, content);
+        }
+        let content = fragments.as_ref().map(|parts| self.combine_selection_fragments(area, parts));
+        self.update_selection_snapshot(area, &entries, selection, content);
+        drop(fragments);
         for element in entries {
             if let Some(render) = self.render_id(element) {
                 self.mark_render_paint(render);
             }
         }
     }
+
+    fn selection_content_combiner(&self, area: ElementId) -> Option<&dyn Fn(&[&str]) -> String> {
+        match self.elements.get(area.0)?.widget.kind() {
+            WidgetKind::SelectionContainer { delegate, .. } => delegate.content_combiner(),
+            _ => None,
+        }
+    }
+
+    fn combine_selection_fragments(
+        &self,
+        area: ElementId,
+        pieces: &[Option<Cow<'_, str>>],
+    ) -> String {
+        let present = pieces.iter().flatten().map(Cow::as_ref);
+        if let Some(combine) = self.selection_content_combiner(area) {
+            let parts: Vec<_> = present.collect();
+            if parts.is_empty() {
+                String::new()
+            } else {
+                combine(&parts)
+            }
+        } else {
+            present.collect()
+        }
+    }
+
+    fn update_selection_snapshot(
+        &self,
+        area: ElementId,
+        entries: &[ElementId],
+        selection: Option<StaticSelection>,
+        content: Option<String>,
+    ) {
+        let Some(controller) = self.selection_area_controller(area) else { return; };
+        if let Some(selection) = selection.filter(|_| !entries.is_empty()) {
+            let content = content.unwrap_or_else(|| static_selection_text(self, entries, selection));
+            let geometry = self.selection_geometry(area, entries, selection);
+            let range = selection_content_range(self, entries, selection);
+            controller.set_selection_snapshot(content, range, geometry);
+        } else {
+            controller.clear_selection();
+        }
+    }
+
+    fn project_selection(
+        &self,
+        area: ElementId,
+        children: &[ElementId],
+        first_index: usize,
+        anchor: usize,
+        extent: usize,
+        selection: StaticSelection,
+    ) -> Option<StaticSelection> {
+        let first = *children.first()?;
+        let last = *children.last()?;
+        let last_index = first_index + children.len() - 1;
+        if anchor.max(extent) < first_index || anchor.min(extent) > last_index {
+            return None;
+        }
+        let clip = |point: StaticSelectionPoint, index: usize| {
+            if index < first_index {
+                StaticSelectionPoint { element: first, byte: 0, affinity: TextAffinity::Downstream }
+            } else if index > last_index {
+                StaticSelectionPoint {
+                    element: last,
+                    byte: self.selectable_text_value(last).map_or(0, str::len),
+                    affinity: TextAffinity::Upstream,
+                }
+            } else {
+                point
+            }
+        };
+        Some(StaticSelection {
+            area,
+            anchor: clip(selection.anchor, anchor),
+            extent: clip(selection.extent, extent),
+        })
+    }
     pub(super) fn static_selection_range(&self, element: ElementId) -> Option<TextRange> {
         let area = self.selection_area_ancestor(element)?;
         let selection = self.static_selections.get(&area).copied()?;
+        if let Some(entries) = self.selection_paint_order.get(&area) {
+            return static_selection_range(self, entries, selection, element);
+        }
         let entries = self.selectable_texts_in_area(selection.area);
         static_selection_range(self, &entries, selection, element)
     }
@@ -2176,19 +2661,94 @@ impl WidgetTree {
         })
     }
 
+    fn external_selection_registrar(&self, id: ElementId) -> Option<crate::SelectionRegistrar> {
+        let element = self.elements.get(id.0)?;
+        let WidgetKind::SelectionContainer { delegate, registrar, .. } = element.widget.kind()
+        else {
+            return None;
+        };
+        if !delegate.is_enabled() {
+            return None;
+        }
+        if let Some(registrar) = registrar {
+            return Some(registrar.clone());
+        }
+        let mut current = element.parent;
+        while let Some(parent) = current {
+            let element = self.elements.get(parent.0)?;
+            if self.selection_boundary_policy(parent).is_some() {
+                return None;
+            }
+            if let Some(registrar) = element.environment_override.as_ref().and_then(|scope| {
+                scope.value.downcast_ref::<crate::SelectionRegistrar>()
+            }) {
+                return Some(registrar.clone());
+            }
+            current = element.parent;
+        }
+        None
+    }
+
+    fn sync_external_selection_registration(&mut self, id: ElementId, has_content: bool) {
+        let registrar = has_content.then(|| self.external_selection_registrar(id)).flatten();
+        if self.selection_registrations.get(&id).map(|lease| &lease.registrar)
+            == registrar.as_ref()
+        {
+            return;
+        }
+        self.selection_registrations.remove(&id);
+        if let Some(registrar) = registrar {
+            self.selection_registrations.insert(id, registrar.register(self.tree_id, id));
+        }
+    }
+
     pub(super) fn refresh_selection_states(&mut self) {
-        let areas = self
-            .tracked
-            .selection_boundaries
-            .iter()
-            .copied()
-            .filter(|&id| {
-                self.selection_boundary_policy(id).is_some()
-                    && self.selection_area_controller(id).is_some()
-            })
-            .collect::<Vec<_>>();
+        enum Work {
+            Enter(ElementId),
+            Finish(ElementId, Vec<ElementId>, Vec<ElementId>),
+        }
+
+        // A child proxy contributes one entry to its nearest accepting
+        // registrar, but only while the proxy's own registry has content.
+        // Resolve children before parents in this layout pass instead of
+        // relying on the tracked bucket's iteration order or another frame.
+        let areas: Vec<_> = self.tracked.selection_boundaries.iter().copied().collect();
+        let mut work: Vec<_> = areas.iter().copied().map(Work::Enter).collect();
+        let mut visited = FastHashSet::default();
+        while let Some(next) = work.pop() {
+            match next {
+                Work::Enter(area) if visited.insert(area) => {
+                    let (entries, proxies) = self.selection_registry_members(area);
+                    let children = proxies.iter().copied().map(Work::Enter);
+                    let start = work.len();
+                    work.extend(children);
+                    work.insert(start, Work::Finish(area, entries, proxies));
+                }
+                Work::Enter(_) => {}
+                Work::Finish(area, entries, proxies) => {
+                    if let Some(controller) = self.selection_area_controller(area) {
+                        let nested = proxies
+                            .iter()
+                            .filter(|&&proxy| {
+                                !self.selection_registrations.contains_key(&proxy)
+                                    && self.selection_area_controller(proxy)
+                                        .is_some_and(|child| child.registered_child_count() != 0)
+                            })
+                            .count();
+                        let total = entries.len() + nested;
+                        controller.set_registered_child_count(total);
+                        self.sync_external_selection_registration(area, total != 0);
+                    }
+                }
+            }
+        }
         for area in areas {
-            self.sync_static_selection(area);
+            if self.selection_command_owner(area) == area {
+                self.sync_static_selection(area);
+            } else {
+                self.static_selections.remove(&area);
+                self.selection_paint_order.remove(&area);
+            }
         }
     }
     /// Runs the logical cursor action advertised to assistive technology.
@@ -2639,6 +3199,68 @@ impl WidgetTree {
         ))
     }
 
+    /// Checks the selection against the editable viewport, any ancestor
+    /// viewports, and the part of the view not covered by system insets.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn editable_toolbar_selection_is_visible(&self, id: ElementId) -> bool {
+        let visible = (|| {
+            let render = self.render_id(id)?;
+            let field = self.element_bounds(id)?;
+            let mut selection = self.editable_selection_menu_rect(id)?;
+            if selection.size.width == 0. {
+                // A collapsed caret is a line in the menu geometry, but
+                // it still has one pixel of visible coverage.
+                selection.size.width = 1.;
+            }
+            let handles = self.text_field_selection_handle_geometry(id)?;
+            let local_endpoint_visible = |handle: crate::TextSelectionHandle| {
+                field.contains(handle.anchor)
+                    || field.contains(handle.anchor - Offset::new(0., handle.line_height * 0.5))
+            };
+            if !local_endpoint_visible(handles.start)
+                && !handles.end.is_some_and(local_endpoint_visible)
+            {
+                return Some(false);
+            }
+
+            let environment = &self.environment;
+            let size = if environment.viewport.width > 0. && environment.viewport.height > 0. {
+                environment.viewport
+            } else {
+                self.root_layout_size()?
+            };
+            let safe = environment.safe_insets;
+            let drawable = Rect::from_origin_size(
+                Offset::new(safe.left, safe.top),
+                Size::maybe_new(
+                    size.width - safe.horizontal(),
+                    size.height - safe.vertical() - environment.view_insets.bottom,
+                )?,
+            );
+            let mut clip = field.intersection(drawable)?;
+            let mut ancestor = self.renders.get(render.0)?.parent;
+            while let Some(id) = ancestor {
+                let parent = self.renders.get(id.0)?;
+                if matches!(parent.object.kind(),
+                    RenderKind::Scroll { .. }
+                    | RenderKind::SliverViewport { .. }
+                    | RenderKind::ListWheelScrollView { .. }
+                    | RenderKind::ListWheelViewport { .. }
+                    | RenderKind::TwoDimensionalScrollView { .. }
+                    | RenderKind::TwoDimensionalViewport { .. }
+                ) {
+                    let local = Rect::from_origin_size(Offset::ZERO, parent.size);
+                    let bounds = self.render_world_transform(id).try_transform_rect_bbox(local)?;
+                    clip = clip.intersection(bounds)?;
+                }
+                ancestor = parent.parent;
+            }
+            Some(clip.size.width > 0. && clip.size.height > 0. && clip.intersects(selection))
+        })();
+        visible.unwrap_or(false)
+    }
+
     /// The one-pixel caret position marker in global coordinates, used for
     /// selection handles and position-to-point interaction. To obtain the
     /// full painted caret, use [Self::editable_local_caret_rect].
@@ -2815,6 +3437,58 @@ impl WidgetTree {
             rect.origin + Offset::new(padding.left - scroll.x, top - scroll.y),
             rect.size,
         ))
+    }
+
+    fn flutter_handwriting_eligible(&self, id: ElementId) -> bool {
+        self.elements.get(id.0).is_some_and(|element| {
+            matches!(element.widget.kind(), WidgetKind::TextField(spec)
+                if spec.enabled && !spec.read_only && spec.stylus_handwriting_enabled)
+        })
+    }
+
+    /// Responds to the host's view-local handwriting target query. A field
+    /// covered by another hit target is not eligible, even when its bounds
+    /// intersect the query.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn flutter_handwriting_targets(&self, query: Rect) -> Vec<(String, Rect)> {
+        self.text_field_elements()
+            .filter(|&id| self.flutter_handwriting_eligible(id))
+            .filter_map(|id| {
+                let bounds = self.element_bounds(id)?;
+                if bounds.size.width <= 0.
+                    || bounds.size.height <= 0.
+                    || !bounds.intersects(query)
+                {
+                    return None;
+                }
+                let common = bounds.intersection(query)?;
+                let center = common.origin + Offset::new(
+                    common.size.width * 0.5,
+                    common.size.height * 0.5,
+                );
+                (self.text_field_at(center) == Some(id)).then(|| (
+                    format!("incular-editable:{}:{}:{}", self.tree_id, id.0.index(), id.0.generation()),
+                    bounds,
+                ))
+            })
+            .collect()
+    }
+
+    /// Resolves a host target against its original mounted tree and arena
+    /// generation, so a retired identifier cannot focus a replacement.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn flutter_handwriting_target(&self, wire_id: &str) -> Option<ElementId> {
+        let mut parts = wire_id.strip_prefix("incular-editable:")?.split(':');
+        let tree = parts.next()?.parse::<u64>().ok()?;
+        let index = parts.next()?.parse::<u32>().ok()?;
+        let generation = parts.next()?.parse::<u32>().ok()?;
+        if tree != self.tree_id || parts.next().is_some() {
+            return None;
+        }
+        let id = ElementId(incular_core::ArenaId::from_parts(index, generation));
+        self.flutter_handwriting_eligible(id).then_some(id)
     }
 
     /// The visible grapheme bounds for the optional Flutter handwriting host.
@@ -3357,36 +4031,10 @@ pub(super) fn caret_for_line_position(
     let Some(line_data) = layout.get_line(line) else {
         return (0, incular_text::TextAffinity::Downstream);
     };
-    let positions = layout.line_caret_positions(line);
-    let nearest = positions
-        .iter()
-        .enumerate()
-        .min_by(|(_, left), (_, right)| {
-            (left.x - x)
-                .abs()
-                .total_cmp(&(right.x - x).abs())
-                .then_with(|| left.x.total_cmp(&right.x))
-        });
-    let Some((index, position)) = nearest else {
-        return (
-            caret_for_line_x(line_data, x),
-            incular_text::TextAffinity::Downstream,
-        );
-    };
-    // Adjacent clusters can encode the same caret byte at the same screen
-    // edge twice. The stops are in visual cluster order, so a pointer on
-    // or to the right of the shared edge belongs to the right cluster.
-    // Keep distinct logical stops at bidi boundaries separate.
-    let position = if x >= position.x {
-        positions[index + 1..]
-            .iter()
-            .take_while(|next| next.x == position.x && next.offset == position.offset)
-            .last()
-            .unwrap_or(position)
-    } else {
-        position
-    };
-    (position.offset, position.affinity)
+    layout.closest_caret_for_line(line, x).map_or_else(
+        || (caret_for_line_x(line_data, x), incular_text::TextAffinity::Downstream),
+        |position| (position.offset, position.affinity),
+    )
 }
 /// Flutter's `_moveToTextBoundary` over `LineBoundary` in `layout` (see
 /// [`WidgetTree::text_field_line_boundary`]).
@@ -3714,18 +4362,21 @@ pub(super) fn selection_content_range(
     for &entry in entries {
         let text = tree.selectable_text_value(entry)?;
         let content_offset = |point: StaticSelectionPoint| {
-            offset.saturating_add(utf16_len(&text[..valid_boundary(text, point.byte)]))
+            let range = TextRange::new(0, valid_boundary(text, point.byte));
+            let content = tree.selection_fragment(entry, range)?;
+            Some(offset.saturating_add(utf16_len(&content)))
         };
         if entry == selection.anchor.element {
-            anchor = Some(content_offset(selection.anchor));
+            anchor = content_offset(selection.anchor);
         }
         if entry == selection.extent.element {
-            extent = Some(content_offset(selection.extent));
+            extent = content_offset(selection.extent);
         }
         if let (Some(anchor), Some(extent)) = (anchor, extent) {
             return Some(SelectedContentRange::new(anchor, extent));
         }
-        offset = offset.saturating_add(utf16_len(text));
+        let content = tree.selection_fragment(entry, TextRange::new(0, text.len()))?;
+        offset = offset.saturating_add(utf16_len(&content));
     }
     None
 }
@@ -3742,10 +4393,10 @@ pub(super) fn static_selection_text(
         let Some(range) = static_selection_range(tree, entries, selection, *element) else {
             continue;
         };
-        let Some(text) = tree.selectable_text_value(*element) else {
+        let Some(text) = tree.selection_fragment(*element, range) else {
             continue;
         };
-        out.push_str(&text[range.start..range.end]);
+        out.push_str(&text);
     }
     out
 }

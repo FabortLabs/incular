@@ -16,6 +16,7 @@ use std::{
 mod attributed_string;
 mod custom_action;
 mod label_builder;
+mod role_checks;
 mod sort_key;
 mod visibility;
 pub use attributed_string::{
@@ -24,6 +25,7 @@ pub use attributed_string::{
 pub use custom_action::{CustomSemanticsAction, CustomSemanticsActionId};
 pub use incular_core::TextDirection;
 pub use label_builder::SemanticsLabelBuilder;
+pub use role_checks::{SemanticRoleIssue, SemanticRoleIssueKind};
 pub use visibility::{InvisibleSemanticsNode, InvisibleSemanticsNodes};
 pub use sort_key::{
     CustomSemanticsSortKey, IncompatibleSemanticsSortKeyTypes, SemanticsSortKeyRef,
@@ -84,10 +86,12 @@ pub enum Role {
     GenericContainer,
     Checkbox,
     Radio,
+    RadioGroup,
     /// A two-state toggle distinct from a momentary button.
     Switch,
     Slider,
     Menu,
+    MenuBar,
     Dialog,
     /// A modal alert that needs the user's attention.
     AlertDialog,
@@ -97,6 +101,11 @@ pub enum Role {
     Status,
     /// A region containing form controls.
     Form,
+    Complementary,
+    ContentInfo,
+    Main,
+    Navigation,
+    Region,
     Image,
     Heading,
     Link,
@@ -105,6 +114,8 @@ pub enum Role {
     TabList,
     TabPanel,
     MenuItem,
+    MenuItemCheckbox,
+    MenuItemRadio,
     ProgressBar,
     Meter,
     SearchField,
@@ -511,6 +522,14 @@ pub enum SemanticsInputType {
     Email,
 }
 
+/// Optional textual limits as declared by an accessible slider or meter.
+/// Numeric limits remain available to native accessibility adapters.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SemanticValueBoundsText {
+    pub min: Option<String>,
+    pub max: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SemanticState {
     /// Whether the node accepts input. Flutter's default is "unspecified",
@@ -565,6 +584,7 @@ pub struct SemanticState {
     pub numeric_min: Option<f64>,
     pub numeric_max: Option<f64>,
     pub numeric_step: Option<f64>,
+    pub value_bounds_text: Option<Arc<SemanticValueBoundsText>>,
     /// Heading level in the portable tree (1 is the most prominent level).
     pub heading_level: Option<u8>,
     /// Flutter's `hasToggledState`/`isToggled`, for on/off controls such as
@@ -761,6 +781,7 @@ impl Default for SemanticState {
             numeric_min: None,
             numeric_max: None,
             numeric_step: None,
+            value_bounds_text: None,
             heading_level: None,
             toggled: None,
             hidden: false,
