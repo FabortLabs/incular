@@ -238,3 +238,61 @@ fn a_page_that_opts_out_does_not_steal_focus_with_its_own_autofocus_target() {
     assert!(home.has_primary_focus());
     assert!(!opted_out.has_focus());
 }
+
+#[test]
+fn a_closed_host_connection_cannot_refocus_the_retained_editor_while_a_route_covers_it() {
+    use incular_platform::TextInputCommand;
+    use incular_text::TextEditingController;
+    use incular_widgets::EditableText;
+
+    let navigator = Navigator::new();
+    let node = FocusNode::new();
+    let text = TextEditingController::with_text("kept");
+    let home = EditableText::new(text.clone())
+        .focus_node(node.clone())
+        .autofocus(true)
+        .text_direction(TextDirection::Ltr)
+        .size(Size::new(160., 36.));
+    navigator.push_page(Page::new("/", home));
+    let (mut runtime, outlet) = build_outlet(&navigator, |outlet| outlet.borrow().widget());
+    settle(&mut runtime, &outlet);
+    assert!(node.has_primary_focus());
+    let target = runtime.focused_element().unwrap();
+    let closed = runtime
+        .take_text_input_commands()
+        .iter()
+        .find_map(|command| match command {
+            TextInputCommand::SetClient { configuration, .. } => Some(configuration.client),
+            _ => None,
+        })
+        .expect("editor was attached");
+    assert!(runtime.text_input_connection_closed(closed));
+    settle(&mut runtime, &outlet);
+    assert!(!node.has_focus());
+
+    navigator.push_page(Page::new("/cover", SizedBox::square(200.)));
+    settle(&mut runtime, &outlet);
+    assert!(
+        runtime.tree().element_exists(target),
+        "covered page stays mounted"
+    );
+    assert!(!runtime.text_input_focus_received(closed));
+    assert!(!runtime.request_text_input_focus_for(target));
+    assert!(!node.has_focus());
+    assert!(runtime.take_text_input_commands().is_empty());
+
+    navigator.pop();
+    settle(&mut runtime, &outlet);
+    assert!(
+        !node.has_focus(),
+        "popping the cover does not invent a new request"
+    );
+    assert!(runtime.text_input_focus_received(closed));
+    assert!(node.has_primary_focus());
+    assert_eq!(runtime.focused_element(), Some(target));
+    assert!(runtime.take_text_input_commands().iter().any(|command| {
+        matches!(command, TextInputCommand::SetClient { configuration, state, .. }
+            if configuration.client != closed && state.text == "kept")
+    }));
+    assert_eq!(text.text(), "kept");
+}

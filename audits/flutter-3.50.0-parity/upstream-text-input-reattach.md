@@ -371,3 +371,20 @@ same extended grapheme but at a scalar boundary, does accept the edit,
 retains the noncollapsed selection, and paints the emoji without crashing.
 This is a partial comparison, not full UTF-16 editing-state equivalence.
 All 17 focused native whole-editing-state tests passed.
+
+## A retained editor covered by another route
+
+The original at `widgets/editable_text_test.dart:2165` is explicitly
+skipped by Flutter, so it is not counted as paired. An authored pinned
+probe removes the Material scaffolding but keeps the mounted editor,
+host connection close, and actual navigator push. In this fixture the
+pinned Flutter editor still returns true to the host's refocus request
+while another route covers it.
+
+The native mounted Navigator/RouteOutlet test keeps the same editor
+element while it is covered and checks that the host's refocus request
+is refused without sending new keyboard commands. Popping the cover
+does not invent a focus request. The next real host request refocuses
+that same editor, restores its text, and creates a fresh connection.
+The authored Flutter observation and all six focused native route tests
+passed. The native guard is kept rather than copying a skipped behavior.
