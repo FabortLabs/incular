@@ -606,18 +606,18 @@ pub struct TapUpDetails {
 ///
 /// With Flutter's default `DragStartBehavior.start` the position is where the
 /// drag was accepted, not where the pointer first went down.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub struct DragStartDetails {
     /// Timestamp of the event that started the drag (`sourceTimeStamp`).
     pub source_time: Option<Instant>,
     pub global_position: Offset,
     pub local_position: Offset,
-    /// The kind of the device that started the drag.
-    pub kind: PointerDeviceKind,
+    /// The initiating device, if the drag came from a physical pointer.
+    pub kind: Option<PointerDeviceKind>,
 }
 
 /// Metadata for drag down events.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub struct DragDownDetails {
     pub global_position: Offset,
     pub local_position: Offset,
@@ -1049,7 +1049,7 @@ pub enum GestureDecision {
 /// `delta` is the movement since the previous event, not the displacement
 /// from the pointer-down position. Accepting a drag does not itself produce an
 /// update: the first update reports the movement after acceptance.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct DragUpdateDetails {
     /// Timestamp of the pointer event (`sourceTimeStamp`).
     pub source_time: Option<Instant>,
@@ -1065,7 +1065,7 @@ pub struct DragUpdateDetails {
 }
 
 /// Details of the end of a drag (Flutter `DragEndDetails`).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub struct DragEndDetails {
     /// Velocity of the pointer when it stopped, zero for a slow release.
     pub velocity: Velocity,
@@ -1114,3 +1114,5 @@ impl GestureCallbacks {
         recognizer
     }
 }
+
+mod drag_diagnostics;

@@ -3471,7 +3471,7 @@ impl WidgetTree {
                     source_time: None,
                     local_position,
                     global_position,
-                    kind: incular_core::PointerDeviceKind::Unknown,
+                    kind: None,
                 };
                 let update = DragUpdateDetails {
                     source_time: None,

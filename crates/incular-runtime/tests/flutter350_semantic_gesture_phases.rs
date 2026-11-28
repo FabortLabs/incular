@@ -56,6 +56,7 @@ fn start_only_detectors_advertise_and_invoke_only_their_axes() {
                 assert_eq!(details.local_position, Offset::new(100., 50.));
                 assert_eq!(details.global_position, Offset::new(120., 80.));
                 assert!(details.source_time.is_none());
+                assert_eq!(details.kind, None);
                 calls.set(calls.get() + 1);
             }
         };

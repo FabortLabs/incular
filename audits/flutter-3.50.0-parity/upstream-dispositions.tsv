@@ -3931,3 +3931,4 @@ packages/flutter/test/painting/binding_test.dart	46	ShaderWarmUp is null by defa
 packages/flutter/test/painting/image_cache_binding_test.dart	15	PaintingBinding with memory pressure before initInstances	reference-ran-incular-open	upstream-root-asset-memory-pressure.md#reference-only-binding-cases
 packages/flutter/test/painting/image_provider_resize_image_test.dart	25	Two identical instances should be equal and have same hashCode	paired-match	upstream-resized-cache-identity.md#shared-provider-value-and-hash
 packages/flutter/test/painting/decoration_test.dart	161	Decoration equality	paired-match	upstream-decoration-values.md#box-decoration-equality-and-hashes
+packages/flutter/test/gestures/drag_test.dart	1596	Drag details	paired-match	upstream-drag-details-diagnostics.md

@@ -935,7 +935,7 @@ impl PointerGestureRecognizer {
             source_time: self.drag.pending_time,
             global_position,
             local_position,
-            kind: self.kind,
+            kind: Some(self.kind),
         };
         self.pan_action = Some(action);
         self.pan_started = true;

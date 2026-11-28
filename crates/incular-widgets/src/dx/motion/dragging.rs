@@ -313,7 +313,7 @@ pub(crate) fn pan(node: &Rc<MotionNode>, widget: Widget) -> Widget {
                 (weak.clone(), last.clone(), ignored.clone(), lifted.clone());
             move |details| {
                 let Some(node) = weak.upgrade() else { return };
-                let touch = details.kind == incular_core::PointerDeviceKind::Touch;
+                let touch = details.kind == Some(incular_core::PointerDeviceKind::Touch);
                 ignored.set(long_press && touch);
                 if ignored.get() || lifted.get() {
                     return;
