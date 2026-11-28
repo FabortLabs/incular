@@ -20,6 +20,11 @@ fn keyboard_dismiss_controller(kind: &RenderKind) -> Option<&ScrollController> {
         {
             Some(controller)
         }
+        RenderKind::SliverViewport { config }
+            if config.behavior.keyboard_dismiss == crate::ScrollViewKeyboardDismissBehavior::OnDrag =>
+        {
+            Some(&config.controller)
+        }
         _ => None,
     }
 }

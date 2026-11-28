@@ -1651,12 +1651,25 @@ impl Widget {
                     delegate,
                     semantic_child_count: None,
                     inherit_physics: None,
+                    keyboard_dismissal: Default::default(),
                     behavior: Default::default(),
                 }),
             },
             semantics: None,
         })
     }
+    pub(crate) fn with_sliver_keyboard_dismissal(
+        mut self,
+        policy: Option<crate::ScrollViewKeyboardDismissBehavior>,
+    ) -> Self {
+        use crate::scrolling::SliverKeyboardDismissal;
+        if let WidgetKind::SliverViewport { config } = self.kind_mut() {
+            Rc::make_mut(config).keyboard_dismissal = policy
+                .map_or(SliverKeyboardDismissal::Inherited, SliverKeyboardDismissal::Explicit);
+        }
+        self
+    }
+
     pub(crate) fn with_scroll_increment_calculator(
         mut self,
         calculator: Option<crate::ScrollIncrementCalculator>,

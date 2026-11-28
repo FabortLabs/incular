@@ -126,7 +126,7 @@ pub use geometry::{
     SliverLayout, SliverPaintOrder, SliverScrollDependency, SliverViewportConfig,
 };
 pub(crate) use geometry::{
-    SliverAxisResolution, SliverRevealGeometry, SliverViewportDelegate, SliverViewportLayout,
+    SliverAxisResolution, SliverKeyboardDismissal, SliverRevealGeometry, SliverViewportDelegate, SliverViewportLayout,
     sliver_paint_slots,
 };
 

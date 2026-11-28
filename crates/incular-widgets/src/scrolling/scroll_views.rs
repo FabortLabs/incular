@@ -453,6 +453,9 @@ pub struct ListView {
     /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
     #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
     clip_behavior: Clip,
+    /// Flutter's keyboard dismissal policy, inherited when unset.
+    #[builder(default, setter(strip_option))]
+    keyboard_dismiss_behavior: Option<crate::ScrollViewKeyboardDismissBehavior>,
     /// Flutter `dragStartBehavior`; defaults to `DragStartBehavior.start`.
     #[builder(default)]
     drag_start_behavior: DragStartBehavior,
@@ -491,6 +494,7 @@ impl ListView {
             cache_extent: None,
             physics: None,
             clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            keyboard_dismiss_behavior: None,
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
@@ -524,6 +528,7 @@ impl ListView {
             cache_extent: None,
             physics: None,
             clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            keyboard_dismiss_behavior: None,
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
@@ -575,6 +580,7 @@ impl ListView {
             cache_extent: None,
             physics: None,
             clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            keyboard_dismiss_behavior: None,
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
@@ -693,6 +699,16 @@ impl ListView {
     }
 
     /// Sets where a scroll drag measures its start from (Flutter
+    /// Whether a user-driven scroll update dismisses the keyboard.
+    #[must_use]
+    pub fn keyboard_dismiss_behavior(
+        mut self,
+        behavior: crate::ScrollViewKeyboardDismissBehavior,
+    ) -> Self {
+        self.keyboard_dismiss_behavior = Some(behavior);
+        self
+    }
+
     /// `dragStartBehavior`).
     #[must_use]
     pub fn drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
@@ -863,6 +879,7 @@ fn list_view_widget(value: ListView) -> Widget {
         },
         sliver,
     )
+    .with_sliver_keyboard_dismissal(value.keyboard_dismiss_behavior)
     .with_ambient_sliver_axis()
     .with_sliver_semantic_child_count(semantic_child_count)
 }
@@ -970,6 +987,9 @@ pub struct GridView {
     /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
     #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
     clip_behavior: Clip,
+    /// Flutter's keyboard dismissal policy, inherited when unset.
+    #[builder(default, setter(strip_option))]
+    keyboard_dismiss_behavior: Option<crate::ScrollViewKeyboardDismissBehavior>,
     /// Flutter `dragStartBehavior`; defaults to `DragStartBehavior.start`.
     #[builder(default)]
     drag_start_behavior: DragStartBehavior,
@@ -1009,6 +1029,7 @@ impl GridView {
             cache_extent: None,
             physics: None,
             clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            keyboard_dismiss_behavior: None,
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
@@ -1068,6 +1089,7 @@ impl GridView {
             cache_extent: None,
             physics: None,
             clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            keyboard_dismiss_behavior: None,
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
@@ -1147,6 +1169,16 @@ impl GridView {
     }
 
     /// Sets where a scroll drag measures its start from (Flutter
+    /// Whether a user-driven scroll update dismisses the keyboard.
+    #[must_use]
+    pub fn keyboard_dismiss_behavior(
+        mut self,
+        behavior: crate::ScrollViewKeyboardDismissBehavior,
+    ) -> Self {
+        self.keyboard_dismiss_behavior = Some(behavior);
+        self
+    }
+
     /// `dragStartBehavior`).
     #[must_use]
     pub fn drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
@@ -1248,6 +1280,7 @@ fn grid_view_widget(value: GridView) -> Widget {
         },
         sliver,
     )
+    .with_sliver_keyboard_dismissal(value.keyboard_dismiss_behavior)
     .with_ambient_sliver_axis()
     .with_sliver_semantic_child_count(semantic_child_count)
 }

@@ -2,16 +2,17 @@ use std::time::Duration;
 
 use incular_config::{Constraints, TextDirection};
 use incular_core::{
-    Color, InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
-    PointerSampleMetadata, Size, time::Instant,
+    Color, DragStartBehavior, InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind,
+    PointerPhase, PointerSampleMetadata, Size, time::Instant,
 };
 use incular_platform::TextInputCommand;
 use incular_runtime::Runtime;
 use incular_text::TextEditingController;
 use incular_widgets::{
-    Column, Directionality, EditableText, Expanded, FocusNode, FocusScope, ScrollBehavior,
-    ScrollConfiguration, ScrollController, ScrollViewKeyboardDismissBehavior as Dismiss,
-    SingleChildScrollView, Widget,
+    Column, CustomScrollView, Directionality, EditableText, Expanded, FocusNode, FocusScope,
+    GridView, ListView, ScrollBehavior, ScrollConfiguration, ScrollController,
+    ScrollViewKeyboardDismissBehavior as Dismiss, SingleChildScrollView, SizedBox, Sliver,
+    SliverGridDelegate, SliverList, Widget,
 };
 
 fn editor(node: &FocusNode) -> Widget {
@@ -69,9 +70,13 @@ struct Host {
 
 impl Host {
     fn new(policy: Option<Dismiss>, ambient: Dismiss, other_scope: bool) -> Self {
+        Self::mount(|focus, scroll| scene(focus, scroll, policy, ambient, other_scope))
+    }
+
+    fn mount(build: impl FnOnce(&FocusNode, &ScrollController) -> Widget) -> Self {
         let focus = FocusNode::new();
         let scroll = ScrollController::new();
-        let runtime = Runtime::new(scene(&focus, &scroll, policy, ambient, other_scope)).unwrap();
+        let runtime = Runtime::new(build(&focus, &scroll)).unwrap();
         let mut host = Self {
             runtime,
             focus,
@@ -231,4 +236,134 @@ fn updating_ambient_policy_rebinds_the_same_retained_scroller() {
     host.frame();
     host.drag(-50.);
     assert!(host.focus.has_primary_focus());
+}
+
+#[derive(Clone, Copy, Debug)]
+enum SliverView {
+    List,
+    ListBuilder,
+    ListSeparated,
+    Grid,
+    GridBuilder,
+    GridCount,
+    GridExtent,
+    Custom,
+}
+
+fn sliver_scene(
+    kind: SliverView,
+    policy: Option<Dismiss>,
+    ambient: Dismiss,
+    focus: &FocusNode,
+    scroll: &ScrollController,
+) -> Widget {
+    let nodes: Vec<_> = std::iter::once(focus.clone())
+        .chain((1..50).map(|_| FocusNode::new()))
+        .collect();
+    let rows = || nodes.iter().map(editor).collect::<Vec<_>>();
+    let nth = {
+        let nodes = nodes.clone();
+        move |index| editor(&nodes[index])
+    };
+    let list = |descriptor: ListView| -> Widget {
+        let descriptor = descriptor.controller(scroll.clone());
+        policy.map_or_else(
+            || descriptor.clone().into(),
+            |behavior| {
+                descriptor
+                    .clone()
+                    .keyboard_dismiss_behavior(behavior)
+                    .into()
+            },
+        )
+    };
+    let grid = |descriptor: GridView| -> Widget {
+        let descriptor = descriptor.controller(scroll.clone());
+        policy.map_or_else(
+            || descriptor.clone().into(),
+            |behavior| {
+                descriptor
+                    .clone()
+                    .keyboard_dismiss_behavior(behavior)
+                    .into()
+            },
+        )
+    };
+    let layout = || SliverGridDelegate::fixed_cross_axis_count(2);
+    let view = match kind {
+        SliverView::List => list(ListView::new(rows())),
+        SliverView::ListBuilder => list(ListView::builder(50, nth)),
+        SliverView::ListSeparated => list(ListView::separated(50, nth, |_| SizedBox::shrink())),
+        SliverView::Grid => grid(GridView::new(layout(), rows())),
+        SliverView::GridBuilder => grid(GridView::builder(50, layout(), nth)),
+        SliverView::GridCount => grid(GridView::count(2, rows())),
+        SliverView::GridExtent => grid(GridView::extent(300., rows())),
+        SliverView::Custom => {
+            let sliver: Box<dyn Sliver> = Box::new(SliverList::builder(50, nth));
+            let view = CustomScrollView::new([sliver])
+                .controller(scroll.clone())
+                .drag_start_behavior(DragStartBehavior::Down);
+            match policy {
+                Some(behavior) => view.keyboard_dismiss_behavior(behavior).into(),
+                None => view.into(),
+            }
+        }
+    };
+    Directionality::new(
+        TextDirection::Ltr,
+        ScrollConfiguration::new(FocusScope::new(view))
+            .behavior(ScrollBehavior::new().keyboard_dismiss_behavior(ambient)),
+    )
+    .into()
+}
+
+fn assert_sliver_policy(kind: SliverView, explicit: Option<Dismiss>, ambient: Dismiss) {
+    let mut host =
+        Host::mount(|focus, scroll| sliver_scene(kind, explicit, ambient, focus, scroll));
+    let focus = host.runtime.focused_element().unwrap();
+    let bounds = host.runtime.tree().element_bounds(focus).unwrap();
+    host.drag_from(bounds.origin.y + bounds.size.height * 0.5, -40.);
+    assert!(host.scroll.offset() > 0., "{kind:?} really scrolled");
+    let should_dismiss = explicit.unwrap_or(ambient) == Dismiss::OnDrag;
+    assert_eq!(host.focus.has_primary_focus(), !should_dismiss, "{kind:?}");
+}
+
+#[test]
+fn each_list_constructor_applies_the_explicit_keyboard_dismissal_policy() {
+    for kind in [
+        SliverView::List,
+        SliverView::ListBuilder,
+        SliverView::ListSeparated,
+    ] {
+        for policy in [None, Some(Dismiss::Manual), Some(Dismiss::OnDrag)] {
+            assert_sliver_policy(kind, policy, Dismiss::Manual);
+        }
+    }
+}
+
+#[test]
+fn each_grid_constructor_applies_the_explicit_keyboard_dismissal_policy() {
+    for kind in [
+        SliverView::Grid,
+        SliverView::GridBuilder,
+        SliverView::GridCount,
+        SliverView::GridExtent,
+    ] {
+        for policy in [None, Some(Dismiss::Manual), Some(Dismiss::OnDrag)] {
+            assert_sliver_policy(kind, policy, Dismiss::Manual);
+        }
+    }
+}
+
+#[test]
+fn custom_scroll_view_applies_the_explicit_keyboard_dismissal_policy() {
+    assert_sliver_policy(SliverView::Custom, Some(Dismiss::OnDrag), Dismiss::Manual);
+}
+
+#[test]
+fn sliver_scroll_widgets_inherit_policy_unless_explicitly_overridden() {
+    for view in [SliverView::List, SliverView::Grid, SliverView::Custom] {
+        assert_sliver_policy(view, None, Dismiss::OnDrag);
+        assert_sliver_policy(view, Some(Dismiss::Manual), Dismiss::OnDrag);
+    }
 }

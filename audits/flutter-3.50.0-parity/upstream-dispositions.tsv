@@ -3937,3 +3937,18 @@ packages/flutter/test/widgets/list_view_test.dart	1178	ListView does not crash a
 packages/flutter/test/widgets/grid_view_test.dart	483	GridView in zero context	paired-match	upstream-scroll-zero-area.md
 packages/flutter/test/widgets/shrink_wrapping_viewport_test.dart	60	ShrinkWrappingViewport does not crash at zero area	paired-match	upstream-scroll-zero-area.md
 packages/flutter/test/widgets/single_child_scroll_view_test.dart	1038	keyboardDismissBehavior tests	paired-match	upstream-scroll-keyboard-dismissal.md
+packages/flutter/test/widgets/scroll_view_test.dart	86	ListView dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	218	ListView.builder dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	297	ListView.separated dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	338	GridView dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	378	GridView.builder dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	419	GridView.count dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	459	GridView.extent dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	539	ListView dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	577	ListView.builder dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	654	ListView.separated dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	694	GridView dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	733	GridView.builder dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	773	GridView.count dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	812	GridView.extent dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	962	CustomScrollView dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views

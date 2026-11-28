@@ -14,3 +14,20 @@ different scope. A native blur retires the text-input client and sends
 Hide. The authored Flutter scope/notification probe and all eleven
 focused native checks passed. These checks cover SingleChildScrollView,
 not every sliver-based scroll descriptor.
+
+## List, grid, and custom scroll views
+
+The next fifteen originals in pinned `widgets/scroll_view_test.dart`
+passed: the explicit onDrag variants and the default manual variants
+for ListView, ListView.builder, ListView.separated, GridView,
+GridView.builder, GridView.count and GridView.extent, plus the
+CustomScrollView onDrag case with DragStartBehavior.down.
+
+Native tests mount fifty actual editors, focus one, and drag from
+that editor by the reference's 40 logical pixels. They verify an
+actual offset change and whether the same editor retains focus.
+Extra cases cover inherited onDrag and an explicit manual override.
+A raw Viewport remains a renderer, rather than installing a scroll
+view's dismissal listener. The named ListView.custom and
+GridView.custom child-delegate constructors are not credited here.
+All 14 focused native keyboard and zero-area tests passed.

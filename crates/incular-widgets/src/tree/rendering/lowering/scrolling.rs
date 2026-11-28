@@ -90,7 +90,13 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
                             .with_implicit_scrolling(config.physics.allows_implicit_scrolling())
                     })
             });
-            let resolved = behavior.resolve();
+            use crate::scrolling::SliverKeyboardDismissal;
+            let mut resolved = behavior.resolve();
+            resolved.keyboard_dismiss = match config.keyboard_dismissal {
+                SliverKeyboardDismissal::Disabled => crate::ScrollViewKeyboardDismissBehavior::Manual,
+                SliverKeyboardDismissal::Inherited => resolved.keyboard_dismiss,
+                SliverKeyboardDismissal::Explicit(policy) => policy,
+            };
             let text_direction = context.depend::<TextDirection>();
             let safe_insets = context
                 .depend::<crate::tree::context::RuntimeSafeInsets>()

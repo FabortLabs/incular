@@ -468,8 +468,19 @@ pub struct SliverViewportConfig {
     /// `Some(page)` when the view set no physics: lowering takes the ambient
     /// `ScrollBehavior`'s, with page snapping on top for `page`.
     pub(crate) inherit_physics: Option<bool>,
+    pub(crate) keyboard_dismissal: SliverKeyboardDismissal,
     /// The ambient scroll behavior, resolved at lowering.
     pub(crate) behavior: crate::scroll_behavior::ResolvedScrollBehavior,
+}
+
+/// A raw Viewport paints slivers but does not install the ScrollView's
+/// keyboard dismissal listener.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum SliverKeyboardDismissal {
+    #[default]
+    Disabled,
+    Inherited,
+    Explicit(crate::ScrollViewKeyboardDismissBehavior),
 }
 
 impl SliverViewportConfig {
@@ -543,6 +554,7 @@ impl PartialEq for SliverViewportConfig {
             && self.paint_order == other.paint_order
             && self.semantic_child_count == other.semantic_child_count
             && self.inherit_physics == other.inherit_physics
+            && self.keyboard_dismissal == other.keyboard_dismissal
             && self.behavior == other.behavior
             && Rc::ptr_eq(&self.delegate, &other.delegate)
     }

@@ -472,6 +472,9 @@ pub struct CustomScrollView {
     /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
     #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
     clip_behavior: Clip,
+    /// Flutter's keyboard dismissal policy, inherited when unset.
+    #[builder(default, setter(strip_option))]
+    keyboard_dismiss_behavior: Option<crate::ScrollViewKeyboardDismissBehavior>,
     /// Flutter `dragStartBehavior`; defaults to `DragStartBehavior.start`.
     #[builder(default)]
     drag_start_behavior: DragStartBehavior,
@@ -512,6 +515,7 @@ impl CustomScrollView {
             reverse: false,
             physics: None,
             clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            keyboard_dismiss_behavior: None,
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
@@ -578,6 +582,16 @@ impl CustomScrollView {
     }
 
     /// Sets where a scroll drag measures its start from (Flutter
+    /// Whether a user-driven scroll update dismisses the keyboard.
+    #[must_use]
+    pub fn keyboard_dismiss_behavior(
+        mut self,
+        behavior: crate::ScrollViewKeyboardDismissBehavior,
+    ) -> Self {
+        self.keyboard_dismiss_behavior = Some(behavior);
+        self
+    }
+
     /// `dragStartBehavior`).
     #[must_use]
     pub fn drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
@@ -661,7 +675,8 @@ impl CustomScrollView {
 
 impl From<CustomScrollView> for Widget {
     fn from(value: CustomScrollView) -> Self {
-        value.into_viewport(true)
+        let policy = value.keyboard_dismiss_behavior;
+        value.into_viewport(true).with_sliver_keyboard_dismissal(policy)
     }
 }
 
