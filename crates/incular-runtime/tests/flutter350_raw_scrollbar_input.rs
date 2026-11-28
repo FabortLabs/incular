@@ -185,3 +185,57 @@ fn a_held_track_press_pages_once_before_release() {
     scene.frame(650);
     assert_eq!(scene.controller.offset(), 480.);
 }
+
+fn scene_with_thumb_minima(content: f32, minimum: f32, overscroll: Option<f32>) -> Scene {
+    use incular_scroll::ScrollPhysics;
+    let controller = ScrollController::new();
+    let view = SingleChildScrollView::new(Widget::box_(Size::new(1000., content), Color::WHITE))
+        .controller(controller.clone())
+        .physics(ScrollPhysics::default().bouncing());
+    let bar = RawScrollbar::new(controller.clone()).thumb_visibility(true);
+    let bar = match overscroll {
+        Some(floor) => bar.min_lengths(minimum, Some(floor)),
+        None => bar.min_thumb_length(minimum),
+    };
+    let scene = ScrollConfiguration::new(bar.with_child(view))
+        .behavior(ScrollBehavior::new().scrollbars(false));
+    let mut scene = Scene {
+        runtime: Runtime::new(Directionality::new(TextDirection::Ltr, scene).into()).unwrap(),
+        controller,
+        at: Instant::now(),
+    };
+    scene.frame(0);
+    scene
+}
+
+#[test]
+fn a_mounted_raw_scrollbar_uses_the_explicit_normal_thumb_minimum() {
+    let mut scene = scene_with_thumb_minima(50_000., 21., Some(8.));
+    assert_eq!(thumb(&scene.frame(300)), Some(rect(0., 21.)));
+}
+
+#[test]
+fn a_real_overscroll_drag_uses_an_inherited_or_explicit_thumb_floor() {
+    for (content, floor) in [(10_000., Some(8.)), (50_000., None)] {
+        let mut scene = scene_with_thumb_minima(content, 36., floor);
+        let _ = scene.frame(300);
+        scene.pointer(
+            310,
+            PointerPhase::Down,
+            PointerDeviceKind::Touch,
+            400.,
+            300.,
+        );
+        scene.pointer(
+            330,
+            PointerPhase::Move,
+            PointerDeviceKind::Touch,
+            400.,
+            1300.,
+        );
+        let list = scene.frame(350);
+        assert!(scene.controller.offset() < 0.);
+        assert_eq!(thumb(&list), Some(rect(0., floor.unwrap_or(36.))));
+        scene.pointer(360, PointerPhase::Up, PointerDeviceKind::Touch, 400., 1300.);
+    }
+}

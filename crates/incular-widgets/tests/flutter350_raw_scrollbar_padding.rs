@@ -250,3 +250,37 @@ fn padded_thumb_keeps_length_until_overscroll_then_shrinks_to_its_floor() {
     assert!((extent(3003.) - full).abs() <= 2.);
     exact(extent(50_000.), 8.);
 }
+
+#[test]
+fn thumb_stays_monotonic_when_the_minimum_fills_the_viewport() {
+    let viewport = Size::new(60., 80.);
+    let (controller, _lease) = settings(Axis::Vertical, false, 80., 100., 240.);
+    for minimum in [18., f32::INFINITY] {
+        let mut scrollbar = RawScrollbar::new(controller.clone())
+            .thumb_visibility(true)
+            .min_lengths(minimum, Some(minimum));
+        let start = Instant::now();
+        scrollbar.tick(start);
+        scrollbar.tick(start + Duration::from_millis(300));
+        let mut previous: Option<Rect> = None;
+        let mut pixels = -100.;
+        while pixels <= 240. {
+            controller.jump_to(pixels);
+            let thumb = scrollbar.geometry(viewport).thumb;
+            if let Some(before) = previous {
+                let (top, bottom) = (thumb.origin.y, thumb.origin.y + thumb.size.height);
+                let bottom_before = before.origin.y + before.size.height;
+                if thumb.size.height == viewport.height {
+                    assert!(before.origin.y <= top && bottom_before <= bottom);
+                } else {
+                    assert!(before.origin.y < top && bottom_before < bottom);
+                }
+            }
+            previous = Some(thumb);
+            pixels += 80. / 3.;
+        }
+        if minimum.is_infinite() {
+            assert_eq!(previous.unwrap().size.height, viewport.height);
+        }
+    }
+}

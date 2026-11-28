@@ -297,8 +297,10 @@ impl RawScrollbarStyle {
     fn normalized(self) -> Self {
         Self {
             thickness: finite_positive(self.thickness, 1.0),
-            min_thumb_extent: finite_positive(self.min_thumb_extent, 1.0),
-            min_overscroll_thumb_extent: finite_positive(self.min_overscroll_thumb_extent, 1.0),
+            // Zero is a valid configured floor; infinity is capped by
+            // the available track when calculating its geometry.
+            min_thumb_extent: self.min_thumb_extent.max(0.0),
+            min_overscroll_thumb_extent: self.min_overscroll_thumb_extent.max(0.0),
             main_axis_margin: finite_or_zero(self.main_axis_margin),
             cross_axis_margin: finite_non_negative(self.cross_axis_margin),
             ..self
@@ -513,6 +515,30 @@ impl RawScrollbar {
     #[must_use]
     pub fn padding(mut self, padding: impl Into<EdgeInsetsGeometry>) -> Self {
         self.style.padding = Some(padding.into());
+        self
+    }
+
+    /// Configures the thumb minimum and uses it during overscroll as well.
+    #[must_use]
+    pub fn min_thumb_length(self, minimum: f32) -> Self {
+        self.min_lengths(minimum, None)
+    }
+
+    /// Sets both Flutter minimum length inputs atomically. When no overscroll
+    /// minimum is supplied, it inherits the configured normal minimum.
+    #[must_use]
+    pub fn min_lengths(mut self, minimum: f32, overscroll_minimum: Option<f32>) -> Self {
+        let floor = overscroll_minimum.unwrap_or(minimum);
+        debug_assert!(
+            minimum >= 0.0,
+            "the thumb minimum length cannot be negative"
+        );
+        debug_assert!(
+            floor >= 0.0 && floor <= minimum,
+            "the overscroll minimum must be nonnegative and no greater than the thumb minimum",
+        );
+        self.style.min_thumb_extent = minimum;
+        self.style.min_overscroll_thumb_extent = floor;
         self
     }
 

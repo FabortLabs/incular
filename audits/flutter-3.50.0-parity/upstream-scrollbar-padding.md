@@ -17,3 +17,20 @@ Focused native run: 5 padding/overscroll probes and 8 adjacent paint
 regressions passed. All 10 selected upstream originals passed. The native
 overscroll probe uses large finite offsets to saturate at the floor rather
 than sending unsupported non-finite controller offsets. Renderer unchanged.
+
+## Thumb minimum inheritance and viewport cap
+
+Flutter's overscroll floor inherits the configured normal minimum when no
+explicit floor is supplied. Incular's paired `min_lengths` builder resolves
+both values and checks their ordering in debug builds. Setting only the
+normal minimum also updates the effective overscroll floor.
+
+The mounted input tests measure the 21-pixel normal thumb and drive a real
+touch overscroll through the bouncing viewport, checking both the explicit
+8-pixel floor and the inherited 36-pixel floor. The padding test samples
+controller offsets in order, including overscroll, to verify the thumb never
+moves backward and that an infinite minimum is capped at the viewport.
+
+All three pinned Flutter originals (522, 1749, 1884), one authored Flutter
+inheritance probe, and 13 focused native tests passed. The renderer was not
+changed.
