@@ -759,3 +759,115 @@ fn restoring_a_live_8_by_8_frame_recovers_exactly_its_decoded_bytes() {
     assert!(cache.status_for_key(&asset).keep_alive);
     assert_eq!(source.pending(), 0);
 }
+
+fn empty_manifest_bytes() -> Arc<[u8]> {
+    use incular_core::standard_message_codec::{MessageValue, StandardMessageCodec};
+
+    StandardMessageCodec::encode_message(&MessageValue::Map(Vec::new()))
+        .unwrap()
+        .unwrap()
+        .into()
+}
+
+#[test]
+fn a_deferred_asset_manifest_handoff_preserves_the_mounted_groups_live_key() {
+    use incular_assets::CachingAssetBundle;
+    use incular_image::AssetImage;
+
+    clear_shared_bundle_image_cache();
+    let cache = shared_bundle_image_cache();
+    let transport = Deferred::default();
+    let bundle = Arc::new(CachingAssetBundle::new(transport.clone()));
+    let provider = AssetImage::new("1").bundle(bundle.clone());
+    let key = key(&ImageAssetBundle::new(bundle), 1);
+    let configuration = ImageConfiguration::empty();
+    let stream = provider.resolve(&configuration);
+    let consumer = observe_frame_group(&stream);
+    assert_eq!(cache.status_for_key(&key), Default::default());
+
+    transport.take("AssetManifest.bin")(Ok(empty_manifest_bytes()));
+    assert_eq!(transport.pending(), 1, "image fetch starts on key delivery");
+    finish_pending_streams();
+    assert!(cache.status_for_key(&key).pending && cache.status_for_key(&key).live);
+    assert!(cache.evict_with_live(&key, false));
+    assert!(!cache.status_for_key(&key).pending);
+    assert!(cache.status_for_key(&key).live);
+    let reuse = provider.resolve(&configuration);
+    assert_eq!(transport.pending(), 1);
+    transport.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(stream.state(), ImageLoadState::Ready(_)));
+    assert_eq!(reuse.state(), stream.state());
+    assert!(cache.status_for_key(&key).live);
+    drop(consumer);
+    assert!(!cache.status_for_key(&key).live);
+    clear_shared_bundle_image_cache();
+}
+
+#[test]
+fn a_discarded_asset_view_can_still_warm_the_cache_after_deferred_key_resolution() {
+    use incular_assets::CachingAssetBundle;
+    use incular_image::AssetImage;
+
+    clear_shared_bundle_image_cache();
+    let cache = shared_bundle_image_cache();
+    let transport = Deferred::default();
+    let bundle = Arc::new(CachingAssetBundle::new(transport.clone()));
+    let provider = AssetImage::new("1").bundle(bundle.clone());
+    let key = key(&ImageAssetBundle::new(bundle), 1);
+    drop(provider.resolve(&ImageConfiguration::empty()));
+    transport.take("AssetManifest.bin")(Ok(empty_manifest_bytes()));
+    finish_pending_streams();
+    assert!(cache.status_for_key(&key).pending);
+    transport.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    let final_status = cache.status_for_key(&key);
+    assert!(!final_status.live && !final_status.pending && final_status.keep_alive);
+    assert_eq!(cache.retained(), (1, BYTES));
+    clear_shared_bundle_image_cache();
+}
+
+#[test]
+fn a_mapped_completion_detaches_its_live_use_from_the_source_stream() {
+    let (cache, transport, asset) = live_bundle_fixture();
+    let original = cache.resolve_stream(asset.clone());
+    let mapped = original.clone().map_image(Ok);
+    let _observer = observe_frame_group(&mapped);
+    assert!(cache.status_for_key(&asset).live);
+    transport.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(mapped.state(), ImageLoadState::Ready(_)));
+    assert!(!cache.status_for_key(&asset).live);
+    assert!(cache.status_for_key(&asset).keep_alive);
+}
+
+#[test]
+fn an_old_worker_preparation_cannot_steal_the_replacement_live_key() {
+    use incular_assets::CachingAssetBundle;
+    use incular_image::AssetImage;
+
+    clear_shared_bundle_image_cache();
+    let cache = shared_bundle_image_cache();
+    let transport = Deferred::default();
+    let bundle = Arc::new(CachingAssetBundle::new(transport.clone()));
+    let provider = AssetImage::new("1").bundle(bundle.clone());
+    let asset = key(&ImageAssetBundle::new(bundle), 1);
+    let old = provider.resolve(&ImageConfiguration::empty());
+    let _old_group = observe_frame_group(&old);
+    transport.take("AssetManifest.bin")(Ok(empty_manifest_bytes()));
+    assert!(cache.evict(&asset));
+    let replacement = cache.resolve_stream(asset.clone());
+    finish_pending_streams();
+    assert_eq!(cache.resolve_stream(asset.clone()), replacement);
+    transport.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(old.state(), ImageLoadState::Ready(_)));
+    assert!(matches!(replacement.state(), ImageLoadState::Loading(_)));
+    assert_eq!(cache.retained(), (0, 0));
+    transport.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(replacement.state(), ImageLoadState::Ready(_)));
+    assert!(cache.status_for_key(&asset).keep_alive);
+    assert!(!cache.status_for_key(&asset).live);
+    clear_shared_bundle_image_cache();
+}

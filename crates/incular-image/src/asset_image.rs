@@ -271,16 +271,31 @@ impl AssetImage {
         resize: Option<ImageResizeOptions>,
     ) -> ImageStream {
         let cache = shared_bundle_image_cache();
-        ImageStream::from_load_callback(|done| {
-            self.obtain_key_from_bundle(
-                bundle,
-                config,
-                Box::new(move |key| match key {
-                    Ok(key) => cache.load_async_with_size(key, resize, done),
-                    Err(error) => done(Err(error)),
-                }),
-            );
-        })
+        if let Some(manifest) = bundle
+            .0
+            .cached_asset_manifest(AssetManifestFormat::current_platform())
+            && let Some(logical) = self.key_name()
+        {
+            return match resolve_key(
+                bundle, logical.into_owned(), config.target_device_pixel_ratio(), &manifest,
+            ) {
+                Ok(key) => cache.resolve_stream_with_size(key, resize),
+                Err(error) => ImageStream::failed(error),
+            };
+        }
+        let transport_cache = cache.clone();
+        ImageStream::from_source_key_callback(
+            |complete| {
+                self.obtain_key_from_bundle(
+                    bundle,
+                    config,
+                    Box::new(move |key| {
+                        complete(key.map(|key| transport_cache.prepare_stream(key, resize)));
+                    }),
+                );
+            },
+            move |prepared| cache.install_prepared_stream(prepared),
+        )
     }
 
     /// The path chosen by the explicit filesystem-only adapter.

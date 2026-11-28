@@ -86,6 +86,14 @@ fn attach(pending: &Pending, done: ImageLoadCallback) {
     done(completed);
 }
 
+/// A worker may start the decode immediately after obtaining the key.
+/// The UI later joins the right pending stream without starting I/O again.
+pub(crate) struct PreparedBundleStream {
+    key: BundleDecodeKey,
+    pending: Option<Pending>,
+    result: futures_channel::oneshot::Receiver<Result<ImageHandle, ImageError>>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct BundleDecodeKey {
     asset: AssetBundleImageKey,
@@ -524,6 +532,53 @@ impl BundleImageCache {
             }
         }
         live_streams::remember(self, &key, &stream, pending.as_ref());
+        stream
+    }
+
+    pub(crate) fn prepare_stream(
+        &self,
+        asset: AssetBundleImageKey,
+        resize: Option<ImageResizeOptions>,
+    ) -> PreparedBundleStream {
+        let key = BundleDecodeKey { asset, resize };
+        let (send, result) = futures_channel::oneshot::channel();
+        let pending = self.start_async_with_key(
+            key.clone(),
+            Box::new(move |result| { let _ = send.send(result); }),
+        );
+        PreparedBundleStream { key, pending, result }
+    }
+
+    pub(crate) fn install_prepared_stream(&self, prepared: PreparedBundleStream) -> ImageStream {
+        let PreparedBundleStream { key, pending, result } = prepared;
+        let stream = if let Some(existing) = pending.as_ref().and_then(|pending| {
+            PENDING_STREAMS.with(|memo| memo.borrow().get(pending))
+        }) {
+            existing
+        } else {
+            let stream = ImageStream::from_load_receiver(result);
+            if let Some(pending) = &pending {
+                PENDING_STREAMS.with(|memo| memo.borrow_mut().remember(pending, &stream));
+            }
+            stream
+        };
+        // A worker may complete a detached job while its UI handoff
+        // waits. Never let that old view replace the new job's tracking.
+        let resolved = stream.untracked_state();
+        let current = {
+            let state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            match state.pending.get(&key) {
+                Some(active) => pending.as_ref().is_some_and(|work| Arc::ptr_eq(work, active)),
+                None => match (state.ready.peek(&key), resolved) {
+                    (Some(current), crate::ImageLoadState::Ready(result)) => *current == result,
+                    (None, _) => pending.is_none(),
+                    _ => false,
+                },
+            }
+        };
+        if current {
+            live_streams::remember(self, &key, &stream, pending.as_ref());
+        }
         stream
     }
 

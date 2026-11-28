@@ -109,3 +109,16 @@ Six unobserved decodes leave zero live images with enabled or
 disabled retention. These comparisons use exact bundle keys on
 one UI thread; cross-thread stream identity is not claimed. All
 65 focused native cache, listener, resize, and frame tests passed.
+
+### Deferred AssetImage provider handoff
+
+The ordinary AssetImage path also shares the chosen pending
+stream. Delivery of a deferred manifest still starts the asset
+read immediately on its callback; the UI thread subsequently
+attaches the result without rereading the asset. Group ownership
+is forwarded to the canonical source after attachment and
+removed when the group leaves or a mapped frame detaches.
+A queued old handoff cannot mark a replacement's key live.
+Discarding the original view still allows its decode to warm
+the cache. All 51 focused native image and mounted scroll-aware
+checks passed; these controls add no original registrations.

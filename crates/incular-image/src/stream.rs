@@ -100,8 +100,7 @@ pub(crate) struct ImageStreamLiveUse(ImageStream);
 
 impl Drop for ImageStreamLiveUse {
     fn drop(&mut self) {
-        let count = self.0.cell.live_listeners.get();
-        self.0.cell.live_listeners.set(count - 1);
+        self.0.adjust_live_listeners(1, false);
     }
 }
 
@@ -139,13 +138,41 @@ impl ImageStream {
     }
 
     pub(crate) fn retain_listener_group(&self) -> ImageStreamLiveUse {
-        let count = self.cell.live_listeners.get();
-        self.cell.live_listeners.set(count.checked_add(1).expect("too many image listeners"));
+        self.adjust_live_listeners(1, true);
         ImageStreamLiveUse(self.clone())
     }
 
     pub(crate) fn has_live_listeners(&self) -> bool {
         self.cell.live_listeners.get() != 0
+    }
+
+    fn adjust_live_listeners(&self, amount: usize, add: bool) {
+        let mut cell = self.cell.clone();
+        loop {
+            let count = cell.live_listeners.get();
+            cell.live_listeners.set(if add {
+                count.checked_add(amount).expect("too many image listeners")
+            } else {
+                count.checked_sub(amount).expect("active group remains registered")
+            });
+            let Some(next) = cell.source.borrow().as_ref().map(|source| source.cell.clone()) else {
+                break;
+            };
+            cell = next;
+        }
+    }
+
+    fn set_source(&self, source: Option<ImageStream>) {
+        let previous = self.cell.source.replace(source.clone());
+        let live = self.cell.live_listeners.get();
+        if live != 0 {
+            if let Some(previous) = previous {
+                previous.adjust_live_listeners(live, false);
+            }
+            if let Some(source) = source {
+                source.adjust_live_listeners(live, true);
+            }
+        }
     }
 
     fn with(state: ImageLoadState) -> Self {
@@ -235,16 +262,64 @@ impl ImageStream {
         }
     }
 
+    /// Resolves a source key on a worker or inline, then attaches the
+    /// canonical stream on the UI thread. Actual loading still begins
+    /// after key resolution when the original view has been dropped.
+    pub(crate) fn from_source_key_callback<K: Send + 'static>(
+        start: impl FnOnce(Box<dyn FnOnce(Result<K, ImageError>) + Send>),
+        resolve: impl FnOnce(K) -> ImageStream + 'static,
+    ) -> Self {
+        let (send, mut receive) = oneshot::channel();
+        start(Box::new(move |outcome| {
+            let _ = send.send(outcome);
+        }));
+        match receive.try_recv() {
+            Ok(Some(Ok(key))) => return resolve(key),
+            Ok(Some(Err(error))) => return Self::failed(error),
+            Err(_) => return Self::failed(abandoned_image_load()),
+            Ok(None) => {}
+        }
+
+        let stream = Self::with(ImageLoadState::Loading(None));
+        let owner = stream.downgrade();
+        drop(schedule_async_task(
+            move || async move {
+                let result = receive.await.unwrap_or_else(|_| Err(abandoned_image_load()));
+                match result {
+                    Ok(key) => {
+                        let source = resolve(key);
+                        if let Some(stream) = owner.upgrade() {
+                            ImageStreamCompleter { stream }.follow(&source);
+                        }
+                    }
+                    Err(error) => {
+                        if let Some(stream) = owner.upgrade() {
+                            ImageStreamCompleter { stream }.fail(error);
+                        }
+                    }
+                }
+            },
+            Priority::ANIMATION,
+        ));
+        stream
+    }
+
     /// Resolves a one-shot image callback into a UI-thread stream. A
     /// synchronous completion is already ready or failed when this returns;
     /// delayed completions wake the UI scheduler and invalidate listeners
     /// on the owning thread rather than mutating UI state from a loader.
     #[must_use]
     pub fn from_load_callback(start: impl FnOnce(crate::ImageLoadCallback)) -> Self {
-        let (send, mut receive) = oneshot::channel();
+        let (send, receive) = oneshot::channel();
         start(Box::new(move |outcome| {
             let _ = send.send(outcome);
         }));
+        Self::from_load_receiver(receive)
+    }
+
+    pub(crate) fn from_load_receiver(
+        mut receive: oneshot::Receiver<Result<ImageHandle, ImageError>>,
+    ) -> Self {
         match receive.try_recv() {
             Ok(Some(result)) => return Self::from_result(result),
             Err(_) => return Self::failed(abandoned_image_load()),
@@ -295,7 +370,7 @@ impl ImageStream {
             return mapped;
         }
         let mapped = Self::with(ImageLoadState::Loading(None));
-        *mapped.cell.source.borrow_mut() = Some(self);
+        mapped.set_source(Some(self));
         *mapped.cell.map.borrow_mut() = Some(Box::new(map));
         mapped
     }
@@ -435,7 +510,7 @@ impl ImageStream {
                     let _ = self.cell.mapped_label.set(label);
                 }
                 self.cell.completed.set(true);
-                *self.cell.source.borrow_mut() = None;
+                self.set_source(None);
                 *self.cell.state.borrow_mut() = outcome.clone();
                 if let Some(listeners) = self.cell.chunks.get() {
                     let upstream = listeners.upstream.borrow_mut().take();
@@ -825,7 +900,7 @@ impl ImageStreamCompleter {
             source.suppress_unhandled_errors();
         }
         let mut listeners = stream.cell.take_frame_listeners();
-        *stream.cell.source.borrow_mut() = Some(source.clone());
+        stream.set_source(Some(source.clone()));
         if !listeners.is_empty() && !source.is_completed() {
             let leaf = source.leaf();
             for listener in listeners.drain(..) {
