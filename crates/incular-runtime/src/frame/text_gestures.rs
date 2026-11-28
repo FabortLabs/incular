@@ -2100,6 +2100,22 @@ impl Runtime {
         let previous = self.observed_editor_selection(drag.field);
         self.tree.text_field_select(drag.field, next, affinity, now);
         self.report_editor_selection_delta(drag.field, previous, SelectionChangedCause::Drag);
+        // On non-Apple platforms Flutter reveals whichever endpoint moved,
+        // checking the base first. The usual extent-following caret reveal
+        // would otherwise undo the scroll toward a moved leading handle.
+        if current.base != next.base
+            && !matches!(
+                self.text_shortcut_platform,
+                TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs
+            )
+            && controller.selection() == next
+            && self.tree.text_controller(drag.field).is_some_and(|mounted| mounted == controller)
+        {
+            self.frame_requested |= self.tree.text_field_bring_position_into_view(
+                drag.field, next.base, affinity,
+            );
+            self.preserve_selection_scroll(drag.field, &controller);
+        }
     }
 
     /// Ends a handle press. A tap on a collapsed handle toggles the touch

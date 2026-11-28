@@ -4228,3 +4228,5 @@ packages/flutter/test/widgets/editable_text_test.dart	9767	multi-line field can 
 packages/flutter/test/widgets/editable_text_test.dart	10174	batch editing works	paired-match	upstream-editable-host-configuration.md#nested-batches-do-not-leak-intermediate-text-to-the-host
 packages/flutter/test/widgets/editable_text_test.dart	10218	batch edits need to be nested properly	partial-match	upstream-editable-host-configuration.md#nested-batches-do-not-leak-intermediate-text-to-the-host
 packages/flutter/test/widgets/editable_text_test.dart	10238	catch unfinished batch edits on disposal	partial-match	upstream-editable-host-configuration.md#nested-batches-do-not-leak-intermediate-text-to-the-host
+packages/flutter/test/widgets/editable_text_test.dart	4226	Dragging selection base handle upwards scrolls the viewport	paired-match	upstream-editable-scroll-toolbar.md#upward-reverse-selections-track-the-actively-dragged-end
+packages/flutter/test/widgets/editable_text_test.dart	4275	Mouse drag selection from bottom to top does not snap to extent	paired-match	upstream-editable-scroll-toolbar.md#upward-reverse-selections-track-the-actively-dragged-end

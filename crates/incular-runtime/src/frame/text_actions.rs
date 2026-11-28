@@ -190,7 +190,7 @@ impl Runtime {
         true
     }
 
-    fn preserve_selection_scroll(&mut self, field: ElementId, controller: &TextEditingController) {
+    pub(super) fn preserve_selection_scroll(&mut self, field: ElementId, controller: &TextEditingController) {
         // The window's enclosing viewport and the field's own text viewport
         // have separate reveal keys. A deferred pass must not turn this
         // command into an ordinary change that reveals the selected end.

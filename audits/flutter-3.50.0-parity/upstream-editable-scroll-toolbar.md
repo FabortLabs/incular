@@ -109,3 +109,20 @@ uses the editor's scroll axis and retains iOS's horizontal exclusion.
 This is a touch/viewport comparison, not an equivalence claim for
 post-release velocity, scroll physics overrides, or externally attached
 editable scroll controllers. All 20 focused native editor tests passed.
+
+## Upward reverse selections track the actively dragged end
+
+Pinned **4226** (Android) and **4275** passed. In the 100-line native
+fixture, a real leading-handle drag changes the range from `500→600` to
+`0→600`. Before the correction the range changed but the viewport stayed
+814 px down, at the stationary extent. It now reveals the moved base and
+stays at offset zero after the handle is released. The non-Apple rule gives
+a moved base priority; the usual extent-based reveal does not undo it.
+Apple's extent behavior remains unchanged.
+
+The second fixture starts at the bottom and drags a real mouse from
+10 px above the bottom to 10 px below the top. The reverse selection
+retains its anchor and the viewport no longer sits at its maximum. All
+35 focused native scrollbar/selection/handle cases passed. The fixtures
+do not require or claim parity for an externally attached editor
+ScrollController.

@@ -775,3 +775,128 @@ fn android_single_line_scrolls_horizontally_without_selecting_or_focusing() {
     assert!(!focused);
     assert!(!selected);
 }
+
+#[test]
+fn reverse_mouse_drag_follows_the_upward_endpoint_without_snapping_to_document_end() {
+    use incular_text::TextStyle;
+
+    let text = TextEditingController::with_text("Line 1\n".repeat(100));
+    let mut style = TextStyle::new().font_size(14.);
+    if let Some(font) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") {
+        const FONT: &str = "FlutterTest reverse mouse select";
+        incular_text::register_application_font_as(FONT, std::fs::read(font).unwrap());
+        style = style.font_family(FONT);
+    }
+    let edit = EditableText::new(text.clone())
+        .text_direction(TextDirection::Ltr)
+        .max_lines(None)
+        .style(style);
+    let mut runtime = Runtime::new(edit.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Linux);
+    let viewport = Constraints::tight(Size::new(800., 600.));
+    let clock = Instant::now();
+    let time = |ms| clock + Duration::from_millis(ms);
+    runtime.run_frame_at(viewport, time(0)).unwrap();
+    let field = runtime.tree().root().unwrap();
+    assert!(
+        runtime
+            .tree_mut()
+            .text_field_scroll_to_document_boundary(field, true)
+    );
+    runtime.run_frame_at(viewport, time(10)).unwrap();
+    let maximum = runtime.tree().editable_max_scroll_extent(field).unwrap();
+    assert!(maximum > 0.);
+    let offset = |runtime: &Runtime| runtime.tree().text_field_scroll_offset(field).unwrap().y;
+    assert_eq!(offset(&runtime), maximum);
+
+    let mouse = |runtime: &mut Runtime, phase, position, ms| {
+        let _ = runtime.handle_input_at(
+            InputEvent::PointerWithMetadata {
+                pointer: 9,
+                device: 15,
+                kind: PointerDeviceKind::Mouse,
+                buttons: if phase == PointerPhase::Up {
+                    0
+                } else {
+                    PRIMARY_POINTER_BUTTON
+                },
+                button: matches!(phase, PointerPhase::Down | PointerPhase::Up)
+                    .then_some(PRIMARY_POINTER_BUTTON),
+                phase,
+                position,
+                sample: PointerSampleMetadata::default(),
+            },
+            time(ms),
+        );
+        runtime.run_frame_at(viewport, time(ms)).unwrap();
+    };
+    mouse(&mut runtime, PointerPhase::Down, Offset::new(10., 590.), 20);
+    mouse(&mut runtime, PointerPhase::Move, Offset::new(10., 10.), 45);
+    runtime.run_frame_at(viewport, time(300)).unwrap();
+    let selected = text.selection();
+    assert!(selected.base > selected.extent);
+    assert!(
+        offset(&runtime) < maximum,
+        "drag left the field pinned to the document end"
+    );
+    mouse(&mut runtime, PointerPhase::Up, Offset::new(10., 10.), 320);
+    assert_eq!(text.selection(), selected);
+    assert!(offset(&runtime) < maximum);
+}
+
+#[test]
+fn dragging_the_android_base_handle_reveals_the_base_and_not_the_stationary_extent() {
+    use incular_core::DragStartBehavior;
+    use incular_text::{TextSelection, TextStyle};
+
+    let text = TextEditingController::with_text("Line 1\n".repeat(100));
+    let mut style = TextStyle::new().font_size(14.);
+    if let Some(font) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") {
+        const FONT: &str = "FlutterTest base handle reveal";
+        incular_text::register_application_font_as(FONT, std::fs::read(font).unwrap());
+        style = style.font_family(FONT);
+    }
+    let edit = EditableText::new(text.clone())
+        .text_direction(TextDirection::Ltr)
+        .max_lines(None)
+        .autofocus(true)
+        .style(style)
+        .selection_handles_builder(|_, _| SizedBox::shrink().into())
+        .drag_start_behavior(DragStartBehavior::Down);
+    let mut runtime = Runtime::new(edit.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let viewport = Constraints::tight(Size::new(800., 600.));
+    let clock = Instant::now();
+    let time = |ms| clock + Duration::from_millis(ms);
+    runtime.run_frame_at(viewport, time(0)).unwrap();
+    let field = runtime.focused_element().unwrap();
+    text.set_selection(TextSelection::new(500, 600));
+    runtime.run_frame_at(viewport, time(10)).unwrap();
+    let maximum = runtime.tree().editable_max_scroll_extent(field).unwrap();
+    assert!(maximum > 0.);
+    let offset = |runtime: &Runtime| runtime.tree().text_field_scroll_offset(field).unwrap().y;
+    assert_eq!(offset(&runtime), maximum);
+    let geometry = runtime
+        .tree()
+        .text_field_selection_handle_geometry(field)
+        .unwrap();
+    runtime
+        .tree()
+        .text_field_selection_handles(field)
+        .unwrap()
+        .show(geometry);
+    runtime.run_frame_at(viewport, time(20)).unwrap();
+    let rect = geometry.start.rect();
+    let knob = rect.origin + Offset::new(rect.size.width * 0.5, rect.size.height * 0.5);
+    let top = Offset::new(0., -1500.);
+    pointer(&mut runtime, PointerPhase::Down, knob, time(50));
+    pointer(&mut runtime, PointerPhase::Move, top, time(90));
+    runtime.run_frame_at(viewport, time(95)).unwrap();
+    assert_eq!(text.selection(), TextSelection::new(0, 600));
+    assert_eq!(offset(&runtime), 0., "the view must follow the moved base");
+    pointer(&mut runtime, PointerPhase::Up, top, time(110));
+    runtime.run_frame_at(viewport, time(115)).unwrap();
+    assert_eq!(runtime.focused_element(), Some(field));
+    assert_eq!(text.selection(), TextSelection::new(0, 600));
+    assert_eq!(offset(&runtime), 0.);
+}
