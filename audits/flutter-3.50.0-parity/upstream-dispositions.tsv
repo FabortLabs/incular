@@ -4080,3 +4080,6 @@ packages/flutter/test/widgets/editable_text_test.dart	412	When the value of grou
 packages/flutter/test/widgets/editable_text_test.dart	586	RTL arabic correct caret placement after trailing whitespace	paired-match	upstream-editable-cursor-visibility.md
 packages/flutter/test/widgets/editable_text_test.dart	9937	bringIntoView brings the caret into view when in a viewport	paired-match	upstream-editable-reveal.md
 packages/flutter/test/widgets/editable_text_test.dart	930	onAppPrivateCommand does not throw	paired-match	upstream-app-private-input-command.md
+packages/flutter/test/widgets/editable_text_test.dart	13957	Should have no effect on an empty and non-focused field	paired-match	undo-history-comparisons.md
+packages/flutter/test/widgets/editable_text_test.dart	13977	Should have no effect on an empty and focused field	paired-match	undo-history-comparisons.md
+packages/flutter/test/widgets/editable_text_test.dart	14183	Initial value is recorded when an undo is received just after getting the focus	paired-match	undo-history-comparisons.md

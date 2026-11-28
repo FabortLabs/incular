@@ -179,3 +179,129 @@ fn an_unfocused_editor_reports_exactly_one_group_deadline() {
         .unwrap();
     assert_eq!(runtime.next_frame_deadline(), None);
 }
+
+const HISTORY_PLATFORMS: [TextShortcutPlatform; 5] = [
+    TextShortcutPlatform::Android,
+    TextShortcutPlatform::Ios,
+    TextShortcutPlatform::Linux,
+    TextShortcutPlatform::MacOs,
+    TextShortcutPlatform::Windows,
+];
+
+fn unfocused_history_editor(
+    text: &str,
+    platform: TextShortcutPlatform,
+) -> (Editor, incular_widgets::FocusNode) {
+    let controller = TextEditingController::with_text(text);
+    let focus = incular_widgets::FocusNode::new();
+    let widget = EditableText::new(controller.clone())
+        .focus_node(focus.clone())
+        .text_direction(TextDirection::Ltr);
+    let mut runtime = Runtime::new(widget.into()).unwrap();
+    runtime.set_text_shortcut_platform(platform);
+    let mut editor = Editor {
+        runtime,
+        controller,
+        now: Instant::now(),
+    };
+    editor.advance(0);
+    assert!(!focus.has_focus());
+    assert!(editor.controller.selection_if_set().is_none());
+    (editor, focus)
+}
+
+fn history_shortcut(editor: &mut Editor, platform: TextShortcutPlatform, redo: bool) {
+    let modifier = match platform {
+        TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs => Modifiers::META,
+        _ => Modifiers::CONTROL,
+    };
+    let modifiers = if redo {
+        modifier | Modifiers::SHIFT
+    } else {
+        modifier
+    };
+    editor.press(
+        KeyboardKey::Character(if redo { "Z" } else { "z" }.into()),
+        Code::KeyZ,
+        modifiers,
+    );
+}
+
+#[test]
+fn undo_and_redo_leave_a_never_edited_empty_field_alone_with_or_without_focus() {
+    for platform in HISTORY_PLATFORMS {
+        let (mut editor, focus) = unfocused_history_editor("", platform);
+        let initial = editor.controller.with_value(Clone::clone);
+        for redo in [false, true] {
+            history_shortcut(&mut editor, platform, redo);
+            assert_eq!(
+                editor.controller.with_value(Clone::clone),
+                initial,
+                "{platform:?}"
+            );
+            assert!(!focus.has_focus());
+        }
+
+        editor.advance(500);
+        focus.request_focus();
+        editor.advance(0);
+        assert!(focus.has_primary_focus());
+        assert_eq!(
+            editor.controller.selection_if_set(),
+            Some(TextSelection::collapsed(0))
+        );
+        editor.advance(500);
+        let focused_empty = editor.controller.with_value(Clone::clone);
+        for redo in [false, true] {
+            history_shortcut(&mut editor, platform, redo);
+            assert_eq!(
+                editor.controller.with_value(Clone::clone),
+                focused_empty,
+                "{platform:?}"
+            );
+            assert!(focus.has_primary_focus());
+        }
+    }
+}
+
+#[test]
+fn an_undo_immediately_after_focus_does_not_discard_the_initial_value() {
+    use incular_platform::{PlatformEvent, TextInputState};
+
+    for platform in HISTORY_PLATFORMS {
+        let (mut editor, focus) = unfocused_history_editor("A", platform);
+        focus.request_focus();
+        editor.advance(0);
+        assert!(focus.has_primary_focus());
+        history_shortcut(&mut editor, platform, false);
+        editor.advance(500);
+        let expected = if matches!(
+            platform,
+            TextShortcutPlatform::Linux
+                | TextShortcutPlatform::MacOs
+                | TextShortcutPlatform::Windows
+        ) {
+            TextSelection::new(0, 1)
+        } else {
+            TextSelection::collapsed(1)
+        };
+        assert_eq!(editor.controller.text(), "A", "{platform:?}");
+        assert_eq!(editor.controller.selection(), expected, "{platform:?}");
+
+        let _ = editor
+            .runtime
+            .handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+                text: "AB".into(),
+                selection_start: 2,
+                selection_end: 2,
+                composing: None,
+            }));
+        editor.advance(0);
+        assert_eq!(editor.controller.text(), "AB");
+        assert_eq!(editor.controller.selection(), TextSelection::collapsed(2));
+        history_shortcut(&mut editor, platform, false);
+        assert_eq!(editor.controller.text(), "A", "{platform:?}");
+        assert_eq!(editor.controller.selection(), expected, "{platform:?}");
+        assert!(focus.has_primary_focus());
+    }
+}

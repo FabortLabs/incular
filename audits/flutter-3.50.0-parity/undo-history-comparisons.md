@@ -148,3 +148,20 @@ restores `abc`, Ctrl+Y does nothing, and Ctrl+Shift+Z restores
 `abcd`. All 17 focused native text-shortcut checks passed; the
 authored Windows policy probe passed on the pinned Linux runner.
 No production shortcut changed or upstream case was added.
+
+## Empty fields and the first undo after focus
+
+All 18 pinned platform expansions of `widgets/editable_text_test.dart:13957,13977,14183`
+passed. Native key dispatch exercises the five supported desktop
+and mobile shortcut policies (the Fuchsia fallback uses the same
+Android policy). Undo and redo leave an untouched empty editor
+alone whether its selection is initially unset or collapsed upon
+focus.
+
+For the race, the native runtime focuses an editor holding `A`
+and sends undo before its 500 ms history window flushes. It then
+accepts `AB` through the native text-input path and immediately
+undoes it. The original `A` and its platform selection are restored:
+selected on desktop, collapsed at the end on mobile. This uses the
+real shortcut path and a deterministic frame clock. All seven
+focused undo tests passed.
