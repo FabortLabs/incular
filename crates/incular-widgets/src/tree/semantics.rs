@@ -1088,7 +1088,7 @@ impl WidgetTree {
                 let Some(rect) = placement.approximate_clip() else {
                     continue;
                 };
-                let clip = world.transform_rect_bbox(rect);
+                let clip = project_semantic_rect(world, rect);
                 semantic_bounds_clip = Some(semantic_bounds_clip.map_or(clip, |outer| {
                     outer.intersection(clip).unwrap_or_default()
                 }));
@@ -1110,7 +1110,7 @@ impl WidgetTree {
         let mut outside_semantic_scope = false;
         if let Some(mut window) = sliver_window {
             let layout_box =
-                world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size));
+                project_semantic_rect(world, Rect::from_origin_size(Offset::ZERO, render.size));
             let in_window = semantic_clip_overlaps(window.cache, layout_box);
             if !in_window && entry.widget.semantic_properties().ensures_sliver_semantics {
                 // An explicitly ensured off-cache sliver must keep its
@@ -1157,7 +1157,7 @@ impl WidgetTree {
             .layers
             .approximate_box_paint_clip(render.object.kind(), render.size)
         {
-            let clip = world.transform_rect_bbox(local_clip);
+            let clip = project_semantic_rect(world, local_clip);
             Some(semantic_bounds_clip.map_or(clip, |ancestor| {
                 ancestor.intersection(clip).unwrap_or_default()
             }))
@@ -1167,9 +1167,9 @@ impl WidgetTree {
         let child_sliver_window = match render.object.kind() {
             RenderKind::SliverViewport { config } => {
                 let visible = (config.clip_behavior != incular_config::Clip::None).then(|| {
-                    world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size))
+                    project_semantic_rect(world, Rect::from_origin_size(Offset::ZERO, render.size))
                 });
-                let cache = world.transform_rect_bbox(sliver_semantics_cache_clip(
+                let cache = project_semantic_rect(world, sliver_semantics_cache_clip(
                     config.axis,
                     render.size,
                     config.cache_extent,
@@ -1189,7 +1189,7 @@ impl WidgetTree {
                 if *clip_behavior != incular_config::Clip::None =>
             {
                 let bounds =
-                    world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size));
+                    project_semantic_rect(world, Rect::from_origin_size(Offset::ZERO, render.size));
                 Some(viewport_clip.map_or(bounds, |outer| {
                     outer.intersection(bounds).unwrap_or_default()
                 }))
@@ -2180,7 +2180,7 @@ impl WidgetTree {
         let clip = config.overlap_paint_clip(render.constraints?, render.size, geometry)?;
         let unscroll = self.child_content_transform(viewport.render).inverse()?;
         let viewport_world = child_parent_world.then(unscroll);
-        Some(viewport_world.transform_rect_bbox(clip))
+        Some(project_semantic_rect(viewport_world, clip))
     }
 
     /// Whether a visible `element` sits in a scroll viewport, so an
@@ -3121,8 +3121,10 @@ impl WidgetTree {
         child_world: CoreTransform,
     ) -> Rect {
         let render = self.render_live(render_id, "semantic render must remain live");
-        self.semantic_bounds_transform(render_id, world, child_world)
-            .transform_rect_bbox(self.semantic_local_bounds(render_id, render.size))
+        project_semantic_rect(
+            self.semantic_bounds_transform(render_id, world, child_world),
+            self.semantic_local_bounds(render_id, render.size),
+        )
     }
 
     /// Insets operate in local coordinates before the retained world transform.
@@ -3172,6 +3174,15 @@ fn sliver_semantics_cache_clip(
         axis.offset(-extension, 0.),
         axis.size(main + 2. * extension, axis.cross_extent(size)),
     )
+}
+
+fn project_semantic_rect(world: CoreTransform, rect: Rect) -> Rect {
+    // A non-finite paint matrix has no accessible geometry. Keep the
+    // annotation/clip machinery safe even before paint rejects the subtree.
+    if !world.to_kurbo().is_finite() {
+        return Rect::default();
+    }
+    world.transform_rect_bbox(rect)
 }
 
 fn semantic_clip_overlaps(clip: Rect, bounds: Rect) -> bool {

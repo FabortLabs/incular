@@ -142,3 +142,50 @@ fn a_live_scale_keeps_the_leaf_dirty_while_zero_and_repaints_once_when_restored(
     assert_eq!(count.get(), 2);
     assert_eq!(tree.render_id(leaf), render);
 }
+
+#[test]
+fn a_non_finite_transform_cannot_crash_semantic_geometry_and_recovers() {
+    use incular_widgets::{ClipRRect, Semantics, SizedBox};
+
+    let mut tree = WidgetTree::new();
+    let semantic_child = || {
+        ClipRRect::new(
+            4.,
+            Semantics::new(SizedBox::expand())
+                .container(true)
+                .text_direction(incular_config::TextDirection::Ltr)
+                .label("transformed label"),
+        )
+    };
+    let scene = |matrix| Widget::from(Transform::new(matrix, semantic_child()));
+    let root = tree.mount(scene(CoreTransform::IDENTITY)).unwrap();
+
+    for affine in [
+        CoreTransform::IDENTITY,
+        CoreTransform::from_coefficients([f64::NAN, 0., 0., 1., 0., 0.]),
+        CoreTransform::IDENTITY,
+        CoreTransform::from_coefficients([f64::INFINITY, 0., 0., 1., 0., 0.]),
+        CoreTransform::IDENTITY,
+    ] {
+        tree.update(root, scene(affine)).unwrap();
+        tree.layout(Constraints::tight(Size::new(100., 80.)))
+            .unwrap();
+        tree.update_compositor(Instant::now()).unwrap();
+        tree.update_semantics();
+        tree.try_paint().unwrap();
+        if affine.has_drawable_area() {
+            let node = tree
+                .semantics()
+                .iter()
+                .find_map(|(_, node)| {
+                    (node.label.as_deref() == Some("transformed label")).then_some(node)
+                })
+                .expect("a drawable child must publish semantics again");
+            assert_eq!(node.bounds.size, Size::new(100., 80.));
+        } else {
+            assert!(tree.semantics().iter().all(|(_, node)| {
+                node.label.as_deref() != Some("transformed label") || node.bounds.size == Size::ZERO
+            }));
+        }
+    }
+}

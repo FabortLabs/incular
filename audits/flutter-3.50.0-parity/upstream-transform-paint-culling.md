@@ -22,3 +22,20 @@ All 40 focused native tests passed. The comparator uses submitted
 child paint and layer identity, not an exact count of internal
 framework layers: Incular deliberately retains the dormant layer
 handles needed for reappearance.
+
+## Accessibility geometry before paint
+
+After the painting fix, a non-finite transform above a labelled,
+rounded-clipped child could still panic earlier in semantics
+collection. All semantic bounds and clip projections now treat
+a non-finite world matrix as empty geometry. The native test runs
+one retained tree through valid → NaN → valid → infinity → valid
+and verifies a valid 100×80 semantic label on each return without
+publishing an invalid rectangle. This includes a real rounded clip
+and preserves the existing finite projection path.
+
+The authored pinned `non_finite_transform_semantics_test.dart`
+confirms that Flutter's debug semantics node reports an assertion
+for the non-finite rectangle. Incular deliberately recovers instead;
+this is recorded separately and adds no upstream paired count.
+All 14 focused native transform and clip-hit tests passed.
