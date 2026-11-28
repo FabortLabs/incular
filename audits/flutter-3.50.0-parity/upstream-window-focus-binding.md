@@ -19,3 +19,22 @@ separate view-level focus traversal policy or synthesize native OS
 focus events.
 
 Two direct mounted tests and eight adjacent runtime tests passed.
+
+## Focus entry into a retained view
+
+Pinned `widgets/view_test.dart:516,567,622` passed. Native structured
+view-focus events used to change only window appearance, not route
+keyboard focus. All four native baseline cases reproduced the gap.
+A structured exit now parks focus outside the widget subtree; forward
+and backward entry select the corresponding edge of its Tab order.
+Undefined entry preserves the latest widget request or restores the
+same eligible parked node, without selecting its text again.
+Ordinary OS chrome activation remains separate from view traversal.
+
+Directional selection waits for measured controls, including on the
+first frame. Request order also survives a node attaching late:
+an older request does not override the host's direction, but a newer
+eligible widget request does. The latter order is pinned in an
+authored Flutter probe. All 24 focused native focus, window and
+routing tests passed. No automatic native window raise or nested
+engine ViewAnchor focus request is claimed.

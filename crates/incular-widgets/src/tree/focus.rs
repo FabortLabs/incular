@@ -1964,6 +1964,28 @@ impl WidgetTree {
         incular_gestures::focus_epoch()
     }
 
+    /// Drops requests older than host entry, even if their nodes attached
+    /// after the event. A newer eligible widget request can still win.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn has_newer_hosted_focus_request(&self, host_order: u64) -> bool {
+        let epoch = self.focus_epoch();
+        let host_age = epoch.wrapping_sub(host_order);
+        let mut newer = false;
+        if let Some(nodes) = &self.hosted_focus_nodes {
+            for (&id, binding) in nodes {
+                if let Some(order) = binding.node().focus_request_order() {
+                    if epoch.wrapping_sub(order) >= host_age {
+                        binding.node().clear_pending_focus_request();
+                    } else if self.can_request_focus(id) {
+                        newer = true;
+                    }
+                }
+            }
+        }
+        newer
+    }
+
     /// Drops requests queued before the host parks focus at the app root.
     #[doc(hidden)]
     pub fn clear_hosted_focus_requests(&self) {

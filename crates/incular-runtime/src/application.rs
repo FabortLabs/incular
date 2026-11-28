@@ -1399,7 +1399,7 @@ impl Application {
         WindowFocusSubscription { _listener: listener }
     }
 
-    fn handle_window_focus(&mut self, event: WindowFocusEvent) {
+    fn handle_window_focus(&mut self, event: WindowFocusEvent, apply_view_entry: bool) {
         if self
             .with_window_mut(event.window_id, |record| {
                 record.lifecycle = if event.focused {
@@ -1416,6 +1416,9 @@ impl Application {
                 let mut environment = record.runtime.environment();
                 environment.window_focused = event.focused;
                 record.runtime.set_environment(environment);
+                if apply_view_entry {
+                    record.runtime.handle_view_focus_entry(event.focused, event.direction);
+                }
             })
             .is_none()
         {
@@ -1526,11 +1529,14 @@ impl Application {
             WindowEventKind::Lifecycle(lifecycle) => {
                 match lifecycle {
                     WindowLifecycle::Focused | WindowLifecycle::Unfocused => {
-                        self.handle_window_focus(WindowFocusEvent {
-                            window_id,
-                            focused: lifecycle == WindowLifecycle::Focused,
-                            direction: WindowFocusDirection::Undefined,
-                        });
+                        self.handle_window_focus(
+                            WindowFocusEvent {
+                                window_id,
+                                focused: lifecycle == WindowLifecycle::Focused,
+                                direction: WindowFocusDirection::Undefined,
+                            },
+                            false,
+                        );
                     }
                     _ => {
                         let _ =
@@ -1539,11 +1545,10 @@ impl Application {
                 }
             }
             WindowEventKind::FocusChanged { focused, direction } => {
-                self.handle_window_focus(WindowFocusEvent {
-                    window_id,
-                    focused,
-                    direction,
-                });
+                self.handle_window_focus(
+                    WindowFocusEvent { window_id, focused, direction },
+                    true,
+                );
             }
             WindowEventKind::RedrawRequested => {}
             WindowEventKind::StateChanged(state) => {

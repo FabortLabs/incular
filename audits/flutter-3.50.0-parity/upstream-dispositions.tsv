@@ -3986,3 +3986,6 @@ packages/flutter/test/rendering/multi_view_binding_test.dart	52	changing metrics
 packages/flutter/test/rendering/multi_view_binding_test.dart	72	semantics actions are performed on the right view	paired-match	upstream-multi-view-binding.md
 packages/flutter/test/rendering/multi_view_binding_test.dart	107	all registered renderviews are asked to composite frame	partial-match	upstream-multi-view-binding.md
 packages/flutter/test/rendering/multi_view_binding_test.dart	147	hit-testing reaches the right view	partial-match	upstream-multi-view-binding.md
+packages/flutter/test/widgets/view_test.dart	516	ViewFocusEvents cause unfocusing and refocusing	paired-match	upstream-window-focus-binding.md#focus-entry-into-a-retained-view
+packages/flutter/test/widgets/view_test.dart	567	ViewFocusEvent with an undefined direction keeps the focused child	paired-match	upstream-window-focus-binding.md#focus-entry-into-a-retained-view
+packages/flutter/test/widgets/view_test.dart	622	ViewFocusEvent with a forward direction moves focus to the first child	paired-match	upstream-window-focus-binding.md#focus-entry-into-a-retained-view

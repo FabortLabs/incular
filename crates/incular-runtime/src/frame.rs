@@ -325,6 +325,10 @@ pub struct Runtime {
     directional_focus_history: Option<DirectionalFocusHistory>,
     primary_focus_changes: incular_core::reactivity::DependencySource,
     parked_focus: Option<ParkedFocus>,
+    // Explicit view-entry focus is distinct from OS chrome activation and
+    // application suspend/resume, which have separate retention contracts.
+    view_parked_focus: Option<ParkedFocus>,
+    pending_view_entry: Option<(incular_platform::WindowFocusDirection, u64)>,
     focused_selection_lease: Option<incular_text::FocusedSelectionLease>,
     adopted_focus_epoch: Option<u64>,
     initial_focus: InitialFocus,
@@ -608,6 +612,8 @@ impl Runtime {
             directional_focus_history: None,
             primary_focus_changes: incular_core::reactivity::DependencySource::default(),
             parked_focus: None,
+            view_parked_focus: None,
+            pending_view_entry: None,
             focused_selection_lease: None,
             adopted_focus_epoch: None,
             initial_focus: InitialFocus::AwaitingLayout,
@@ -1218,6 +1224,53 @@ impl Runtime {
                 self.parked_focus = None;
             }
             _ => {}
+        }
+    }
+
+    /// Applies a structured host view-focus event. Ordinary native window
+    /// activation continues to update chrome without changing traversal.
+    pub(crate) fn handle_view_focus_entry(
+        &mut self,
+        focused: bool,
+        direction: incular_platform::WindowFocusDirection,
+    ) {
+        use incular_platform::WindowFocusDirection as Direction;
+        self.pending_view_entry = None;
+        if !focused {
+            if let Some(target) = self.focused {
+                self.view_parked_focus = Some(ParkedFocus {
+                    target,
+                    node: self.tree.focus_node_at(target),
+                });
+            }
+            self.tree.clear_hosted_focus_requests();
+            self.set_focus(None);
+        } else if direction == Direction::Undefined {
+            // Accessibility can select a child before the host activates
+            // the view. That newer request wins over the parked child.
+            self.adopt_external_focus_change();
+            if let Some(parked) = self.view_parked_focus.take()
+                && self.focused.is_none()
+                && self.tree.can_request_focus(parked.target)
+                && self.tree.focus_node_at(parked.target) == parked.node
+            {
+                self.set_focus_with_external_selection(Some(parked.target), false);
+            }
+        } else {
+            self.view_parked_focus = None;
+            self.tree.clear_hosted_focus_requests();
+            // Resolve after layout so newly built entries and traversal
+            // geometry are both available on the first native view frame.
+            self.pending_view_entry = Some((direction, self.tree.focus_epoch()));
+            self.request_frame();
+        }
+    }
+
+    fn settle_view_focus_entry(&mut self) {
+        if let Some((direction, _)) = self.pending_view_entry.take() {
+            let reverse = direction == incular_platform::WindowFocusDirection::Backward;
+            let next = self.tree.resolve_sequential_focus(None, reverse);
+            self.apply_sequential_focus(next, reverse, None);
         }
     }
 
@@ -3379,6 +3432,11 @@ impl Runtime {
 
     fn take_external_focus_change(&mut self) -> Option<Option<ElementId>> {
         self.tree.refresh_hosted_scope_membership();
+        if let Some((_, host_order)) = self.pending_view_entry
+            && self.tree.has_newer_hosted_focus_request(host_order)
+        {
+            self.pending_view_entry = None;
+        }
         // Scanning focusable elements allocates, so only look when some
         // focus node changed since the last check.
         let epoch = self.tree.focus_epoch();
@@ -5191,6 +5249,7 @@ impl Runtime {
             self.set_focus_with_external_selection(Some(next), false);
         }
         self.settle_scope_autofocus(false);
+        self.settle_view_focus_entry();
         let _composite_guard = tracing::info_span!("incular.composite").entered();
         let composite_span = profiling::PhaseSpan::start();
         let (composited, animations_active) = self.tree.update_compositor(now)?;
