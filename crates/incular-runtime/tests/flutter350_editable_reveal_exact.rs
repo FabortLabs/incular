@@ -141,3 +141,65 @@ fn entering_text_reveals_the_focused_editor_after_user_scrolled_away() {
 fn implicit_scroll_policy_can_leave_the_edited_field_off_screen() {
     typing_when_editor_was_scrolled_away(false);
 }
+
+#[test]
+fn bringing_an_unfocused_multiline_caret_into_view_scrolls_only_the_outer_viewport() {
+    use incular_config::Alignment;
+    use incular_core::Offset;
+    use incular_text::TextAffinity;
+    use incular_widgets::{Align, GlobalKey, SingleChildScrollView};
+
+    let body =
+        "Now is the time for\nall good people\nto come to the aid\nof their country.".repeat(20);
+    let text = TextEditingController::with_text(&body);
+    text.clear_selection();
+    let focus = FocusNode::new();
+    let key = GlobalKey::new();
+    let editor = Widget::from(
+        EditableText::new(text.clone())
+            .focus_node(focus.clone())
+            .text_direction(TextDirection::Ltr)
+            .max_lines(None),
+    )
+    .with_key(key);
+    let scrolling = ScrollController::new();
+    let viewport = SingleChildScrollView::new(editor).controller(scrolling.clone());
+    let scene = Align::new(Alignment::TOP_LEFT, SizedBox::square(200.).child(viewport));
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(bounds).unwrap();
+    let id = runtime.tree().element_with_key(&key.into()).unwrap();
+    let renderer = runtime.tree().render_id(id);
+    assert!(scrolling.max_offset() > 0.);
+    assert_eq!(scrolling.offset(), 0.);
+    assert_eq!(
+        runtime.tree().text_field_scroll_offset(id),
+        Some(Offset::ZERO)
+    );
+    assert!(!focus.has_focus());
+    assert!(text.selection_if_set().is_none());
+
+    assert!(runtime.tree_mut().text_field_bring_position_into_view(
+        id,
+        body.len(),
+        TextAffinity::Downstream,
+    ));
+    for _ in 0..3 {
+        runtime.run_frame(bounds).unwrap();
+    }
+    assert_eq!(scrolling.offset(), scrolling.max_offset());
+    assert_eq!(
+        runtime.tree().text_field_scroll_offset(id),
+        Some(Offset::ZERO)
+    );
+    assert_eq!(runtime.tree().render_id(id), renderer);
+    assert!(!focus.has_focus());
+    assert!(text.selection_if_set().is_none());
+    let caret_y = runtime
+        .tree()
+        .text_field_offset_rect(id, body.len(), TextAffinity::Downstream)
+        .unwrap()
+        .origin
+        .y;
+    assert!((0. ..200.).contains(&caret_y));
+}

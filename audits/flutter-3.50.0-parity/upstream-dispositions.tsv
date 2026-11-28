@@ -4078,3 +4078,4 @@ packages/flutter/test/widgets/editable_text_test.dart	1493	enableIMEPersonalized
 packages/flutter/test/widgets/editable_text_test.dart	378	The value of the passed-in groupId should match the groupId of the EditableText	paired-match	upstream-editable-outside-pointer.md
 packages/flutter/test/widgets/editable_text_test.dart	412	When the value of groupId is not passed in, the default type should be EditableText	paired-match	upstream-editable-outside-pointer.md
 packages/flutter/test/widgets/editable_text_test.dart	586	RTL arabic correct caret placement after trailing whitespace	paired-match	upstream-editable-cursor-visibility.md
+packages/flutter/test/widgets/editable_text_test.dart	9937	bringIntoView brings the caret into view when in a viewport	paired-match	upstream-editable-reveal.md

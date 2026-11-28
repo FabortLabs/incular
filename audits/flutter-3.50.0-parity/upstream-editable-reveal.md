@@ -72,3 +72,15 @@ the unchanged text, the selection, and retained focus. The same
 results hold with a formatter which would reject replacement text.
 Both focused native tests passed. This completes all 14 registration
 sites in the pinned show-on-screen test file.
+
+## Explicit reveal inside a 200 px scroll viewport
+
+Pinned `widgets/editable_text_test.dart:9937` passed. The native
+route uses the original four-line paragraph repeated 20 times and
+an unfocused, height-unbounded EditableText in a 200×200
+SingleChildScrollView. Both offsets start at zero. Revealing the
+final caret moves only the outer scroll controller to its maximum
+while leaving the editor's local offset at zero. The caret is
+inside the viewport with the same retained editor, no focus change,
+and no newly created selection. All nine focused reveal and
+scaled-position tests passed.
