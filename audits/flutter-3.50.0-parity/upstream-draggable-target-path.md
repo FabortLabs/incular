@@ -148,3 +148,15 @@ a tap available to the lower sibling but competes and can win when
 the pointer actually drags. Opaque long press starts at the deadline
 over the empty child. The authored Flutter cases and all 21 focused
 native tests passed.
+
+## Button-mask admission
+
+Pinned :4045 and the mounted native fixture agree on default
+primary-only admission, an explicit secondary-only filter rejecting
+primary, a primary-or-tertiary filter accepting primary, and an
+always-false filter. A pinned authored mouse fixture also checks
+actual secondary and tertiary drags, an accepted chord, and rejection
+of a default primary-plus-secondary chord. The native callback sees
+the entire normalized mask once per press. This changes only the
+Draggable member's admission, not sibling tap policies. All 19
+focused native tests passed.

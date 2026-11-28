@@ -4138,3 +4138,4 @@ packages/flutter/test/widgets/draggable_test.dart	3970	configurable feedback ign
 packages/flutter/test/widgets/draggable_test.dart	3395	configurable DragTarget hit test behavior	paired-match	upstream-draggable-target-path.md#source-and-target-hit-policies
 packages/flutter/test/widgets/draggable_test.dart	3886	configurable Draggable hit test behavior	paired-match	upstream-draggable-target-path.md#source-and-target-hit-policies
 packages/flutter/test/widgets/draggable_test.dart	4006	configurable DragTarget hit test behavior	paired-match	upstream-draggable-target-path.md#source-and-target-hit-policies
+packages/flutter/test/widgets/draggable_test.dart	4045	Test allowedButtonsFilter	paired-match	upstream-draggable-target-path.md#button-mask-admission

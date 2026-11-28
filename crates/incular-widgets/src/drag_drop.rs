@@ -14,7 +14,7 @@ use std::{
 };
 
 use incular_config::Axis;
-use incular_core::Offset;
+use incular_core::{Offset, PRIMARY_POINTER_BUTTON};
 
 use crate::gestures::{HitTestBehavior, Velocity};
 use crate::{ExcludeSemantics, IgnorePointer, OverlayPortal, Positioned, Stack, Widget};
@@ -123,6 +123,9 @@ pub struct DragPosition {
 
 pub trait RetainedDragSource {
     fn context_id(&self) -> usize;
+    fn allows_buttons(&self, buttons: u32) -> bool {
+        buttons == PRIMARY_POINTER_BUTTON
+    }
     /// Flutter `Draggable.affinity`: the axis the gesture must move along to
     /// start a drag, `None` for any direction.
     fn affinity(&self) -> Option<Axis> {
@@ -196,6 +199,7 @@ pub struct Draggable<T: Clone + 'static> {
     ignoring_feedback_semantics: bool,
     axis: Option<Axis>,
     affinity: Option<Axis>,
+    allowed_buttons_filter: Option<Rc<dyn Fn(u32) -> bool>>,
     feedback_offset: Offset,
     drag_anchor_strategy: DragAnchorStrategy,
     max_simultaneous_drags: Option<usize>,
@@ -222,6 +226,7 @@ impl<T: Clone + 'static> Draggable<T> {
             ignoring_feedback_semantics: true,
             axis: None,
             affinity: None,
+            allowed_buttons_filter: None,
             feedback_offset: Offset::ZERO,
             drag_anchor_strategy: DragAnchorStrategy::Child,
             max_simultaneous_drags: None,
@@ -279,6 +284,13 @@ impl<T: Clone + 'static> Draggable<T> {
     #[must_use]
     pub fn affinity(mut self, axis: Axis) -> Self {
         self.affinity = Some(axis);
+        self
+    }
+    /// Filters the entire button mask of an initiating press. By default
+    /// only the primary button, without any other buttons, starts a drag.
+    #[must_use]
+    pub fn allowed_buttons_filter(mut self, filter: impl Fn(u32) -> bool + 'static) -> Self {
+        self.allowed_buttons_filter = Some(Rc::new(filter));
         self
     }
     /// Offsets the point hit-tested for targets from the pointer.
@@ -358,6 +370,7 @@ struct DragSourceBinding<T: Clone + 'static> {
     feedback: Option<Rc<dyn Fn(T) -> Widget>>,
     axis: Option<Axis>,
     affinity: Option<Axis>,
+    allowed_buttons_filter: Option<Rc<dyn Fn(u32) -> bool>>,
     feedback_offset: Offset,
     drag_anchor_strategy: DragAnchorStrategy,
     max_simultaneous_drags: Option<usize>,
@@ -417,6 +430,11 @@ impl<T: Clone + 'static> DragSourceBinding<T> {
 impl<T: Clone + 'static> RetainedDragSource for DragSourceBinding<T> {
     fn context_id(&self) -> usize {
         self.context.id()
+    }
+    fn allows_buttons(&self, buttons: u32) -> bool {
+        self.allowed_buttons_filter
+            .as_ref()
+            .map_or(buttons == PRIMARY_POINTER_BUTTON, |filter| filter(buttons))
     }
     fn affinity(&self) -> Option<Axis> {
         self.affinity
@@ -549,6 +567,7 @@ impl<T: Clone + 'static> From<Draggable<T>> for Widget {
                 feedback: value.feedback,
                 axis: value.axis,
                 affinity: value.affinity,
+                allowed_buttons_filter: value.allowed_buttons_filter,
                 feedback_offset: value.feedback_offset,
                 drag_anchor_strategy: value.drag_anchor_strategy,
                 max_simultaneous_drags: value.max_simultaneous_drags,
@@ -843,6 +862,12 @@ impl<T: Clone + 'static> LongPressDraggable<T> {
     #[must_use]
     pub fn feedback(mut self, builder: impl Fn(T) -> Widget + 'static) -> Self {
         self.draggable = self.draggable.feedback(builder);
+        self
+    }
+    /// See [`Draggable::allowed_buttons_filter`].
+    #[must_use]
+    pub fn allowed_buttons_filter(mut self, filter: impl Fn(u32) -> bool + 'static) -> Self {
+        self.draggable = self.draggable.allowed_buttons_filter(filter);
         self
     }
     /// See [`Draggable::hit_test_behavior`].

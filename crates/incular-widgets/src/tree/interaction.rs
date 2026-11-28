@@ -961,15 +961,29 @@ impl WidgetTree {
                 if !callbacks.allows_pointer_device(kind) {
                     continue;
                 }
+                let drag_source = self.drag_source(candidate);
                 let shared_drag = primary
                     .then(|| self.shared_application_drag(candidate, &callbacks))
                     .flatten();
                 // A press competes only with the callbacks of its own button.
                 let mut live_tap_buttons = callbacks.on_any_tap.is_some().then_some(buttons);
-                let Some(mut callbacks) = callbacks.for_button_mask(buttons) else {
-                    self.reject_deferred_tap_at(candidate);
-                    self.interrupt_mounted_double_tap(candidate);
-                    continue;
+                let mut callbacks = if let Some(source) = &drag_source {
+                    let mask = if buttons == 0 {
+                        incular_core::PRIMARY_POINTER_BUTTON
+                    } else {
+                        buttons
+                    };
+                    if !source.allows_buttons(mask) {
+                        continue;
+                    }
+                    callbacks
+                } else {
+                    let Some(callbacks) = callbacks.for_button_mask(buttons) else {
+                        self.reject_deferred_tap_at(candidate);
+                        self.interrupt_mounted_double_tap(candidate);
+                        continue;
+                    };
+                    callbacks
                 };
                 if !primary && !callbacks.has_tap_callbacks() {
                     self.reject_deferred_tap_at(candidate);
@@ -1034,20 +1048,14 @@ impl WidgetTree {
                     recognizer.set_gesture_settings(self.gesture_settings_at(candidate));
                     // Flutter's `Draggable` without an affinity uses
                     // `ImmediateMultiDragGestureRecognizer`.
-                    if primary
-                        && self
-                            .drag_source(candidate)
-                            .is_some_and(|source| source.affinity().is_none())
+                    if drag_source.as_ref().is_some_and(|source| source.affinity().is_none())
                     {
                         recognizer.set_immediate_drag(true);
                     }
                     // Flutter `LongPressDraggable` and the delayed reorder
                     // listener use a `DelayedMultiDragGestureRecognizer`: one
                     // recognizer that starts the drag after the delay.
-                    if let Some(delay) = self
-                        .drag_source(candidate)
-                        .and_then(|source| source.start_delay())
-                        .filter(|_| primary)
+                    if let Some(delay) = drag_source.as_ref().and_then(|source| source.start_delay())
                     {
                         recognizer.set_delayed_drag(Some(delay));
                     }
