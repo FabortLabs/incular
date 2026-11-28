@@ -1200,6 +1200,7 @@ pub struct EditableText {
     content_padding: incular_config::EdgeInsets,
     clip_behavior: incular_config::Clip,
     fixed_scroll_offset: Option<f32>,
+    allow_implicit_caret_scrolling: bool,
     on_editing_complete: Option<Rc<dyn Fn()>>,
     on_submit: Option<Rc<dyn Fn(String)>>,
     on_tap_outside: Option<EditableOutsideTap>,
@@ -1286,6 +1287,7 @@ impl EditableText {
             content_padding: incular_config::EdgeInsets::ZERO,
             clip_behavior: incular_config::Clip::HardEdge,
             fixed_scroll_offset: None,
+            allow_implicit_caret_scrolling: true,
             on_editing_complete: None,
             on_submit: None,
             on_tap_outside: None,
@@ -1353,6 +1355,15 @@ impl EditableText {
 
     /// Binds the editor directly to an application-owned keyboard focus node.
     /// The node survives rebuilds when the application reuses the handle.
+    /// Controls automatic scroll-to-caret in this editor's own viewport.
+    /// Explicit scroll commands and the enclosing viewports keep their
+    /// independent scrolling policies. Enabled by default.
+    #[must_use]
+    pub const fn allow_implicit_caret_scrolling(mut self, allow: bool) -> Self {
+        self.allow_implicit_caret_scrolling = allow;
+        self
+    }
+
     /// Associates this editor with tap-region companions in the same group.
     /// An omitted group is shared by EditableText and TextFieldTapRegion.
     #[must_use]
@@ -2226,6 +2237,7 @@ impl From<EditableText> for Widget {
             content_padding: value.content_padding,
             clip_behavior: value.clip_behavior,
             fixed_scroll_offset: value.fixed_scroll_offset,
+            allow_implicit_caret_scrolling: value.allow_implicit_caret_scrolling,
             on_editing_complete: value.on_editing_complete,
             on_submit: value.on_submit,
             on_tap_outside: value.on_tap_outside,

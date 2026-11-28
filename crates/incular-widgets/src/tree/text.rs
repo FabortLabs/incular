@@ -805,12 +805,16 @@ impl WidgetTree {
         offset: usize,
         affinity: incular_text::TextAffinity,
     ) -> bool {
-        if !self.text_controller(id).is_some_and(|controller| {
-            controller.with_value(|value| value.text.is_char_boundary(offset))
-        }) {
+        let Some(WidgetKind::TextField(spec)) =
+            self.elements.get(id.0).map(|element| element.widget.kind())
+        else {
+            return false;
+        };
+        if !spec.controller.with_value(|value| value.text.is_char_boundary(offset)) {
             return false;
         }
-        let moved = self.scroll_text_field_to_position(id, offset, affinity);
+        let moved = spec.allow_implicit_caret_scrolling
+            && self.scroll_text_field_to_position(id, offset, affinity);
         let outer_moved = self.editable_local_caret_rect(id, offset, affinity).is_some_and(|rect| {
             crate::Scrollable::show_on_screen(self, id, crate::ShowOnScreen::new().rect(rect)) != 0
         });

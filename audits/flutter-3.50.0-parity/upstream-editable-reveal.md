@@ -84,3 +84,20 @@ while leaving the editor's local offset at zero. The caret is
 inside the viewport with the same retained editor, no focus change,
 and no newly created selection. All nine focused reveal and
 scaled-position tests passed.
+
+## Disabling the editor's own implicit caret scroll
+
+Pinned `widgets/editable_text_test.dart:9983` passed. A 200×200
+native field containing the original paragraph repeated 20 times
+reveals its final caret at the local maximum scroll extent. After
+an explicit return to zero, disabling implicit caret scrolling
+keeps the same renderer and stops subsequent bring-into-view and
+selection changes from moving the local viewport. Explicit
+scroll-to-end still works. Enclosing viewports keep their separate
+policy, matching Flutter's forwarding of the unchanged caret
+rectangle when local implicit movement is disabled.
+
+Marked partial because Incular exposes this editor-local policy but
+does not bind arbitrary Flutter ScrollPhysics or a ScrollController
+to the editor's private viewport. All 16 focused reveal, read-only
+and scroll-key checks passed.

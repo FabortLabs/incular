@@ -639,6 +639,7 @@ pub struct TextFieldRender {
     pub(crate) content_padding: incular_config::EdgeInsets,
     pub(crate) clip_behavior: incular_config::Clip,
     pub(crate) fixed_scroll_offset: Option<f32>,
+    pub(crate) allow_implicit_caret_scrolling: bool,
     pub(crate) multiline: bool,
     pub(crate) min_lines: Option<usize>,
     pub(crate) max_lines: Option<usize>,

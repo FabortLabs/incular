@@ -203,3 +203,86 @@ fn bringing_an_unfocused_multiline_caret_into_view_scrolls_only_the_outer_viewpo
         .y;
     assert!((0. ..200.).contains(&caret_y));
 }
+
+#[test]
+fn retained_editor_can_disable_implicit_caret_scrolling_without_disabling_explicit_scroll() {
+    use incular_config::Alignment;
+    use incular_core::Offset;
+    use incular_text::TextAffinity;
+    use incular_widgets::{Align, GlobalKey};
+
+    let body =
+        "Now is the time for\nall good people\nto come to the aid\nof their country.".repeat(20);
+    let text = TextEditingController::with_text(&body);
+    text.clear_selection();
+    let key = GlobalKey::new();
+    let build = |allow: bool| {
+        let mut editor = EditableText::new(text.clone())
+            .text_direction(TextDirection::Ltr)
+            .max_lines(None);
+        if !allow {
+            editor = editor.allow_implicit_caret_scrolling(false);
+        }
+        Widget::from(Align::new(
+            Alignment::TOP_LEFT,
+            SizedBox::square(200.).child(Widget::from(editor).with_key(key)),
+        ))
+    };
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(build(true)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let id = runtime.tree().element_with_key(&key.into()).unwrap();
+    let render = runtime.tree().render_id(id);
+    assert_eq!(
+        runtime.tree().text_field_scroll_offset(id),
+        Some(Offset::ZERO)
+    );
+    let max = runtime.tree().editable_max_scroll_extent(id).unwrap();
+    assert!(max > 0.);
+
+    assert!(runtime.tree_mut().text_field_bring_position_into_view(
+        id,
+        body.len(),
+        TextAffinity::Downstream
+    ));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(runtime.tree().text_field_scroll_offset(id).unwrap().y, max);
+
+    assert!(
+        runtime
+            .tree_mut()
+            .text_field_scroll_to_document_boundary(id, false)
+    );
+    runtime.schedule_update(root, build(false)).unwrap();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(runtime.tree().render_id(id), render);
+    assert_eq!(
+        runtime.tree().text_field_scroll_offset(id),
+        Some(Offset::ZERO)
+    );
+    assert!(!runtime.tree_mut().text_field_bring_position_into_view(
+        id,
+        body.len(),
+        TextAffinity::Downstream
+    ));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(
+        runtime.tree().text_field_scroll_offset(id),
+        Some(Offset::ZERO)
+    );
+
+    text.set_selection(incular_text::TextSelection::collapsed(body.len()));
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(
+        runtime.tree().text_field_scroll_offset(id),
+        Some(Offset::ZERO)
+    );
+    assert!(
+        runtime
+            .tree_mut()
+            .text_field_scroll_to_document_boundary(id, true)
+    );
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(runtime.tree().text_field_scroll_offset(id).unwrap().y, max);
+}

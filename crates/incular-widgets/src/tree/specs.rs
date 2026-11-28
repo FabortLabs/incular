@@ -564,6 +564,7 @@ pub struct TextFieldSpec {
     pub(crate) content_padding: incular_config::EdgeInsets,
     pub(crate) clip_behavior: incular_config::Clip,
     pub(crate) fixed_scroll_offset: Option<f32>,
+    pub(crate) allow_implicit_caret_scrolling: bool,
     pub(crate) on_editing_complete: Option<Rc<dyn Fn()>>,
     pub(crate) on_submit: Option<Rc<dyn Fn(String)>>,
     pub(crate) on_tap_outside: Option<EditableOutsideTap>,

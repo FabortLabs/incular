@@ -199,7 +199,8 @@ impl WidgetTree {
                 // In a read-only field, mounting or simply gaining focus
                 // does not reveal the pre-existing selection. A subsequent
                 // change within the focused field can still reveal it.
-                let reveal = revealed != Some(reveal_key)
+                let reveal = field.allow_implicit_caret_scrolling
+                    && revealed != Some(reveal_key)
                     && controller.selection_if_set().is_some()
                     && (!field.read_only || (focused && revealed.is_some_and(|old| old.2)));
                 let has_layout = layout.is_some();
