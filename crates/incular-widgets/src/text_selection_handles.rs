@@ -202,11 +202,15 @@ pub struct TextSelectionHandlesState {
     handles: RefCell<Option<TextSelectionHandles>>,
     collapsed_layout: Cell<TextSelectionHandleLayout>,
     revision: RefCell<Rc<Cell<u64>>>,
+    magnifier: RefCell<Option<Rc<crate::magnifier::TextMagnifierState>>>,
 }
 
 impl RetainedState for TextSelectionHandlesState {
     fn rebind_revision(&self, revision: Rc<Cell<u64>>) {
-        *self.revision.borrow_mut() = revision;
+        *self.revision.borrow_mut() = revision.clone();
+        if let Some(magnifier) = self.magnifier.borrow().as_ref() {
+            magnifier.rebind_revision(revision);
+        }
     }
 }
 
@@ -215,7 +219,37 @@ impl TextSelectionHandlesState {
         Self {
             handles: RefCell::new(None),
             collapsed_layout: Cell::new(collapsed_layout),
+            magnifier: RefCell::new(None),
             revision: RefCell::new(revision),
+        }
+    }
+
+    pub(crate) fn magnifier(&self) -> Option<Rc<crate::magnifier::TextMagnifierState>> {
+        self.magnifier.borrow().clone()
+    }
+
+    fn configure_magnifier(&self, enabled: bool) {
+        let mut magnifier = self.magnifier.borrow_mut();
+        if enabled {
+            magnifier.get_or_insert_with(|| Rc::new(
+                crate::magnifier::TextMagnifierState::new(self.revision.borrow().clone())
+            ));
+        } else {
+            let _ = magnifier.take();
+        }
+    }
+
+    /// A range handle has standard artwork; the collapsed marker can
+    /// instead have a caller-supplied knob smaller than its hit region.
+    #[doc(hidden)]
+    pub fn knob_contains(&self, endpoint: TextSelectionHandleEndpoint, point: Offset) -> bool {
+        let Some(handle) = self.handles().and_then(|handles| handles.endpoint(endpoint)) else {
+            return false;
+        };
+        if endpoint == TextSelectionHandleEndpoint::Collapsed {
+            self.collapsed_layout.get().rect(handle.anchor).contains(point)
+        } else {
+            handle.rect().contains(point)
         }
     }
 
@@ -301,6 +335,7 @@ pub(crate) fn with_text_selection_handles(
     child: impl Fn(Rc<TextSelectionHandlesState>) -> Widget + 'static,
     builder: TextSelectionHandlesBuilder,
     collapsed_layout: Option<TextSelectionHandleLayout>,
+    magnifier: crate::TextMagnifierConfiguration,
 ) -> Widget {
     let collapsed_layout = collapsed_layout
         .unwrap_or_else(|| TextSelectionHandleLayout::standard(SelectionHandleType::Collapsed));
@@ -308,16 +343,36 @@ pub(crate) fn with_text_selection_handles(
         move |revision| TextSelectionHandlesState::new(revision, collapsed_layout),
         move |state, _, _| {
             state.collapsed_layout.set(collapsed_layout);
+            state.configure_magnifier(magnifier.has_builder());
             let handles = state.handles();
+            let lens = state.magnifier().and_then(|state| state.overlay(&magnifier));
             let mut portal = OverlayPortal::new(SizedBox::shrink())
                 .role(TransientRole::ContextMenu)
-                .show(handles.is_some());
-            if let Some(handles) = handles {
+                .show(handles.is_some() || lens.is_some());
+            if handles.is_some() || lens.is_some() {
                 let builder = builder.clone();
-                // Flutter `_SelectionToolbarWrapper`: a press on a handle is
-                // not a tap outside the field, which keeps its focus.
+                let handles_in_lens = magnifier.displays_handles_in_magnifier();
                 portal = portal.overlay_child_layout_builder(move |context, _| {
-                    crate::TextFieldTapRegion::new(builder(context, &handles)).into()
+                    let handles = handles.map(|handles| {
+                        // A handle belongs to its editor's tap region.
+                        Widget::from(crate::TextFieldTapRegion::new(builder(context, &handles)))
+                    });
+                    match (handles, lens.clone()) {
+                        (Some(handles), Some(lens)) => {
+                            // A backdrop lens samples what precedes it. Keep
+                            // both overlays in one stack so opening order
+                            // cannot determine whether the knobs are sampled.
+                            let children = if handles_in_lens {
+                                [handles, lens]
+                            } else {
+                                [lens, handles]
+                            };
+                            Stack::new(children).fit(StackFit::Passthrough)
+                                .clip_behavior(Clip::None).into()
+                        }
+                        (Some(widget), None) | (None, Some(widget)) => widget,
+                        (None, None) => SizedBox::shrink().into(),
+                    }
                 });
             }
             Stack::new([

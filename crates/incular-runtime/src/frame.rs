@@ -3189,7 +3189,7 @@ impl Runtime {
             PointerPhase::Cancel => {
                 self.captured_text_field = None;
                 self.text_long_press = None;
-                self.text_handle_drag = None;
+                self.cancel_text_handle_drag();
                 self.captured_selectable_text = None;
                 if let Some(element) = self.pressed_button.take() {
                     let _ = self
@@ -3392,6 +3392,7 @@ impl Runtime {
             self.tree.set_keyboard_focus(previous, false);
             let _ = self.tree.set_focused(previous, false, self.input_now());
             self.hide_text_field_overlays(previous);
+            self.cancel_text_handle_drag();
         }
         self.focused = next;
         self.primary_focus_node = next_node;

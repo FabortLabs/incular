@@ -606,6 +606,7 @@ pub struct TextFieldSpec {
     /// Flutter `spellCheckConfiguration`.
     pub(crate) spell_check: Option<crate::SpellCheckConfiguration>,
     pub(crate) spell_check_suppressed: bool,
+    pub(crate) text_magnifier: Option<Rc<crate::magnifier::TextMagnifierState>>,
     pub(crate) stylus_handwriting_enabled: bool,
     pub(crate) has_context_menu_builder: bool,
     pub(crate) legacy_selection_controls: bool,

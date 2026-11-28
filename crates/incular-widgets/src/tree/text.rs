@@ -1404,6 +1404,73 @@ impl WidgetTree {
         }
     }
 
+    /// Whether this editor has a custom magnifier to present.
+    #[doc(hidden)]
+    pub fn text_field_has_magnifier(&self, id: ElementId) -> bool {
+        self.text_field_magnifier(id).is_some()
+    }
+
+    fn text_field_magnifier(&self, id: ElementId) -> Option<&crate::magnifier::TextMagnifierState> {
+        match self.elements.get(id.0)?.widget.kind() {
+            WidgetKind::TextField(spec) => spec.text_magnifier.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Project the caret, line and field to the owning overlay's view.
+    /// The gesture point and the line-snapped text hit can differ.
+    #[doc(hidden)]
+    pub fn update_text_field_magnifier(
+        &self,
+        id: ElementId,
+        gesture: Offset,
+        text_hit: Offset,
+    ) -> bool {
+        let Some(state) = self.text_field_magnifier(id) else {
+            return false;
+        };
+        let info = (|| {
+            let (position, affinity) = self.text_field_position_at(id, text_hit)?;
+            let render = self.render_id(id)?;
+            let node = self.renders.get(render.0)?;
+            let RenderKind::TextField(field) = node.object.kind() else {
+                return None;
+            };
+            let layout = node.field_layout()?;
+            let (start, end) = field.controller.with_value(|value| {
+                (
+                    line_boundary(&layout, &value.text, position, affinity, false, false),
+                    line_boundary(&layout, &value.text, position, affinity, true, false),
+                )
+            });
+            let start = self.editable_local_caret_rect(id, start?.0, incular_text::TextAffinity::Downstream)?;
+            let end = self.editable_local_caret_rect(id, end?.0, incular_text::TextAffinity::Upstream)?;
+            let caret = self.editable_local_caret_rect(id, position, affinity)?;
+            let left = start.origin.x + start.size.width * 0.5;
+            let right = end.origin.x + end.size.width * 0.5;
+            let bottom = end.origin.y + end.size.height;
+            let line = Rect::from_origin_size(
+                Offset::new(left.min(right), start.origin.y.min(bottom)),
+                Size::maybe_new((right - left).abs(), (bottom - start.origin.y).abs())?,
+            );
+            let world = self.render_world_transform(render);
+            let field_bounds = Rect::from_origin_size(Offset::ZERO, node.size);
+            Some(crate::MagnifierInfo {
+                global_gesture_position: gesture,
+                current_line_boundaries: world.try_transform_rect_bbox(line)?,
+                caret_rect: world.try_transform_rect_bbox(caret)?,
+                field_bounds: world.try_transform_rect_bbox(field_bounds)?,
+            })
+        })();
+        state.set_info(info)
+    }
+
+    /// Removes any magnifier without detaching the editor or its handles.
+    #[doc(hidden)]
+    pub fn hide_text_field_magnifier(&self, id: ElementId) -> bool {
+        self.text_field_magnifier(id).is_some_and(|state| state.set_info(None))
+    }
+
     /// The shared toolbar overlay, including a currently open suggestions menu.
     #[doc(hidden)]
     #[must_use]

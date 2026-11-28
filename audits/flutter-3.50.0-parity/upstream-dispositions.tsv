@@ -4176,3 +4176,5 @@ packages/flutter/test/widgets/editable_text_test.dart	17710	EditableText respect
 packages/flutter/test/widgets/editable_text_test.dart	17733	EditableText respects MediaQueryData.lineHeightScaleFactorOverride, MediaQueryData.letterSpacingOverride, and MediaQueryData.wordSpacingOverride	paired-match	upstream-editable-input-styles.md#mounted-text-and-strut-accessibility-overrides
 packages/flutter/test/widgets/editable_text_test.dart	18171	should notify on size change	paired-match	upstream-editable-defaults.md#multiline-size-notification
 packages/flutter/test/widgets/editable_text_test.dart	18516	showToolbar does nothing and returns false when already shown	paired-match	upstream-editable-defaults.md#duplicate-toolbar-request-after-autofocus
+packages/flutter/test/widgets/editable_text_test.dart	17058	should build nothing by default	paired-match	upstream-editable-magnifier.md#default-and-scaled-handle-drag
+packages/flutter/test/widgets/editable_text_test.dart	17088	magnifier is in correct position when EditableText is scaled	paired-match	upstream-editable-magnifier.md#default-and-scaled-handle-drag

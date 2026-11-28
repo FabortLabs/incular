@@ -1260,6 +1260,7 @@ pub struct EditableText {
     renderer_ignores_pointer: bool,
     context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
     selection_handles_builder: Option<crate::TextSelectionHandlesBuilder>,
+    magnifier_configuration: crate::TextMagnifierConfiguration,
     collapsed_selection_handle_layout: Option<crate::TextSelectionHandleLayout>,
     edit_transform: Option<super::specs::EditTransform>,
     edit_changed: Option<super::specs::EditChanged>,
@@ -1348,6 +1349,7 @@ impl EditableText {
             renderer_ignores_pointer: false,
             context_menu_builder: None,
             selection_handles_builder: None,
+            magnifier_configuration: crate::TextMagnifierConfiguration::disabled(),
             collapsed_selection_handle_layout: None,
             edit_transform: None,
             edit_changed: None,
@@ -1420,6 +1422,20 @@ impl EditableText {
     pub fn select_all_on_focus(mut self, select: bool) -> Self {
         self.select_all_on_focus = Some(select);
         self
+    }
+
+    /// Configures the editor's selection magnifier. By default the neutral
+    /// editor has no magnifier builder.
+    #[must_use]
+    pub fn magnifier_configuration(mut self, configuration: crate::TextMagnifierConfiguration) -> Self {
+        self.magnifier_configuration = configuration;
+        self
+    }
+
+    /// The configured magnifier, including the disabled default.
+    #[must_use]
+    pub const fn configured_magnifier(&self) -> &crate::TextMagnifierConfiguration {
+        &self.magnifier_configuration
     }
 
     /// Enables stylus handwriting for this editor. Defaults to true.
@@ -2215,6 +2231,7 @@ impl From<EditableText> for Widget {
             .cloned();
         let selection_handles_builder = value.selection_handles_builder.clone();
         let collapsed_selection_handle_layout = value.collapsed_selection_handle_layout;
+        let magnifier_configuration = value.magnifier_configuration;
         let legacy_selection_controls = context_menu_builder.is_none()
             && selection_handles_builder.is_none();
         let edit_transform = compose_edit_transform(
@@ -2236,6 +2253,7 @@ impl From<EditableText> for Widget {
             legacy_selection_controls,
             toolbar_options: value.toolbar_options,
             selection_handles: None,
+            text_magnifier: None,
             spell_check: value.spell_check,
             stylus_handwriting_enabled: value.stylus_handwriting_enabled,
             spell_check_suppressed,
@@ -2339,18 +2357,30 @@ impl From<EditableText> for Widget {
                 spell_toolbar_builder.clone(),
             )
         };
-        match selection_handles_builder {
-            Some(builder) => crate::text_selection_handles::with_text_selection_handles(
+        if let Some(builder) = selection_handles_builder {
+            return crate::text_selection_handles::with_text_selection_handles(
                 move |state| {
                     let mut spec = spec.clone();
+                    spec.text_magnifier = state.magnifier();
                     spec.selection_handles = Some(state);
                     with_menu(spec)
                 },
                 builder,
                 collapsed_selection_handle_layout,
-            ),
-            None => with_menu(spec),
+                magnifier_configuration,
+            );
         }
+        if !magnifier_configuration.has_builder() {
+            return with_menu(spec);
+        }
+        crate::magnifier::with_text_magnifier(
+            move |state| {
+                let mut spec = spec.clone();
+                spec.text_magnifier = Some(state);
+                with_menu(spec)
+            },
+            magnifier_configuration,
+        )
     }
 }
 

@@ -665,6 +665,7 @@ impl Runtime {
     /// keyboard edits do through `hideToolbar`, and a mouse press does.
     pub(super) fn hide_text_field_overlays(&mut self, field: ElementId) {
         self.hide_text_field_handles(field);
+        self.frame_requested |= self.tree.hide_text_field_magnifier(field);
         if let Some(menu) = self.tree.text_field_toolbar_state(field)
             && menu.hide()
         {
@@ -1806,8 +1807,8 @@ impl Runtime {
         kind: PointerDeviceKind,
     ) -> Option<ElementId> {
         let (field, handle) = self.text_handle_under(position, kind)?;
-        let handles = self.tree.text_field_selection_handles(field)?.handles()?;
-        let geometry = handles.endpoint(handle)?;
+        let handles_state = self.tree.text_field_selection_handles(field)?;
+        let geometry = handles_state.handles()?.endpoint(handle)?;
         // `_handleSelectionEndHandleDragStart`: aim at the centre of the line
         // the handle points to, not at the handle itself.
         let centre = geometry.anchor.y - geometry.line_height / 2.0;
@@ -1817,15 +1818,22 @@ impl Runtime {
             .map_or(TextSelection::collapsed(0), |controller| {
                 controller.selection()
             });
+        let on_knob = handles_state.knob_contains(handle, position);
+        // The padded handle region is drag-only: the drag can accept
+        // immediately when there is no competing tap on the visible knob.
+        let started = !on_knob && self.tree.text_field_has_magnifier(field);
+        if started {
+            self.start_text_handle_magnifier(field, position, centre);
+        }
         self.text_handle_drag = Some(TextHandleDrag {
             field,
             handle,
             down_position: position,
-            on_knob: geometry.rect().contains(position),
+            on_knob,
             drag_y: position.y,
             target: centre - position.y,
             start_selection,
-            started: false,
+            started,
         });
         Some(field)
     }
@@ -1845,17 +1853,33 @@ impl Runtime {
             drag.started = true;
             // `_handleSelectionStartHandleDragStart` hides the toolbar while
             // the handle moves; `_handleAnyDragEnd` shows it again.
-            if let Some(menu) = self.tree.text_field_context_menu(drag.field) {
-                menu.hide();
-            }
+            self.start_text_handle_magnifier(drag.field, position, drag.drag_y + drag.target);
         }
         if let Some(next_y) = self.tree.editable_handle_drag_y(drag.field, position, drag.drag_y) {
             drag.drag_y = next_y;
             let target = Offset::new(position.x, drag.drag_y + drag.target);
             self.text_handle_select(&drag, target, self.input_now());
+            self.frame_requested |= self.tree.update_text_field_magnifier(drag.field, position, target);
         }
         self.text_handle_drag = Some(drag);
         self.frame_requested = true;
+    }
+
+    fn start_text_handle_magnifier(&mut self, field: ElementId, position: Offset, centre: f32) {
+        if let Some(menu) = self.tree.text_field_context_menu(field) {
+            self.frame_requested |= menu.hide();
+        }
+        self.frame_requested |= self.tree.update_text_field_magnifier(
+            field,
+            position,
+            Offset::new(position.x, centre),
+        );
+    }
+
+    pub(super) fn cancel_text_handle_drag(&mut self) {
+        if let Some(drag) = self.text_handle_drag.take() {
+            self.frame_requested |= self.tree.hide_text_field_magnifier(drag.field);
+        }
     }
 
     /// The selection update of `_handleSelectionEndHandleDragUpdate` and
@@ -1911,6 +1935,7 @@ impl Runtime {
         let Some(drag) = self.text_handle_drag.take() else {
             return;
         };
+        let _ = self.tree.hide_text_field_magnifier(drag.field);
         self.frame_requested = true;
         if !drag.started {
             let delta = position - drag.down_position;

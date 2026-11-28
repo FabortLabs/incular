@@ -7,7 +7,7 @@
 //! a matrix [`crate::BackdropFilter`] and clipped to the decoration's shape,
 //! under the decoration's shadows and border.
 
-use std::{rc::Rc, sync::Arc};
+use std::{cell::{Cell, RefCell}, rc::Rc, sync::Arc};
 
 use incular_config::{Alignment, Clip};
 use incular_core::{Offset, Rect, Size, Transform};
@@ -109,6 +109,77 @@ impl TextMagnifierConfiguration {
             .as_ref()
             .and_then(|builder| builder(info))
     }
+}
+
+impl TextMagnifierConfiguration {
+    pub(crate) fn has_builder(&self) -> bool {
+        self.magnifier_builder.is_some()
+    }
+}
+
+/// The active magnifier geometry of an editor whose builder is enabled.
+#[doc(hidden)]
+pub struct TextMagnifierState {
+    info: Cell<Option<MagnifierInfo>>,
+    revision: RefCell<Rc<Cell<u64>>>,
+}
+
+impl crate::tree::RetainedState for TextMagnifierState {
+    fn rebind_revision(&self, revision: Rc<Cell<u64>>) {
+        self.revision.replace(revision);
+    }
+}
+
+impl TextMagnifierState {
+    pub(crate) fn new(revision: Rc<Cell<u64>>) -> Self {
+        Self {
+            info: Cell::new(None),
+            revision: RefCell::new(revision),
+        }
+    }
+
+    pub(crate) fn overlay(&self, configuration: &TextMagnifierConfiguration) -> Option<Widget> {
+        let info = self.info.get()?;
+        configuration.build(info).map(|widget| IgnorePointer::new(widget).into())
+    }
+
+    /// Updates the position, or removes the magnifier with `None`.
+    pub fn set_info(&self, info: Option<MagnifierInfo>) -> bool {
+        if self.info.replace(info) == info {
+            return false;
+        }
+        let revision = self.revision.borrow();
+        revision.set(revision.get().wrapping_add(1));
+        true
+    }
+}
+
+pub(crate) fn with_text_magnifier(
+    child: impl Fn(Rc<TextMagnifierState>) -> Widget + 'static,
+    configuration: TextMagnifierConfiguration,
+) -> Widget {
+    use crate::{OverlayPortal, Positioned, StackFit, TransientRole};
+
+    Widget::retained_builder(
+        TextMagnifierState::new,
+        move |state, _, _| {
+            let overlay = state.overlay(&configuration);
+            let mut portal = OverlayPortal::new(SizedBox::shrink())
+                .role(TransientRole::Tooltip)
+                .show(overlay.is_some());
+            if let Some(overlay) = overlay {
+                portal = portal.overlay_child_layout_builder(move |_, _| overlay.clone());
+            }
+            Stack::new([
+                child(state.clone()),
+                Positioned::new(portal).left(0.).top(0.).width(0.).height(0.).into(),
+            ])
+            .fit(StackFit::Passthrough)
+            .clip_behavior(Clip::None)
+            .into()
+        },
+        false,
+    )
 }
 
 /// Flutter `MagnifierController`'s geometry.
