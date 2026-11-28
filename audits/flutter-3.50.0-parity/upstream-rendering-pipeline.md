@@ -19,3 +19,16 @@ frame. Headless runtimes retain their deliberate eager default;
 native host demand is configured explicitly in this test. No desktop
 screen-reader or GPU presentation is claimed. All eight native
 tests passed.
+
+## Independent native consumers
+
+The desktop bridge previously sent both AccessKit and platform services'
+activation through the same platform boolean. AccessKit deactivation could
+clear the tree even when the second consumer remained active. The platform
+service now holds independent demand, scoped to its native window, and
+requests its initial snapshot even when the tree is already clean.
+The focused desktop test starts from a live, idle AccessKit tree, activates
+the second consumer, checks the current retained label, and confirms no
+nodes are removed when AccessKit deactivates. Releasing the second
+consumer then disables collection. This exercises the native bridge's
+retained projection, not a live screen reader or browser adapter.

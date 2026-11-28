@@ -831,8 +831,7 @@ impl DesktopHost {
             ),
             projection: AccessKitProjection::new(),
             active: false,
-            service_projection: incular_accessibility::MobileAccessibilityProjection::new(),
-            service_active: false,
+            service: Default::default(),
         };
         accessibility.projection.note_adapter_created();
         // Semantics are collected only while an assistive technology listens
@@ -1466,10 +1465,8 @@ impl DesktopHost {
                 .adapter
                 .update_if_active(|| update.into_accesskit());
         }
-        if state.accessibility.service_active
-            && let Some(update) = self
-                .application
-                .sync_semantics_projection(id, &mut state.accessibility.service_projection)
+        if let Some(projection) = state.accessibility.service.projection()
+            && let Some(update) = self.application.sync_semantics_projection(id, projection)
         {
             self.platform_services
                 .publish_semantics(&state.window, update);
@@ -1520,17 +1517,22 @@ impl DesktopHost {
             let id = state.surface.id();
             match event {
                 DesktopSemanticsEvent::Enable => {
-                    if !state.accessibility.service_active {
-                        state.accessibility.service_active = true;
-                        state.accessibility.service_projection.activate();
-                        self.application.set_semantics_enabled(id, true);
+                    if state
+                        .accessibility
+                        .service
+                        .activate(&mut self.application, id)
+                    {
+                        // The tree may already be up to date for AccessKit;
+                        // the new platform consumer still needs its snapshot.
+                        state.window.request_redraw();
                     }
                 }
                 DesktopSemanticsEvent::Action { native_id, action } => {
                     let request = state
                         .accessibility
-                        .service_projection
-                        .translate_action(native_id, action);
+                        .service
+                        .projection()
+                        .and_then(|projection| projection.translate_action(native_id, action));
                     if let Some(request) = request {
                         let _ = self.application.dispatch_accessibility_action(id, request);
                     }
