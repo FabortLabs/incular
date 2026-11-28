@@ -291,3 +291,20 @@ widget itself reads the active locale and localized greeting, switching
 from Hello to Hola without falling back to the application's locale.
 The catalog is the Rust equivalent of Flutter's delegate configuration.
 All nine focused composition tests passed.
+
+### Empty snapshot and transformed previews
+
+The pinned scaffold's `no_previews_detected_test.dart:16` and
+`custom_previews_test.dart:90` passed. The neutral native gallery
+mounts the help text and accessible documentation link only for an
+empty snapshot. The pointer test invokes the injected documentation
+opener once. When a reloaded snapshot has one preview, there is one
+group and one preview, with neither help text nor link remaining.
+Returning to an empty snapshot restores the help without opening it.
+
+A second mounted case applies a fixed-size transform to each member
+before the shared brightness transform. Both wrappers actually run,
+and the two rendered preview headers match the pinned light and dark
+labels exactly. The snapshot composition is separate from package
+scanning, HTTP serving, and automatic source discovery. All three
+gallery tests and nine composition tests passed.

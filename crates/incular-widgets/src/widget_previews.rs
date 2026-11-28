@@ -4,6 +4,8 @@
 //! for preview annotations nor starts a preview server.
 
 pub mod file_filter;
+mod gallery;
+pub use gallery::{PreviewGallery, PreviewGalleryEntry};
 pub mod ide_theme;
 pub mod search;
 pub mod restart;
