@@ -244,3 +244,13 @@ its enclosing listener received no notification. It now receives exactly
 one `SizeChangedLayoutNotification` when the height changes and none
 on mount, focus, or a subsequent unchanged frame. Width and retained
 focus identity stay unchanged. The focused native regression passed.
+
+## Duplicate toolbar request after autofocus
+
+Pinned iOS `widgets/editable_text_test.dart:18516` passed. A neutral
+native toolbar starts hidden after autofocus. The host's first request
+returns true and mounts it. A second request returns false and preserves
+the exact same retained overlay across subsequent frames. The same
+test fixture still verifies this during a handwriting interaction.
+All seven focused binding and five font-pinned keyboard geometry tests
+passed.

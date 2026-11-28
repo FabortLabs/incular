@@ -372,6 +372,15 @@ fn only_selection_changes_during_a_live_scribble_interaction_report_handwriting(
 
 #[test]
 fn repeated_toolbar_show_keeps_the_same_mounted_overlay_during_handwriting() {
+    assert_duplicate_toolbar_show_is_inert(true);
+}
+
+#[test]
+fn repeated_toolbar_show_keeps_the_same_mounted_overlay_after_autofocus() {
+    assert_duplicate_toolbar_show_is_inert(false);
+}
+
+fn assert_duplicate_toolbar_show_is_inert(handwriting: bool) {
     use incular_runtime::TextShortcutPlatform;
     use incular_widgets::{Widget, internal::Key};
 
@@ -383,6 +392,7 @@ fn repeated_toolbar_show_keeps_the_same_mounted_overlay_during_handwriting() {
             EditableText::new(text)
                 .text_direction(TextDirection::Ltr)
                 .focus_node(focus.clone())
+                .autofocus(!handwriting)
                 .context_menu_builder(|_, _| {
                     Widget::from(SizedBox::new().width(20.).height(10.)).with_key(TOOLBAR)
                 })
@@ -409,31 +419,36 @@ fn repeated_toolbar_show_keeps_the_same_mounted_overlay_during_handwriting() {
     };
     layout();
     assert!(toolbar().is_none());
-    focus.request_focus();
-    layout();
+    if handwriting {
+        focus.request_focus();
+        layout();
+    }
+    assert!(focus.has_primary_focus());
     let client = runtime
         .borrow()
         .flutter_text_input_configuration()
         .unwrap()
         .0
         .get();
-    assert_eq!(
-        host.send("TextInputClient.scribbleInteractionBegan", Value::Null)
-            .unwrap(),
-        b"[null]"
-    );
-    assert_eq!(
-        host.send(
-            "TextInputClient.updateEditingState",
-            json!([client, {"text": "Lorem ipsum dolor sit amet", "selectionBase": 3, "selectionExtent": 4}])
-        ).unwrap(),
-        b"[null]"
-    );
-    layout();
-    assert!(
-        toolbar().is_none(),
-        "handwriting selection does not open the toolbar by itself"
-    );
+    if handwriting {
+        assert_eq!(
+            host.send("TextInputClient.scribbleInteractionBegan", Value::Null)
+                .unwrap(),
+            b"[null]"
+        );
+        assert_eq!(
+            host.send(
+                "TextInputClient.updateEditingState",
+                json!([client, {"text": "Lorem ipsum dolor sit amet", "selectionBase": 3, "selectionExtent": 4}])
+            ).unwrap(),
+            b"[null]"
+        );
+        layout();
+        assert!(
+            toolbar().is_none(),
+            "handwriting selection does not open the toolbar by itself"
+        );
+    }
 
     let show = JsonMethodCodec::encode_method_call(&MethodCall {
         method: "TextInputClient.showToolbar".into(),
@@ -460,11 +475,13 @@ fn repeated_toolbar_show_keeps_the_same_mounted_overlay_during_handwriting() {
     assert_eq!(toolbar(), Some(mounted));
     layout();
     assert_eq!(toolbar(), Some(mounted));
-    assert_eq!(
-        host.send("TextInputClient.scribbleInteractionFinished", Value::Null)
-            .unwrap(),
-        b"[null]"
-    );
+    if handwriting {
+        assert_eq!(
+            host.send("TextInputClient.scribbleInteractionFinished", Value::Null)
+                .unwrap(),
+            b"[null]"
+        );
+    }
 }
 
 #[test]
