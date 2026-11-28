@@ -507,6 +507,36 @@ impl BundleImageCache {
         self.resolve_stream_with_size(key, None)
     }
 
+    /// Resolves the key and returns a synchronous loader failure directly.
+    /// A result that is still pending keeps its normal typed stream error
+    /// path; this does not block for the worker.
+    pub fn resolve_stream_checked(
+        &self,
+        key: AssetBundleImageKey,
+    ) -> Result<ImageStream, ImageError> {
+        let stream = self.resolve_stream(key);
+        if let crate::ImageLoadState::Failed(error) = stream.untracked_state() {
+            return Err(error);
+        }
+        Ok(stream)
+    }
+
+    /// Resolves a key and delivers a synchronous loader error to one caller
+    /// supplied handler, returning no stream in that case.
+    pub fn resolve_stream_on_error(
+        &self,
+        key: AssetBundleImageKey,
+        on_error: impl FnOnce(ImageError),
+    ) -> Option<ImageStream> {
+        match self.resolve_stream_checked(key) {
+            Ok(stream) => Some(stream),
+            Err(error) => {
+                on_error(error);
+                None
+            }
+        }
+    }
+
     pub(crate) fn resolve_stream_with_size(
         &self,
         asset: AssetBundleImageKey,

@@ -871,3 +871,101 @@ fn an_old_worker_preparation_cannot_steal_the_replacement_live_key() {
     assert!(!cache.status_for_key(&asset).live);
     clear_shared_bundle_image_cache();
 }
+
+#[test]
+fn a_synchronous_loader_error_returns_to_the_caller_or_the_supplied_handler() {
+    let cache = BundleImageCache::default();
+    let bundle = ImageAssetBundle::new(Arc::new(Counting::default()));
+    let missing = AssetBundleImageKey::new(bundle, "missing".to_owned(), 1.);
+    let expected = cache.resolve_stream_checked(missing.clone()).unwrap_err();
+    let mut caught = None;
+    assert!(
+        cache
+            .resolve_stream_on_error(missing.clone(), |error| caught = Some(error))
+            .is_none()
+    );
+    assert_eq!(caught, Some(expected));
+    assert_eq!(cache.status_for_key(&missing), Default::default());
+}
+
+#[test]
+fn a_deferred_loader_error_stays_in_its_stream_rather_than_the_synchronous_handler() {
+    let (cache, transport, asset) = live_bundle_fixture();
+    let stream = cache
+        .resolve_stream_on_error(asset.clone(), |_| panic!("this failure is not inline"))
+        .unwrap();
+    assert!(cache.status_for_key(&asset).pending);
+    transport.take("1")(Err(AssetError::NotFound("1".into())));
+    finish_pending_streams();
+    assert!(matches!(stream.state(), ImageLoadState::Failed(_)));
+    assert_eq!(cache.status_for_key(&asset), Default::default());
+}
+
+#[test]
+fn decoded_pixels_live_until_the_last_cache_listener_or_image_info_owner_releases_them() {
+    use incular_image::ImageStreamListener;
+    use std::{cell::RefCell, rc::Rc};
+
+    for listener_during_eviction in [false, true] {
+        let (cache, transport, asset) = live_bundle_fixture();
+        let received = Rc::new(RefCell::new(None::<incular_image::ImageInfo>));
+        let stream = cache.resolve_stream(asset.clone());
+        let consumer = stream.listen(ImageStreamListener::new({
+            let received = received.clone();
+            Rc::new(move |info, _| *received.borrow_mut() = Some(info))
+        }));
+        transport.take("1")(Ok(Arc::from(IMAGE)));
+        finish_pending_streams();
+        let frame = received.borrow_mut().take().unwrap();
+        let weak = frame.image().downgrade();
+        assert_eq!(frame.image().size_bytes(), BYTES);
+        assert!(cache.status_for_key(&asset).keep_alive);
+        drop(stream);
+
+        let mut consumer = Some(consumer);
+        if !listener_during_eviction {
+            drop(consumer.take());
+        }
+        assert!(cache.evict(&asset));
+        assert_eq!(cache.retained(), (0, 0));
+        assert!(weak.upgrade().is_some());
+        drop(consumer);
+        assert!(weak.upgrade().is_some());
+        drop(frame);
+        assert!(
+            weak.is_dropped(),
+            "no cache or listener pixel owner remains"
+        );
+    }
+}
+
+#[test]
+fn a_failed_decode_is_already_removed_when_the_observer_receives_the_error() {
+    use incular_image::ImageStreamListener;
+    use std::{cell::Cell, rc::Rc};
+
+    let (cache, transport, asset) = live_bundle_fixture();
+    let first = cache.resolve_stream(asset.clone());
+    let seen = Rc::new(Cell::new(None));
+    let _observer = first.listen(
+        ImageStreamListener::new(Rc::new(|_, _| panic!("failed asset has no frame"))).on_error({
+            let cache = cache.clone();
+            let asset = asset.clone();
+            let seen = seen.clone();
+            Rc::new(move |_| {
+                seen.set(Some((
+                    cache.status_for_key(&asset).pending,
+                    cache.evict(&asset),
+                )));
+            })
+        }),
+    );
+    transport.take("1")(Err(AssetError::NotFound("missing asset".into())));
+    finish_pending_streams();
+    assert_eq!(seen.get(), Some((false, false)));
+    let retry = cache.resolve_stream(asset.clone());
+    assert_ne!(retry, first);
+    transport.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(retry.state(), ImageLoadState::Ready(_)));
+}

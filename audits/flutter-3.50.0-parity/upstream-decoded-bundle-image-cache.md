@@ -122,3 +122,25 @@ A queued old handoff cannot mark a replacement's key live.
 Discarding the original view still allows its decode to warm
 the cache. All 51 focused native image and mounted scroll-aware
 checks passed; these controls add no original registrations.
+
+## Loader errors and decoded resource ownership
+
+The remaining four pinned originals were executed. :178 pairs:
+an inline loader failure returns to the caller as a typed error,
+or invokes its supplied handler and returns no stream. A deferred
+failure still arrives through its stream, never through the inline
+handler.
+
+At :291, Flutter can explicitly evict the failed pending entry
+from its error listener. Incular has already removed that entry
+when its error listener runs, so the explicit eviction reports a
+miss and a retry starts immediately. The callback timing and
+return-value difference is recorded rather than counted as parity.
+
+At :604 and :649, native weak handles show that removing the
+listener and evicting release their ownership without revoking
+the listener's already delivered ImageInfo. Once the final
+ImageInfo drops, the actual pixel resource is released. Flutter's
+originals also count engine image-handle stack traces; Rust Arc
+handles do not expose that instrumentation, so those rows remain
+partial. All 58 focused native cache and image-info tests passed.
