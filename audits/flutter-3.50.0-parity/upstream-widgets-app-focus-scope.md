@@ -128,3 +128,23 @@ Three native tests cover those four scenarios, including the visible
 page and exact generator trace. All three and 41 adjacent app and
 routing tests passed after the fix. These authored cases do not add
 to the original upstream case count.
+
+## Recheck after separating explicit semantic children
+
+The shortcut routing recheck exposed four already-existing failures in
+the navigation-focus target. Removing the new shortcut maps did not
+change any of them. The passive semantics annotation had become the
+outer widget of the navigation scope while the actual focus node moved
+to its inner child. The autofocus marker and the app builder's key were
+still on the outside.
+
+The native tree now resolves that known annotation to the real retained
+scope anchor. It preserves the accessibility annotation, does not
+choose a leaf that did not ask for focus, and lets an explicit editor
+autofocus win. The builder key still identifies the same navigation
+scope through the transparent annotation.
+
+All four pinned originals and both authored reference cases were rerun.
+Twenty focused native tests passed across app focus, stock and scoped
+shortcut activation, and route autofocus/restoration. This restores
+previously paired cases rather than incrementing coverage.

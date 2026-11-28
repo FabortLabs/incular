@@ -251,10 +251,30 @@ impl WidgetTree {
     /// Returns the node installed by a mounted focus or editing widget.
     #[must_use]
     pub fn focus_node_at(&self, id: ElementId) -> Option<incular_gestures::FocusNode> {
-        self.elements
-            .get(id.0)
-            .and_then(|element| external_node(element.widget.kind()))
-            .cloned()
+        let element = self.elements.get(id.0)?;
+        external_node(element.widget.kind()).cloned().or_else(|| {
+            self.navigation_scope_anchor_at(id)
+                .and_then(|anchor| self.focus_boundary_at(anchor))
+                .cloned()
+        })
+    }
+
+    /// The app builder receives the navigation scope's semantic wrapper.
+    /// Its autofocus marker is on that public widget, but requests must
+    /// target the retained scope node below the annotation.
+    fn navigation_scope_anchor_at(&self, id: ElementId) -> Option<ElementId> {
+        let element = self.elements.get(id.0)?;
+        if !element.widget.semantic_properties().navigation_scope_autofocus {
+            return None;
+        }
+        let anchor = match element.widget.kind() {
+            WidgetKind::ProxyLayout { mode: ChildLayoutMode::SemanticAnnotation, .. } => {
+                *element.children.first()?
+            }
+            _ => id,
+        };
+        self.focus_boundary_at(anchor)?.scope_owner()?;
+        Some(anchor)
     }
 
     pub(crate) fn focus_boundary_at(&self, id: ElementId) -> Option<&incular_gestures::FocusNode> {
@@ -2365,11 +2385,11 @@ impl WidgetTree {
                 autofocusing_scopes.push(id);
             }
             if navigation_anchor.is_none()
-                && element.widget.semantic_properties().navigation_scope_autofocus
-                && includes(id)
-                && self.can_request_focus(id)
+                && let Some(anchor) = self.navigation_scope_anchor_at(id)
+                && includes(anchor)
+                && self.can_request_focus(anchor)
             {
-                navigation_anchor = Some(id);
+                navigation_anchor = Some(anchor);
             }
             pending.extend(element.children.iter().rev().copied());
         }
@@ -2543,8 +2563,11 @@ impl WidgetTree {
         let explicit = requests.into_iter().find_map(|id| {
             let element = self.elements.get(id.0)?;
             if element.widget.semantic_properties().navigation_scope_autofocus {
-                if navigation_anchor.is_none() && self.can_request_focus(id) {
-                    navigation_anchor = Some(id);
+                if navigation_anchor.is_none()
+                    && let Some(anchor) = self.navigation_scope_anchor_at(id)
+                    && self.can_request_focus(anchor)
+                {
+                    navigation_anchor = Some(anchor);
                 }
                 return None;
             }
