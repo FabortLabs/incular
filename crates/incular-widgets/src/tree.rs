@@ -1643,6 +1643,7 @@ pub struct WidgetTree {
     scroll_attachments: FastHashMap<ElementId, Vec<MetricAttachment>>,
     /// Pointer, gesture, drag and scroll-interaction state.
     input: InputState,
+    haptic_feedback_handler: Option<Rc<dyn Fn(incular_platform::HapticFeedbackType)>>,
     semantics: SemanticsTree,
     semantic_ids: FastHashMap<ElementId, SemanticNodeId>,
     /// A semantic parent (or the forest root) gets a separate point order

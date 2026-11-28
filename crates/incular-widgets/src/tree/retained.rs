@@ -60,6 +60,7 @@ impl WidgetTree {
             pending_handlers: Vec::new(),
             scroll_attachments: FastHashMap::default(),
             input: InputState::default(),
+            haptic_feedback_handler: None,
             semantics: SemanticsTree::new(),
             semantic_ids: FastHashMap::default(),
             semantic_point_order: FastHashMap::default(),

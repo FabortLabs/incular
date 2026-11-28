@@ -126,6 +126,9 @@ pub trait RetainedDragSource {
     fn allows_buttons(&self, buttons: u32) -> bool {
         buttons == PRIMARY_POINTER_BUTTON
     }
+    fn haptic_feedback_on_start(&self) -> bool {
+        false
+    }
     /// Flutter `Draggable.affinity`: the axis the gesture must move along to
     /// start a drag, `None` for any direction.
     fn affinity(&self) -> Option<Axis> {
@@ -204,6 +207,7 @@ pub struct Draggable<T: Clone + 'static> {
     drag_anchor_strategy: DragAnchorStrategy,
     max_simultaneous_drags: Option<usize>,
     start_delay: Option<Duration>,
+    haptic_feedback_on_start: bool,
     on_start: Option<Rc<dyn Fn(T)>>,
     on_end: Option<Rc<dyn Fn(T)>>,
     on_cancel: Option<Rc<dyn Fn(T)>>,
@@ -231,6 +235,7 @@ impl<T: Clone + 'static> Draggable<T> {
             drag_anchor_strategy: DragAnchorStrategy::Child,
             max_simultaneous_drags: None,
             start_delay: None,
+            haptic_feedback_on_start: false,
             on_start: None,
             on_end: None,
             on_cancel: None,
@@ -375,6 +380,7 @@ struct DragSourceBinding<T: Clone + 'static> {
     drag_anchor_strategy: DragAnchorStrategy,
     max_simultaneous_drags: Option<usize>,
     start_delay: Option<Duration>,
+    haptic_feedback_on_start: bool,
     on_start: Option<Rc<dyn Fn(T)>>,
     on_end: Option<Rc<dyn Fn(T)>>,
     on_cancel: Option<Rc<dyn Fn(T)>>,
@@ -441,6 +447,9 @@ impl<T: Clone + 'static> RetainedDragSource for DragSourceBinding<T> {
     }
     fn start_delay(&self) -> Option<Duration> {
         self.start_delay
+    }
+    fn haptic_feedback_on_start(&self) -> bool {
+        self.haptic_feedback_on_start
     }
     fn can_start(&self) -> bool {
         self.max_simultaneous_drags
@@ -572,6 +581,7 @@ impl<T: Clone + 'static> From<Draggable<T>> for Widget {
                 drag_anchor_strategy: value.drag_anchor_strategy,
                 max_simultaneous_drags: value.max_simultaneous_drags,
                 start_delay: value.start_delay,
+                haptic_feedback_on_start: value.haptic_feedback_on_start,
                 on_start: value.on_start,
                 on_end: value.on_end,
                 on_cancel: value.on_cancel,
@@ -853,10 +863,17 @@ pub struct LongPressDraggable<T: Clone + 'static> {
 impl<T: Clone + 'static> LongPressDraggable<T> {
     #[must_use]
     pub fn new(context: DragDropContext<T>, payload: T, child: impl Into<Widget>) -> Self {
-        Self {
-            draggable: Draggable::new(context, payload, child)
-                .start_delay(incular_gestures::PointerGestureRecognizer::LONG_PRESS_TIMEOUT),
-        }
+        let mut draggable = Draggable::new(context, payload, child)
+            .start_delay(incular_gestures::PointerGestureRecognizer::LONG_PRESS_TIMEOUT);
+        draggable.haptic_feedback_on_start = true;
+        Self { draggable }
+    }
+    /// Requests a selection click when a drag actually starts. Enabled by
+    /// default; hosts without a haptic handler safely ignore the request.
+    #[must_use]
+    pub fn haptic_feedback_on_start(mut self, enabled: bool) -> Self {
+        self.draggable.haptic_feedback_on_start = enabled;
+        self
     }
     /// The hold required before dragging, defaulting to 500 milliseconds.
     #[must_use]

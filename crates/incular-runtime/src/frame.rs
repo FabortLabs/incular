@@ -884,6 +884,16 @@ impl Runtime {
         std::mem::take(&mut self.text_selection_actions)
     }
 
+    /// Installs a window-local host sink for framework haptic requests.
+    /// A host without haptics can leave this unset. The sink should enqueue
+    /// or dispatch the effect without blocking the frame.
+    pub fn set_haptic_feedback_handler(
+        &mut self,
+        handler: Option<Rc<dyn Fn(incular_platform::HapticFeedbackType)>>,
+    ) {
+        self.tree.set_haptic_feedback_handler(handler);
+    }
+
     fn collect_autofill_context_completions(&mut self) {
         self.text_input_commands.extend(
             self.tree.take_autofill_context_completions().into_iter()

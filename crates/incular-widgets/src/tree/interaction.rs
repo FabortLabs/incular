@@ -2910,7 +2910,8 @@ impl WidgetTree {
         };
         // Down-time eligibility only decides whether the recognizer can
         // compete. Another pending contact may win first and fill the limit.
-        if !self.input.active_drags.contains_key(&key) && !source.can_start() {
+        let starting = !self.input.active_drags.contains_key(&key);
+        if starting && !source.can_start() {
             if let Some(gesture) = self.input.active_gestures.get_mut(&key) {
                 gesture.drag_refused = true;
             }
@@ -2932,9 +2933,21 @@ impl WidgetTree {
                 velocity: crate::gestures::Velocity::ZERO,
             }
         });
+        if starting && active.source.haptic_feedback_on_start()
+            && let Some(handler) = &self.haptic_feedback_handler
+        {
+            handler(incular_platform::HapticFeedbackType::SelectionClick);
+        }
         if let Some(position) = active.source.update(active.session, position) {
             self.update_drag_target(key, position);
         }
+    }
+    #[doc(hidden)]
+    pub fn set_haptic_feedback_handler(
+        &mut self,
+        handler: Option<Rc<dyn Fn(incular_platform::HapticFeedbackType)>>,
+    ) {
+        self.haptic_feedback_handler = handler;
     }
     pub(super) fn drag_source(&self, element: ElementId) -> Option<Rc<dyn RetainedDragSource>> {
         match self.elements.get(element.0)?.widget.kind() {

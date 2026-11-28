@@ -170,3 +170,17 @@ millisecond before the deadline. The default starts exactly at
 Release removes feedback. A short tap or movement past slop before
 the deadline sends no start or drop, even after waiting longer.
 All nine focused native delay, hit, button and feedback tests passed.
+
+### Haptic request at long-press start
+
+Pinned :3240 and :3248 passed. The native mounted runtime calls an
+installed host handler once, at actual drag activation, with
+SelectionClick by default and when explicitly enabled. A disabled
+option sends none, and no request occurs on down, before the hold
+deadline, or on release. The captured host request encodes
+`flutter/platform`, `HapticFeedback.vibrate`, and the exact
+selectionClick argument through the existing platform codec.
+
+All 12 focused runtime and platform cases passed. This exercises
+the host request boundary, not a physical actuator; hosts without a
+registered handler remain silent without retaining pending requests.

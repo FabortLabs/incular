@@ -4143,3 +4143,5 @@ packages/flutter/test/widgets/draggable_test.dart	730	Drag and drop - long press
 packages/flutter/test/widgets/draggable_test.dart	3120	long-press draggable calls onDragStartedCalled after long press	paired-match	upstream-draggable-target-path.md#delayed-drag-activation
 packages/flutter/test/widgets/draggable_test.dart	3161	Custom long press delay for LongPressDraggable	paired-match	upstream-draggable-target-path.md#delayed-drag-activation
 packages/flutter/test/widgets/draggable_test.dart	3201	Default long press delay for LongPressDraggable	paired-match	upstream-draggable-target-path.md#delayed-drag-activation
+packages/flutter/test/widgets/draggable_test.dart	3240	long-press draggable calls Haptic Feedback onStart	paired-match	upstream-draggable-target-path.md#haptic-request-at-long-press-start
+packages/flutter/test/widgets/draggable_test.dart	3248	long-press draggable can disable Haptic Feedback	paired-match	upstream-draggable-target-path.md#haptic-request-at-long-press-start
