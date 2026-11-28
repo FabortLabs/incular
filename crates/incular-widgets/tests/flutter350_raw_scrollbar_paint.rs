@@ -293,3 +293,175 @@ fn the_same_overlay_repaints_when_the_window_height_changes_one_pixel() {
     );
     assert_eq!(settle(&mut tree, size, at + Duration::from_secs(2)), None);
 }
+
+fn explicit_track_commands(
+    orientation: RawScrollbarOrientation,
+    configure: impl FnOnce(RawScrollbar) -> RawScrollbar,
+) -> Vec<PaintCommand> {
+    let viewport = Size::new(800., 600.);
+    let controller = ScrollController::new();
+    let (axis, main) = match orientation {
+        RawScrollbarOrientation::Top | RawScrollbarOrientation::Bottom => (Axis::Horizontal, 800.),
+        _ => (Axis::Vertical, 600.),
+    };
+    controller.try_set_metrics_context(axis, false).unwrap();
+    controller.update_extents(4000., main).unwrap();
+    let mut bar = RawScrollbar::new(controller);
+    bar.set_style(RawScrollbarStyle {
+        thumb_visibility: Some(true),
+        orientation,
+        ..RawScrollbarStyle::default()
+    });
+    let mut tree = WidgetTree::new();
+    tree.mount(configure(bar).with_child(Widget::box_(viewport, Color::WHITE)))
+        .unwrap();
+    tree.layout(Constraints::tight(viewport)).unwrap();
+    let now = Instant::now();
+    tree.pump_scrollbar_fades(now);
+    tree.pump_scrollbar_fades(now + Duration::from_millis(300));
+    let list = tree.paint();
+    list.commands()
+        .iter()
+        .filter(|command| match command {
+            PaintCommand::PushTransform { transform } => {
+                assert_eq!(*transform, incular_core::Transform::IDENTITY);
+                false
+            }
+            PaintCommand::PopTransform => false,
+            _ => true,
+        })
+        .cloned()
+        .collect()
+}
+
+fn expected_track_border(start: Offset, end: Offset, color: Color) -> PaintCommand {
+    use incular_rendering::{Path, Stroke};
+    let mut path = Path::builder();
+    path.move_to(start);
+    path.line_to(end);
+    PaintCommand::StrokePath {
+        path: std::sync::Arc::new(path.build()),
+        brush: color.into(),
+        stroke: Stroke::default(),
+    }
+}
+
+#[test]
+fn a_default_explicit_thumb_does_not_draw_an_unrequested_track_or_border() {
+    let commands = explicit_track_commands(RawScrollbarOrientation::Right, |bar| {
+        bar.track_color(Color::BLACK)
+            .track_border_color(Color::BLACK)
+    });
+    assert_eq!(
+        commands.as_slice(),
+        &[
+            PaintCommand::Rect {
+                rect: Rect::from_origin_size(Offset::ZERO, Size::new(800., 600.)),
+                color: Color::WHITE,
+            },
+            PaintCommand::Rect {
+                rect: Rect::from_origin_size(Offset::new(794., 0.), Size::new(6., 90.)),
+                color: RAW_INK,
+            },
+        ],
+    );
+}
+
+#[test]
+fn enabled_track_paints_the_one_pixel_inner_edge_between_track_and_thumb() {
+    let rect = |height| Rect::from_origin_size(Offset::new(794., 0.), Size::new(6., height));
+    let start = Offset::new(794., 0.);
+    let end = Offset::new(794., 600.);
+    let commands = explicit_track_commands(RawScrollbarOrientation::Right, |bar| {
+        bar.track_visibility(true)
+    });
+    assert!(commands.ends_with(&[
+        PaintCommand::Rect {
+            rect: rect(600.),
+            color: Color::rgba(0, 0, 0, 8),
+        },
+        expected_track_border(start, end, Color::rgba(0, 0, 0, 26)),
+        PaintCommand::Rect {
+            rect: rect(90.),
+            color: RAW_INK,
+        },
+    ]));
+    let track = Color::rgba(33, 150, 243, 255);
+    let border = Color::rgba(255, 235, 59, 255);
+    let thumb = Color::rgba(244, 67, 54, 255);
+    let commands = explicit_track_commands(RawScrollbarOrientation::Right, |mut bar| {
+        let mut style = bar.style();
+        style.thumb_color = thumb;
+        bar.set_style(style);
+        bar.track_visibility(true)
+            .track_color(track)
+            .track_border_color(border)
+    });
+    assert!(commands.ends_with(&[
+        PaintCommand::Rect {
+            rect: rect(600.),
+            color: track
+        },
+        expected_track_border(start, end, border),
+        PaintCommand::Rect {
+            rect: rect(90.),
+            color: thumb
+        },
+    ]));
+}
+
+#[test]
+fn enabled_track_and_thumb_round_independently_without_forcing_border_ink() {
+    use incular_rendering::RRect;
+    use incular_widgets::Radius;
+    let round = |bar: RawScrollbar| {
+        bar.track_visibility(true)
+            .track_radius(Radius::circular(1.))
+            .radius(Radius::circular(2.))
+    };
+    let with_border = explicit_track_commands(RawScrollbarOrientation::Right, round);
+    let commands = explicit_track_commands(RawScrollbarOrientation::Right, |bar| {
+        round(bar).track_border_color(Color::TRANSPARENT)
+    });
+    let rounded = |height, radius, color: Color| PaintCommand::RRect {
+        rrect: RRect::uniform(
+            Rect::from_origin_size(Offset::new(794., 0.), Size::new(6., height)),
+            radius,
+        ),
+        brush: color.into(),
+    };
+    assert!(with_border.ends_with(&[
+        rounded(600., 1., Color::rgba(0, 0, 0, 8)),
+        expected_track_border(
+            Offset::new(794., 0.),
+            Offset::new(794., 600.),
+            Color::rgba(0, 0, 0, 26),
+        ),
+        rounded(90., 2., RAW_INK),
+    ]));
+    assert_eq!(commands.len(), 3);
+    assert!(commands.ends_with(&[
+        rounded(600., 1., Color::rgba(0, 0, 0, 8)),
+        rounded(90., 2., RAW_INK),
+    ]));
+}
+
+#[test]
+fn explicitly_transparent_track_fill_and_border_are_preserved_on_all_four_edges() {
+    use RawScrollbarOrientation::{Bottom, Left, Right, Top};
+    for (side, start, end) in [
+        (Left, Offset::new(6., 0.), Offset::new(6., 600.)),
+        (Right, Offset::new(794., 0.), Offset::new(794., 600.)),
+        (Top, Offset::new(0., 6.), Offset::new(800., 6.)),
+        (Bottom, Offset::new(0., 594.), Offset::new(800., 594.)),
+    ] {
+        let commands = explicit_track_commands(side, |bar| {
+            bar.track_visibility(true).track_color(Color::TRANSPARENT)
+        });
+        assert_eq!(commands.len(), 3, "side={side:?}: {commands:?}");
+        assert_eq!(
+            commands[1],
+            expected_track_border(start, end, Color::rgba(0, 0, 0, 26)),
+        );
+    }
+}

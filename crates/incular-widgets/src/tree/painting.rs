@@ -1395,15 +1395,46 @@ impl WidgetTree {
             return;
         }
         let style = scrollbar.style();
-        for (rect, mut color) in [
-            (geometry.track, style.track_color),
-            (geometry.thumb, style.thumb_color),
-        ] {
+        let faded = |mut color: Color| {
             color.alpha = (f32::from(color.alpha) * geometry.opacity).round() as u8;
-            if color.alpha > 0 {
-                cache.push(PaintCommand::Rect { rect, color });
+            color
+        };
+        let (track, border) = scrollbar.track_paint_colors();
+        let paint_fill = |cache: &mut DisplayList, rect, radius: Option<crate::Radius>, color| {
+            let color = faded(color);
+            if color.alpha == 0 {
+                return;
             }
+            match radius {
+                None => cache.push(PaintCommand::Rect { rect, color }),
+                Some(radius) if radius.x == radius.y => cache.push(PaintCommand::RRect {
+                    rrect: RRect::uniform(rect, radius.x),
+                    brush: color.into(),
+                }),
+                Some(radius) => cache.push(PaintCommand::FillPath {
+                    path: Arc::new(crate::painting_effects::rrect_path(
+                        rect,
+                        crate::BorderRadius::all(radius),
+                    )),
+                    brush: color.into(),
+                    fill_rule: FillRule::NonZero,
+                }),
+            }
+        };
+        paint_fill(cache, geometry.track, style.track_radius, track);
+        let border = faded(border);
+        if border.alpha > 0 {
+            let (start, end) = scrollbar.track_inner_edge(geometry.track);
+            let mut line = Path::builder();
+            line.move_to(start);
+            line.line_to(end);
+            cache.push(PaintCommand::StrokePath {
+                path: Arc::new(line.build()),
+                brush: border.into(),
+                stroke: Stroke::default(),
+            });
         }
+        paint_fill(cache, geometry.thumb, style.radius, style.thumb_color);
     }
     pub(super) fn hit_test_render(
         &self,

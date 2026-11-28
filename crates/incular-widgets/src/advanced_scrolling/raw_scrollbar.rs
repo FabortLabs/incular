@@ -15,8 +15,8 @@ use incular_core::{finite_non_negative, finite_or_zero};
 use incular_scroll::{ActivityOrigin, OwnedActivity, ScrollController};
 use smart_default::SmartDefault;
 
-use crate::MouseCursor;
 use crate::gestures::PointerDeviceKind;
+use crate::{MouseCursor, Radius};
 
 /// Flutter `_kScrollbarFadeDuration` (`widgets/scrollbar.dart:43`).
 pub(crate) const SCROLLBAR_FADE_DURATION: Duration = Duration::from_millis(300);
@@ -251,8 +251,19 @@ pub struct RawScrollbarStyle {
     /// Insets around the track. When absent, mounted bars inherit the
     /// nearest MediaQuery's safe-area padding.
     pub padding: Option<EdgeInsetsGeometry>,
-    /// Track paint color. A transparent track is the default overlay style.
+    /// Legacy track fill: nontransparent ink opts into painting a track
+    /// without a border unless `track_visibility` is explicitly set.
     pub track_color: Color,
+    /// With a permanently visible thumb, opts into Flutter's track and border.
+    pub track_visibility: Option<bool>,
+    /// Overrides the track fill when `track_visibility` is true.
+    pub track_fill_color: Option<Color>,
+    /// Overrides the one-pixel inner track edge when `track_visibility` is true.
+    pub track_border_color: Option<Color>,
+    /// Rounded track corners, independent of the thumb's radius.
+    pub track_radius: Option<Radius>,
+    /// Rounded thumb corners. An omitted radius draws a square thumb.
+    pub radius: Option<Radius>,
     /// Thumb paint color.
     #[default(Color::rgba(188, 188, 188, 102))]
     pub thumb_color: Color,
@@ -496,6 +507,75 @@ impl RawScrollbar {
     pub fn padding(mut self, padding: impl Into<EdgeInsetsGeometry>) -> Self {
         self.style.padding = Some(padding.into());
         self
+    }
+
+    /// Shows the track and its inner edge when the thumb is always visible.
+    #[must_use]
+    pub fn track_visibility(mut self, visible: bool) -> Self {
+        self.style.track_visibility = Some(visible);
+        self
+    }
+
+    /// Overrides the opted-in track fill, including fully transparent ink.
+    #[must_use]
+    pub fn track_color(mut self, color: Color) -> Self {
+        self.style.track_fill_color = Some(color);
+        self
+    }
+
+    /// Overrides the opted-in inner track edge.
+    #[must_use]
+    pub fn track_border_color(mut self, color: Color) -> Self {
+        self.style.track_border_color = Some(color);
+        self
+    }
+
+    /// Sets the rounded corners of the track.
+    #[must_use]
+    pub fn track_radius(mut self, radius: Radius) -> Self {
+        self.style.track_radius = Some(radius);
+        self
+    }
+
+    /// Sets the rounded corners of the thumb.
+    #[must_use]
+    pub fn radius(mut self, radius: Radius) -> Self {
+        self.style.radius = Some(radius);
+        self
+    }
+
+    pub(crate) fn track_paint_colors(&self) -> (Color, Color) {
+        match self.style.track_visibility {
+            Some(true) if self.show_scrollbar() => (
+                self.style.track_fill_color.unwrap_or_else(|| {
+                    if self.style.track_color.alpha == 0 {
+                        Color::rgba(0, 0, 0, 8)
+                    } else {
+                        self.style.track_color
+                    }
+                }),
+                self.style
+                    .track_border_color
+                    .unwrap_or(Color::rgba(0, 0, 0, 26)),
+            ),
+            None => (self.style.track_color, Color::TRANSPARENT),
+            _ => (Color::TRANSPARENT, Color::TRANSPARENT),
+        }
+    }
+
+    /// Inner edge of the physical track, centered on the boundary.
+    pub(crate) fn track_inner_edge(&self, track: Rect) -> (Offset, Offset) {
+        let axis = self.controller.metrics().axis_direction.axis();
+        let (orientation, _) = self.style.orientation.resolve(axis, self.text_direction);
+        let (x, y) = (track.origin.x, track.origin.y);
+        let (right, bottom) = (x + track.size.width, y + track.size.height);
+        match orientation {
+            RawScrollbarOrientation::Left => (Offset::new(right, y), Offset::new(right, bottom)),
+            RawScrollbarOrientation::Right => (track.origin, Offset::new(x, bottom)),
+            RawScrollbarOrientation::Top => (Offset::new(x, bottom), Offset::new(right, bottom)),
+            RawScrollbarOrientation::Bottom => (track.origin, Offset::new(right, y)),
+            RawScrollbarOrientation::Auto => unreachable!("orientation already resolved"),
+        }
     }
 
     /// `RawScrollbar.thumbVisibility ?? false`.

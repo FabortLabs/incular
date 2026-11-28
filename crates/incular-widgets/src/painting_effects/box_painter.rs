@@ -1201,7 +1201,7 @@ fn deflate_sides(rect: Rect, insets: EdgeInsets) -> Rect {
 }
 
 /// `BorderRadius.toRRect(rect)` as a path with elliptical corners.
-pub(super) fn rrect_path(rect: Rect, radius: BorderRadius) -> Path {
+pub(crate) fn rrect_path(rect: Rect, radius: BorderRadius) -> Path {
     elliptical_rrect_path(rect, clockwise_radii(radius))
 }
 

@@ -4375,3 +4375,7 @@ packages/flutter/test/widgets/scrollbar_test.dart	476	thumb resizes gradually on
 packages/flutter/test/widgets/scrollbar_test.dart	2602	Track offset respects MediaQuery padding	paired-match	upstream-scrollbar-padding.md
 packages/flutter/test/widgets/scrollbar_test.dart	2633	RawScrollbar.padding replaces MediaQueryData.padding	paired-match	upstream-scrollbar-padding.md
 packages/flutter/test/widgets/scrollbar_test.dart	3626	with EdgeInsetsDirectional	paired-match	upstream-scrollbar-padding.md
+packages/flutter/test/widgets/scrollbar_test.dart	570	trackRadius and radius is respected	partial-match	upstream-scrollbar-track-paint.md
+packages/flutter/test/widgets/scrollbar_test.dart	2423	Scrollbar track can be drawn	paired-match	upstream-scrollbar-track-paint.md
+packages/flutter/test/widgets/scrollbar_test.dart	2459	RawScrollbar correctly assigns colors	paired-match	upstream-scrollbar-track-paint.md
+packages/flutter/test/widgets/scrollbar_test.dart	2498	trackRadius and radius properties of RawScrollbar can draw RoundedRectangularRect	paired-match	upstream-scrollbar-track-paint.md
