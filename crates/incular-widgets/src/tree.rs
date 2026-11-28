@@ -1619,6 +1619,8 @@ pub struct WidgetTree {
     input: InputState,
     haptic_feedback_handler: Option<Rc<dyn Fn(incular_platform::HapticFeedbackType)>>,
     semantics: SemanticsTree,
+    #[cfg(debug_assertions)]
+    semantic_role_issues: Vec<incular_semantics::SemanticRoleIssue>,
     semantic_ids: FastHashMap<ElementId, SemanticNodeId>,
     /// A semantic parent (or the forest root) gets a separate point order
     /// only when its traversal children were sorted away from paint order.

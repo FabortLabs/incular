@@ -16,6 +16,7 @@ use std::{
 mod attributed_string;
 mod custom_action;
 mod label_builder;
+mod role_checks;
 mod sort_key;
 mod visibility;
 pub use attributed_string::{
@@ -24,6 +25,7 @@ pub use attributed_string::{
 pub use custom_action::{CustomSemanticsAction, CustomSemanticsActionId};
 pub use incular_core::TextDirection;
 pub use label_builder::SemanticsLabelBuilder;
+pub use role_checks::{SemanticRoleIssue, SemanticRoleIssueKind};
 pub use visibility::{InvisibleSemanticsNode, InvisibleSemanticsNodes};
 pub use sort_key::{
     CustomSemanticsSortKey, IncompatibleSemanticsSortKeyTypes, SemanticsSortKeyRef,

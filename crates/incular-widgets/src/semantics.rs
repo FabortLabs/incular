@@ -1043,9 +1043,14 @@ impl From<Semantics> for Widget {
             .child
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         let tags_children = value.tag_for_children.is_some();
-        if tags_children || (explicit.is_some() && widget.has_explicit_semantics()) {
-            // Keep the tagging annotation outside its child, including
-            // children that contribute implicit semantics such as Text.
+        if tags_children
+            || (explicit.is_some()
+                && (value.state.explicit_child_nodes
+                    || widget.has_explicit_semantics()
+                    || widget.excludes_semantics_subtree()))
+        {
+            // An excluded child does not exclude its parent's annotation.
+            // Preserve that boundary, just as for tags and nested metadata.
             widget = Widget::from_kind(WidgetKind::ProxyLayout {
                 mode: ChildLayoutMode::SemanticAnnotation,
                 child: Some(widget),

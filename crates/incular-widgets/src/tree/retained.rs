@@ -64,6 +64,8 @@ impl WidgetTree {
             input: InputState::default(),
             haptic_feedback_handler: None,
             semantics: SemanticsTree::new(),
+            #[cfg(debug_assertions)]
+            semantic_role_issues: Vec::new(),
             semantic_ids: FastHashMap::default(),
             semantic_point_order: FastHashMap::default(),
             semantic_bounds_insets: FastHashMap::default(),
@@ -1055,6 +1057,14 @@ impl WidgetTree {
     #[must_use]
     pub fn semantics(&self) -> &SemanticsTree {
         &self.semantics
+    }
+    /// Role issues from the most recent semantics update in a debug build.
+    #[must_use]
+    pub fn debug_semantic_role_issues(&self) -> &[incular_semantics::SemanticRoleIssue] {
+        #[cfg(debug_assertions)]
+        return &self.semantic_role_issues;
+        #[cfg(not(debug_assertions))]
+        return &[];
     }
     #[must_use]
     pub fn semantics_diagnostics(&self) -> SemanticsDiagnostics {

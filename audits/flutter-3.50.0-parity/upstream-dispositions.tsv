@@ -4455,3 +4455,18 @@ packages/flutter/test/widgets/selection_container_test.dart	147	selection contai
 packages/flutter/test/widgets/selection_container_test.dart	179	selection container gets registrar from context if not provided	paired-match	upstream-selection-container-registration.md
 packages/flutter/test/widgets/selection_container_test.dart	202	SelectionContainer does not crash at zero area	paired-match	upstream-selection-container-registration.md
 packages/flutter/test/widgets/selectable_region_test.dart	1006	Can extend StaticSelectionContainerDelegate	paired-match	upstream-selection-container-registration.md#custom-selected-content
+packages/flutter/test/widgets/semantics_role_checks_test.dart	16	failure case, empty	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	29	failure case, no tap	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	42	success case	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	59	failure case, list item without list parent	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	75	Success case	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	91	failure case, empty child	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	107	failure case, non tab child	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	124	Success case	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	320	failure case, empty child	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	336	Success case	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	394	failure case, no menu or menuBar as ancester	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	410	Success case with menu as an ancester	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	594	failure case, alert and live region	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	614	failure case, status and live region	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	634	success case	paired-match	upstream-semantics-role-checks.md

@@ -2034,6 +2034,10 @@ impl Widget {
         self
     }
 
+    pub(crate) fn excludes_semantics_subtree(&self) -> bool {
+        self.semantic_properties().hidden
+    }
+
     /// Excludes this widget and its implementation-detail subtree from semantics.
     #[must_use]
     pub fn exclude_semantics(mut self) -> Self {
