@@ -4115,3 +4115,11 @@ packages/flutter/test/widgets/editable_text_test.dart	11405	EditableText changes
 packages/flutter/test/widgets/mouse_region_test.dart	1992	Handle mouse events should ignore the detached MouseTrackerAnnotation	paired-match	upstream-mouse-tracker-callbacks.md#dragging-after-the-original-hovered-child-detaches
 packages/flutter/test/widgets/draggable_test.dart	92	Drag and drop - a lower DragTarget is recognized after entering an upper rejecting target	paired-match	upstream-draggable-target-path.md
 packages/flutter/test/widgets/draggable_test.dart	173	Drag and drop - an accepting upper DragTarget is not bypassed by a lower overlapping target	paired-match	upstream-draggable-target-path.md
+packages/flutter/test/widgets/draggable_test.dart	1108	Null axis draggable moves along all axes	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis
+packages/flutter/test/widgets/draggable_test.dart	1125	Horizontal axis draggable moves horizontally	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis
+packages/flutter/test/widgets/draggable_test.dart	1142	Horizontal axis draggable does not move vertically	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis
+packages/flutter/test/widgets/draggable_test.dart	1162	Vertical axis draggable moves vertically	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis
+packages/flutter/test/widgets/draggable_test.dart	1179	Vertical axis draggable does not move horizontally	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis
+packages/flutter/test/widgets/draggable_test.dart	1248	Null axis onDragUpdate called only if draggable moves in any direction	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis
+packages/flutter/test/widgets/draggable_test.dart	1285	Vertical axis onDragUpdate only called if draggable moves vertical	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis
+packages/flutter/test/widgets/draggable_test.dart	1322	Horizontal axis onDragUpdate only called if draggable moves horizontal	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis

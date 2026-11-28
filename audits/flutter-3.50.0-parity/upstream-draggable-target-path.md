@@ -17,3 +17,19 @@ native fixture compares actual offers and final accepted payloads.
 Native controls also verify that a defer-to-child empty upper target
 does not participate and an opaque upper target blocks a lower one.
 All 35 focused mouse, target path and drag option tests passed.
+
+## Feedback positions and update callbacks by axis
+
+All eight pinned `widgets/draggable_test.dart` registrations at
+:1108, :1125, :1142, :1162, :1179, :1248, :1285, and :1322 passed.
+The native widget fixture tracks the actual feedback element and
+its drag position after the original is replaced. Unrestricted
+moves of ±(300,300) retain both components; locking each axis
+retains only its component on both straight and diagonal moves.
+Release removes feedback and restores the source.
+
+The three update traces also compare real callback deltas. Before
+movement the down-created feedback sends no update. The free drag
+reports (10,10) once; vertical and horizontal locks report only
+(0,10) or (10,0). Zero and suppressed-axis movement and release
+do not add callbacks. Both focused native matrix tests passed.
