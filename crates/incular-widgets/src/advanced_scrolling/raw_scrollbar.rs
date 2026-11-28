@@ -287,6 +287,13 @@ pub struct RawScrollbarStyle {
 }
 
 impl RawScrollbarStyle {
+    fn assert_valid_visibility(self) {
+        debug_assert!(
+            !(self.thumb_visibility == Some(false) && self.track_visibility == Some(true)),
+            "RawScrollbar: a visible track requires a visible thumb",
+        );
+    }
+
     fn normalized(self) -> Self {
         Self {
             thickness: finite_positive(self.thickness, 1.0),
@@ -509,10 +516,20 @@ impl RawScrollbar {
         self
     }
 
+    /// Keeps the thumb visible at rest. An explicitly hidden thumb cannot
+    /// be combined with an explicitly visible track.
+    #[must_use]
+    pub fn thumb_visibility(mut self, visible: bool) -> Self {
+        self.style.thumb_visibility = Some(visible);
+        self.style.assert_valid_visibility();
+        self
+    }
+
     /// Shows the track and its inner edge when the thumb is always visible.
     #[must_use]
     pub fn track_visibility(mut self, visible: bool) -> Self {
         self.style.track_visibility = Some(visible);
+        self.style.assert_valid_visibility();
         self
     }
 
@@ -685,6 +702,7 @@ impl RawScrollbar {
     /// still-current token emits `End`, so a taken-over bracket stays
     /// silent here.
     pub fn set_style(&mut self, style: RawScrollbarStyle) {
+        style.assert_valid_visibility();
         self.end_drag_activity();
         self.style = style.normalized();
         self.fade

@@ -465,3 +465,41 @@ fn explicitly_transparent_track_fill_and_border_are_preserved_on_all_four_edges(
         );
     }
 }
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_visible_track_rejects_an_explicitly_hidden_thumb_in_either_builder_order() {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    let create = || RawScrollbar::new(ScrollController::new());
+    assert!(
+        catch_unwind(AssertUnwindSafe(|| create()
+            .thumb_visibility(false)
+            .track_visibility(true)))
+        .is_err()
+    );
+    assert!(
+        catch_unwind(AssertUnwindSafe(|| create()
+            .track_visibility(true)
+            .thumb_visibility(false)))
+        .is_err()
+    );
+    let mut raw = create();
+    let original = raw.style();
+    let invalid = RawScrollbarStyle {
+        thumb_visibility: Some(false),
+        track_visibility: Some(true),
+        ..original
+    };
+    assert!(catch_unwind(AssertUnwindSafe(|| raw.set_style(invalid))).is_err());
+    assert_eq!(
+        raw.style(),
+        original,
+        "reject the descriptor before changing mounted state"
+    );
+
+    let accepted = create().track_visibility(true);
+    assert_eq!(accepted.style().thumb_visibility, None);
+    let accepted = accepted.thumb_visibility(true);
+    assert_eq!(accepted.style().thumb_visibility, Some(true));
+}

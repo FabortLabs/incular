@@ -23,3 +23,12 @@ that standalone painter test captures *nominal* radii bigger than the
 shape before rasterization. Incular's analytic retained rounded-rectangle
 command already normalizes out-of-range radii rather than exposing
 equivalent pre-rasterization arguments. No whole-image comparison claimed.
+
+## Explicitly hidden thumbs
+
+The original `scrollbar_test.dart:2538` and the native debug fixture
+both reject an explicitly visible track with an explicitly hidden
+thumb. Native rejects either builder order and rejects a conflicting
+style before changing an existing scrollbar. Leaving the thumb
+visibility unspecified still accepts the descriptor, as in Flutter.
+The original and 18 focused native paint and padding tests passed.

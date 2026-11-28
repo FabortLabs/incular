@@ -4542,3 +4542,4 @@ packages/flutter/test/scheduler/scheduler_test.dart	281	Animation frame schedule
 packages/flutter/test/gestures/debug_test.dart	10	debugPrintGestureArenaDiagnostics	partial-match	upstream-gesture-diagnostic-traces.md
 packages/flutter/test/gestures/debug_test.dart	68	debugPrintRecognizerCallbacksTrace	partial-match	upstream-gesture-diagnostic-traces.md
 packages/flutter/test/gestures/debug_test.dart	127	debugPrintGestureArenaDiagnostics and debugPrintRecognizerCallbacksTrace	partial-match	upstream-gesture-diagnostic-traces.md
+packages/flutter/test/widgets/scrollbar_test.dart	2538	Scrollbar asserts that a visible track has a visible thumb	paired-match	upstream-scrollbar-track-paint.md#explicitly-hidden-thumbs
