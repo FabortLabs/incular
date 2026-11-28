@@ -3861,3 +3861,5 @@ packages/flutter/test/rendering/shifted_box_test.dart	212	RenderBaseline compute
 packages/flutter/test/rendering/shifted_box_test.dart	228	computeDryBaseline handles edge cases consistently	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
 packages/flutter/test/rendering/shifted_box_test.dart	14	RenderAligningShiftedBox has computeDryBaseline method implemented	paired-match	upstream-shifted-box-baselines.md#childless-aligned-boxes
 packages/flutter/test/rendering/shifted_box_test.dart	34	computeDryBaseline returns null when child is null	paired-match	upstream-shifted-box-baselines.md#childless-aligned-boxes
+packages/flutter/test/rendering/paragraph_test.dart	269	overflow test	paired-match	upstream-paragraph-overflow-fade.md
+packages/flutter/test/rendering/paragraph_test.dart	1106	paints selection highlights outside fade layer and handles after text	partial-match	upstream-paragraph-overflow-fade.md

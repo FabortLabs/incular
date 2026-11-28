@@ -72,6 +72,7 @@ enum AttachmentSpec {
     Opacity,
     Blur,
     DropShadow,
+    Paragraph { shadow: bool },
     ColorFilter,
     Blend,
     RasterEffects(u8),
@@ -129,11 +130,9 @@ impl LayerSpec {
             WidgetKind::Opacity { .. } => AttachmentSpec::Opacity,
             WidgetKind::Blur { enabled: true, .. } => AttachmentSpec::Blur,
             WidgetKind::DropShadow { .. } | WidgetKind::Banner { .. } => AttachmentSpec::DropShadow,
-            WidgetKind::Text { style, .. }
-                if crate::utilities::layered_text_shadow(&style.shadows).is_some() =>
-            {
-                AttachmentSpec::DropShadow
-            }
+            WidgetKind::Text { style, .. } => AttachmentSpec::Paragraph {
+                shadow: crate::utilities::layered_text_shadow(&style.shadows).is_some(),
+            },
             WidgetKind::ColorFiltered { .. } => AttachmentSpec::ColorFilter,
             WidgetKind::Blend { .. } => AttachmentSpec::Blend,
             WidgetKind::Image {
@@ -252,6 +251,14 @@ impl RasterEffectLayers {
     }
 }
 
+/// Extra layers are owned only while a paragraph has visual overflow.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ParagraphFadeLayers {
+    mask: LayerId,
+    clip: LayerId,
+    selection: LayerId,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) enum LayerAttachment {
     Direct,
@@ -271,6 +278,10 @@ pub(crate) enum LayerAttachment {
     },
     DropShadow {
         layer: LayerId,
+    },
+    Paragraph {
+        shadow: Option<LayerId>,
+        fade: Option<Rc<ParagraphFadeLayers>>,
     },
     ColorFilter {
         layer: LayerId,
@@ -299,7 +310,7 @@ pub(crate) enum LayerAttachment {
 impl LayerAttachment {
     fn primary_layer(&self) -> Option<LayerId> {
         match self {
-            Self::Direct => None,
+            Self::Direct | Self::Paragraph { .. } => None,
             Self::RasterEffects(layers) => layers.blend.or(layers.opacity).or(layers.filter),
             Self::Transform { layer }
             | Self::Opacity { layer }
@@ -493,15 +504,12 @@ impl RenderLayers {
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::DropShadow { layer }
             }
-            // A blurred text shadow is the glyphs' own alpha, blurred and
-            // tinted behind them: the same retained drop-shadow stage.
-            WidgetKind::Text { style, .. }
-                if let Some(shadow) = crate::utilities::layered_text_shadow(&style.shadows) =>
-            {
-                let layer = compositor.create_drop_shadow(text_shadow_effect(shadow));
-                compositor.set_children(root, vec![layer]);
-                LayerAttachment::DropShadow { layer }
-            }
+            WidgetKind::Text { style, .. } => LayerAttachment::Paragraph {
+                // The optional shadow still isolates just the glyph picture.
+                shadow: crate::utilities::layered_text_shadow(&style.shadows)
+                    .map(|shadow| compositor.create_drop_shadow(text_shadow_effect(shadow))),
+                fade: None,
+            },
             WidgetKind::ColorFiltered { filter, .. } => {
                 let layer = compositor.create_color_filter(**filter);
                 compositor.set_children(root, vec![layer]);
@@ -625,6 +633,9 @@ impl RenderLayers {
             LayerAttachment::Opacity { .. } => AttachmentSpec::Opacity,
             LayerAttachment::Blur { .. } => AttachmentSpec::Blur,
             LayerAttachment::DropShadow { .. } => AttachmentSpec::DropShadow,
+            LayerAttachment::Paragraph { shadow, .. } => AttachmentSpec::Paragraph {
+                shadow: shadow.is_some(),
+            },
             LayerAttachment::ColorFilter { .. } => AttachmentSpec::ColorFilter,
             LayerAttachment::Blend { .. } => AttachmentSpec::Blend,
             LayerAttachment::RasterEffects(ref layers) => {
@@ -647,7 +658,17 @@ impl RenderLayers {
         self.spec() == LayerSpec::for_widget(widget)
     }
 
-    pub(crate) fn owned_ids(&self) -> [Option<LayerId>; 5] {
+    pub(crate) fn owned_ids(&self) -> [Option<LayerId>; 6] {
+        if let LayerAttachment::Paragraph { shadow, ref fade } = self.attachment {
+            return [
+                Some(self.root),
+                self.picture,
+                shadow,
+                fade.as_ref().map(|fade| fade.mask),
+                fade.as_ref().map(|fade| fade.clip),
+                fade.as_ref().map(|fade| fade.selection),
+            ];
+        }
         if let LayerAttachment::RasterEffects(layers) = &self.attachment {
             return [
                 Some(self.root),
@@ -655,6 +676,7 @@ impl RenderLayers {
                 layers.filter,
                 layers.opacity,
                 layers.blend,
+                None,
             ];
         }
         let (attachment_a, attachment_b) = match self.attachment {
@@ -668,6 +690,7 @@ impl RenderLayers {
             self.foreground_picture,
             attachment_a,
             attachment_b,
+            None,
         ]
     }
 
@@ -749,6 +772,16 @@ impl RenderLayers {
                 compositor.remove(content);
                 compositor.remove(clip);
             }
+            LayerAttachment::Paragraph { shadow, fade } => {
+                if let Some(shadow) = shadow {
+                    compositor.remove(shadow);
+                }
+                if let Some(fade) = fade {
+                    compositor.remove(fade.mask);
+                    compositor.remove(fade.clip);
+                    compositor.remove(fade.selection);
+                }
+            }
             LayerAttachment::RasterEffects(layers) => {
                 for stage in layers.ids().into_iter().flatten() {
                     compositor.remove(stage);
@@ -789,9 +822,58 @@ impl RenderLayers {
     pub(crate) fn shadow(&self) -> Option<LayerId> {
         match self.attachment {
             LayerAttachment::DropShadow { layer } => Some(layer),
+            LayerAttachment::Paragraph { shadow, .. } => shadow,
             _ => None,
         }
     }
+
+    pub(crate) fn paragraph_selection_picture(&self) -> Option<LayerId> {
+        match &self.attachment {
+            LayerAttachment::Paragraph { fade: Some(fade), .. } => Some(fade.selection),
+            _ => None,
+        }
+    }
+
+    /// Lazily owns the three extra layers only while Fade actually clips.
+    /// Returns whether children need reconnecting through the new topology.
+    pub(crate) fn update_paragraph_fade(
+        &mut self,
+        compositor: &mut LayerTree,
+        brush: Option<Brush>,
+        size: Size,
+    ) -> bool {
+        let LayerAttachment::Paragraph { fade, .. } = &mut self.attachment else {
+            return false;
+        };
+        let Some(brush) = brush else {
+            let Some(old) = fade.take() else {
+                return false;
+            };
+            compositor.remove(old.mask);
+            compositor.remove(old.clip);
+            compositor.remove(old.selection);
+            return true;
+        };
+        let bounds = Rect::from_origin_size(Offset::ZERO, size);
+        let mode = incular_rendering::BlendMode::Modulate;
+        if let Some(existing) = fade {
+            compositor.update_clip(existing.clip, bounds);
+            compositor.update_shader_mask(
+                existing.mask,
+                brush,
+                mode,
+                size,
+                CoreTransform::IDENTITY,
+            );
+            return false;
+        }
+        let clip = compositor.create_clip_rect(bounds);
+        let mask = compositor.create_shader_mask(brush, mode, size, CoreTransform::IDENTITY);
+        let selection = compositor.create_picture(DisplayList::new(), bounds);
+        *fade = Some(Rc::new(ParagraphFadeLayers { mask, clip, selection }));
+        true
+    }
+
     pub(crate) fn color_filter(&self) -> Option<LayerId> {
         match self.attachment {
             LayerAttachment::ColorFilter { layer } => Some(layer),
@@ -857,7 +939,10 @@ impl RenderLayers {
                     DropShadowEffect::asymmetric(*offset, *sigma_x, *sigma_y, *color),
                 );
             }
-            (LayerAttachment::DropShadow { layer }, RenderKind::Text { style, .. }) => {
+            (
+                LayerAttachment::Paragraph { shadow: Some(layer), .. },
+                RenderKind::Text { style, .. },
+            ) => {
                 // The resolved style may have dropped the blurred shadow the
                 // widget declared; a transparent effect then draws nothing.
                 compositor.update_drop_shadow(
@@ -1040,7 +1125,13 @@ impl RenderLayers {
             } else {
                 layers.extend(self.picture);
             }
-            compositor.set_children(self.root, layers);
+            if let LayerAttachment::Paragraph { fade: Some(fade), .. } = &self.attachment {
+                compositor.set_children(fade.clip, layers);
+                compositor.set_children(fade.mask, vec![fade.clip]);
+                compositor.set_children(self.root, vec![fade.selection, fade.mask]);
+            } else {
+                compositor.set_children(self.root, layers);
+            }
             return;
         }
         match self.attachment {

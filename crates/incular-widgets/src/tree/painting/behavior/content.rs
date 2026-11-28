@@ -29,22 +29,16 @@ impl WidgetTree {
                             rect: Rect::from_origin_size(Offset::ZERO, size),
                         });
                     }
-                    // A `Text` under a `SelectionArea` is one of its
-                    // selectables (Flutter's `RenderParagraph` registrar)
-                    // and paints its share of the selection below its glyphs.
-                    let selection = if self.static_selections.is_empty() {
-                        None
-                    } else {
-                        self.element_for_render(id)
-                            .and_then(|element| self.static_selection_range(element))
-                    };
-                    if let Some(selection) = selection {
-                        for rect in selection_rects(&layout, selection, 0., 0., 0.) {
-                            cache.push(PaintCommand::Rect {
-                                rect,
-                                color: Color::rgba(72, 120, 220, 150),
-                            });
-                        }
+                    // An active fade has its own selection picture below
+                    // the mask. The glyph source must not contain it.
+                    if self
+                        .render_live(id, "retained paragraph remains live")
+                        .object
+                        .layers
+                        .paragraph_selection_picture()
+                        .is_none()
+                    {
+                        self.paint_paragraph_selection(id, &layout, cache);
                     }
                     push_text_backgrounds(cache, &layout, style.effective_background_color());
                     let layered = self

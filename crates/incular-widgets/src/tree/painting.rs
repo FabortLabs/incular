@@ -978,6 +978,31 @@ impl WidgetTree {
             .subtree_needs_paint = pending;
     }
 
+    fn paint_paragraph_selection(
+        &self,
+        id: RenderObjectId,
+        layout: &incular_text::TextLayout,
+        cache: &mut DisplayList,
+    ) {
+        // A Text under a SelectionArea paints its registered range below
+        // the glyphs and outside any TextOverflow::Fade isolation.
+        if self.static_selections.is_empty() {
+            return;
+        }
+        let Some(selection) = self
+            .element_for_render(id)
+            .and_then(|element| self.static_selection_range(element))
+        else {
+            return;
+        };
+        for rect in selection_rects(layout, selection, 0., 0., 0.) {
+            cache.push(PaintCommand::Rect {
+                rect,
+                color: Color::rgba(72, 120, 220, 150),
+            });
+        }
+    }
+
     fn repaint_pictures(&mut self, id: RenderObjectId) {
         let node = self.render_live(id, "retained render must remain live");
         let (kind, size) = (node.object.shared_kind(), node.size);
@@ -1004,6 +1029,21 @@ impl WidgetTree {
         if let Some(layer) = picture_layer {
             self.compositor
                 .update_picture_if_changed(layer, &picture, bounds);
+        }
+        let node = self.render_live(id, "retained render must remain live");
+        if let Some(layer) = node.object.layers.paragraph_selection_picture()
+            && let Some(layout) = node.text_layout()
+        {
+            let bounds = Rect::from_origin_size(Offset::ZERO, size);
+            picture.clear();
+            picture.push(PaintCommand::PushClip { rect: bounds });
+            self.paint_paragraph_selection(id, layout, &mut picture);
+            picture.push(PaintCommand::PopClip);
+            // Skip an otherwise empty clip pair and its scene commands.
+            if picture.commands().len() == 2 {
+                picture.clear();
+            }
+            self.compositor.update_picture_if_changed(layer, &picture, bounds);
         }
         if let Some(layer) = foreground_layer {
             picture.clear();

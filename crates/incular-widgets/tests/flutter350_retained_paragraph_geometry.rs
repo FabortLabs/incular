@@ -689,3 +689,215 @@ fn editable_default_height_covers_middle_line_spacing_across_entire_document() {
         assert_eq!(tree.diagnostics().layouts, before);
     }
 }
+
+#[test]
+fn retained_paragraph_overflow_modes_resize_and_scope_the_fade() {
+    use incular_rendering::PaintCommand;
+    use incular_text::TextOverflow;
+    use incular_widgets::Text;
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let paragraph_key = GlobalKey::new();
+    let constraints = Constraints::loose(Size::new(50., 600.));
+    let build = |max_lines, soft_wrap, overflow| {
+        Widget::from(
+            Text::new(concat!(
+                "This\n",
+                "is a wrapping test. It should wrap at manual newlines, ",
+                "and if softWrap is true, also at spaces.",
+            ))
+            .text_direction(TextDirection::Ltr)
+            .style(style.clone().font_size(10.))
+            .max_lines(max_lines)
+            .soft_wrap(soft_wrap)
+            .overflow(overflow),
+        )
+        .with_key(paragraph_key)
+    };
+
+    let mut tree = WidgetTree::with_text_engine(engine);
+    let root = tree
+        .mount(build(Some(1), true, TextOverflow::Clip))
+        .unwrap();
+    tree.layout(constraints).unwrap();
+    let paragraph = tree.element_with_key(&paragraph_key.into()).unwrap();
+    let line = tree.element_bounds(paragraph).unwrap().size.height;
+    close(line, 10.);
+
+    for (max_lines, soft_wrap, overflow, expected, fade) in [
+        (Some(3), true, TextOverflow::Clip, Some(3.), false),
+        (None, true, TextOverflow::Clip, None, false),
+        (Some(1), true, TextOverflow::Ellipsis, Some(1.), false),
+        (Some(3), true, TextOverflow::Ellipsis, Some(3.), false),
+        (None, true, TextOverflow::Ellipsis, Some(2.), false),
+        (Some(1), false, TextOverflow::Clip, Some(1.), false),
+        (Some(3), false, TextOverflow::Clip, Some(2.), false),
+        (None, false, TextOverflow::Clip, Some(2.), false),
+        (Some(1), false, TextOverflow::Ellipsis, Some(1.), false),
+        (Some(3), false, TextOverflow::Ellipsis, Some(3.), false),
+        (None, false, TextOverflow::Ellipsis, Some(2.), false),
+        (Some(3), true, TextOverflow::Fade, Some(3.), true),
+        (Some(3), true, TextOverflow::Ellipsis, Some(3.), false),
+        (Some(100), true, TextOverflow::Fade, None, false),
+    ] {
+        tree.update(root, build(max_lines, soft_wrap, overflow))
+            .unwrap();
+        tree.layout(constraints).unwrap();
+        assert_eq!(
+            tree.element_with_key(&paragraph_key.into()),
+            Some(paragraph)
+        );
+        let height = tree.element_bounds(paragraph).unwrap().size.height;
+        if let Some(expected) = expected {
+            assert!(
+                (height - expected * line).abs() < 0.001,
+                "{max_lines:?} {soft_wrap} {overflow:?}: {height} expected {}",
+                expected * line,
+            );
+        } else {
+            assert!(height > 5. * line, "unlimited wraps preserve all lines");
+        }
+        let list = tree.paint();
+        assert_eq!(
+            list.commands()
+                .iter()
+                .any(|op| matches!(op, PaintCommand::PushShaderMask { .. })),
+            fade,
+            "{max_lines:?} {soft_wrap} {overflow:?}",
+        );
+    }
+}
+
+#[test]
+fn no_wrap_paragraph_fades_toward_the_physical_trailing_edge() {
+    use incular_rendering::{BlendMode, Brush, PaintCommand};
+    use incular_text::TextOverflow;
+    use incular_widgets::Text;
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let fit = Constraints::loose(Size::new(200., 40.));
+    let narrow = Constraints::loose(Size::new(50., 40.));
+    let build = |direction| {
+        Widget::from(
+            Text::new("ABCDEFGHIJK")
+                .text_direction(direction)
+                .style(style.clone().font_size(10.))
+                .soft_wrap(false)
+                .overflow(TextOverflow::Fade),
+        )
+    };
+    let mut tree = WidgetTree::with_text_engine(engine);
+    let root = tree.mount(build(TextDirection::Ltr)).unwrap();
+    for (direction, start, end) in [
+        (
+            TextDirection::Ltr,
+            Offset::new(40., 0.),
+            Offset::new(50., 0.),
+        ),
+        (TextDirection::Rtl, Offset::new(10., 0.), Offset::ZERO),
+    ] {
+        tree.update(root, build(direction)).unwrap();
+        tree.layout(narrow).unwrap();
+        let painted = tree.paint();
+        let masks: Vec<_> = painted
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::PushShaderMask {
+                    shader: Brush::LinearGradient(brush),
+                    blend_mode,
+                    mask_size,
+                    ..
+                } => Some((brush, *blend_mode, *mask_size)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(masks.len(), 1);
+        let (gradient, mode, size) = masks[0];
+        assert_eq!(mode, BlendMode::Modulate);
+        assert_eq!(size, Size::new(50., 10.));
+        assert_eq!(gradient.start, start);
+        assert_eq!(gradient.end, end);
+    }
+    tree.layout(fit).unwrap();
+    assert!(
+        !tree
+            .paint()
+            .commands()
+            .iter()
+            .any(|op| matches!(op, PaintCommand::PushShaderMask { .. }))
+    );
+}
+
+#[test]
+fn paragraph_fade_keeps_selection_outside_and_paints_inline_widgets_inside() {
+    use incular_core::Color;
+    use incular_rendering::{Brush, PaintCommand};
+    use incular_text::TextOverflow;
+    use incular_widgets::{RichParagraph, WidgetSpan};
+
+    let Some((style, engine)) = flutter_test_style() else {
+        return;
+    };
+    let span = TextSpan::new("A")
+        .style(style.font_size(10.))
+        .child(WidgetSpan::new(7))
+        .child(TextSpan::new("\nB\nC\nD"));
+    let marker = Color::rgba(21, 190, 87, 255);
+    let selected = Color::rgba(72, 120, 220, 150);
+    let key = GlobalKey::new();
+    let paragraph = Widget::from(
+        RichParagraph::new(
+            RichText::new(span)
+                .max_lines(Some(3))
+                .overflow(TextOverflow::Fade),
+        )
+        .child(7, Widget::box_(Size::new(10., 10.), marker)),
+    )
+    .with_key(key);
+    let controller = SelectionAreaController::new();
+    let scene = Directionality::new(
+        TextDirection::Ltr,
+        Widget::selection_area(controller, paragraph),
+    );
+    let mut tree = WidgetTree::with_text_engine(engine);
+    tree.mount(scene.into()).unwrap();
+    tree.layout(Constraints::loose(Size::new(100., 100.)))
+        .unwrap();
+    let label = tree.element_with_key(&key.into()).unwrap();
+    assert!(tree.selectable_text_select_all(label));
+    let commands = tree.paint();
+    let commands = commands.commands();
+    let mask = commands
+        .iter()
+        .position(|command| {
+            matches!(
+                command,
+                PaintCommand::PushShaderMask { shader: Brush::LinearGradient(brush), .. }
+                    if brush.start == Offset::new(0., 25.) && brush.end == Offset::new(0., 30.)
+            )
+        })
+        .expect("three 10px lines fade over half an ellipsis line");
+    let pop = mask
+        + commands[mask..]
+            .iter()
+            .position(|command| matches!(command, PaintCommand::PopEffect))
+            .unwrap();
+    let highlight = |command: &PaintCommand| matches!(command, PaintCommand::Rect { color, .. } if *color == selected);
+    assert!(commands[..mask].iter().any(highlight));
+    assert!(!commands[mask..].iter().any(highlight));
+    assert!(
+        commands[mask..pop]
+            .iter()
+            .any(|command| matches!(command, PaintCommand::GlyphRun { .. }))
+    );
+    assert!(
+        commands[mask..pop]
+            .iter()
+            .any(|command| matches!(command, PaintCommand::Rect { color, .. } if *color == marker))
+    );
+}

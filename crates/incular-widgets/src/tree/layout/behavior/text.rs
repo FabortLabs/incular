@@ -131,9 +131,11 @@ impl WidgetTree {
         id: RenderObjectId,
         children: &[RenderObjectId],
         visible: Option<Box<[RenderObjectId]>>,
+        reconnect: bool,
     ) {
         let node = self.render_live(id, "inline paragraph remains live");
-        if node.inline_visible_children() == visible.as_deref() {
+        let visibility_changed = node.inline_visible_children() != visible.as_deref();
+        if !visibility_changed && !reconnect {
             return;
         }
         let layers = visible
@@ -150,7 +152,9 @@ impl WidgetTree {
         self.render_live_mut(id, "inline paragraph remains live")
             .set_inline_visible_children(visible);
         surface.set_render_children(&mut self.compositor, &kind, layers);
-        self.mark_render_semantics(id, SemanticsDirty::Subtree);
+        if visibility_changed {
+            self.mark_render_semantics(id, SemanticsDirty::Subtree);
+        }
     }
 
     pub(super) fn layout_text_kind(
@@ -163,7 +167,10 @@ impl WidgetTree {
         Ok(match *kind {
             RenderKind::Text {
                 ref text,
+                ref style,
                 ref inline,
+                text_direction,
+                overflow,
                 ..
             } => {
                 let width = constraints
@@ -201,7 +208,16 @@ impl WidgetTree {
                 )
                 .expect("text layout receives a paragraph");
                 let size = constraints.constrain(layout.metrics.size);
-                let node = self.render_live_mut(id, "retained render must remain live");
+                let mask = if overflow == TextOverflow::Fade {
+                    paragraph_overflow_mask(
+                        self.text_engine.get_mut(), style, text_direction, &layout, size,
+                    )
+                } else {
+                    None
+                };
+                let node = self.renders.get_mut(id.0).expect("retained text remains live");
+                let reconnect =
+                    node.object.layers.update_paragraph_fade(&mut self.compositor, mask, size);
                 node.set_text_layout(layout.clone());
                 node.set_fixed_text_alignment_width(width.filter(|width| {
                     inline.is_none() && *width == constraints.min_width()
@@ -233,7 +249,9 @@ impl WidgetTree {
                         .collect(),
                     None => ChildOffsets::default(),
                 };
-                self.sync_inline_children(id, children, visible.map(Vec::into_boxed_slice));
+                self.sync_inline_children(
+                    id, children, visible.map(Vec::into_boxed_slice), reconnect,
+                );
                 (size, offsets)
             }
             RenderKind::SelectableText {
@@ -437,6 +455,52 @@ impl WidgetTree {
 
 /// One paragraph shaping path for dry size and live layout. It never
 /// reads or updates render geometry; live inline boxes are supplied by the caller.
+/// RenderParagraph sizes a fade from one ellipsis in the root style.
+fn paragraph_overflow_mask(
+    engine: &mut TextEngine,
+    style: &TextStyle,
+    direction: TextDirection,
+    layout: &incular_text::TextLayout,
+    size: Size,
+) -> Option<Brush> {
+    use incular_rendering::{GradientStops, LinearGradient};
+    use std::sync::OnceLock;
+
+    let wide = layout.metrics.size.width > size.width;
+    let tall = layout.metrics.size.height > size.height || layout.overflowed;
+    if (!wide && !tall) || size.width <= 0. || size.height <= 0. {
+        return None;
+    }
+    let ellipsis = engine
+        .layout_with_options(
+            "…",
+            style,
+            TextLayoutOptions::new(None, TextAlign::Start).text_direction(direction),
+        )
+        .metrics
+        .size;
+    let (start, end) = if wide {
+        match direction {
+            TextDirection::Ltr => (
+                Offset::new(size.width - ellipsis.width, 0.),
+                Offset::new(size.width, 0.),
+            ),
+            TextDirection::Rtl => (Offset::new(ellipsis.width, 0.), Offset::ZERO),
+        }
+    } else {
+        (
+            Offset::new(0., size.height - ellipsis.height * 0.5),
+            Offset::new(0., size.height),
+        )
+    };
+    static STOPS: OnceLock<GradientStops> = OnceLock::new();
+    let stops = STOPS.get_or_init(|| {
+        GradientStops::from_colors(&[Color::WHITE, Color::rgba(255, 255, 255, 0)], None)
+            .expect("two valid fade colors")
+    });
+    Some(Brush::LinearGradient(LinearGradient::new(start, end, stops.clone())))
+}
+
 pub(in crate::tree::layout) fn shape_render_paragraph(
     engine: &mut TextEngine,
     kind: &RenderKind,
@@ -460,8 +524,11 @@ pub(in crate::tree::layout) fn shape_render_paragraph(
     else {
         return None;
     };
-    let width = constraints
-        .is_width_bounded()
+    // RenderParagraph keeps the painter unbounded for no-wrap Clip,
+    // Fade and Visible. The render box clamps the resulting width; the
+    // painter must keep every hard line unless an explicit maxLines cuts it.
+    let width = (constraints.is_width_bounded()
+        && (*soft_wrap || *overflow == TextOverflow::Ellipsis))
         .then_some(constraints.max_width());
     let strut = strut
         .as_ref()
@@ -469,7 +536,7 @@ pub(in crate::tree::layout) fn shape_render_paragraph(
     let options = |width| {
         TextLayoutOptions::new(width, *align)
             .text_direction(*text_direction)
-            .soft_wrap(*soft_wrap)
+            .soft_wrap(*soft_wrap || *overflow == TextOverflow::Ellipsis)
             .max_lines(*max_lines)
             .overflow(*overflow)
             .height_behavior(*height_behavior)
@@ -480,7 +547,9 @@ pub(in crate::tree::layout) fn shape_render_paragraph(
         None => engine.layout_with_options(text, style, options(width)),
     };
     let mut layout = shape(width);
-    if let Some(shrunk) = shrink_wrapped_text_width(&layout, constraints) {
+    if width.is_some()
+        && let Some(shrunk) = shrink_wrapped_text_width(&layout, constraints)
+    {
         layout = shape(Some(shrunk));
     }
     engine.apply_discretionary_hyphens(
