@@ -3907,3 +3907,4 @@ packages/flutter/test/widgets/focus_scope_test.dart	1840	Focus passes changes in
 packages/flutter/test/widgets/focus_traversal_test.dart	435	Find the initial focus when a route is pushed or popped.	paired-match	upstream-navigation-initial-focus.md#push-pop-and-nested-traversal
 packages/flutter/test/widgets/focus_traversal_test.dart	559	Nested navigator does not trap focus	paired-match	upstream-navigation-initial-focus.md#push-pop-and-nested-traversal
 packages/flutter/test/widgets/focus_traversal_test.dart	1534	Find the initial focus when a route is pushed or popped.	paired-match	upstream-navigation-initial-focus.md#push-pop-and-nested-traversal
+packages/flutter/test/widgets/routes_test.dart	517	Can autofocus a TextField nested in a Focus in a route.	paired-match	upstream-navigation-initial-focus.md#editor-nested-inside-a-focus-boundary

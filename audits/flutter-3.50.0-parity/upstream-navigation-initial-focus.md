@@ -15,3 +15,14 @@ check the previous control and its containing scope regain focus. The
 nested navigator test also verifies each step forward and backward,
 including wrap-around outside the navigator. All three focused native
 cases passed after the fix.
+
+## Editor nested inside a focus boundary
+
+Pinned `widgets/routes_test.dart:517` passed. A real Incular EditableText
+inside a Focus wrapper receives primary focus on the initial route and
+on a pushed route. Typed input reaches only the currently focused editor,
+and returning restores the original editor. The native test checks both
+Flutter's Linux single-line select-all default and Android's retained
+cursor behavior on return. Another test verifies that a page which sets
+`request_focus(false)` cannot steal focus with its own autofocus control.
+All five focused navigation tests passed.

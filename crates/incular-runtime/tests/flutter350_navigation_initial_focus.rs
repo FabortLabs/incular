@@ -167,3 +167,74 @@ fn sequential_focus_enters_and_leaves_a_nested_navigator_in_both_directions() {
         focused(to);
     }
 }
+
+#[test]
+fn a_text_editor_inside_focus_autofocuses_and_receives_input_on_each_route() {
+    use incular_runtime::TextShortcutPlatform;
+    use incular_widgets::{EditableText, internal::TextEditingController};
+
+    for (platform, expected) in [
+        (TextShortcutPlatform::Linux, " again"),
+        (TextShortcutPlatform::Android, "home again"),
+    ] {
+        let navigator = Navigator::new();
+        let home = FocusNode::new();
+        let incoming = FocusNode::new();
+        let home_text = TextEditingController::new();
+        let incoming_text = TextEditingController::new();
+        let page = |name, focus: &FocusNode, text: &TextEditingController| {
+            let editor = EditableText::new(text.clone())
+                .focus_node(focus.clone())
+                .text_direction(TextDirection::Ltr)
+                .size(Size::new(160., 32.))
+                .autofocus(true);
+            Page::new(name, Focus::new(editor))
+        };
+        let first = navigator.push_page(page("/", &home, &home_text));
+        let (mut runtime, outlet) = build_outlet(&navigator, |outlet| outlet.borrow().widget());
+        runtime.set_text_shortcut_platform(platform);
+        settle(&mut runtime, &outlet);
+        assert!(home.has_primary_focus());
+        let _ = runtime.handle_input(InputEvent::Text("home".into()));
+        assert_eq!(home_text.text(), "home");
+
+        navigator.push_page(page("/editor", &incoming, &incoming_text));
+        settle(&mut runtime, &outlet);
+        assert!(incoming.has_primary_focus());
+        assert!(!home.has_focus());
+        let _ = runtime.handle_input(InputEvent::Text("new".into()));
+        assert_eq!(incoming_text.text(), "new");
+        assert_eq!(home_text.text(), "home");
+
+        navigator.pop();
+        settle(&mut runtime, &outlet);
+        assert_eq!(navigator.current().unwrap().id, first);
+        assert!(home.has_primary_focus());
+        assert!(!incoming.has_focus());
+        assert_eq!(
+            home_text.selection().is_collapsed(),
+            platform == TextShortcutPlatform::Android
+        );
+        let _ = runtime.handle_input(InputEvent::Text(" again".into()));
+        assert_eq!(home_text.text(), expected);
+        assert_eq!(incoming_text.text(), "new");
+    }
+}
+
+#[test]
+fn a_page_that_opts_out_does_not_steal_focus_with_its_own_autofocus_target() {
+    let navigator = Navigator::new();
+    let home = FocusNode::new();
+    let opted_out = FocusNode::new();
+    let first = navigator.push_page(Page::new("/", button(&home, false, || {})));
+    let (mut runtime, outlet) = build_outlet(&navigator, |outlet| outlet.borrow().widget());
+    settle(&mut runtime, &outlet);
+    assert!(home.has_primary_focus());
+
+    navigator
+        .push_page(Page::new("/opt-out", button(&opted_out, false, || {})).request_focus(false));
+    settle(&mut runtime, &outlet);
+    assert_ne!(navigator.current().unwrap().id, first);
+    assert!(home.has_primary_focus());
+    assert!(!opted_out.has_focus());
+}
