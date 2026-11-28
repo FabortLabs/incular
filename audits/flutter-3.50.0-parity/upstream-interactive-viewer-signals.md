@@ -60,3 +60,22 @@ size to the 200/220 scale. The aligned 45-degree drag selects
 vertical, and explicit horizontal/vertical axes reject the
 opposite motion. The prior scroll and zoom anchor cases remain
 green in the same native target.
+
+## Viewport-aware builder, clip retention and resize
+
+The pinned originals at :1091, :1279, :1309 and :1386 passed.
+The builder receives all four viewport corners after inverse
+scene transformation and supports lazily producing its child.
+A 15px drag changes the visible keyed rows from indices 0–5
+to 1–6. The retained layout verifies the exact colors and
+preserves all ten row identities. Swapping the controller
+detaches the old one; changing the active controller and window
+size updates the next layout's scene coordinates.
+
+ClipRect stays mounted for both Clip.none and the default
+hard-edge mode. Only the viewport builder executes in response
+to size constraints. The fixed-child variant's internal reactive
+wrapper reads its already mounted child for intrinsic sizing;
+the test measures a 200px intrinsic width without executing
+a speculative builder. A fixed tight viewer also stays at its
+identity transform when dragged before and after resizing.

@@ -321,7 +321,7 @@ pub use inherited_data::{
     CapturedThemes, InheritedModel, InheritedModelData, InheritedNotifier, SharedAppData,
     SharedAppDataKey, SharedAppDataStore,
 };
-pub use interactive_viewer::{InteractiveViewer, PanAxis, TransformationController};
+pub use interactive_viewer::{InteractiveViewer, InteractiveViewerViewport, PanAxis, TransformationController};
 pub use layout::{
     Align, AspectRatio, Baseline, Builder, Center, ClipOval, ClipPath, ClipRRect, ClipReclip,
     ClipRect, ClipShape, ColoredBox, Column, ConstrainedBox, ConstraintsTransformBox, Container,

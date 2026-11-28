@@ -11,8 +11,8 @@ use incular_gestures::constants::MIN_FLING_VELOCITY;
 
 use crate::gestures::{ScaleEndDetails, ScaleStartDetails, ScaleUpdateDetails, Velocity};
 use crate::{
-    ClipRect, GestureDetector, HitTestBehavior, Listener, OverflowBox, RawPointerEvent, Transform,
-    Widget,
+    BuildContext, ClipRect, GestureDetector, HitTestBehavior, LayoutBuilder, Listener, OverflowBox,
+    RawPointerEvent, Transform, Widget,
 };
 
 /// `_kDrag`: the default `interactionEndFrictionCoefficient`.
@@ -226,6 +226,52 @@ type StartCallback = Rc<dyn Fn(ScaleStartDetails)>;
 type UpdateCallback = Rc<dyn Fn(ScaleUpdateDetails)>;
 type EndCallback = Rc<dyn Fn(ScaleEndDetails)>;
 
+/// The four viewport corners in scene coordinates, clockwise from top left.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InteractiveViewerViewport {
+    pub corners: [Offset; 4],
+}
+
+impl InteractiveViewerViewport {
+    /// The smallest axis-aligned rectangle containing the viewport.
+    #[must_use]
+    pub fn bounds(self) -> Rect {
+        let [first, rest @ ..] = self.corners;
+        let (mut left, mut top, mut right, mut bottom) = (first.x, first.y, first.x, first.y);
+        for corner in rest {
+            left = left.min(corner.x);
+            top = top.min(corner.y);
+            right = right.max(corner.x);
+            bottom = bottom.max(corner.y);
+        }
+        Rect::from_origin_size(
+            Offset::new(left, top),
+            Size::new(right - left, bottom - top),
+        )
+    }
+
+    fn from_transform(size: Size, transform: CoreTransform) -> Self {
+        let inverse = transform.inverse();
+        Self {
+            corners: [
+                Offset::ZERO,
+                Offset::new(size.width, 0.),
+                Offset::new(size.width, size.height),
+                Offset::new(0., size.height),
+            ]
+            .map(|corner| inverse.map_or(corner, |value| value.transform_point(corner))),
+        }
+    }
+}
+
+type ViewportBuilder = Rc<dyn for<'a> Fn(&BuildContext<'a>, InteractiveViewerViewport) -> Widget>;
+
+#[derive(Clone)]
+enum ViewerChild {
+    Fixed(Widget),
+    Builder(ViewportBuilder),
+}
+
 /// A widget that pans and zooms its child.
 ///
 /// Flutter's defaults: scale between 0.8 and 2.5, panning and scaling
@@ -234,7 +280,7 @@ type EndCallback = Rc<dyn Fn(ScaleEndDetails)>;
 /// scale factor of 200.
 #[derive(Clone)]
 pub struct InteractiveViewer {
-    child: Widget,
+    child: ViewerChild,
     controller: Option<TransformationController>,
     min_scale: f32,
     max_scale: f32,
@@ -256,8 +302,21 @@ pub struct InteractiveViewer {
 impl InteractiveViewer {
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
+        Self::with_child(ViewerChild::Fixed(child.into()), true)
+    }
+
+    /// Builds content for the visible scene quadrilateral after layout.
+    /// The child itself is unconstrained, as in Flutter's builder variant.
+    #[must_use]
+    pub fn builder(
+        build: impl for<'a> Fn(&BuildContext<'a>, InteractiveViewerViewport) -> Widget + 'static,
+    ) -> Self {
+        Self::with_child(ViewerChild::Builder(Rc::new(build)), false)
+    }
+
+    fn with_child(child: ViewerChild, constrained: bool) -> Self {
         Self {
-            child: child.into(),
+            child,
             controller: None,
             min_scale: 0.8,
             max_scale: 2.5,
@@ -265,7 +324,7 @@ impl InteractiveViewer {
             scale_enabled: true,
             pan_axis: PanAxis::Free,
             boundary_margin: EdgeInsets::ZERO,
-            constrained: true,
+            constrained,
             clip_behavior: Clip::HardEdge,
             alignment: None,
             interaction_end_friction_coefficient: DRAG,
@@ -331,7 +390,7 @@ impl InteractiveViewer {
     /// unconstrained at the top-left.
     #[must_use]
     pub fn constrained(mut self, constrained: bool) -> Self {
-        self.constrained = constrained;
+        self.constrained = constrained && matches!(self.child, ViewerChild::Fixed(_));
         self
     }
 
@@ -799,14 +858,46 @@ impl ViewerState {
     }
 }
 
+impl ViewerState {
+    fn build_viewer_content(self: &Rc<Self>, matrix: CoreTransform, child: Widget) -> Widget {
+        let observed = {
+            let state = self.clone();
+            Widget::size_observer(move |size| state.child_size.set(size), child)
+        };
+        let transformed: Widget = match self.config.alignment {
+            None => Transform::new(matrix, observed).into(),
+            Some(alignment) => {
+                let size = self.child_size.get();
+                Transform::new(matrix, observed)
+                    .origin(Offset::new(
+                        size.width * (alignment.x + 1.0) / 2.0,
+                        size.height * (alignment.y + 1.0) / 2.0,
+                    ))
+                    .into()
+            }
+        };
+        let content: Widget = if self.config.constrained {
+            transformed
+        } else {
+            OverflowBox::builder()
+                .min_width(0.0)
+                .min_height(0.0)
+                .max_width(f32::INFINITY)
+                .max_height(f32::INFINITY)
+                .child(transformed)
+                .build()
+                .into()
+        };
+        ClipRect::new(content)
+            .clip_behavior(self.config.clip_behavior)
+            .into()
+    }
+}
+
 impl From<InteractiveViewer> for Widget {
     fn from(value: InteractiveViewer) -> Self {
         let transformer = value.controller.clone().unwrap_or_default();
         let inertia_controller = AnimationController::new(Duration::ZERO);
-        let constrained = value.constrained;
-        let clip_behavior = value.clip_behavior;
-        let alignment = value.alignment;
-        let child = value.child.clone();
         let state = Rc::new(ViewerState {
             config: value,
             transformer: transformer.clone(),
@@ -832,38 +923,29 @@ impl From<InteractiveViewer> for Widget {
             let state = state.clone();
             move |_| {
                 let matrix = state.transformer.value();
-                let observed = {
-                    let state = state.clone();
-                    Widget::size_observer(move |size| state.child_size.set(size), child.clone())
-                };
-                let transformed: Widget = match alignment {
-                    None => Transform::new(matrix, observed).into(),
-                    Some(alignment) => {
-                        let size = state.child_size.get();
-                        Transform::new(matrix, observed)
-                            .origin(Offset::new(
-                                size.width * (alignment.x + 1.0) / 2.0,
-                                size.height * (alignment.y + 1.0) / 2.0,
-                            ))
-                            .into()
-                    }
-                };
-                let content: Widget = if constrained {
-                    transformed
-                } else {
-                    OverflowBox::builder()
-                        .min_width(0.0)
-                        .min_height(0.0)
-                        .max_width(f32::INFINITY)
-                        .max_height(f32::INFINITY)
-                        .child(transformed)
-                        .build()
+                match &state.config.child {
+                    ViewerChild::Fixed(child) => state.build_viewer_content(matrix, child.clone()),
+                    ViewerChild::Builder(builder) => {
+                        let builder = builder.clone();
+                        let state = state.clone();
+                        LayoutBuilder::new(move |context, constraints| {
+                            let size = Size::new(
+                                if constraints.is_width_bounded() {
+                                    constraints.max_width()
+                                } else {
+                                    constraints.min_width()
+                                },
+                                if constraints.is_height_bounded() {
+                                    constraints.max_height()
+                                } else {
+                                    constraints.min_height()
+                                },
+                            );
+                            let viewport = InteractiveViewerViewport::from_transform(size, matrix);
+                            state.build_viewer_content(matrix, builder(context, viewport))
+                        })
                         .into()
-                };
-                if clip_behavior == Clip::None {
-                    content
-                } else {
-                    ClipRect::new(content).clip_behavior(clip_behavior).into()
+                    }
                 }
             }
         });

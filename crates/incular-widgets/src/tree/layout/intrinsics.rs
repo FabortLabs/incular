@@ -17,6 +17,9 @@ pub(super) fn forwards_intrinsic_child(kind: &RenderKind) -> bool {
             | RenderKind::Decorated { desired: None, .. }
             | RenderKind::Opacity { .. }
             | RenderKind::BackdropFilter { .. }
+            | RenderKind::Transform { .. }
+            | RenderKind::SizeObserver { .. }
+            | RenderKind::AnimationTicker { .. }
             | RenderKind::ProxyLayout {
                 mode: ChildLayoutMode::SemanticAnnotation,
             }
@@ -28,6 +31,24 @@ pub(super) fn forwards_intrinsic_child(kind: &RenderKind) -> bool {
 }
 
 impl WidgetTree {
+    /// Whether this retained builder executes in response to layout bounds.
+    /// Reactive build-only wrappers may share the arena representation but
+    /// can safely measure their already-materialized child without rebuilding.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_builder_uses_constraints(&self, id: RenderObjectId) -> Option<bool> {
+        let element = self.elements.get(self.element_for_render(id)?.0)?;
+        if let WidgetKind::LayoutBuilder {
+            constraint_dependent,
+            ..
+        } = element.widget.kind()
+        {
+            Some(*constraint_dependent)
+        } else {
+            None
+        }
+    }
+
     /// Returns the retained box's minimum intrinsic width at the given height.
     ///
     /// Use positive infinity for an unbounded height. Returns `None` for an
@@ -231,6 +252,11 @@ impl WidgetTree {
                 }
                 child_extent(height)
             }
+            RenderKind::LayoutBuilder
+                if self.layout_builder_uses_constraints(id) == Some(false) =>
+            {
+                node.children.first().and_then(|_| child_extent(cross))
+            }
             kind if forwards_intrinsic_child(kind) => child_extent(cross),
             _ => None,
         }
@@ -282,7 +308,12 @@ impl WidgetTree {
                 let size = child(flipped)?;
                 Some(constraints.constrain(Size::new(size.height, size.width)))
             }
-            RenderKind::Transform { .. } => child(constraints),
+            RenderKind::LayoutBuilder
+                if self.layout_builder_uses_constraints(id) == Some(false) =>
+            {
+                node.children.first().and_then(|_| child(constraints))
+            }
+
             kind if forwards_intrinsic_child(kind) => child(constraints),
             _ => None,
         }

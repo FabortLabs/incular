@@ -218,6 +218,11 @@ impl WidgetTree {
                 ))?;
                 Some(shifted(result, *alignment, constraints.constrain(result.0)))
             }
+            RenderKind::LayoutBuilder
+                if self.layout_builder_uses_constraints(id) == Some(false) =>
+            {
+                node.children.first().and_then(|_| child(constraints))
+            }
             kind if super::intrinsics::forwards_intrinsic_child(kind) => child(constraints),
             _ => Some((self.dry_layout_size(id, constraints)?, None)),
         }

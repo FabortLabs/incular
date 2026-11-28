@@ -333,7 +333,7 @@ pub mod prelude {
         HeroFlightShuttleBuilder, HeroMode, HeroPlaceholderBuilder, HeroRectTween,
         HeroShuttleContext, HeroTag, Icon, IconTheme, IgnoreBaseline, IgnorePointer, Image,
         ImageErrorBuilder, ImageFiltered, ImageFrameBuilder, ImageIcon, ImageLoadingBuilder,
-        ImageRepeat, IndexedStack, InheritedModel, InheritedModelData, Intent, InteractiveViewer,
+        ImageRepeat, IndexedStack, InheritedModel, InheritedModelData, Intent, InteractiveViewer, InteractiveViewerViewport,
         KeepAlive, KeepAliveHandle, KeepAliveNotification, KeepAliveRegistry, KeyboardListener,
         KeyedSubtree, LayoutBuilder, LayoutChangedNotification, LayoutChildId, LayoutId, LimitedBox, ListBody, ListView,
         ListWheelScrollView, ListWheelViewport, Listener, ListenerCallbacks, Localizations,
