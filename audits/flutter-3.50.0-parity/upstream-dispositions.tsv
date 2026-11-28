@@ -4539,3 +4539,6 @@ packages/flutter/test/widgets/semantics_role_checks_test.dart	1027	Success case,
 packages/flutter/test/widgets/semantics_role_checks_test.dart	1052	failure case, region role without label	paired-match	upstream-semantics-role-checks.md#landmarks
 packages/flutter/test/widgets/semantics_role_checks_test.dart	1070	Success case, region role	paired-match	upstream-semantics-role-checks.md#landmarks
 packages/flutter/test/scheduler/scheduler_test.dart	281	Animation frame scheduled in the middle of the warm-up frame	reference-skipped	scheduler-callback-phases-comparisons.md#native-redraw-arriving-between-warm-up-phases
+packages/flutter/test/gestures/debug_test.dart	10	debugPrintGestureArenaDiagnostics	partial-match	upstream-gesture-diagnostic-traces.md
+packages/flutter/test/gestures/debug_test.dart	68	debugPrintRecognizerCallbacksTrace	partial-match	upstream-gesture-diagnostic-traces.md
+packages/flutter/test/gestures/debug_test.dart	127	debugPrintGestureArenaDiagnostics and debugPrintRecognizerCallbacksTrace	partial-match	upstream-gesture-diagnostic-traces.md

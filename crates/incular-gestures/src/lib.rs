@@ -81,7 +81,10 @@ pub use keyboard::{
 };
 pub use least_squares::{LeastSquaresSolver, PolynomialFit};
 pub use long_press::LongPressGestureRecognizer;
-pub use managed_arena::{GestureArenaClient, GestureArenaManager, GestureArenaRegistration};
+pub use managed_arena::{
+    GestureArenaClient, GestureArenaManager, GestureArenaRegistration, GestureArenaTrace,
+    GestureArenaTraceHandler, GestureArenaTracePhase, GestureArenaWinCause,
+};
 pub use mouse::MouseRegion;
 pub use multidrag::{Drag, MultiDragGestureRecognizer, MultiDragStartCallback};
 pub use multitap::{
@@ -91,6 +94,7 @@ pub use multitap::{
 pub use tap_callback_error::{
     TapCallbackError, TapCallbackErrorHandler, TapCallbackKind, TapCancelReason,
     invoke_retained_tap, set_tap_callback_error_handler,
+    TapCallbackTraceHandler, set_tap_callback_trace_handler,
 };
 #[doc(hidden)]
 pub use pointer::DragBoundaryFrame;
