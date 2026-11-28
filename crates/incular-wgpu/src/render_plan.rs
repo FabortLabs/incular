@@ -183,7 +183,7 @@ pub(crate) enum BackdropOp {
     Blur(GaussianBlur),
     /// `ImageFilter.matrix`: each output device pixel shows the backdrop at
     /// this transform of its position.
-    Matrix(Transform),
+    Matrix(Transform, ImageSampling),
     /// A general filter (Flutter `ImageFilter.compose`, or a colour filter
     /// used as an image filter): its stages in application order, each over
     /// the whole target.
@@ -201,7 +201,7 @@ pub(crate) enum BackdropStage {
     },
     /// Each output device pixel shows its input at this transform of its
     /// position.
-    Matrix(Transform),
+    Matrix(Transform, ImageSampling),
     Color(incular_painting::ColorFilter),
 }
 

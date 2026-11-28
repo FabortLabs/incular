@@ -909,6 +909,11 @@ pub enum ImageFilter {
     /// `ImageFilter.matrix`: the input transformed by an affine matrix in
     /// the filtered layer's coordinates.
     Matrix(incular_core::Transform),
+    /// Matrix filter with an explicitly chosen reconstruction policy.
+    SampledMatrix {
+        transform: incular_core::Transform,
+        quality: crate::FilterQuality,
+    },
     /// `ImageFilter.dilate`: each pixel the channel-wise maximum over the
     /// `2 * radius + 1` rectangle around it, radii in logical pixels.
     Dilate { radius_x: f32, radius_y: f32 },
@@ -934,6 +939,25 @@ impl ImageFilter {
     pub fn matrix(transform: incular_core::Transform) -> Self {
         Self::Matrix(transform)
     }
+    /// Same affine matrix constructor with Flutter's explicit filter quality.
+    #[must_use]
+    pub fn matrix_with_quality(transform: incular_core::Transform, quality: crate::FilterQuality) -> Self {
+        if quality == crate::FilterQuality::Medium {
+            Self::matrix(transform)
+        } else {
+            Self::SampledMatrix { transform, quality }
+        }
+    }
+
+    #[must_use]
+    pub const fn matrix_parts(&self) -> Option<(incular_core::Transform, crate::FilterQuality)> {
+        match self {
+            Self::Matrix(transform) => Some((*transform, crate::FilterQuality::Medium)),
+            Self::SampledMatrix { transform, quality } => Some((*transform, *quality)),
+            _ => None,
+        }
+    }
+
     /// Negative and non-finite radii are zero.
     #[must_use]
     pub fn dilate(radius_x: f32, radius_y: f32) -> Self {
@@ -1011,7 +1035,7 @@ impl std::fmt::Display for UnsupportedImageFilter {
         let form = match self.filter {
             ImageFilter::Blur(_) => "blur",
             ImageFilter::SampledBlur(_) => "configured sampling blur",
-            ImageFilter::Matrix(_) => "matrix",
+            ImageFilter::Matrix(_) | ImageFilter::SampledMatrix { .. } => "matrix",
             ImageFilter::Dilate { .. } => "dilate",
             ImageFilter::Erode { .. } => "erode",
             ImageFilter::Color(_) => "color",

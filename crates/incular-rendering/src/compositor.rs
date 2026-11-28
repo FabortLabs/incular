@@ -3702,6 +3702,9 @@ fn image_filter_generation(filter: &ImageFilter) -> u64 {
                     hasher.finish()
                 }
                 ImageFilter::Matrix(matrix) => transform_generation(*matrix),
+                ImageFilter::SampledMatrix { transform, quality } => {
+                    transform_generation(*transform) ^ (*quality as u64 + 1).rotate_left(11)
+                }
                 ImageFilter::Dilate { radius_x, radius_y } => {
                     1 ^ u64::from(radius_x.to_bits()) ^ u64::from(radius_y.to_bits()) << 32
                 }

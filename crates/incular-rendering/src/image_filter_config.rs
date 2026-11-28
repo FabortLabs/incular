@@ -212,6 +212,9 @@ impl ImageFilter {
                 outer.debug_short_description()
             ),
             Self::Matrix(transform) => format!("matrix({:?})", transform.coefficients()),
+            Self::SampledMatrix { transform, quality } => {
+                format!("matrix({:?}, {quality:?})", transform.coefficients())
+            }
             Self::Dilate { radius_x, radius_y } => format!("dilate({radius_x:?}, {radius_y:?})"),
             Self::Erode { radius_x, radius_y } => format!("erode({radius_x:?}, {radius_y:?})"),
             Self::Color(filter) => format!("color({filter:?})"),
@@ -249,7 +252,10 @@ impl Hash for ImageFilter {
                     }
                 }
             }
-            Self::Matrix(transform) => {
+            Self::Matrix(transform) | Self::SampledMatrix { transform, .. } => {
+                if let Self::SampledMatrix { quality, .. } = self {
+                    quality.hash(state);
+                }
                 for coefficient in transform.coefficients() {
                     if coefficient == 0. {
                         0

@@ -4,6 +4,8 @@
 //! layer's retained source, and one affine resample with the requested
 //! sampling draws it through the matrix into the layer's effect texture.
 
+#[cfg(not(incular_d3d11))]
+use super::effects::EffectPasses;
 use super::*;
 
 impl WgpuRenderer {
@@ -74,25 +76,13 @@ impl WgpuRenderer {
             .then(stage_inverse)
             .then(Transform::translation(output_origin))
             .then(Transform::scale(1. / scale));
-        let mode = match filter.sampling {
-            incular_painting::ImageSampling::Linear => 2,
-            incular_painting::ImageSampling::Nearest => 4,
-            incular_painting::ImageSampling::MatrixCubic => 8,
-            incular_painting::ImageSampling::LinearMipmap => {
-                if cfg!(incular_d3d11) {
-                    2
-                } else {
-                    6
-                }
-            }
-        };
         self.render_matrix_filter(
             MatrixResample {
                 layer,
                 generation,
                 scale,
                 sampling,
-                mode,
+                quality: filter.sampling,
                 source,
             },
             width,
@@ -125,9 +115,10 @@ impl WgpuRenderer {
             generation,
             scale,
             sampling,
-            mode,
+            quality,
             source,
         } = resample;
+        let mode = matrix_mode(quality);
         let coefficients = sampling.to_kurbo().as_coeffs().map(|value| value as f32);
         let mut matrix_bits = [0; 20];
         for (bits, value) in matrix_bits.iter_mut().zip(coefficients) {
@@ -153,39 +144,13 @@ impl WgpuRenderer {
             self.offscreen_target_pool.recycle(previous.target);
         }
         let target = self.take_effect_temp(width, height);
-        let source_view = self
+        let source_target = self
             .offscreen_cache
             .get(&layer)
             .expect("source cache for matrix filter")
             .target
-            .color_view
             .clone();
-        let mut weights = [0.; BLUR_WEIGHT_SLOTS];
-        weights[..6].copy_from_slice(&coefficients);
-        #[cfg(not(incular_d3d11))]
-        let source_view = if mode == 6 {
-            let lod = matrix_mip_level(coefficients, source.width, source.height);
-            weights[6] = lod;
-            if lod > 0. {
-                self.matrix_mip_source(layer, source, lod.ceil() as u32)?
-            } else {
-                source_view
-            }
-        } else {
-            source_view
-        };
-        let params = GpuBlurParams {
-            source_origin: [0., 0.],
-            source_size: [source.width as f32, source.height as f32],
-            output_size: [width as f32, height as f32],
-            direction: [1., 1.],
-            radius: 0,
-            mode,
-            sampling_mode: 0,
-            _padding: 0,
-            weights,
-        };
-        self.submit_effect_pass(&source_view, &target.color_view, &params, false)?;
+        self.sample_matrix_target(&source_target, &target, sampling, quality)?;
         let bind_group =
             self.create_composite_bind_group(&target, "incular matrix filter bind group");
         let bytes = target.bytes();
@@ -217,12 +182,62 @@ impl WgpuRenderer {
         Ok(())
     }
 
+    /// Resamples either an isolated subtree or a captured backdrop with
+    /// the same device-pixel affine map, sampling policy, and edge rules.
+    pub(super) fn sample_matrix_target(
+        &mut self,
+        source: &OffscreenTarget,
+        target: &OffscreenTarget,
+        sampling: Transform,
+        quality: incular_painting::ImageSampling,
+    ) -> Result<(), RendererError> {
+        let mode = matrix_mode(quality);
+        let coefficients = sampling.to_kurbo().as_coeffs().map(|value| value as f32);
+        let mut weights = [0.; BLUR_WEIGHT_SLOTS];
+        weights[..6].copy_from_slice(&coefficients);
+        let mut passes = self.begin_effect_passes("incular matrix sampling");
+        #[cfg(not(incular_d3d11))]
+        let mip_view = if mode == 6 {
+            let lod = matrix_mip_level(coefficients, source.width, source.height);
+            weights[6] = lod;
+            if lod > 0. {
+                Some(self.matrix_mip_source(source, lod.ceil() as u32, &mut passes)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        #[cfg(incular_d3d11)]
+        let mip_view: Option<wgpu::TextureView> = None;
+        let params = GpuBlurParams {
+            source_origin: [0.; 2],
+            source_size: [source.width as f32, source.height as f32],
+            output_size: [target.width as f32, target.height as f32],
+            direction: [1.; 2],
+            radius: 0,
+            mode,
+            sampling_mode: 0,
+            _padding: 0,
+            weights,
+        };
+        self.record_effect_pass(
+            &mut passes,
+            mip_view.as_ref().unwrap_or(&source.color_view),
+            &target.color_view,
+            &params,
+            false,
+        )?;
+        self.submit_effect_passes(passes);
+        Ok(())
+    }
+
     #[cfg(not(incular_d3d11))]
     fn matrix_mip_source(
         &mut self,
-        layer: incular_painting::LayerId,
-        source: CachedSource,
+        source: &OffscreenTarget,
         levels_above_base: u32,
+        passes: &mut EffectPasses,
     ) -> Result<wgpu::TextureView, RendererError> {
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("incular matrix filter mip source"),
@@ -234,16 +249,14 @@ impl WgpuRenderer {
             mip_level_count: levels_above_base + 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: self.window_gpu.config.format,
+            format: source.format,
             usage: wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
-        let source_texture = self.offscreen_cache[&layer].target._color.clone();
-        let mut passes = self.begin_effect_passes("incular matrix mip chain");
         passes.encoder.copy_texture_to_texture(
-            source_texture.as_image_copy(),
+            source._color.as_image_copy(),
             texture.as_image_copy(),
             wgpu::Extent3d {
                 width: source.width,
@@ -274,11 +287,21 @@ impl WgpuRenderer {
                 _padding: 0,
                 weights: [0.; BLUR_WEIGHT_SLOTS],
             };
-            self.record_effect_pass(&mut passes, &previous, &next, &params, false)?;
+            self.record_effect_pass(passes, &previous, &next, &params, false)?;
             previous = next;
         }
-        self.submit_effect_passes(passes);
         Ok(texture.create_view(&wgpu::TextureViewDescriptor::default()))
+    }
+}
+
+fn matrix_mode(quality: incular_painting::ImageSampling) -> u32 {
+    use incular_painting::ImageSampling;
+    match quality {
+        ImageSampling::Linear => 2,
+        ImageSampling::Nearest => 4,
+        ImageSampling::MatrixCubic => 8,
+        ImageSampling::LinearMipmap if cfg!(incular_d3d11) => 2,
+        ImageSampling::LinearMipmap => 6,
     }
 }
 
@@ -298,13 +321,13 @@ fn matrix_mip_level([a, b, c, d, ..]: [f32; 6], width: u32, height: u32) -> f32 
 
 /// One matrix-filter resample: the layer whose retained source it reads,
 /// the source's generation and placement, and the output-texel to
-/// source-texel map with its shader mode (2 bilinear, 4 nearest).
+/// source-texel map with its sampling policy.
 #[derive(Clone, Copy)]
 struct MatrixResample {
     layer: incular_painting::LayerId,
     generation: u64,
     scale: f32,
     sampling: Transform,
-    mode: u32,
+    quality: incular_painting::ImageSampling,
     source: CachedSource,
 }

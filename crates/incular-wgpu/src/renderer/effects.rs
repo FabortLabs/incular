@@ -1074,19 +1074,6 @@ impl WgpuRenderer {
         Ok(())
     }
 
-    /// Runs one effect pass with `params` on its own submission.
-    pub(super) fn submit_effect_pass(
-        &mut self,
-        source: &wgpu::TextureView,
-        destination: &wgpu::TextureView,
-        params: &GpuBlurParams,
-        blur: bool,
-    ) -> Result<(), RendererError> {
-        let mut passes = self.begin_effect_passes("incular transient effect pass");
-        let recorded = self.record_effect_pass(&mut passes, source, destination, params, blur);
-        self.submit_effect_passes(passes);
-        recorded
-    }
 }
 
 /// The paired kernel of a blur of `sigma` pixels, as the blur shader reads

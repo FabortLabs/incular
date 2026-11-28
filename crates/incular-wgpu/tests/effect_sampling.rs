@@ -989,6 +989,43 @@ fn matrix_minification_reads_mip_levels_and_blends_between_them() {
             &fractional[..4]
         );
     }
+
+    // Feed the same quarter-scale backdrop mapping (DPR 1, unchanged
+    // coordinates) through the production sampling shader on this capture.
+    use incular_core::Transform;
+    let backdrop = incular_rendering::backdrop_matrix_sampling(
+        Transform::IDENTITY,
+        Transform::scale_non_uniform(0.25, 1.),
+        1.,
+    )
+    .unwrap();
+    let sample_backdrop = |mode| {
+        let mut params = [0u32; PARAM_WORDS];
+        params[2..8].copy_from_slice(&[8f32, 8., 8., 8., 1., 1.].map(f32::to_bits));
+        params[9] = mode;
+        for (word, coefficient) in params[12..18].iter_mut().zip(backdrop.coefficients()) {
+            *word = (coefficient as f32).to_bits();
+        }
+        params[18] = 2f32.to_bits();
+        read_effect(
+            &device,
+            &queue,
+            shader,
+            bytemuck::cast_slice(&params),
+            &view,
+            wgpu::AddressMode::ClampToEdge,
+            true,
+        )
+    };
+    assert_eq!(&sample_backdrop(2)[..4], &[255, 0, 0, 255]);
+    let medium = sample_backdrop(6);
+    for (&actual, expected) in medium[..4].iter().zip([191u8, 0, 63, 255]) {
+        assert!(
+            actual.abs_diff(expected) <= 1,
+            "backdrop medium = {:?}",
+            &medium[..4]
+        );
+    }
 }
 
 #[test]

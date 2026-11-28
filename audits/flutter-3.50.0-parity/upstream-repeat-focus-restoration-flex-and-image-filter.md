@@ -222,3 +222,23 @@ cloning the restoration capability neither creates another manager
 nor drops the first early when the app is released. The final handle
 releases that same allocation and produces one disposal. All 15
 focused persistence, bucket ownership, and dirty-flush checks passed.
+
+### Explicit matrix quality for backdrops
+
+A pinned Flutter widget probe puts 32×16 red/blue stripes behind a
+clipped BackdropFilter at DPR 1. Quarter-scale Low returns solid red;
+explicit Medium and the unchanged default return `[191, 0, 63, 255]`.
+
+`ImageFilter::matrix_with_quality` carries all four policies through
+subtree and backdrop filters. A direct or composed backdrop uses the
+same production matrix sampler as an isolated subtree. Only Medium
+minification adds mip work, and its source copy, mip passes, and final
+sample share the effect encoder. An explicit quality change keeps the
+layer ID, but invalidates that layer's filtered-result signature.
+
+The wgpu offscreen test uses the backdrop affine mapping and actual
+readback of the striped capture, matching the pinned bytes to one
+channel level. The retained widget tests compare all four modes and
+the generation change inside a composed backdrop, with the color
+stage still in order. This compares an isolated offscreen capture,
+not the full original golden or the optional D3D11 fallback.

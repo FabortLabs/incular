@@ -57,6 +57,21 @@ impl WgpuRenderer {
         };
         let full = PixelRect::full(width, height);
         let (op, region) = match (image_filter, matrix) {
+            (Some(filter), _) if filter.matrix_parts().is_some() => {
+                let (matrix, quality) = filter.matrix_parts().expect("matrix filter");
+                let Some(sampling) =
+                    incular_painting::backdrop_matrix_sampling(transform, matrix, scale)
+                else {
+                    return Ok(Vec::new());
+                };
+                (
+                    BackdropOp::Matrix(sampling, quality.matrix_sampling()),
+                    BackdropRegion {
+                        output: full,
+                        input: full,
+                    },
+                )
+            }
             // A general filter runs each stage over the whole target, so
             // every stage reads and writes the same frame of pixels.
             (Some(filter), _) => {
@@ -91,14 +106,16 @@ impl WgpuRenderer {
                                 bounds,
                             }
                         }
-                        incular_painting::ImageFilter::Matrix(matrix) => {
+                        matrix @ (incular_painting::ImageFilter::Matrix(_)
+                        | incular_painting::ImageFilter::SampledMatrix { .. }) => {
+                            let (matrix, quality) = matrix.matrix_parts().expect("matrix filter");
                             // A singular matrix leaves nothing to sample.
                             let Some(sampling) = incular_painting::backdrop_matrix_sampling(
                                 transform, matrix, scale,
                             ) else {
                                 return Ok(Vec::new());
                             };
-                            BackdropStage::Matrix(sampling)
+                            BackdropStage::Matrix(sampling, quality.matrix_sampling())
                         }
                         incular_painting::ImageFilter::Color(color) => BackdropStage::Color(color),
                         // Refused before lowering (`unsupported_effect`).
@@ -123,7 +140,7 @@ impl WgpuRenderer {
                 };
                 // The matrix can sample any of the backdrop.
                 (
-                    BackdropOp::Matrix(sampling),
+                    BackdropOp::Matrix(sampling, incular_painting::ImageSampling::LinearMipmap),
                     BackdropRegion {
                         output: full,
                         input: full,
@@ -261,10 +278,10 @@ impl WgpuRenderer {
             }
             return Ok(());
         }
-        let Some((source_view, covered)) = self
+        let Some((source, covered)) = self
             .backdrop_capture_targets
             .get(&source_layer)
-            .map(|(capture, covered)| (capture.color_view.clone(), *covered))
+            .map(|(capture, covered)| (capture.clone(), *covered))
         else {
             self.submit_effect_passes(passes);
             return Ok(());
@@ -282,7 +299,7 @@ impl WgpuRenderer {
                 // Target pixels are the common frame; the capture holds
                 // `covered` of them.
                 let job = BlurJob {
-                    source: &source_view,
+                    source: &source.color_view,
                     source_origin: [covered.x as f32, covered.y as f32],
                     source_size: [covered.width as f32, covered.height as f32],
                     input: region.input,
@@ -300,9 +317,9 @@ impl WgpuRenderer {
                 }
                 self.store_blur_effect(layer, target, scale, generation, sigma, downsample_factor);
             }
-            BackdropOp::Matrix(sampling) => {
+            BackdropOp::Matrix(sampling, quality) => {
                 self.submit_effect_passes(passes);
-                self.render_backdrop_matrix(layer, &source_view, sampling, width, height, scale)?;
+                self.render_backdrop_matrix(layer, &source, sampling, quality, scale)?;
             }
             BackdropOp::Chain(stages) => {
                 // The capture covers the whole target (the chain registered a
@@ -311,9 +328,7 @@ impl WgpuRenderer {
                 self.submit_effect_passes(passes);
                 let mut current: Option<OffscreenTarget> = None;
                 for stage in stages.iter() {
-                    let input = current
-                        .as_ref()
-                        .map_or_else(|| source_view.clone(), |target| target.color_view.clone());
+                    let input = current.as_ref().unwrap_or(&source);
                     let origin = if current.is_some() {
                         [0., 0.]
                     } else {
@@ -345,7 +360,7 @@ impl WgpuRenderer {
                                 let target = self.take_effect_temp(width, height);
                                 self.record_effect_pass(
                                     &mut blur_passes,
-                                    &input,
+                                    &input.color_view,
                                     &target.color_view,
                                     &bounded_source_params(
                                         bounds,
@@ -360,7 +375,9 @@ impl WgpuRenderer {
                                 None
                             };
                             let job = BlurJob {
-                                source: masked.as_ref().map_or(&input, |target| &target.color_view),
+                                source: masked
+                                    .as_ref()
+                                    .map_or(&input.color_view, |target| &target.color_view),
                                 source_origin: if masked.is_some() { [0.; 2] } else { origin },
                                 source_size: if masked.is_some() {
                                     [width as f32, height as f32]
@@ -391,19 +408,21 @@ impl WgpuRenderer {
                             }
                             target
                         }
-                        BackdropStage::Matrix(sampling) => {
+                        BackdropStage::Matrix(sampling, quality) => {
                             let target = self.take_effect_temp(width, height);
                             let shifted =
                                 Transform::translation(Offset::new(-origin[0], -origin[1]))
                                     .then(sampling);
-                            let params =
-                                matrix_params(shifted, size, [width as f32, height as f32]);
-                            self.submit_effect_pass(&input, &target.color_view, &params, false)?;
+                            self.sample_matrix_target(input, &target, shifted, quality)?;
                             target
                         }
                         BackdropStage::Color(filter) => {
                             let target = self.take_effect_temp(width, height);
-                            self.run_color_matrix_pass(&input, &target.color_view, filter)?;
+                            self.run_color_matrix_pass(
+                                &input.color_view,
+                                &target.color_view,
+                                filter,
+                            )?;
                             self.counters.color_matrix_passes += 1;
                             target
                         }
@@ -432,21 +451,19 @@ impl WgpuRenderer {
     fn render_backdrop_matrix(
         &mut self,
         layer: incular_painting::LayerId,
-        source_view: &wgpu::TextureView,
+        source: &OffscreenTarget,
         sampling: Transform,
-        width: u32,
-        height: u32,
+        quality: incular_painting::ImageSampling,
         scale: f32,
     ) -> Result<(), RendererError> {
+        let (width, height) = (source.width, source.height);
         if let Some(previous) = self.effect_cache.remove(&layer) {
             self.remove_effect_cache_bytes(previous.bytes);
             self.offscreen_target_pool.recycle(previous.target);
         }
         let target = self.take_effect_temp(width, height);
         let [a, b, c, d, e, f] = sampling.to_kurbo().as_coeffs().map(|value| value as f32);
-        let size = [width as f32, height as f32];
-        let params = matrix_params(sampling, size, size);
-        self.submit_effect_pass(source_view, &target.color_view, &params, false)?;
+        self.sample_matrix_target(source, &target, sampling, quality)?;
         let bind_group =
             self.create_composite_bind_group(&target, "incular backdrop matrix bind group");
         let bytes = target.bytes();
@@ -477,29 +494,6 @@ impl WgpuRenderer {
         );
         self.add_effect_cache_bytes(bytes);
         Ok(())
-    }
-}
-
-/// Resample parameters for an affine map from output pixel positions to
-/// input texel positions over an input of `source_size` texels.
-fn matrix_params(
-    sampling: Transform,
-    source_size: [f32; 2],
-    output_size: [f32; 2],
-) -> GpuBlurParams {
-    let coefficients = sampling.to_kurbo().as_coeffs().map(|value| value as f32);
-    let mut weights = [0.; BLUR_WEIGHT_SLOTS];
-    weights[..6].copy_from_slice(&coefficients);
-    GpuBlurParams {
-        source_origin: [0., 0.],
-        source_size,
-        output_size,
-        direction: [1., 1.],
-        radius: 0,
-        mode: 2,
-        sampling_mode: 0,
-        _padding: 0,
-        weights,
     }
 }
 

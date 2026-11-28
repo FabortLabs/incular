@@ -453,7 +453,8 @@ impl From<ImageFiltered> for Widget {
                         Widget::blur_stage(blur.sigma_x, blur.sigma_y, None, value.enabled, child)
                     }
                     ImageFilter::Color(filter) => ColorFiltered::new(filter, child).into(),
-                    ImageFilter::Matrix(transform) => {
+                    matrix @ (ImageFilter::Matrix(_) | ImageFilter::SampledMatrix { .. }) => {
+                        let (transform, quality) = matrix.matrix_parts().expect("matrix filter");
                         Widget::from_kind(crate::tree::WidgetKind::Transform {
                             transform,
                             origin: Some(incular_core::Offset::ZERO),
@@ -461,10 +462,9 @@ impl From<ImageFiltered> for Widget {
                             fraction: None,
                             transform_hit_tests: false,
                             slot: None,
-                            // Flutter's ImageFilter.matrix defaults to
-                            // Medium. Even affine scaling samples an
-                            // isolated child image, not transformed draws.
-                            filter_quality: Some(incular_rendering::FilterQuality::Medium),
+                            // A matrix samples an isolated child image,
+                            // not the individual transformed draws.
+                            filter_quality: Some(quality),
                             child,
                         })
                     }
