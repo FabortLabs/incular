@@ -345,3 +345,17 @@ identical next frame without reopening the client or emitting new
 commands. A programmatically focused editor inside a zero-size
 FittedBox still sends finite composing geometry. All 16 focused
 native runtime and platform cases passed.
+
+## Composition-only frames and late metrics
+
+Pinned `widgets/editable_text_test.dart:17235,17259` both passed.
+The mounted native editor disables its cursor and tickers and is isolated
+behind a repaint boundary. Moving its parent composition to x = 42
+publishes exactly one size/transform update for the same client after
+the very next frame. No editor pulse or extra frame supplies the update.
+
+A second native test removes a focused editor, confirms the native client
+was cleared, and then delivers both window metrics and a larger keyboard
+inset. The next frame has no focus, no reopened input connection, and no
+wire update for the old client. All five focused native geometry tests
+passed.

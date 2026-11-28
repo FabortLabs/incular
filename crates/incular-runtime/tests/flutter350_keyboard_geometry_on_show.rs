@@ -154,3 +154,103 @@ fn moving_the_mounted_field_sends_only_its_changed_geometry() {
     assert_eq!(calls.len(), 1);
     assert_eq!(geometry(&calls), &box_at(14., 10., 20.));
 }
+
+#[test]
+fn parent_composition_updates_the_host_on_the_same_frame_with_a_muted_cursor() {
+    use incular_text::{TextEditingValue, TextSelection};
+    use incular_widgets::{RepaintBoundary, TickerMode};
+
+    let controller = TextEditingController::new();
+    controller.set_value(TextEditingValue {
+        text: String::new(),
+        selection: TextSelection::collapsed(0),
+        composing: None,
+    });
+    let field = Widget::from(
+        EditableText::new(controller)
+            .text_direction(TextDirection::Ltr)
+            .show_cursor(false),
+    )
+    .with_key("editor");
+    let motion = TranslationController::new();
+    let root = Widget::translate(
+        motion.clone(),
+        TickerMode::new(false, RepaintBoundary::new(field)).into(),
+    );
+    let mut runtime = Runtime::new(root).unwrap();
+    let viewport = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(viewport).unwrap();
+    let mut controls = FlutterTextInputControls::new(false);
+    let client = show(&mut runtime, &mut controls, None, "editor");
+    let initial = controls.take_platform_calls();
+    assert_eq!(geometry(&initial), &box_at(600., 0., 0.));
+
+    assert!(motion.set_offset(Offset::new(42., 0.)));
+    runtime.run_frame(viewport).unwrap();
+    assert_eq!(
+        runtime.flutter_text_input_configuration().unwrap().0,
+        client
+    );
+    assert!(
+        runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    let calls = controls.take_platform_calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(geometry(&calls), &box_at(600., 42., 0.));
+}
+
+#[test]
+fn late_window_and_keyboard_metrics_do_not_address_an_unmounted_editor() {
+    use incular_config::EdgeInsets;
+    use incular_platform::{PhysicalSize, PlatformEvent, TextInputCommand, WindowMetrics};
+
+    let editor = Widget::from(
+        EditableText::new(TextEditingController::with_text("removed"))
+            .text_direction(TextDirection::Ltr),
+    )
+    .with_key("editor");
+    let viewport = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(Column::new([editor]).into()).unwrap();
+    runtime.run_frame(viewport).unwrap();
+    let mut controls = FlutterTextInputControls::new(false);
+    let client = show(&mut runtime, &mut controls, None, "editor");
+    let _ = controls.take_platform_calls();
+    let _ = runtime.take_text_input_commands();
+
+    let root = runtime.tree().root().unwrap();
+    runtime
+        .schedule_update(root, Column::new([SizedBox::shrink()]).into())
+        .unwrap();
+    runtime.run_frame(viewport).unwrap();
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("editor"))
+            .is_none()
+    );
+    assert!(runtime.take_text_input_commands().iter().any(|command| {
+        matches!(command, TextInputCommand::Clear { client: closed } if *closed == client)
+    }));
+
+    let _ = runtime.handle_platform_event(PlatformEvent::Metrics(WindowMetrics::new(
+        PhysicalSize::new(600, 450),
+        1.,
+    )));
+    let mut environment = runtime.environment();
+    environment.view_insets = EdgeInsets::only(0., 0., 0., 150.);
+    assert!(runtime.set_environment(environment));
+    runtime
+        .run_frame(Constraints::tight(Size::new(600., 450.)))
+        .unwrap();
+    assert!(runtime.focused_element().is_none());
+    assert!(runtime.flutter_text_input_configuration().is_none());
+    assert!(runtime.take_text_input_commands().is_empty());
+    assert!(
+        !runtime
+            .publish_flutter_text_input_snapshot(&mut controls)
+            .unwrap()
+    );
+    assert!(controls.take_platform_calls().is_empty());
+}
