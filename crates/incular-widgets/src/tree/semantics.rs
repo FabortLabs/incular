@@ -3177,12 +3177,9 @@ fn sliver_semantics_cache_clip(
 }
 
 fn project_semantic_rect(world: CoreTransform, rect: Rect) -> Rect {
-    // A non-finite paint matrix has no accessible geometry. Keep the
-    // annotation/clip machinery safe even before paint rejects the subtree.
-    if !world.to_kurbo().is_finite() {
-        return Rect::default();
-    }
-    world.transform_rect_bbox(rect)
+    // Keep annotation/clip geometry safe even before paint rejects an
+    // invalid or unrepresentable projection.
+    world.try_transform_rect_bbox(rect).unwrap_or_default()
 }
 
 fn semantic_clip_overlaps(clip: Rect, bounds: Rect) -> bool {

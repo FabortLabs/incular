@@ -39,3 +39,24 @@ confirms that Flutter's debug semantics node reports an assertion
 for the non-finite rectangle. Incular deliberately recovers instead;
 this is recorded separately and adds no upstream paired count.
 All 14 focused native transform and clip-hit tests passed.
+
+## Finite matrices with unrepresentable bounds
+
+An affine can contain only finite numbers and still overflow when
+mapped into Incular's f32 world rectangles. A scale of half
+`f32::MAX` and a translation of `1e40` both reproduced the
+geometry panic in a previously painted clip subtree.
+
+The new checked projection keeps ordinary bounds arithmetic and
+the strict geometry API unchanged, while retained culling,
+compositor bounds, semantic clips and oval scissors can reject an
+unrepresentable rectangle safely. An intermediate overflow
+disables the shortcut rather than dropping the subtree: the
+`1e39` and `1e-39` composition still paints at its representable
+world bounds. Crossing widely separated sibling boxes also disables
+union culling while retaining the visible sibling. Cached pictures
+reappear when their transform returns to range.
+
+All 40 focused compositor, transform, annotation, and wgpu
+offscreen checks passed. These authored range cases do not add
+upstream registrations.

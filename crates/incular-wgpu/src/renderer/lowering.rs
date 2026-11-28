@@ -956,7 +956,8 @@ impl WgpuRenderer {
                             let geometry = if rect.size.width <= 0. || rect.size.height <= 0. {
                                 None
                             } else if b == 0. && c == 0. {
-                                Some((transform.transform_rect_bbox(*rect), AnalyticClip::Oval))
+                                transform.try_transform_rect_bbox(*rect)
+                                    .map(|bounds| (bounds, AnalyticClip::Oval))
                             } else {
                                 AffineOvalClip::new(*rect, transform, scale)
                                     .map(|oval| (oval.bounds, AnalyticClip::AffineOval(oval)))

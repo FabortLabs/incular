@@ -717,12 +717,40 @@ impl Transform {
 
     #[must_use]
     pub fn transform_rect_bbox(self, rect: Rect) -> Rect {
-        // Translations and axis-aligned scales map a box to a box edge by
-        // edge. Retained trees place nearly everything with those, and this
-        // runs per layer for culling, hit testing and semantic bounds. The
-        // arithmetic matches the general path term for term; non-finite
-        // boxes keep that path's NaN behaviour by taking it.
+        let [left, top, right, bottom] = self.rect_bbox_edges(rect);
+        Rect::from_origin_size(
+            Offset::new(left as f32, top as f32),
+            Size::new((right - left) as f32, (bottom - top) as f32),
+        )
+    }
+
+    /// Projects a rectangle without panicking when the affine or its bounds
+    /// cannot be represented in logical f32 geometry.
+    #[must_use]
+    pub fn try_transform_rect_bbox(self, rect: Rect) -> Option<Rect> {
+        if !self.0.is_finite()
+            || !(rect.origin.x + rect.size.width).is_finite()
+            || !(rect.origin.y + rect.size.height).is_finite()
+        {
+            return None;
+        }
+        let [left, top, right, bottom] = self.rect_bbox_edges(rect);
+        let size = Size::maybe_new((right - left) as f32, (bottom - top) as f32)?;
+        let (left, top) = (left as f32, top as f32);
+        if !(left + size.width).is_finite() || !(top + size.height).is_finite() {
+            return None;
+        }
+        Some(Rect::from_origin_size(Offset::new(left, top), size))
+    }
+
+    fn rect_bbox_edges(self, rect: Rect) -> [f64; 4] {
+        // Retained placements are generally axis-aligned. Keep this fast
+        // path, and use the same f32 input edge rounding as the general one.
         let [a, b, c, d, e, f] = self.0.as_coeffs();
+        let x0 = f64::from(rect.origin.x);
+        let y0 = f64::from(rect.origin.y);
+        let x1 = f64::from(rect.origin.x + rect.size.width);
+        let y1 = f64::from(rect.origin.y + rect.size.height);
         if b == 0.
             && c == 0.
             && rect.origin.x.is_finite()
@@ -730,28 +758,13 @@ impl Transform {
             && rect.size.width.is_finite()
             && rect.size.height.is_finite()
         {
-            let x0 = a * f64::from(rect.origin.x) + e;
-            let x1 = a * f64::from(rect.origin.x + rect.size.width) + e;
-            let y0 = d * f64::from(rect.origin.y) + f;
-            let y1 = d * f64::from(rect.origin.y + rect.size.height) + f;
-            let (left, right) = (x0.min(x1), x0.max(x1));
-            let (top, bottom) = (y0.min(y1), y0.max(y1));
-            return Rect::from_origin_size(
-                Offset::new(left as f32, top as f32),
-                Size::new((right - left) as f32, (bottom - top) as f32),
-            );
+            let (x0, x1) = (a * x0 + e, a * x1 + e);
+            let (y0, y1) = (d * y0 + f, d * y1 + f);
+            [x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1)]
+        } else {
+            let rect = self.0.transform_rect_bbox(kurbo::Rect::new(x0, y0, x1, y1));
+            [rect.x0, rect.y0, rect.x1, rect.y1]
         }
-        let rect = kurbo::Rect::new(
-            f64::from(rect.origin.x),
-            f64::from(rect.origin.y),
-            f64::from(rect.origin.x + rect.size.width),
-            f64::from(rect.origin.y + rect.size.height),
-        );
-        let rect = self.0.transform_rect_bbox(rect);
-        Rect::from_origin_size(
-            Offset::new(rect.x0 as f32, rect.y0 as f32),
-            Size::new((rect.x1 - rect.x0) as f32, (rect.y1 - rect.y0) as f32),
-        )
     }
 }
 

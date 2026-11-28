@@ -27,7 +27,7 @@ impl AffineOvalClip {
             rect.origin + Offset::new(rect.size.width * 0.5, rect.size.height * 0.5),
         );
         Some(Self {
-            bounds: transform.transform_rect_bbox(rect),
+            bounds: transform.try_transform_rect_bbox(rect)?,
             center,
             normalized_inverse,
         })

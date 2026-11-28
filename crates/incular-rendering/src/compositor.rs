@@ -7,7 +7,7 @@ use crate::effects::{
     BlendMode, ColorFilter, DropShadowEffect, GaussianBlur, ImageFilter, blur_bounds,
     drop_shadow_bounds,
 };
-use crate::geometry::{RRect, union_rect};
+use crate::geometry::RRect;
 use crate::gradients::Brush;
 use crate::paint::FillRule;
 use crate::paths::{Path, ellipse_as_path, fallback_tolerance, rect_as_path, rrect_as_path};
@@ -163,18 +163,32 @@ impl LayerAnchor {
     }
 }
 
+fn try_union_bounds(left: Rect, right: Rect) -> Option<Rect> {
+    let x0 = left.origin.x.min(right.origin.x);
+    let y0 = left.origin.y.min(right.origin.y);
+    let x1 = (left.origin.x + left.size.width).max(right.origin.x + right.size.width);
+    let y1 = (left.origin.y + left.size.height).max(right.origin.y + right.size.height);
+    let size = Size::maybe_new(x1 - x0, y1 - y0)?;
+    Some(Rect::from_origin_size(Offset::new(x0, y0), size))
+}
+
+fn join_bounds(mut bounds: impl Iterator<Item = Rect>) -> Option<Rect> {
+    let first = bounds.next()?;
+    bounds.try_fold(first, try_union_bounds)
+}
+
 /// World-space bounding box of a clip layer's shape, or `None` when the
 /// shape is empty and clips everything away. Conservative for rounded
 /// corners: the box covers the full rect. Pass only clip layers; any
 /// other kind also reports `None` so a misuse culls rather than leaks.
 fn clip_world_bounds(kind: &LayerKind, world_transform: Transform) -> Option<Rect> {
     match kind {
-        LayerKind::ClipRect { rect, .. } => Some(world_transform.transform_rect_bbox(*rect)),
-        LayerKind::ClipRRect { rrect, .. } => Some(world_transform.transform_rect_bbox(rrect.rect)),
-        LayerKind::ClipOval { rect, .. } => Some(world_transform.transform_rect_bbox(*rect)),
+        LayerKind::ClipRect { rect, .. } => world_transform.try_transform_rect_bbox(*rect),
+        LayerKind::ClipRRect { rrect, .. } => world_transform.try_transform_rect_bbox(rrect.rect),
+        LayerKind::ClipOval { rect, .. } => world_transform.try_transform_rect_bbox(*rect),
         LayerKind::ClipPath { path, .. } => path
             .tight_bounds()
-            .map(|bounds| world_transform.transform_rect_bbox(bounds)),
+            .and_then(|bounds| world_transform.try_transform_rect_bbox(bounds)),
         _ => None,
     }
 }
@@ -2293,9 +2307,20 @@ impl LayerTree {
             let (child_bounds, child_cullable) = self.cull_bounds(child);
             cullable &= child_cullable;
             if let Some(child_bounds) = child_bounds {
-                let child_bounds = local.transform_rect_bbox(child_bounds);
-                bounds =
-                    Some(bounds.map_or(child_bounds, |bounds| union_rect(bounds, child_bounds)));
+                if let Some(child_bounds) = local.try_transform_rect_bbox(child_bounds) {
+                    if let Some(joined) = bounds.map_or(Some(child_bounds), |bounds| {
+                        try_union_bounds(bounds, child_bounds)
+                    }) {
+                        bounds = Some(joined);
+                    } else {
+                        cullable = false;
+                    }
+                } else {
+                    // This intermediate coordinate space may overflow even
+                    // when an enclosing affine brings the final box back
+                    // into range. Disable the bounds shortcut in that case.
+                    cullable = false;
+                }
             }
         }
         if let Some(layer) = self.layers.get_mut(id.0) {
@@ -2325,7 +2350,8 @@ impl LayerTree {
             let (bounds, cullable) = self.cull_bounds(id);
             if cullable
                 && bounds.is_none_or(|bounds| {
-                    !active.intersects(world_transform.transform_rect_bbox(bounds))
+                    world_transform.try_transform_rect_bbox(bounds)
+                        .is_some_and(|world| !active.intersects(world))
                 })
             {
                 self.diagnostics.layers_culled += 1;
@@ -2399,7 +2425,10 @@ impl LayerTree {
                 display_list,
                 bounds,
             } => {
-                let world = world_transform.transform_rect_bbox(bounds);
+                let Some(world) = world_transform.try_transform_rect_bbox(bounds) else {
+                    self.diagnostics.layers_culled += 1;
+                    return;
+                };
                 if clip.is_some_and(|active| !active.intersects(world)) {
                     self.diagnostics.layers_culled += 1;
                     return;
@@ -2427,13 +2456,13 @@ impl LayerTree {
                 // Flutter `RenderTransform.paint` with a `filterQuality`: the
                 // child paints untransformed into an `ImageFilterLayer` whose
                 // `ImageFilter.matrix` resamples it.
-                let source_bounds = self
-                    .layers
-                    .get(id.0)
-                    .into_iter()
-                    .flat_map(|layer| layer.children.iter().copied())
-                    .filter_map(|child| self.subtree_bounds(child, world_transform))
-                    .reduce(union_rect);
+                let source_bounds = join_bounds(
+                    self.layers
+                        .get(id.0)
+                        .into_iter()
+                        .flat_map(|layer| layer.children.iter().copied())
+                        .filter_map(|child| self.subtree_bounds(child, world_transform)),
+                );
                 let Some(bounds) = source_bounds else {
                     return;
                 };
@@ -3016,7 +3045,7 @@ impl LayerTree {
                         if !(size.width > 0. && size.height > 0.) {
                             return None;
                         }
-                        let world = world_transform.transform_rect_bbox(region);
+                        let world = world_transform.try_transform_rect_bbox(region)?;
                         match clip {
                             Some((active, _)) => Some(active.intersection(world)?),
                             None => Some(world),
@@ -3197,92 +3226,52 @@ impl LayerTree {
     }
     fn subtree_bounds(&self, id: LayerId, world_transform: Transform) -> Option<Rect> {
         let layer = self.layers.get(id.0)?;
+        let children_at = |world: Transform| {
+            join_bounds(layer.children.iter().filter_map(|child| self.subtree_bounds(*child, world)))
+        };
         match &layer.kind {
-            LayerKind::Picture { bounds, .. } => Some(world_transform.transform_rect_bbox(*bounds)),
+            LayerKind::Picture { bounds, .. } => world_transform.try_transform_rect_bbox(*bounds),
             LayerKind::Transform { transform: local, .. } => {
                 let world = world_transform.then(*local);
                 if !world.has_drawable_area() {
                     return None;
                 }
-                layer
-                    .children
-                    .iter()
-                    .filter_map(|child| self.subtree_bounds(*child, world))
-                    .reduce(union_rect)
+                children_at(world)
             }
-            LayerKind::ClipRect { rect, .. } => {
-                let world = world_transform.transform_rect_bbox(*rect);
-                layer
-                    .children
-                    .iter()
-                    .filter_map(|child| self.subtree_bounds(*child, world_transform))
-                    .reduce(union_rect)
-                    .and_then(|bounds| bounds.intersection(world))
-            }
-            LayerKind::ClipRRect { .. }
+            LayerKind::ClipRect { .. }
+            | LayerKind::ClipRRect { .. }
             | LayerKind::ClipOval { .. }
             | LayerKind::ClipPath { .. } => {
-                let world = clip_world_bounds(&layer.kind, world_transform)?;
-                layer
-                    .children
-                    .iter()
-                    .filter_map(|child| self.subtree_bounds(*child, world_transform))
-                    .reduce(union_rect)
-                    .and_then(|bounds| bounds.intersection(world))
+                let clip = clip_world_bounds(&layer.kind, world_transform)?;
+                children_at(world_transform)?.intersection(clip)
             }
             LayerKind::Opacity { alpha } if opacity_is_transparent(*alpha) => None,
-            LayerKind::Opacity { .. } => layer
-                .children
-                .iter()
-                .filter_map(|child| self.subtree_bounds(*child, world_transform))
-                .reduce(union_rect),
-            LayerKind::Blur { .. } | LayerKind::DropShadow { .. } => layer
-                .children
-                .iter()
-                .filter_map(|child| self.subtree_bounds(*child, world_transform))
-                .reduce(union_rect),
-            LayerKind::ColorFilter { .. } | LayerKind::Blend { .. } => layer
-                .children
-                .iter()
-                .filter_map(|child| self.subtree_bounds(*child, world_transform))
-                .reduce(union_rect),
-            LayerKind::ShaderMask { .. }
-            | LayerKind::BackdropFilter { .. }
-            | LayerKind::AnnotatedRegion { .. } => layer
-                .children
-                .iter()
-                .filter_map(|child| self.subtree_bounds(*child, world_transform))
-                .reduce(union_rect),
             LayerKind::Leader { offset, .. } => {
-                let next = leader_world_transform(world_transform, *offset);
-                layer
-                    .children
-                    .iter()
-                    .filter_map(|child| self.subtree_bounds(*child, next))
-                    .reduce(union_rect)
+                children_at(leader_world_transform(world_transform, *offset))
             }
             LayerKind::Follower(follower) => {
-                let next = self.follower_transform(world_transform, follower)?;
-                layer
-                    .children
-                    .iter()
-                    .filter_map(|child| self.subtree_bounds(*child, next))
-                    .reduce(union_rect)
+                children_at(self.follower_transform(world_transform, follower)?)
             }
+            LayerKind::Opacity { .. }
+            | LayerKind::Blur { .. }
+            | LayerKind::DropShadow { .. }
+            | LayerKind::ColorFilter { .. }
+            | LayerKind::Blend { .. }
+            | LayerKind::ShaderMask { .. }
+            | LayerKind::BackdropFilter { .. }
+            | LayerKind::AnnotatedRegion { .. } => children_at(world_transform),
         }
     }
 
     fn visual_subtree_bounds(&self, id: LayerId, world_transform: Transform) -> Option<Rect> {
         let layer = self.layers.get(id.0)?;
         let child_bounds = |tree: &Self, transform: Transform| {
-            layer
-                .children
-                .iter()
-                .filter_map(|child| tree.visual_subtree_bounds(*child, transform))
-                .reduce(union_rect)
+            join_bounds(
+                layer.children.iter().filter_map(|child| tree.visual_subtree_bounds(*child, transform)),
+            )
         };
         match &layer.kind {
-            LayerKind::Picture { bounds, .. } => Some(world_transform.transform_rect_bbox(*bounds)),
+            LayerKind::Picture { bounds, .. } => world_transform.try_transform_rect_bbox(*bounds),
             LayerKind::Transform { transform: local, .. } => {
                 let world = world_transform.then(*local);
                 if !world.has_drawable_area() {
@@ -3291,7 +3280,7 @@ impl LayerTree {
                 child_bounds(self, world)
             }
             LayerKind::ClipRect { rect, .. } => {
-                let world = world_transform.transform_rect_bbox(*rect);
+                let world = world_transform.try_transform_rect_bbox(*rect)?;
                 child_bounds(self, world_transform).and_then(|bounds| bounds.intersection(world))
             }
             LayerKind::ClipRRect { .. }
@@ -3354,10 +3343,13 @@ impl LayerTree {
             return;
         }
         let kind = match &layer.kind {
-            LayerKind::Picture { bounds, .. } => format!(
-                "Picture(local_bounds={bounds:?}, world_bounds={:?}, clip={clip:?})",
-                world_transform.transform_rect_bbox(*bounds)
-            ),
+            LayerKind::Picture { bounds, .. } => {
+                if let Some(world) = world_transform.try_transform_rect_bbox(*bounds) {
+                    format!("Picture(local_bounds={bounds:?}, world_bounds={world:?}, clip={clip:?})")
+                } else {
+                    format!("Picture(local_bounds={bounds:?}, non-drawable transform: unrepresentable bounds)")
+                }
+            }
             LayerKind::Transform { transform, .. } => {
                 format!(
                     "Transform(local={:?}, world={:?})",
@@ -3367,15 +3359,15 @@ impl LayerTree {
             }
             LayerKind::ClipRect { rect, .. } => format!(
                 "ClipRect(local={rect:?}, world={:?})",
-                world_transform.transform_rect_bbox(*rect)
+                world_transform.try_transform_rect_bbox(*rect).unwrap_or_default()
             ),
             LayerKind::ClipRRect { rrect, .. } => format!(
                 "ClipRRect(local={rrect:?}, world={:?})",
-                world_transform.transform_rect_bbox(rrect.rect)
+                world_transform.try_transform_rect_bbox(rrect.rect).unwrap_or_default()
             ),
             LayerKind::ClipOval { rect, .. } => format!(
                 "ClipOval(local={rect:?}, world={:?})",
-                world_transform.transform_rect_bbox(*rect)
+                world_transform.try_transform_rect_bbox(*rect).unwrap_or_default()
             ),
             LayerKind::ClipPath { path, .. } => format!(
                 "ClipPath(local_bounds={:?}, world={:?})",
@@ -3485,7 +3477,7 @@ impl LayerTree {
                 transform: local, ..
             } => (world_transform.then(*local), clip),
             LayerKind::ClipRect { rect, .. } => {
-                let world = world_transform.transform_rect_bbox(*rect);
+                let world = world_transform.try_transform_rect_bbox(*rect).unwrap_or_default();
                 (
                     world_transform,
                     Some(clip.map_or(world, |old| old.intersection(world).unwrap_or(world))),
