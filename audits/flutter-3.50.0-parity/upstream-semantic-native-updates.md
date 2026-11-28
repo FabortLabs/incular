@@ -19,10 +19,10 @@ Four pinned Flutter cases have equivalent retained comparisons in
   update, replacing one named custom action dirties only that node, keeps
   its native identity, and rejects the old action in both adapters.
 
-Three other named `semantics_update_test.dart` cases passed only on Flutter:
-attributed speech spans (:95), engine traversal matrices for nested portals
-(:194), and unresolved explicit traversal-parent identifiers (:271).
-These do not count as paired. This slice validates update data and the real
+The engine traversal matrices for nested portals (:194) still have
+no paired native wire comparison. Attributed speech spans (:95) are
+tracked separately. The unresolved traversal parent (:271) is now
+paired below. This slice validates update data and the real
 AccessKit consumer, not native assistive-technology speech.
 
 ## Mixed-direction merged labels
@@ -52,3 +52,25 @@ runs, but the retained revision does not change and neither AccessKit
 nor the mobile projection emits an update. Changing the label to
 `bye` then emits exactly one node without replacing the semantic
 identity. All seven focused native semantic-update tests passed.
+
+## Named traversal parents and missing nodes
+
+Pinned `semantics_update_test.dart:271` passed. Incular now supports
+unique named semantic traversal parents and referring children. The
+mounted original puts a named child next to an ordinary 10×10 box
+without declaring its parent. The framework and both native projections
+receive no accessible children; point dispatch cannot address a
+discarded child. Ordinary pointer and layout structure is unchanged.
+
+The additional native test places the target away from the rendered
+child. The named node appears beneath the target in traversal, but
+the actual hit entry stays on its original physical branch. Removing
+the target immediately removes the previously published child and its
+hit entry, even though the physical widget still exists. Clearing the
+last named link restores ordinary ancestry. A cycle or duplicate
+target name cannot create orphaned native roots. Ordinary trees do
+not run the named traversal pass.
+
+The nested OverlayPortal matrix original (:194) passed on pinned
+Flutter but remains unpaired. The Incular adapters publish world bounds
+rather than that engine's per-node traversal matrix.

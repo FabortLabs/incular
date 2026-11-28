@@ -111,6 +111,10 @@ pub struct Semantics {
     #[builder(default, setter(strip_option))]
     locale_for_subtree: Option<incular_config::Locale>,
     #[builder(default, setter(strip_option, into))]
+    traversal_parent_identifier: Option<Arc<str>>,
+    #[builder(default, setter(strip_option, into))]
+    traversal_child_identifier: Option<Arc<str>>,
+    #[builder(default, setter(strip_option, into))]
     child: Option<Widget>,
 }
 
@@ -166,8 +170,25 @@ impl Semantics {
             block_user_actions: false,
             tag_for_children: None,
             locale_for_subtree: None,
+            traversal_parent_identifier: None,
+            traversal_child_identifier: None,
             child: Some(child.into()),
         }
+    }
+
+    /// Gives this node a unique name that semantic traversal children can target.
+    #[must_use]
+    pub fn traversal_parent_identifier(mut self, identifier: impl Into<Arc<str>>) -> Self {
+        self.traversal_parent_identifier = Some(identifier.into());
+        self
+    }
+
+    /// Places this node under the named traversal parent. If the parent
+    /// is absent, this branch is omitted from accessibility.
+    #[must_use]
+    pub fn traversal_child_identifier(mut self, identifier: impl Into<Arc<str>>) -> Self {
+        self.traversal_child_identifier = Some(identifier.into());
+        self
     }
 
     /// Sets the semantic role (e.g. Button, Header, TextField).
@@ -1006,6 +1027,8 @@ impl Semantics {
         );
         let has_metadata = self.role.is_some()
             || self.locale_for_subtree.is_some()
+            || self.traversal_parent_identifier.is_some()
+            || self.traversal_child_identifier.is_some()
             || self.label.is_some()
             || self.value.is_some()
             || self.description.is_some()
@@ -1024,6 +1047,9 @@ impl Semantics {
                 .map_or_else(Vec::new, |item| item.attributes().to_vec())
         };
         let mut state = self.state.clone();
+        if self.traversal_parent_identifier.is_some() || self.traversal_child_identifier.is_some() {
+            state.container = true;
+        }
         let mut configured_attributes =
             state.text_attributes.take().map_or_else(SemanticTextAttributes::default, |data| {
                 Arc::unwrap_or_clone(data)
@@ -1081,6 +1107,11 @@ impl From<Semantics> for Widget {
         }
         if let Some(explicit) = explicit {
             widget = widget.semantics(explicit);
+        }
+        if value.traversal_parent_identifier.is_some() || value.traversal_child_identifier.is_some() {
+            let properties = widget.semantic_properties_mut();
+            properties.traversal_parent = value.traversal_parent_identifier;
+            properties.traversal_child = value.traversal_child_identifier;
         }
         if let Some(Some(tag)) = value.tag_for_children {
             widget = widget.with_semantic_child_tag(tag);

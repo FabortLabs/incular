@@ -17,6 +17,7 @@ use incular_semantics::{
 };
 use std::{borrow::Cow, rc::Rc};
 
+mod graft;
 pub(super) mod paragraph;
 pub(super) mod table;
 mod traversal;
@@ -343,6 +344,8 @@ pub(super) struct SemanticsScratch {
     detached: Vec<SemanticNodeId>,
     /// Scroll nodes re-collected after a scroll offset change.
     scrolls: Vec<ElementId>,
+    named_traversal_last_pass: bool,
+    named_traversal_detached: Vec<SemanticNodeId>,
 }
 
 impl WidgetTree {
@@ -479,8 +482,22 @@ impl WidgetTree {
         #[cfg(feature = "devtools")]
         let trace = self.devtools_trace_begin_element(root, TracePhase::Semantics);
         let mut scratch = std::mem::take(&mut self.semantics_scratch);
-        self.collect_semantics(root, full, &mut scratch);
+        let has_named_traversal = !self.tracked.semantic_traversal_links.is_empty();
+        // Opted-in cross-branch names can affect a physically unrelated
+        // subtree. Ordinary semantic updates retain their incremental path.
+        self.collect_semantics(
+            root,
+            full || has_named_traversal || scratch.named_traversal_last_pass,
+            &mut scratch,
+        );
+        let hit_orders = self.graft_semantic_traversal(
+            &mut scratch.builds,
+            &mut scratch.edges,
+            &mut scratch.named_traversal_detached,
+        );
         self.apply_semantics(&mut scratch);
+        self.apply_grafted_hit_orders(hit_orders);
+        scratch.named_traversal_last_pass = has_named_traversal;
         #[cfg(debug_assertions)]
         {
             self.semantic_role_issues = self.semantics.role_issues_with_action_blocks(|node| {
@@ -826,6 +843,7 @@ impl WidgetTree {
             synthetic_changes,
             changed_viewport_children,
             detached,
+            named_traversal_detached,
             ..
         } = scratch;
         // Allocate stable IDs for every new node before wiring any edges, so
@@ -895,6 +913,7 @@ impl WidgetTree {
         attached.sort_unstable_by_key(|id| id.0);
         synthetic_changes.clear();
         detached.clear();
+        detached.append(named_traversal_detached);
         let mut cursor = 0;
         // Collection builds fresh values each pass, so moving them into the
         // retained graph avoids a second copy of every label and action list.

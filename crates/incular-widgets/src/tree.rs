@@ -1885,6 +1885,7 @@ struct TrackedElements {
     notification_listeners: BTreeSet<ElementId>,
     transient_portals: BTreeSet<ElementId>,
     semantics_debuggers: BTreeSet<ElementId>,
+    semantic_traversal_links: BTreeSet<ElementId>,
     /// Elements whose semantics hide the siblings before them. Nearly every
     /// tree has none, which spares the semantics pass a look at each child
     /// of every node it enters.
@@ -1919,6 +1920,12 @@ impl TrackedElements {
             self.raw_scrollbars.insert(id);
         } else if !self.raw_scrollbars.is_empty() {
             self.raw_scrollbars.remove(&id);
+        }
+        let semantics = element.widget.semantic_properties();
+        if semantics.traversal_parent.is_some() || semantics.traversal_child.is_some() {
+            self.semantic_traversal_links.insert(id);
+        } else if !self.semantic_traversal_links.is_empty() {
+            self.semantic_traversal_links.remove(&id);
         }
         let membership = [
             (
@@ -2078,6 +2085,9 @@ impl TrackedElements {
     fn untrack(&mut self, id: ElementId, tracked: u16) {
         if !self.raw_scrollbars.is_empty() {
             self.raw_scrollbars.remove(&id);
+        }
+        if !self.semantic_traversal_links.is_empty() {
+            self.semantic_traversal_links.remove(&id);
         }
         if tracked != 0 {
             // Includes both sources and listeners. Conservatively invalidate

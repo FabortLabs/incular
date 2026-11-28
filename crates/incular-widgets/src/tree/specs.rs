@@ -278,6 +278,8 @@ pub(crate) struct SemanticProperties {
     pub(super) merge_descendants: bool,
     pub(super) tag_for_children: Option<incular_semantics::SemanticsTag>,
     pub(super) locale_for_subtree: Option<std::sync::Arc<str>>,
+    pub(crate) traversal_parent: Option<std::sync::Arc<str>>,
+    pub(crate) traversal_child: Option<std::sync::Arc<str>>,
     /// Flutter `alwaysIncludeSemantics` on an opacity widget: keep the child's
     /// semantics even while the opacity is zero.
     pub(super) always_include_semantics: bool,

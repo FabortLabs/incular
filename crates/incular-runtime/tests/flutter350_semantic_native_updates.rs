@@ -530,3 +530,154 @@ fn requesting_the_same_semantics_recomputes_without_republishing() {
     assert_eq!(mobile_patch.nodes.len(), 1);
     assert_eq!(mobile_patch.nodes[0].semantic.label.as_deref(), Some("bye"));
 }
+
+#[test]
+fn unresolved_named_child_does_not_reach_either_native_accessibility_order() {
+    use incular_core::Offset;
+    use incular_widgets::Column;
+
+    let mut runtime = Runtime::new(scene(Column::new([
+        Widget::from(
+            Semantics::new(SizedBox::new().width(10.).height(10.))
+                .traversal_child_identifier("111"),
+        ),
+        SizedBox::new().width(10.).height(10.).into(),
+    ])))
+    .unwrap();
+    frame(&mut runtime);
+    let tree = runtime.tree();
+    assert!(tree.semantics().roots().is_empty());
+    assert_eq!(tree.semantics().iter().count(), 0);
+    assert!(
+        tree.semantic_action_target_at(Offset::new(1., 1.), &SemanticAction::Activate)
+            .is_none()
+    );
+    let mut accesskit = AccessKitProjection::new();
+    let native = accesskit
+        .sync(tree.semantics(), 1.)
+        .unwrap()
+        .into_accesskit();
+    let native_tree = Tree::new(native, true);
+    assert_eq!(native_tree.state().root().children().count(), 0);
+    let mut mobile = MobileAccessibilityProjection::new();
+    let update = mobile.sync(tree.semantics()).unwrap();
+    assert!(update.roots.is_empty() && update.nodes.is_empty());
+}
+
+#[test]
+fn named_traversal_uses_logical_ancestry_without_moving_the_hit_target() {
+    use incular_core::Offset;
+    use incular_widgets::{Positioned, Stack};
+
+    let build = |host_present, child_named| {
+        let child = Semantics::new(SizedBox::shrink())
+            .container(true)
+            .label("outside")
+            .on_tap(|| {});
+        let child = if child_named {
+            child.traversal_child_identifier("owner")
+        } else {
+            child
+        };
+        let mut items = vec![Widget::from(
+            Positioned::new(Widget::from(child).with_key("child"))
+                .left(140.)
+                .top(110.)
+                .width(30.)
+                .height(30.),
+        )];
+        if host_present {
+            let owner = Semantics::new(SizedBox::shrink())
+                .container(true)
+                .label("owner")
+                .traversal_parent_identifier("owner");
+            items.push(
+                Positioned::new(Widget::from(owner).with_key("host"))
+                    .left(10.)
+                    .top(10.)
+                    .width(25.)
+                    .height(25.)
+                    .into(),
+            );
+        }
+        scene(
+            Semantics::new(Stack::new(items))
+                .label("root")
+                .container(true)
+                .explicit_child_nodes(true),
+        )
+    };
+    let mut runtime = Runtime::new(build(true, true)).unwrap();
+    frame(&mut runtime);
+    let host = semantic_id(&runtime, "owner");
+    let child = semantic_id(&runtime, "outside");
+    let root = semantic_id(&runtime, "root");
+    let tree = runtime.tree();
+    assert_eq!(tree.semantics().node(root).unwrap().children, [host]);
+    assert_eq!(tree.semantics().node(host).unwrap().children, [child]);
+    assert_eq!(
+        tree.semantic_inverse_hit_test_children(root).unwrap().len(),
+        2
+    );
+    assert!(
+        tree.semantic_inverse_hit_test_children(host)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        tree.semantic_action_target_at(Offset::new(145., 115.), &SemanticAction::Activate),
+        Some(child)
+    );
+
+    // Removing only the parent removes the child's accessibility exposure
+    // immediately, without removing its retained rendered widget.
+    patch(&mut runtime, build(false, true));
+    let tree = runtime.tree();
+    assert!(tree.element_with_key(&"child".into()).is_some());
+    assert!(tree.semantics().node(child).is_none());
+    assert!(
+        tree.semantic_inverse_hit_test_children(root)
+            .unwrap()
+            .is_empty()
+    );
+
+    // Removing the last named annotation restores ordinary ancestry.
+    patch(&mut runtime, build(false, false));
+    let child = semantic_id(&runtime, "outside");
+    let tree = runtime.tree();
+    assert_eq!(tree.semantics().node(root).unwrap().children, [child]);
+    assert_eq!(
+        tree.semantic_inverse_hit_test_children(root).unwrap(),
+        [child]
+    );
+}
+
+#[test]
+fn duplicate_targets_and_cycles_cannot_create_detached_native_roots() {
+    use incular_widgets::Column;
+    let branch = |label, name, destination| {
+        let node = Semantics::new(SizedBox::new().width(20.).height(20.))
+            .label(label)
+            .container(true)
+            .traversal_parent_identifier(name);
+        let node = if let Some(target) = destination {
+            node.traversal_child_identifier(target)
+        } else {
+            node
+        };
+        Widget::from(node)
+    };
+    let mut runtime = Runtime::new(scene(Column::new([
+        branch("name-a1", "ambiguous", None),
+        branch("name-a2", "ambiguous", None),
+        branch("cycle-a", "one", Some("two")),
+        branch("cycle-b", "two", Some("one")),
+        branch("cannot-attach", "unique", Some("ambiguous")),
+    ])))
+    .unwrap();
+    frame(&mut runtime);
+    let semantic = runtime.tree().semantics();
+    assert_eq!(semantic.roots().len(), 2);
+    assert_eq!(semantic.iter().count(), 2);
+    assert!(semantic.iter().all(|(_, node)| node.children.is_empty()));
+}
