@@ -4156,3 +4156,5 @@ packages/flutter/test/widgets/editable_text_test.dart	6720	called when the compo
 packages/flutter/test/widgets/editable_text_test.dart	6758	only send updates when necessary	paired-match	upstream-text-input-reattach.md#live-composing-geometry-and-degenerate-transforms
 packages/flutter/test/widgets/editable_text_test.dart	6779	zero matrix paint transform	paired-match	upstream-text-input-reattach.md#live-composing-geometry-and-degenerate-transforms
 packages/flutter/test/widgets/editable_text_test.dart	7987	keyboard shortcuts respect read-only	paired-match	upstream-editable-defaults.md#read-only-keyboard-actions
+packages/flutter/test/widgets/editable_text_test.dart	1772	can update style of previous activated EditableText	partial-match	upstream-editable-defaults.md#restyling-focused-and-previously-focused-fields
+packages/flutter/test/widgets/editable_text_test.dart	6484	text styling info is sent on style update	paired-match	upstream-editable-defaults.md#restyling-focused-and-previously-focused-fields

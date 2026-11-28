@@ -209,3 +209,18 @@ the clipboard, Copy sends the entire document, and Delete and
 Backspace leave the text and full range untouched. Native uses
 the corresponding Ctrl and Command shortcut tables, with
 Fuchsia sharing the Android path, and an in-memory clipboard.
+
+### Restyling focused and previously focused fields
+
+Pinned :6484 and :1772 passed. Rebuilding the active field changes
+the wire style from RobotoMono to Raleway, weight 600 to 700,
+letter spacing 1 and word spacing 2. The same client receives one
+style update, and a repeated identical frame emits nothing.
+
+An authored pinned reference and the mounted native fixture also
+show the earlier field relayout from 9 to 20 px after its controller
+and style are replaced, while the current field stays 9 px and
+retains focus. Native uses separate focus nodes, as does the authored
+reference, so :1772 is partial rather than claiming equivalent
+behavior for the original's shared FocusNode attachment. The eight
+focused native tests used the matching embedded FlutterTest font.
