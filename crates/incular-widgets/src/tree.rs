@@ -660,6 +660,7 @@ pub struct TextFieldRender {
     pub(crate) cursor_opacity_animates: bool,
     pub(crate) show_cursor: bool,
     pub(crate) paint_cursor_above_text: bool,
+    pub(crate) painters: Option<Rc<crate::editable_paint::EditorPainters>>,
     pub(crate) cursor_color: Color,
     pub(crate) background_cursor_color: Option<Color>,
     pub(crate) selection_color: Option<Color>,

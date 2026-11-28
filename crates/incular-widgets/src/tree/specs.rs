@@ -592,6 +592,7 @@ pub struct TextFieldSpec {
     pub(crate) cursor_radius: f32,
     pub(crate) show_cursor: bool,
     pub(crate) paint_cursor_above_text: bool,
+    pub(crate) painters: Option<Rc<crate::editable_paint::EditorPainters>>,
     pub(crate) cursor_color: Color,
     pub(crate) mouse_cursor: Option<crate::MouseCursor>,
     pub(crate) background_cursor_color: Option<Color>,

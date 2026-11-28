@@ -446,11 +446,26 @@ impl WidgetTree {
                             cache.push(command);
                         }
                     }
+                    let text_origin = Offset::new(
+                        content_padding.left - active_scroll_x,
+                        top - active_scroll_y,
+                    );
+                    let painter_context = field.painters.as_ref().map(|_| crate::EditableTextPaintContext {
+                        size,
+                        text_origin,
+                        scroll_offset: Offset::new(active_scroll_x, active_scroll_y),
+                        caret: shape_caret(caret, caret_y, caret_height),
+                        selection: controller.selection_if_set(),
+                        focused,
+                    });
+                    if let (Some(painter), Some(context)) = (
+                        field.painters.as_ref().and_then(|p| p.background.as_ref()),
+                        painter_context,
+                    ) {
+                        painter.record(context, cache);
+                    }
                     cache.push(PaintCommand::PushTransform {
-                        transform: CoreTransform::translation(Offset::new(
-                            content_padding.left - active_scroll_x,
-                            top - active_scroll_y,
-                        )),
+                        transform: CoreTransform::translation(text_origin),
                     });
                     let color = if shows_placeholder {
                         placeholder_color
@@ -495,6 +510,12 @@ impl WidgetTree {
                     }
                     if let Some(command) = caret_command {
                         cache.push(command);
+                    }
+                    if let (Some(painter), Some(context)) = (
+                        field.painters.as_ref().and_then(|p| p.foreground.as_ref()),
+                        painter_context,
+                    ) {
+                        painter.record(context, cache);
                     }
                     if clip.is_some() {
                         cache.push(PaintCommand::PopClip);

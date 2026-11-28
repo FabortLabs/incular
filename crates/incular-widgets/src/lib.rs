@@ -56,6 +56,7 @@ mod dismissible;
 mod display_feature_sub_screen;
 mod drag_boundary;
 mod drag_drop;
+mod editable_paint;
 mod dx;
 mod environment;
 mod explicit_animations;
@@ -214,6 +215,7 @@ pub use environment::{
     MediaQueryEdges, Orientation, OrientationBuilder, PrimaryScrollController, ScrollConfiguration,
     SensitiveContent, SensitiveContentHost, TickerMode,
 };
+pub use editable_paint::{EditableTextPaintContext, EditableTextPainter, EditableTextPainterDelegate};
 pub use explicit_animations::{
     AnimatedBuilder, Listenable, ListenableBuilder, TransitionBuilder, ValueListenable,
     ValueListenableBuilder,

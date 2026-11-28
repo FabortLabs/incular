@@ -80,6 +80,22 @@ fn invalidation_for_change(old: &RenderKind, new: &RenderKind) -> Invalidation {
     use Invalidation as I;
 
     if let (RenderKind::TextField(old), RenderKind::TextField(new)) = (old, new)
+        && old.painters != new.painters
+    {
+        let mut normalized = (**new).clone();
+        normalized.painters = old.painters.clone();
+        if **old == normalized {
+            return if crate::editable_paint::painters_changed(
+                old.painters.as_deref(),
+                new.painters.as_deref(),
+            ) {
+                I::PAINT
+            } else {
+                I::NONE
+            };
+        }
+    }
+    if let (RenderKind::TextField(old), RenderKind::TextField(new)) = (old, new)
         && old.fixed_scroll_offset != new.fixed_scroll_offset
     {
         let mut normalized = (**new).clone();

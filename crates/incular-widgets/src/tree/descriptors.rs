@@ -1227,6 +1227,7 @@ pub struct EditableText {
     /// Flutter's `showCursor ?? !readOnly`.
     show_cursor: Option<bool>,
     paint_cursor_above_text: bool,
+    painters: Option<Rc<crate::editable_paint::EditorPainters>>,
     cursor_color: Color,
     mouse_cursor: Option<crate::MouseCursor>,
     background_cursor_color: Option<Color>,
@@ -1318,6 +1319,7 @@ impl EditableText {
             cursor_radius: 0.0,
             show_cursor: None,
             paint_cursor_above_text: false,
+            painters: None,
             cursor_color: Color::WHITE,
             mouse_cursor: None,
             background_cursor_color: None,
@@ -1391,6 +1393,38 @@ impl EditableText {
     #[must_use]
     pub fn focus_node(mut self, node: crate::FocusNode) -> Self {
         self.focus_node = Some(node);
+        self
+    }
+
+    /// Paints in the editor's viewport below the text, after built-in
+    /// selection and any caret configured to paint behind the text.
+    #[must_use]
+    pub fn painter(mut self, painter: impl crate::EditableTextPainter + 'static) -> Self {
+        let painters = self.painters.get_or_insert_with(Rc::default);
+        Rc::make_mut(painters).background =
+            Some(crate::EditableTextPainterDelegate::new(painter));
+        self
+    }
+
+    /// Paints after the text and any foreground caret, inside the viewport clip.
+    #[must_use]
+    pub fn foreground_painter(mut self, painter: impl crate::EditableTextPainter + 'static) -> Self {
+        let painters = self.painters.get_or_insert_with(Rc::default);
+        Rc::make_mut(painters).foreground =
+            Some(crate::EditableTextPainterDelegate::new(painter));
+        self
+    }
+
+    /// Set or clear both retained painter delegates.
+    #[must_use]
+    pub fn painter_delegates(
+        mut self,
+        background: Option<crate::EditableTextPainterDelegate>,
+        foreground: Option<crate::EditableTextPainterDelegate>,
+    ) -> Self {
+        self.painters = (background.is_some() || foreground.is_some()).then(|| {
+            Rc::new(crate::editable_paint::EditorPainters { background, foreground })
+        });
         self
     }
 
@@ -2324,6 +2358,7 @@ impl From<EditableText> for Widget {
             cursor_radius: value.cursor_radius,
             show_cursor: value.show_cursor.unwrap_or(!value.read_only),
             paint_cursor_above_text: value.paint_cursor_above_text,
+            painters: value.painters,
             cursor_color: value.cursor_color,
             mouse_cursor: value.mouse_cursor,
             background_cursor_color: value.background_cursor_color,

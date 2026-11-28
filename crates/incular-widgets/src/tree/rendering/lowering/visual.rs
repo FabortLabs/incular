@@ -286,6 +286,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 cursor_opacity_animates: spec.cursor_opacity_animates,
                 show_cursor: spec.show_cursor,
                 paint_cursor_above_text: spec.paint_cursor_above_text,
+                painters: spec.painters.clone(),
                 cursor_color: spec.cursor_color,
                 background_cursor_color: spec.background_cursor_color,
                 selection_color: spec.selection_color,

@@ -798,6 +798,7 @@ impl PartialEq for TextFieldSpec {
             && self.cursor_radius == other.cursor_radius
             && self.show_cursor == other.show_cursor
             && self.paint_cursor_above_text == other.paint_cursor_above_text
+            && self.painters == other.painters
             && self.cursor_color == other.cursor_color
             && self.mouse_cursor == other.mouse_cursor
             && self.background_cursor_color == other.background_cursor_color
