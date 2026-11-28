@@ -2817,6 +2817,58 @@ impl WidgetTree {
         ))
     }
 
+    fn flutter_handwriting_eligible(&self, id: ElementId) -> bool {
+        self.elements.get(id.0).is_some_and(|element| {
+            matches!(element.widget.kind(), WidgetKind::TextField(spec)
+                if spec.enabled && !spec.read_only && spec.stylus_handwriting_enabled)
+        })
+    }
+
+    /// Responds to the host's view-local handwriting target query. A field
+    /// covered by another hit target is not eligible, even when its bounds
+    /// intersect the query.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn flutter_handwriting_targets(&self, query: Rect) -> Vec<(String, Rect)> {
+        self.text_field_elements()
+            .filter(|&id| self.flutter_handwriting_eligible(id))
+            .filter_map(|id| {
+                let bounds = self.element_bounds(id)?;
+                if bounds.size.width <= 0.
+                    || bounds.size.height <= 0.
+                    || !bounds.intersects(query)
+                {
+                    return None;
+                }
+                let common = bounds.intersection(query)?;
+                let center = common.origin + Offset::new(
+                    common.size.width * 0.5,
+                    common.size.height * 0.5,
+                );
+                (self.text_field_at(center) == Some(id)).then(|| (
+                    format!("incular-editable:{}:{}:{}", self.tree_id, id.0.index(), id.0.generation()),
+                    bounds,
+                ))
+            })
+            .collect()
+    }
+
+    /// Resolves a host target against its original mounted tree and arena
+    /// generation, so a retired identifier cannot focus a replacement.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn flutter_handwriting_target(&self, wire_id: &str) -> Option<ElementId> {
+        let mut parts = wire_id.strip_prefix("incular-editable:")?.split(':');
+        let tree = parts.next()?.parse::<u64>().ok()?;
+        let index = parts.next()?.parse::<u32>().ok()?;
+        let generation = parts.next()?.parse::<u32>().ok()?;
+        if tree != self.tree_id || parts.next().is_some() {
+            return None;
+        }
+        let id = ElementId(incular_core::ArenaId::from_parts(index, generation));
+        self.flutter_handwriting_eligible(id).then_some(id)
+    }
+
     /// The visible grapheme bounds for the optional Flutter handwriting host.
     /// Positions are UTF-16 starts in the laid-out display text. The
     /// rectangles are editor-local and retain their shaped direction.

@@ -19,6 +19,45 @@ use serde_json::{Map, Value};
 
 use super::{Runtime, resolve_text_input_action};
 
+impl incular_platform::FlutterMountedScribbleTargets for Runtime {
+    fn has_scribble_target(&self, id: &str) -> bool {
+        !cfg!(target_arch = "wasm32") && self.tree.flutter_handwriting_target(id).is_some()
+    }
+
+    fn focus_scribble_target(&mut self, id: &str, position: incular_core::Offset) {
+        let Some(field) = self.tree.flutter_handwriting_target(id) else {
+            return;
+        };
+        let Some((offset, affinity)) = self.tree.text_field_position_at(field, position) else {
+            return;
+        };
+        self.set_focus_with_external_selection(Some(field), false);
+        if self.focused != Some(field) {
+            return;
+        }
+        let selection = TextSelection::collapsed(offset);
+        if self.tree.text_field_select(field, selection, affinity, self.input_now()) {
+            self.text_input_show_requested = true;
+            self.report_text_selection_changed(
+                field,
+                selection,
+                incular_text::SelectionChangedCause::StylusHandwriting,
+            );
+            self.frame_requested = true;
+        }
+    }
+
+    fn scribble_targets_in_rect(
+        &self,
+        rect: incular_core::Rect,
+    ) -> Vec<(String, incular_core::Rect)> {
+        if cfg!(target_arch = "wasm32") {
+            return Vec::new();
+        }
+        self.tree.flutter_handwriting_targets(rect)
+    }
+}
+
 impl Runtime {
     fn mounted_autofill_scope(&self) -> Option<(ElementId, ElementId)> {
         let focused = self.focused?;
@@ -67,6 +106,7 @@ impl Runtime {
             size,
             transform: [a, b, 0., 0., c, d, 0., 0., 0., 0., 1., 0., x, y, 0., 1.],
         })?;
+        self.publish_flutter_handwriting_rects(field, client, controls)?;
         if let Some(marked) = marked {
             controls.update(client, Update::ComposingRect(marked))?;
         }
@@ -77,9 +117,6 @@ impl Runtime {
             config.client == client && config.traits.autofill_hints.is_some()
         }) {
             controls.update(client, Update::RequestAutofill)?;
-        }
-        if shown {
-            self.publish_flutter_handwriting_rects(field, client, controls)?;
         }
         if let Some(caret) = caret {
             controls.update(client, Update::CaretRect(caret))?;

@@ -466,3 +466,114 @@ fn repeated_toolbar_show_keeps_the_same_mounted_overlay_during_handwriting() {
         b"[null]"
     );
 }
+
+#[test]
+fn native_handwriting_discovers_only_touchable_mounted_editors_and_focuses_their_caret() {
+    use incular_core::Color;
+    use incular_runtime::TextShortcutPlatform;
+    use incular_text::{SelectionChangedCause, TextSelection};
+    use incular_widgets::{ColoredBox, Positioned, Stack, Widget};
+
+    let controller = TextEditingController::with_text("Lorem ipsum dolor sit amet");
+    let focus = FocusNode::new();
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let root = |read_only, handwriting, covered| {
+        let editor = EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .focus_node(focus.clone())
+            .read_only(read_only)
+            .stylus_handwriting_enabled(handwriting)
+            .on_selection_changed({
+                let changes = changes.clone();
+                move |selection, cause| changes.borrow_mut().push((selection, cause))
+            });
+        let mut children = vec![Widget::from(Positioned::fill(editor))];
+        if covered {
+            children.push(Widget::from(Positioned::fill(ColoredBox::new(
+                Color::rgba(0, 0, 0, 255),
+                SizedBox::expand(),
+            ))));
+        }
+        Widget::from(Stack::new(children))
+    };
+    let runtime = Rc::new(RefCell::new(
+        Runtime::new(root(false, true, false)).unwrap(),
+    ));
+    runtime
+        .borrow_mut()
+        .set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    let host = Host::new();
+    let _binding = FlutterTextInputBinding::install(&host.inbound, &runtime);
+    let layout = || {
+        runtime
+            .borrow_mut()
+            .run_frame(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+    };
+    let query = |rect| {
+        let response = host
+            .send("TextInputClient.requestElementsInRect", rect)
+            .unwrap();
+        JsonMethodCodec::decode_envelope(&response).unwrap()
+    };
+    let replace = |widget| {
+        let mut runtime = runtime.borrow_mut();
+        let id = runtime.tree().root().unwrap();
+        runtime.schedule_update(id, widget).unwrap();
+    };
+    layout();
+    assert!(!focus.has_focus());
+    let found = query(json!([0, 0, 1, 1]));
+    assert_eq!(found.as_array().unwrap().len(), 1);
+    let first = found[0][0].as_str().unwrap();
+    assert_eq!(found[0], json!([first, 0., 0., 800., 600.]));
+    assert_eq!(query(json!([-1, -1, 1, 1])), json!([]));
+
+    assert_eq!(
+        host.send("TextInputClient.focusElement", json!([first, 0, 0]))
+            .unwrap(),
+        b"[null]"
+    );
+    layout();
+    assert!(focus.has_primary_focus());
+    assert_eq!(controller.selection(), TextSelection::collapsed(0));
+    assert_eq!(
+        changes.take(),
+        [(
+            TextSelection::collapsed(0),
+            SelectionChangedCause::StylusHandwriting
+        )]
+    );
+    assert!(
+        runtime
+            .borrow()
+            .flutter_text_input_configuration()
+            .is_some()
+    );
+
+    for widget in [
+        root(true, true, false),
+        root(false, true, true),
+        root(false, false, false),
+    ] {
+        replace(widget);
+        layout();
+        assert_eq!(query(json!([0, 0, 1, 1])), json!([]));
+    }
+    replace(Stack::new([] as [Widget; 0]).into());
+    layout();
+    replace(root(false, true, false));
+    layout();
+    let replacement = query(json!([0, 0, 1, 1]));
+    assert_ne!(replacement[0][0].as_str().unwrap(), first);
+    assert_eq!(
+        host.send("TextInputClient.focusElement", json!([first, 0, 0]))
+            .unwrap(),
+        b"[null]"
+    );
+    layout();
+    assert!(
+        !focus.has_focus(),
+        "a retired target must not focus the replacement"
+    );
+}

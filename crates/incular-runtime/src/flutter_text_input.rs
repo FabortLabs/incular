@@ -418,7 +418,7 @@ impl crate::Runtime {
         scribble: &mut FlutterScribbleRegistry,
     ) -> FlutterJsonMethodResult {
         use FlutterJsonMethodResult::{NotImplemented, Success};
-        match scribble.handle_method(call) {
+        match scribble.handle_method_with_mounted_targets(call, Some(self)) {
             Ok(None) => {}
             result => return method_result(result, std::convert::identity),
         }

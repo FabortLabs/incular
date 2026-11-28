@@ -136,7 +136,9 @@ pub use flutter_inbound_messenger::{
     FlutterBinaryPayload, FlutterBinaryReply, FlutterChannelMicrotask, FlutterInboundMessenger,
 };
 pub use flutter_floating_cursor::{FloatingCursorDragState, FlutterFloatingCursorPoint, FlutterFloatingCursorPointError};
-pub use flutter_scribble::{FlutterScribbleClient, FlutterScribbleError, FlutterScribbleRegistry};
+pub use flutter_scribble::{
+    FlutterMountedScribbleTargets, FlutterScribbleClient, FlutterScribbleError, FlutterScribbleRegistry,
+};
 pub use deferred_component::{DeferredComponent, DeferredComponentError};
 pub use flutter_event_channel::{
     FlutterEventOperation, FlutterEventSubscription, FlutterEventTask, FlutterJsonBroadcast,

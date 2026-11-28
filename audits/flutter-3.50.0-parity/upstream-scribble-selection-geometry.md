@@ -56,3 +56,21 @@ and changes the selection through the installed host channel.
 No toolbar appears until requested. Its first show succeeds; a
 duplicate returns false, leaving the same keyed overlay mounted
 across two further frames. All five focused binding tests passed.
+
+## Discovering and focusing mounted editors
+
+Pinned iOS :186 and :225 passed. The native binary messenger now
+discovers retained editors without requiring an embedder to register
+each one manually. The query returns the active view's real transformed
+bounds. It rejects an edge-only intersection, a covered field, a
+read-only field, and a field with handwriting disabled. It also rejects
+an identifier retired by unmounting even after a replacement mounts.
+
+The host focuses an unfocused editor by its returned identifier and
+global point. Selection is collapsed at that position, its callback
+reports `StylusHandwriting`, and the focused editor has a text input
+connection. The initial character bounds are sent after editor
+geometry and before keyboard show, consistent with Flutter's first
+geometry pass. Explicit registry clients remain supported. Eleven
+focused native tests passed across binding, geometry, and keyboard
+ordering. Handwriting text placeholders remain open (:327 and :410).

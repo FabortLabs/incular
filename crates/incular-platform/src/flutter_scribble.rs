@@ -18,6 +18,14 @@ pub trait FlutterScribbleClient {
     fn on_scribble_focus(&self, position: Offset);
 }
 
+/// Supplies ordinary editable targets from the current retained view.
+#[doc(hidden)]
+pub trait FlutterMountedScribbleTargets {
+    fn has_scribble_target(&self, id: &str) -> bool;
+    fn focus_scribble_target(&mut self, id: &str, position: Offset);
+    fn scribble_targets_in_rect(&self, rect: Rect) -> Vec<(String, Rect)>;
+}
+
 /// Local registry; registration lifetime follows the mounted elements.
 #[derive(Default)]
 pub struct FlutterScribbleRegistry {
@@ -74,6 +82,16 @@ impl FlutterScribbleRegistry {
         &mut self,
         call: &MethodCall<Value>,
     ) -> Result<Option<Value>, FlutterScribbleError> {
+        self.handle_method_with_mounted_targets(call, None)
+    }
+
+    /// Resolves both explicit registrations and live retained editors.
+    #[doc(hidden)]
+    pub fn handle_method_with_mounted_targets(
+        &mut self,
+        call: &MethodCall<Value>,
+        mounted: Option<&mut dyn FlutterMountedScribbleTargets>,
+    ) -> Result<Option<Value>, FlutterScribbleError> {
         let arguments = || {
             call.arguments
                 .as_array()
@@ -94,12 +112,19 @@ impl FlutterScribbleRegistry {
                     .first()
                     .and_then(Value::as_str)
                     .ok_or(FlutterScribbleError::InvalidArguments)?;
-                if let Some((_, client)) = self.clients.iter().find(|(existing, _)| existing == id)
-                {
-                    client.on_scribble_focus(Offset::new(
+                let position = || {
+                    Ok::<_, FlutterScribbleError>(Offset::new(
                         coordinate(arguments.get(1))?,
                         coordinate(arguments.get(2))?,
-                    ));
+                    ))
+                };
+                if let Some((_, client)) = self.clients.iter().find(|(existing, _)| existing == id)
+                {
+                    client.on_scribble_focus(position()?);
+                } else if let Some(mounted) = mounted
+                    && mounted.has_scribble_target(id)
+                {
+                    mounted.focus_scribble_target(id, position()?);
                 }
                 Value::Null
             }
@@ -115,14 +140,20 @@ impl FlutterScribbleRegistry {
                 let size = Size::maybe_new(*width, *height)
                     .ok_or(FlutterScribbleError::InvalidArguments)?;
                 let query = Rect::from_origin_size(Offset::new(*x, *y), size);
+                let registered = self.clients.iter().filter_map(|(id, client)| {
+                    client
+                        .is_in_scribble_rect(query)
+                        .then(|| (id.clone(), client.bounds()))
+                });
+                let retained = mounted
+                    .map(|mounted| mounted.scribble_targets_in_rect(query))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|(id, _)| !self.clients.iter().any(|(explicit, _)| explicit == id));
                 Value::Array(
-                    self.clients
-                        .iter()
-                        .filter_map(|(id, client)| {
-                            if !client.is_in_scribble_rect(query) {
-                                return None;
-                            }
-                            let bounds = client.bounds();
+                    registered
+                        .chain(retained)
+                        .filter_map(|(id, bounds)| {
                             let components = [
                                 bounds.origin.x,
                                 bounds.origin.y,
