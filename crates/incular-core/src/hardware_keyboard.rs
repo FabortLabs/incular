@@ -118,6 +118,8 @@ pub enum HardwareKeyOrigin {
     #[default]
     Supplied,
     LegacyModifierReconciliation,
+    /// Supplied explicitly by an engine's synthesized key-data stream.
+    EngineSynthesized,
 }
 
 type Handler = Rc<dyn Fn(&KeyboardEvent, HardwareKeyOrigin) -> bool>;

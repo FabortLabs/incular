@@ -31,6 +31,7 @@ fn raw_only_infers_missing_modifier_but_paired_input_trusts_typed_packets() {
             let label = match origin {
                 HardwareKeyOrigin::Supplied => "hardware",
                 HardwareKeyOrigin::LegacyModifierReconciliation => "synthesized",
+                HardwareKeyOrigin::EngineSynthesized => "engine synthesized",
             };
             hardware_log
                 .borrow_mut()

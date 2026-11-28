@@ -1308,6 +1308,34 @@ impl WidgetTree {
         KeyEventResult::Ignored
     }
 
+    /// Delivers a legacy payload with no typed counterpart. This cannot
+    /// trigger a typed shortcut or a KeyboardListener.
+    #[doc(hidden)]
+    pub fn route_legacy_raw_key(
+        &self,
+        focused: Option<ElementId>,
+        raw: &incular_gestures::RawKeyEvent,
+    ) -> KeyEventResult {
+        let mut current = focused;
+        while let Some(id) = current {
+            let Some(element) = self.elements.get(id.0) else {
+                break;
+            };
+            if let WidgetKind::Gesture { callbacks, .. } = element.widget.kind()
+                && callbacks.focus_key_handler_owner != incular_gestures::FocusKeyHandlerOwner::CallbackContainer
+                && let Some(node) = &callbacks.focus_node
+                && let Some(handler) = node.on_key()
+            {
+                let result = handler(node, raw.clone());
+                if result != KeyEventResult::Ignored {
+                    return result;
+                }
+            }
+            current = self.mounted_focus_parent(id);
+        }
+        KeyEventResult::Ignored
+    }
+
     /// Routes keyboard input while preserving a Focus handler's request
     /// to stop framework handling without consuming the native event.
     #[must_use]

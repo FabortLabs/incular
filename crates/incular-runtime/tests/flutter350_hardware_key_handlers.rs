@@ -289,6 +289,11 @@ fn replacing_and_restoring_key_message_handler_only_changes_focus_delivery() {
                 }
                 KeyMessage::Typed(event) => ("typed", Some(event.state.is_down()), None),
                 KeyMessage::Raw(raw) => ("raw", None, Some(raw.is_key_down())),
+                KeyMessage::FlutterBatch { typed, raw } => (
+                    "engine batch",
+                    typed.last().map(|key| key.event.state.is_down()),
+                    raw.as_ref().map(|raw| raw.is_key_down()),
+                ),
             };
             messages.borrow_mut().push(seen);
             seen.0 == "paired"

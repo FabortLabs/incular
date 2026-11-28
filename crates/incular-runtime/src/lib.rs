@@ -14,6 +14,7 @@ pub use debug_view_paint::DebugViewPaintSubscription;
 mod executor;
 pub use executor::sleep;
 mod file_dialogs;
+mod flutter_key_transit;
 mod flutter_text_input;
 mod focus_keys;
 mod frame;
@@ -84,6 +85,9 @@ pub use frame::{
     PointerPacketDispatchError, Runtime,
 };
 pub use incular_widgets::RawKeyboardListenerError;
+pub use flutter_key_transit::{
+    FlutterEngineKeyData, FlutterEngineKeyEvent, FlutterKeyTransit, FlutterKeyTransitMode,
+};
 pub use raw_keyboard::{LegacyRawKeyboardState, RawKeyboardSubscription};
 pub use global_shortcuts::{
     GlobalShortcutCompletionStatus, GlobalShortcutRegistration, GlobalShortcutRegistrationRequest,

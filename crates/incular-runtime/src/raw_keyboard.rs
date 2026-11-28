@@ -88,7 +88,31 @@ impl Drop for RawKeyboardSubscription {
 #[derive(Debug, Default)]
 pub struct LegacyRawKeyboardState {
     pressed: BTreeMap<u64, LogicalKeyboardKey>,
+    filter: LegacyRawPacketFilter,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct LegacyRawPacketFilter {
     skipped_windows: BTreeSet<u64>,
+}
+
+impl LegacyRawPacketFilter {
+    pub(crate) fn admits(&mut self, raw: &RawKeyEvent) -> bool {
+        let Some(RawKeyPlatformData::Windows(data)) = raw.data() else {
+            return true;
+        };
+        let key = data.flutter_physical_key_id();
+        if raw.is_key_down() {
+            if !data.should_dispatch_key_down() {
+                self.skipped_windows.insert(key);
+                return false;
+            }
+            self.skipped_windows.remove(&key);
+            true
+        } else {
+            !self.skipped_windows.remove(&key)
+        }
+    }
 }
 
 impl LegacyRawKeyboardState {
@@ -114,20 +138,11 @@ impl LegacyRawKeyboardState {
     /// Prepares repeat from the previous physical pressed state. Windows
     /// IME-only downs also suppress their matching physical release.
     pub(crate) fn prepare_raw(&mut self, raw: &mut RawKeyEvent) -> bool {
+        if !self.filter.admits(raw) {
+            return false;
+        }
         let key = match raw.data() {
-            Some(RawKeyPlatformData::Windows(data)) => {
-                let key = data.flutter_physical_key_id();
-                if raw.is_key_down() {
-                    if !data.should_dispatch_key_down() {
-                        self.skipped_windows.insert(key);
-                        return false;
-                    }
-                    self.skipped_windows.remove(&key);
-                } else if self.skipped_windows.remove(&key) {
-                    return false;
-                }
-                key
-            }
+            Some(RawKeyPlatformData::Windows(data)) => data.flutter_physical_key_id(),
             Some(RawKeyPlatformData::Android(data)) => data.flutter_physical_key_id(),
             _ => return true,
         };

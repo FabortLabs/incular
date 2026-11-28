@@ -100,3 +100,24 @@ dispatch, inference, and hardware state. The two original typed/raw
 engine queue timing tests (312 and 352) passed on Flutter but remain
 open natively: they exercise a transit queue before the explicit
 message-batch boundary checked here.
+
+## Separate engine key-data and raw streams
+
+The optional `FlutterKeyTransit` ingress now chooses the mode from its
+first packet. An empty engine key-data marker selects paired mode but
+produces no typed key. A solitary synthesized event dispatches immediately
+when the waiting batch is empty; a synthesized release after a queued
+press waits and reaches the focused listener after that press. The raw
+listener gets the original platform sample once, not a synthetic copy.
+
+The mounted native tests cover global-versus-focused delivery and hardware
+pressed state. A custom receiver sees the complete typed sequence with
+its synthesis flags. A Windows IME-only down and its matching release
+leave the batch queued until the next deliverable raw event. Hosts that
+already send complete messages do not go through this new ingress.
+
+Pinned originals 312 and 352 ran in the typed-then-raw reference variant;
+425 passed its empty-marker case. All 15 focused native tests passed
+across the new bridge and adjacent hardware listeners, focus batches,
+and legacy modifier inference. The CapsLock test compares the delivered
+portable key batch, not a native macOS raw decoder.

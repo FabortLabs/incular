@@ -1,3 +1,4 @@
+use crate::FlutterEngineKeyEvent;
 use crate::application_types::{
     ApplicationLifecycle, LifecycleTransition, RuntimeErrorReport, WindowError,
 };
@@ -204,6 +205,12 @@ pub enum KeyMessage {
         typed: KeyboardEvent,
         raw: incular_widgets::RawKeyEvent,
     },
+    /// Optional Flutter engine ingress with ordered typed packets and the
+    /// original raw payload, which is never duplicated per typed packet.
+    FlutterBatch {
+        typed: Vec<FlutterEngineKeyEvent>,
+        raw: Option<incular_widgets::RawKeyEvent>,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -211,6 +218,11 @@ enum KeyMessageSource<'a> {
     Typed,
     Raw(&'a incular_widgets::RawKeyEvent),
     Paired(&'a incular_widgets::RawKeyEvent),
+    FlutterBatch {
+        before: &'a [FlutterEngineKeyEvent],
+        raw: Option<&'a incular_widgets::RawKeyEvent>,
+        last_synthesized: bool,
+    },
     Portable,
 }
 
@@ -220,6 +232,9 @@ impl<'a> KeyMessageSource<'a> {
         match self {
             Self::Typed => RawKeyDelivery::Absent,
             Self::Raw(raw) | Self::Paired(raw) => RawKeyDelivery::Supplied(raw),
+            Self::FlutterBatch { raw, .. } => {
+                raw.map_or(RawKeyDelivery::Absent, RawKeyDelivery::Supplied)
+            }
             Self::Portable => RawKeyDelivery::Mirror,
         }
     }
@@ -232,6 +247,13 @@ impl<'a> KeyMessageSource<'a> {
                 typed: event,
                 raw: raw.clone(),
             },
+            Self::FlutterBatch {
+                before, raw, last_synthesized,
+            } => {
+                let mut typed = before.to_vec();
+                typed.push(FlutterEngineKeyEvent::new(event, last_synthesized));
+                KeyMessage::FlutterBatch { typed, raw: raw.cloned() }
+            }
             Self::Portable => KeyMessage::TypedAndRaw {
                 raw: event.clone().into(),
                 typed: event,
@@ -4391,8 +4413,44 @@ impl Runtime {
                 };
                 self.dispatch_keyboard_event_parts(typed, source, message_source)
             }
+            KeyMessage::FlutterBatch { mut typed, mut raw } => {
+                let skipped = raw.as_mut().is_some_and(|raw| !self.legacy_raw_keyboard.prepare_raw(raw));
+                if skipped {
+                    raw = None;
+                }
+                let Some(last) = typed.pop() else {
+                    return skipped || raw.is_some_and(|raw| self.dispatch_flutter_raw_only(&raw));
+                };
+                self.dispatch_keyboard_event_parts(
+                    last.event,
+                    source,
+                    KeyMessageSource::FlutterBatch {
+                        before: &typed,
+                        raw: raw.as_ref(),
+                        last_synthesized: last.synthesized,
+                    },
+                )
+            }
         }
     }
+
+    fn dispatch_flutter_raw_only(&mut self, raw: &incular_widgets::RawKeyEvent) -> bool {
+        self.adopt_external_focus_change();
+        self.notify_raw_key_routes(raw.portable(), incular_widgets::RawKeyDelivery::Supplied(raw));
+        let handled = match self.key_message_route {
+            KeyMessageRoute::Focus => {
+                self.tree.route_legacy_raw_key(self.focused, raw) == KeyEventResult::Handled
+            }
+            KeyMessageRoute::Disabled => false,
+            KeyMessageRoute::Custom(_) => self.dispatch_custom_key_message(KeyMessage::FlutterBatch {
+                typed: Vec::new(),
+                raw: Some(raw.clone()),
+            }),
+        };
+        self.frame_requested |= handled;
+        handled
+    }
+
 
     fn dispatch_keyboard_event_from(
         &mut self,
@@ -4463,6 +4521,44 @@ impl Runtime {
         hardware.handled
     }
 
+    fn notify_raw_key_routes(
+        &mut self,
+        event: &KeyboardEvent,
+        raw_delivery: incular_widgets::RawKeyDelivery<'_>,
+    ) {
+        if let incular_widgets::RawKeyDelivery::Supplied(raw) = raw_delivery {
+            self.legacy_raw_keyboard.observe(raw);
+        }
+        self.tree.notify_raw_keyboard_observers_with_report(
+            self.focused, event, raw_delivery, |error| self.report_raw_keyboard_error(error),
+        );
+        self.raw_keyboard_listeners.dispatch(event, raw_delivery, |error| {
+            self.report_raw_keyboard_error(error);
+        });
+    }
+
+    fn dispatch_custom_key_message(&self, message: KeyMessage) -> bool {
+        let KeyMessageRoute::Custom(callback) = &self.key_message_route else {
+            return false;
+        };
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(&message))) {
+            Ok(handled) => handled,
+            Err(payload) => {
+                if let Some(report) = &self.key_message_error_handler {
+                    report(KeyMessageHandlerError { message, payload });
+                } else {
+                    let detail = payload
+                        .downcast_ref::<&str>()
+                        .copied()
+                        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                        .unwrap_or("non-string key message handler panic");
+                    tracing::error!(?message, %detail, "key message handler failed");
+                }
+                false
+            }
+        }
+    }
+
     fn dispatch_keyboard_event_parts(
         &mut self,
         event: KeyboardEvent,
@@ -4483,7 +4579,13 @@ impl Runtime {
             message_source,
             KeyMessageSource::Raw(raw) if raw.data().is_some()
         );
-        if !raw_platform_only {
+        let engine_batch = match message_source {
+            KeyMessageSource::FlutterBatch {
+                before, last_synthesized, ..
+            } => Some((before, last_synthesized)),
+            _ => None,
+        };
+        if !raw_platform_only && engine_batch.is_none() {
             self.observe_hardware_key_state(&event);
         }
 
@@ -4491,15 +4593,7 @@ impl Runtime {
         // without going through runtime pointer/Tab handling. Adopt that
         // external selection before routing the event through retained parents.
         self.adopt_external_focus_change();
-        if let RawKeyDelivery::Supplied(raw) = raw_delivery {
-            self.legacy_raw_keyboard.observe(raw);
-        }
-        self.tree.notify_raw_keyboard_observers_with_report(
-            self.focused, &event, raw_delivery, |error| self.report_raw_keyboard_error(error),
-        );
-        self.raw_keyboard_listeners.dispatch(&event, raw_delivery, |error| {
-            self.report_raw_keyboard_error(error);
-        });
+        self.notify_raw_key_routes(&event, raw_delivery);
 
         let mut hardware_handled = false;
         let mut corrections = if raw_platform_only {
@@ -4512,10 +4606,29 @@ impl Runtime {
             }
             self.observe_hardware_key_state(&event);
             corrections
+        } else if let Some((before, _)) = engine_batch {
+            let mut prefix = Vec::with_capacity(before.len());
+            for key in before {
+                self.observe_hardware_key_state(&key.event);
+                let origin = if key.synthesized {
+                    HardwareKeyOrigin::EngineSynthesized
+                } else {
+                    HardwareKeyOrigin::Supplied
+                };
+                hardware_handled |= self.dispatch_hardware_callbacks(&key.event, origin);
+                prefix.push(key.event.clone());
+            }
+            self.observe_hardware_key_state(&event);
+            prefix
         } else {
             Vec::new()
         };
-        hardware_handled |= self.dispatch_hardware_callbacks(&event, HardwareKeyOrigin::Supplied);
+        let origin = if engine_batch.is_some_and(|(_, synthesized)| synthesized) {
+            HardwareKeyOrigin::EngineSynthesized
+        } else {
+            HardwareKeyOrigin::Supplied
+        };
+        hardware_handled |= self.dispatch_hardware_callbacks(&event, origin);
         let trailing = match message_source {
             KeyMessageSource::Raw(raw) => self.legacy_raw_keyboard.trailing_modifier_release(raw, &event),
             _ => None,
@@ -4529,23 +4642,8 @@ impl Runtime {
         }
         if !matches!(self.key_message_route, KeyMessageRoute::Focus) {
             let mut handled = hardware_handled;
-            if let KeyMessageRoute::Custom(callback) = &self.key_message_route {
-                let message = message_source.into_message(event);
-                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(&message))) {
-                    Ok(result) => handled |= result,
-                    Err(payload) => {
-                        if let Some(report) = &self.key_message_error_handler {
-                            report(KeyMessageHandlerError { message, payload });
-                        } else {
-                            let detail = payload
-                                .downcast_ref::<&str>()
-                                .copied()
-                                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-                                .unwrap_or("non-string key message handler panic");
-                            tracing::error!(?message, %detail, "key message handler failed");
-                        }
-                    }
-                }
+            if matches!(self.key_message_route, KeyMessageRoute::Custom(_)) {
+                handled |= self.dispatch_custom_key_message(message_source.into_message(event));
             }
             self.frame_requested |= handled;
             return handled;
@@ -4611,6 +4709,12 @@ impl Runtime {
             self.frame_requested = true;
             return false;
         }
+        // A trailing engine synthesis is part of Focus's ordered batch,
+        // not a replacement for the supplied key's fallback action.
+        let event = engine_batch
+            .filter(|(_, last_synthesized)| *last_synthesized)
+            .and_then(|(before, _)| before.iter().rev().find(|key| !key.synthesized))
+            .map_or(event, |key| key.event.clone());
         if !event.state.is_down() {
             return false;
         }
