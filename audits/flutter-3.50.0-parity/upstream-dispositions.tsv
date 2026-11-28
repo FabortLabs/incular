@@ -4636,3 +4636,8 @@ dev/integration_tests/widget_preview_scaffold/test/custom_previews_test.dart	90	
 dev/integration_tests/widget_preview_scaffold/test/no_previews_detected_test.dart	16	Help message is displayed with link to documentation when no previews are detected	paired-match	upstream-widget-previews-runtime.md#empty-snapshot-and-transformed-previews
 dev/integration_tests/widget_preview_scaffold/test/hot_restart_test.dart	11	Restart Widget Previewer button invokes the DTD hot restart endpoint	paired-match	upstream-widget-previews-runtime.md#explicit-full-previewer-restart
 dev/integration_tests/widget_preview_scaffold/test/error_widget_test.dart	40	'$WidgetPreviewErrorWidget handles navigation to sources'	paired-match	upstream-widget-previews-runtime.md#source-links-in-construction-diagnostics
+packages/flutter/test/widgets/editable_text_test.dart	14005	Can undo/redo a single insertion	paired-match	undo-history-comparisons.md#autofocus-duplicate-changes-and-replacing-a-redo-branch
+packages/flutter/test/widgets/editable_text_test.dart	14048	Can undo/redo multiple insertions	paired-match	undo-history-comparisons.md#autofocus-duplicate-changes-and-replacing-a-redo-branch
+packages/flutter/test/widgets/editable_text_test.dart	14213	Can make changes in the middle of the history	paired-match	undo-history-comparisons.md#autofocus-duplicate-changes-and-replacing-a-redo-branch
+packages/flutter/test/widgets/editable_text_test.dart	14270	inside EditableText, duplicate changes	paired-match	undo-history-comparisons.md#autofocus-duplicate-changes-and-replacing-a-redo-branch
+packages/flutter/test/widgets/editable_text_test.dart	14366	inside EditableText, autofocus	paired-match	undo-history-comparisons.md#autofocus-duplicate-changes-and-replacing-a-redo-branch

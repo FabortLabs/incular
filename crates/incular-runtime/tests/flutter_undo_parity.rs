@@ -348,3 +348,175 @@ fn immediate_undo_after_first_insertion_restores_the_focused_value_without_a_sta
         assert!(focus.has_primary_focus());
     }
 }
+
+fn empty_editing_history(
+    platform: TextShortcutPlatform,
+    autofocus: bool,
+) -> (Editor, incular_widgets::FocusNode) {
+    if !autofocus {
+        let (mut editor, focus) = unfocused_history_editor("", platform);
+        focus.request_focus();
+        assert!(editor.controller.selection_if_set().is_none());
+        editor.advance(0);
+        return (editor, focus);
+    }
+    let controller = TextEditingController::new();
+    let focus = incular_widgets::FocusNode::new();
+    let widget = EditableText::new(controller.clone())
+        .focus_node(focus.clone())
+        .autofocus(true)
+        .text_direction(TextDirection::Ltr);
+    let mut runtime = Runtime::new(widget.into()).unwrap();
+    runtime.set_text_shortcut_platform(platform);
+    let mut editor = Editor {
+        runtime,
+        controller,
+        now: Instant::now(),
+    };
+    editor.advance(0);
+    (editor, focus)
+}
+
+fn replace_from_platform(editor: &mut Editor, text: &str) {
+    use incular_platform::{PlatformEvent, TextInputState};
+
+    let end = text.len(); // These pinned fixtures use ASCII.
+    let _ = editor
+        .runtime
+        .handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+            text: text.into(),
+            selection_start: end,
+            selection_end: end,
+            composing: None,
+        }));
+    assert_history_value(editor, text);
+}
+
+fn assert_history_value(editor: &Editor, expected: &str) {
+    editor.controller.with_value(|value| {
+        assert_eq!(value.text, expected);
+        assert_eq!(value.selection, TextSelection::collapsed(expected.len()));
+        assert!(value.composing.is_none());
+    });
+}
+
+fn shortcut_expect(
+    editor: &mut Editor,
+    platform: TextShortcutPlatform,
+    operations: &[(bool, &str)],
+) {
+    for &(redo, expected) in operations {
+        history_shortcut(editor, platform, redo);
+        assert_history_value(editor, expected);
+    }
+}
+
+#[test]
+fn autofocused_first_frame_seeds_exactly_one_undo_step() {
+    for platform in HISTORY_PLATFORMS {
+        let (mut editor, focus) = empty_editing_history(platform, true);
+        assert!(focus.has_primary_focus());
+        assert_history_value(&editor, "");
+        editor.advance(0);
+        assert_history_value(&editor, "");
+        editor.advance(500);
+        replace_from_platform(&mut editor, "1");
+        editor.advance(500);
+        shortcut_expect(
+            &mut editor,
+            platform,
+            &[(false, ""), (false, ""), (true, "1"), (true, "1")],
+        );
+        assert!(focus.has_primary_focus());
+    }
+}
+
+#[test]
+fn values_that_return_to_the_same_editing_state_do_not_duplicate_history() {
+    for platform in HISTORY_PLATFORMS {
+        let (mut editor, _) = empty_editing_history(platform, false);
+        assert_history_value(&editor, "");
+        editor.advance(500);
+        replace_from_platform(&mut editor, "1");
+        editor.advance(500);
+        shortcut_expect(&mut editor, platform, &[(false, ""), (true, "1")]);
+
+        replace_from_platform(&mut editor, "12");
+        replace_from_platform(&mut editor, "1");
+        editor.advance(500);
+        assert_history_value(&editor, "1");
+        shortcut_expect(
+            &mut editor,
+            platform,
+            &[
+                (true, "1"),
+                (false, ""),
+                (false, ""),
+                (true, "1"),
+                (true, "1"),
+            ],
+        );
+    }
+}
+
+#[test]
+fn single_and_multiple_separate_insertions_have_exact_undo_redo_boundaries() {
+    for platform in HISTORY_PLATFORMS {
+        for multiple in [false, true] {
+            let (mut editor, _) = empty_editing_history(platform, false);
+            assert_history_value(&editor, "");
+            editor.advance(500);
+            replace_from_platform(&mut editor, "A");
+            editor.advance(500);
+            if multiple {
+                replace_from_platform(&mut editor, "AB");
+                editor.advance(500);
+                shortcut_expect(
+                    &mut editor,
+                    platform,
+                    &[(false, "A"), (false, ""), (true, "A"), (true, "AB")],
+                );
+            } else {
+                shortcut_expect(
+                    &mut editor,
+                    platform,
+                    &[
+                        (true, "A"),
+                        (false, ""),
+                        (false, ""),
+                        (true, "A"),
+                        (true, "A"),
+                    ],
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_new_insertion_from_inside_history_replaces_only_the_redo_branch() {
+    for platform in HISTORY_PLATFORMS {
+        let (mut editor, _) = empty_editing_history(platform, false);
+        assert_history_value(&editor, "");
+        editor.advance(500);
+        replace_from_platform(&mut editor, "A");
+        editor.advance(500);
+        replace_from_platform(&mut editor, "AC");
+        editor.advance(500);
+        shortcut_expect(&mut editor, platform, &[(false, "A")]);
+        replace_from_platform(&mut editor, "AB");
+        editor.advance(500);
+        shortcut_expect(
+            &mut editor,
+            platform,
+            &[
+                (true, "AB"),
+                (true, "AB"),
+                (false, "A"),
+                (false, ""),
+                (true, "A"),
+                (true, "AB"),
+            ],
+        );
+    }
+}

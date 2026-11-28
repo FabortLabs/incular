@@ -174,3 +174,23 @@ at 500 ms, then receives `AB` through the text-input path and immediately
 receives the real platform undo chord. It restores `A` and the original
 selection without moving focus: selection 0–1 on desktop and a collapsed
 caret at 1 on mobile. All eight focused native undo tests passed.
+
+## Autofocus, duplicate changes, and replacing a redo branch
+
+All 30 pinned platform expansions of `widgets/editable_text_test.dart:14005,
+14048,14213,14270,14366` passed. The mounted native checks drive the
+platform text-input path, use the real Undo/Redo key chords, and verify
+each exact string, caret and empty composing range at deterministic
+500 ms boundaries. They cover:
+
+- A single insertion and multiple separately sampled insertions.
+- A focused first frame with a valid caret, followed by exactly one
+  undoable insertion despite autofocus and another frame at the same time.
+- Turning `1` into `12` and back before the sampling deadline without
+  duplicating `1` or hiding the earlier empty state.
+- Undoing `AC` to `A`, then inserting `AB`, dropping only the stale
+  redo branch and preserving the earlier empty and `A` states.
+
+The five native shortcut policies cover the Flutter target bindings;
+Fuchsia shares Android's non-composing undo/redo chords. No history
+implementation change was needed for these cases.
