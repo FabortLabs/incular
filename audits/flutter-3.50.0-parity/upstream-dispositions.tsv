@@ -3902,3 +3902,5 @@ packages/flutter/test/widgets/focus_manager_test.dart	246	implements debugFillPr
 packages/flutter/test/widgets/focus_manager_test.dart	1641	implements debugFillProperties	paired-match	upstream-focus-diagnostics.md#node-and-scope-properties
 packages/flutter/test/widgets/focus_manager_test.dart	489	Can setFirstFocus on a scope with no manager.	paired-match	upstream-mounted-focus-scope-nodes.md#first-focus-before-a-manager-attaches
 packages/flutter/test/widgets/focus_manager_test.dart	701	Adding a focusedChild to a scope sets scope as focusedChild in parent scope	paired-match	upstream-mounted-focus-scope-nodes.md#inactive-child-scope-remembers-its-selection
+packages/flutter/test/widgets/focus_scope_test.dart	1825	Focus does not update the focusNode attributes when the widget updates if withExternalFocusNode is used 2	paired-match	upstream-focus-widget-semantics.md#ownership-of-focus-node-properties
+packages/flutter/test/widgets/focus_scope_test.dart	1840	Focus passes changes in attribute values to its focus node	paired-match	upstream-focus-widget-semantics.md#ownership-of-focus-node-properties

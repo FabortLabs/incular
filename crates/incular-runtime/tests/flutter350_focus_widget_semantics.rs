@@ -327,3 +327,92 @@ fn exclude_focus_does_not_add_an_accessibility_node_of_its_own() {
         covered.tree().semantics().iter().count()
     );
 }
+
+#[test]
+fn external_focus_mount_rebuild_and_unmount_do_not_write_node_owned_configuration() {
+    use incular_widgets::{
+        Column, FocusKeyEventHandler, FocusRawKeyEventHandler, KeyEventResult, SizedBox,
+    };
+    use std::rc::Rc;
+
+    let node = FocusNode::new();
+    let typed: FocusKeyEventHandler = Rc::new(|_, _| KeyEventResult::Ignored);
+    let raw: FocusRawKeyEventHandler = Rc::new(|_, _| KeyEventResult::Handled);
+    node.set_on_key_event(Some(typed.clone()));
+    node.set_on_key(Some(raw.clone()));
+    node.set_can_request_focus(false);
+    node.set_skip_traversal(true);
+    node.set_descendants_are_focusable(false);
+    node.set_descendants_are_traversable(false);
+    let revision = node.revision();
+    let assert_untouched = || {
+        assert_eq!(node.revision(), revision);
+        assert!(!node.can_request_focus());
+        assert!(node.skip_traversal());
+        assert!(!node.descendants_are_focusable());
+        assert!(!node.descendants_are_traversable());
+        assert!(Rc::ptr_eq(&node.on_key_event().unwrap(), &typed));
+        assert!(Rc::ptr_eq(&node.on_key().unwrap(), &raw));
+    };
+
+    let build = |side| {
+        let focus = Focus::with_external_focus_node(SizedBox::square(side), node.clone())
+            .can_request_focus(true)
+            .skip_traversal(false)
+            .descendants_are_focusable(true)
+            .descendants_are_traversable(true)
+            .on_key_event(|_, _| KeyEventResult::Handled)
+            .on_key(|_, _| KeyEventResult::Ignored);
+        Column::new([Widget::from(focus)]).into()
+    };
+    let view = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(build(20.)).unwrap();
+    runtime.run_frame(view).unwrap();
+    assert_untouched();
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, build(30.)).unwrap();
+    runtime.run_frame(view).unwrap();
+    assert_untouched();
+    runtime
+        .schedule_update(root, Column::new([Widget::from(SizedBox::shrink())]).into())
+        .unwrap();
+    runtime.run_frame(view).unwrap();
+    assert_untouched();
+}
+
+#[test]
+fn regular_focus_mounts_with_defaults_and_updates_its_owned_node_in_place() {
+    use incular_widgets::{GlobalKey, SizedBox};
+
+    let key = GlobalKey::new();
+    let build = |allows| {
+        let child = Widget::from(SizedBox::square(20.)).with_key(key);
+        let focus = Focus::new(child);
+        if allows {
+            Widget::from(focus)
+        } else {
+            Widget::from(focus.can_request_focus(false).skip_traversal(true))
+        }
+    };
+    let view = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(build(true)).unwrap();
+    runtime.run_frame(view).unwrap();
+    let resolve = |runtime: &Runtime| {
+        let child = runtime.tree().element_with_key(&key.into()).unwrap();
+        Focus::maybe_of(runtime.tree(), child, false).expect("owned focus node")
+    };
+    let before = resolve(&runtime);
+    assert!(before.can_request_focus());
+    assert!(!before.skip_traversal());
+    assert!(before.descendants_are_focusable());
+    assert!(before.descendants_are_traversable());
+    runtime
+        .schedule_update(runtime.tree().root().unwrap(), build(false))
+        .unwrap();
+    runtime.run_frame(view).unwrap();
+    assert_eq!(resolve(&runtime), before);
+    assert!(!before.can_request_focus());
+    assert!(before.skip_traversal());
+    assert!(before.descendants_are_focusable());
+    assert!(before.descendants_are_traversable());
+}

@@ -212,3 +212,14 @@ control. Nine focused highlight and key-routing tests passed. The
 crate compiled on Linux and the Kotlin/JNI signatures were checked
 against each other; there was no Android SDK or Android device run.
 The pairing is at the normalized runtime boundary.
+
+## Ownership of focus node properties
+
+The exact `widgets/focus_scope_test.dart:1825` and `:1840` originals passed.
+A mounted `with_external_focus_node` widget leaves the external node's
+permissions, traversal flags, and both callback identities intact when it
+mounts, rebuilds, or unmounts. The native test starts from nondefault values,
+uses conflicting widget options, and checks that the node's revision stays
+unchanged. A regular Focus without an external node mounts with the reference
+defaults; updating its widget changes eligibility and traversal on the same
+owned node. The 11 native tests in `flutter350_focus_widget_semantics` passed.
