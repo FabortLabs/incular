@@ -100,6 +100,7 @@ impl fmt::Debug for ImageStreamListener {
 pub struct ImageStreamSubscription {
     _frame: ImageFrameSubscription,
     _chunks: Option<ImageChunkSubscription>,
+    _live: crate::stream::ImageStreamLiveUse,
 }
 
 impl ImageStream {
@@ -116,6 +117,7 @@ impl ImageStream {
         if !report_errors {
             self.suppress_unhandled_errors();
         }
+        let live = self.retain_listener_group();
         let handles_error = on_error.is_some();
         let chunks = on_chunk.map(|handle| self.listen_chunks(move |event| handle(event)));
         let source = self.clone();
@@ -140,6 +142,7 @@ impl ImageStream {
         ImageStreamSubscription {
             _frame: frame,
             _chunks: chunks,
+            _live: live,
         }
     }
 }

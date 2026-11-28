@@ -85,3 +85,27 @@ ExactAssetImage uses this path and keeps its decoded-key label.
 Equivalent sharing across different UI threads, the completed
 live-listener registry, and Flutter's separate clearLiveImages
 policy are not claimed. All 44 focused native tests passed.
+
+## Live listener ownership, eviction and LRU re-admission
+
+Thirteen exact pinned registrations passed: :232, :344, :381,
+:398, :415, :441, :455, :471, :488, :504, :525, :561, and :691.
+
+The native cache now distinguishes a pending decode, a retained
+decoded frame, and an actively observed stream. An observer keeps
+its stream alive after the first frame, without making a decoded
+cache entry or an expired stream inherently live. A pending key is
+live while cache-owned work is tracked. Clearing it removes only
+that ownership. Explicit clearLiveImages drops the UI index without
+canceling consumers, and releasing an old observer cannot erase
+tracking for a replacement at the same key.
+
+Default eviction removes all three applicable states. Passing
+includeLive=false preserves only an externally observed stream;
+a subsequent lookup reuses that stream without repeating the I/O.
+A live image can lose the only retained LRU slot and stay live.
+Re-admitting a live 8 × 8 image restores exactly 256 decoded bytes.
+Six unobserved decodes leave zero live images with enabled or
+disabled retention. These comparisons use exact bundle keys on
+one UI thread; cross-thread stream identity is not claimed. All
+65 focused native cache, listener, resize, and frame tests passed.

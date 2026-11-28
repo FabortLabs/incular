@@ -558,3 +558,204 @@ fn exact_asset_resolution_reuses_a_live_pending_stream_and_its_label() {
     finish_pending_streams();
     assert!(matches!(second.state(), ImageLoadState::Ready(_)));
 }
+
+fn live_bundle_fixture() -> (BundleImageCache, Deferred, AssetBundleImageKey) {
+    let source = Deferred::default();
+    let bundle = ImageAssetBundle::new(Arc::new(source.clone()));
+    (BundleImageCache::default(), source, key(&bundle, 1))
+}
+
+fn observe_frame_group(
+    stream: &incular_image::ImageStream,
+) -> incular_image::ImageStreamSubscription {
+    use incular_image::ImageStreamListener;
+    use std::rc::Rc;
+    stream.listen(ImageStreamListener::new(Rc::new(|_, _| {})))
+}
+
+#[test]
+fn clearing_pending_storage_does_not_remove_live_consumers_until_live_clear() {
+    let (cache, source, asset) = live_bundle_fixture();
+    let original = cache.resolve_stream(asset.clone());
+    let _observer = observe_frame_group(&original);
+    let status = cache.status_for_key(&asset);
+    assert!(status.pending && status.live && !status.keep_alive);
+    cache.clear();
+    let status = cache.status_for_key(&asset);
+    assert!(!status.pending && status.live && !status.keep_alive);
+    cache.clear_live_images();
+    assert_eq!(cache.status_for_key(&asset), Default::default());
+    let replacement = cache.resolve_stream(asset.clone());
+    assert_ne!(original, replacement);
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(original.state(), ImageLoadState::Ready(_)));
+    assert!(matches!(replacement.state(), ImageLoadState::Ready(_)));
+}
+
+#[test]
+fn evicting_a_pending_stream_by_default_clears_pending_and_live_entries() {
+    let (cache, source, asset) = live_bundle_fixture();
+    let stream = cache.resolve_stream(asset.clone());
+    assert!(cache.status_for_key(&asset).pending);
+    assert!(cache.status_for_key(&asset).live);
+    assert!(!cache.status_for_key(&asset).keep_alive);
+    assert!(cache.evict(&asset));
+    assert_eq!(cache.status_for_key(&asset), Default::default());
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(stream.state(), ImageLoadState::Ready(_)));
+    assert_eq!(cache.retained(), (0, 0));
+}
+
+#[test]
+fn evicting_pending_without_live_only_preserves_external_observers() {
+    for observed in [false, true] {
+        let (cache, source, asset) = live_bundle_fixture();
+        let stream = cache.resolve_stream(asset.clone());
+        let before = cache.status_for_key(&asset);
+        assert!(before.pending && before.live && !before.keep_alive);
+        let observer = observed.then(|| observe_frame_group(&stream));
+        assert!(cache.evict_with_live(&asset, false));
+        let after = cache.status_for_key(&asset);
+        assert!(!after.pending && !after.keep_alive);
+        assert_eq!(after.live, observed);
+        if observed {
+            assert_eq!(cache.resolve_stream(asset.clone()), stream);
+        }
+        source.take("1")(Ok(Arc::from(IMAGE)));
+        finish_pending_streams();
+        assert!(matches!(stream.state(), ImageLoadState::Ready(_)));
+        drop(observer);
+        assert_eq!(cache.live_image_count(), 0);
+    }
+}
+
+#[test]
+fn evicting_a_completed_stream_distinguishes_live_and_kept_alive() {
+    for include_live in [true, false] {
+        let (cache, source, asset) = live_bundle_fixture();
+        let stream = cache.resolve_stream(asset.clone());
+        let observer = observe_frame_group(&stream);
+        source.take("1")(Ok(Arc::from(IMAGE)));
+        finish_pending_streams();
+        let before = cache.status_for_key(&asset);
+        assert!(!before.pending && before.live && before.keep_alive);
+        assert!(cache.evict_with_live(&asset, include_live));
+        let after = cache.status_for_key(&asset);
+        assert!(!after.pending && !after.keep_alive);
+        assert_eq!(after.live, !include_live);
+        if !include_live {
+            assert_eq!(cache.resolve_stream(asset.clone()), stream);
+            assert!(cache.status_for_key(&asset).keep_alive);
+            assert_eq!(source.pending(), 0);
+        }
+        drop(observer);
+        assert!(!cache.status_for_key(&asset).live);
+    }
+}
+
+#[test]
+fn releasing_an_old_live_group_cannot_remove_the_replacement_tracking() {
+    let (cache, source, asset) = live_bundle_fixture();
+    let original = cache.resolve_stream(asset.clone());
+    let original_observer = observe_frame_group(&original);
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert_eq!(cache.live_image_count(), 1);
+    cache.clear();
+    cache.clear_live_images();
+    assert_eq!(cache.live_image_count(), 0);
+    let replacement = cache.resolve_stream(asset.clone());
+    assert_ne!(original, replacement);
+    let _replacement_observer = observe_frame_group(&replacement);
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert_eq!(cache.live_image_count(), 1);
+    drop(original_observer);
+    assert_eq!(cache.live_image_count(), 1);
+    assert!(cache.status_for_key(&asset).live);
+}
+
+#[test]
+fn live_tracking_releases_all_six_unobserved_streams_with_or_without_cache_retention() {
+    for maximum in [3, 0] {
+        let source = Deferred::default();
+        let bundle = ImageAssetBundle::new(Arc::new(source.clone()));
+        let cache = BundleImageCache::with_limits(ImageCacheLimits::new(maximum, BYTES * 6));
+        for i in 1..=6 {
+            drop(cache.resolve_stream(key(&bundle, i)));
+            source.take(&i.to_string())(Ok(Arc::from(IMAGE)));
+            finish_pending_streams();
+        }
+        assert_eq!(cache.retained(), (maximum, maximum * BYTES));
+        assert_eq!(cache.live_image_count(), 0);
+        assert_eq!(cache.pending_image_count(), 0);
+    }
+}
+
+#[test]
+fn clearing_only_a_cache_owned_pending_listener_never_leaves_live_tracking() {
+    let source = Deferred::default();
+    let bundle = ImageAssetBundle::new(Arc::new(source.clone()));
+    let cache = BundleImageCache::with_limits(ImageCacheLimits::new(1, BYTES * 2));
+    let first = key(&bundle, 1);
+    let second = key(&bundle, 2);
+    let _original = cache.resolve_stream(first.clone());
+    assert!(cache.status_for_key(&first).pending && cache.status_for_key(&first).live);
+    cache.clear();
+    assert_eq!(cache.status_for_key(&first), Default::default());
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert_eq!(cache.status_for_key(&first), Default::default());
+    let _second = cache.resolve_stream(second.clone());
+    source.take("2")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert_eq!(cache.status_for_key(&first), Default::default());
+    assert!(cache.status_for_key(&second).keep_alive);
+}
+
+#[test]
+fn a_live_completed_image_can_lose_the_only_lru_slot_without_losing_its_listener() {
+    let source = Deferred::default();
+    let bundle = ImageAssetBundle::new(Arc::new(source.clone()));
+    let cache = BundleImageCache::with_limits(ImageCacheLimits::new(1, BYTES * 4));
+    let first = key(&bundle, 1);
+    let second = key(&bundle, 2);
+    let observed = cache.resolve_stream(first.clone());
+    let _observer = observe_frame_group(&observed);
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    let status = cache.status_for_key(&first);
+    assert!(!status.pending && status.keep_alive && status.live);
+    assert_eq!(cache.status_for_key(&second), Default::default());
+
+    let unobserved = cache.resolve_stream(second.clone());
+    source.take("2")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(unobserved.state(), ImageLoadState::Ready(_)));
+    let old = cache.status_for_key(&first);
+    let new = cache.status_for_key(&second);
+    assert!(!old.pending && !old.keep_alive && old.live);
+    assert!(!new.pending && new.keep_alive && !new.live);
+}
+
+#[test]
+fn restoring_a_live_8_by_8_frame_recovers_exactly_its_decoded_bytes() {
+    let (cache, source, asset) = live_bundle_fixture();
+    let stream = cache.resolve_stream(asset.clone());
+    let _observer = observe_frame_group(&stream);
+    assert_eq!(cache.retained(), (0, 0));
+    assert!(cache.status_for_key(&asset).pending && cache.status_for_key(&asset).live);
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert_eq!(cache.retained(), (1, BYTES));
+    assert!(cache.evict_with_live(&asset, false));
+    assert_eq!(cache.retained(), (0, 0));
+    assert!(cache.status_for_key(&asset).live);
+    assert_eq!(cache.resolve_stream(asset.clone()), stream);
+    assert_eq!(cache.retained(), (1, BYTES));
+    assert!(cache.status_for_key(&asset).keep_alive);
+    assert_eq!(source.pending(), 0);
+}

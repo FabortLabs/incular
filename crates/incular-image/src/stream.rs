@@ -73,6 +73,7 @@ struct StreamCell {
     chunks: OnceCell<ChunkListeners>,
     unhandled_errors: OnceCell<UnhandledImageErrors>,
     completed: Cell<bool>,
+    live_listeners: Cell<usize>,
     /// The stream this one follows after [`ImageStreamCompleter::follow`].
     source: RefCell<Option<ImageStream>>,
     map: RefCell<Option<FrameMap>>,
@@ -93,6 +94,16 @@ pub struct ImageStream {
 
 /// A cache's non-owning reference to one UI-thread stream cell.
 pub(crate) struct WeakImageStream(Weak<StreamCell>);
+
+/// An active listener group retains the stream after its first frame.
+pub(crate) struct ImageStreamLiveUse(ImageStream);
+
+impl Drop for ImageStreamLiveUse {
+    fn drop(&mut self) {
+        let count = self.0.cell.live_listeners.get();
+        self.0.cell.live_listeners.set(count - 1);
+    }
+}
 
 impl WeakImageStream {
     pub(crate) fn is_live(&self) -> bool {
@@ -127,6 +138,16 @@ impl ImageStream {
         WeakImageStream(Rc::downgrade(&self.cell))
     }
 
+    pub(crate) fn retain_listener_group(&self) -> ImageStreamLiveUse {
+        let count = self.cell.live_listeners.get();
+        self.cell.live_listeners.set(count.checked_add(1).expect("too many image listeners"));
+        ImageStreamLiveUse(self.clone())
+    }
+
+    pub(crate) fn has_live_listeners(&self) -> bool {
+        self.cell.live_listeners.get() != 0
+    }
+
     fn with(state: ImageLoadState) -> Self {
         let completed = !matches!(state, ImageLoadState::Loading(_));
         Self {
@@ -138,6 +159,7 @@ impl ImageStream {
                 chunks: OnceCell::new(),
                 unhandled_errors: OnceCell::new(),
                 completed: Cell::new(completed),
+                live_listeners: Cell::new(0),
                 source: RefCell::new(None),
                 map: RefCell::new(None),
                 mapped_label: OnceCell::new(),
@@ -379,6 +401,10 @@ impl ImageStream {
             }
         });
         *listeners.upstream.borrow_mut() = Some(upstream);
+    }
+
+    pub(crate) fn untracked_state(&self) -> ImageLoadState {
+        self.read_state(false, false)
     }
 
     fn read_state(&self, include_progress: bool, track: bool) -> ImageLoadState {

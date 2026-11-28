@@ -125,7 +125,7 @@ fn decode_asset(bytes: &[u8], name: String, scale: f64) -> Result<ImageHandle, I
     Ok(handle)
 }
 
-fn comparable_scale(scale: f64) -> u64 {
+pub(crate) fn comparable_scale(scale: f64) -> u64 {
     if scale == 0.0 {
         0
     } else if scale.is_nan() {

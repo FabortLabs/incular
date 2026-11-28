@@ -2,7 +2,7 @@
 
 use std::{
     cell::{OnceCell, RefCell},
-    collections::{HashMap, hash_map::Entry},
+    collections::{HashMap, HashSet, hash_map::Entry},
     sync::{Arc, Mutex, PoisonError, Weak},
 };
 
@@ -12,6 +12,8 @@ use crate::{
     AssetBundleImageKey, ImageCacheLimits, ImageConfiguration, ImageError, ImageHandle,
     ImageLoadCallback, ImageResizeOptions, ImageStream,
 };
+
+mod live_streams;
 
 type Pending = Arc<Mutex<PendingImage>>;
 
@@ -147,6 +149,15 @@ pub fn clear_shared_bundle_image_cache() {
 /// A cache hit never rereads or copies encoded bytes.
 #[derive(Clone)]
 pub struct BundleImageCache(Arc<Mutex<State>>);
+
+/// Whether an exact bundle key is waiting, retained, or used by an
+/// active UI listener. The three states are independent.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BundleImageCacheStatus {
+    pub pending: bool,
+    pub keep_alive: bool,
+    pub live: bool,
+}
 
 struct State {
     limits: ImageCacheLimits,
@@ -308,10 +319,59 @@ impl BundleImageCache {
             || state.blocking.contains_key(&key)
     }
 
+    /// Reports the storage and active-listener state of this exact key
+    /// from the owning UI thread, without changing its LRU order.
+    #[must_use]
+    pub fn status_for_key(&self, key: &AssetBundleImageKey) -> BundleImageCacheStatus {
+        let key = BundleDecodeKey::plain(key.clone());
+        let (pending, blocking, keep_alive) = {
+            let state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            (
+                state.pending.get(&key).cloned(),
+                state.blocking.contains_key(&key),
+                state.ready.contains(&key),
+            )
+        };
+        BundleImageCacheStatus {
+            pending: pending.is_some() || blocking,
+            keep_alive,
+            live: live_streams::is_live(self, &key, pending.as_ref()),
+        }
+    }
+
+    /// Number of exact keys with a live stream on this UI thread.
+    #[must_use]
+    pub fn live_image_count(&self) -> usize {
+        let active: HashSet<usize> = self
+            .0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .pending
+            .values()
+            .map(|job| Arc::as_ptr(job) as usize)
+            .collect();
+        live_streams::count(self, &active)
+    }
+
+    /// Stops tracking live stream views without canceling consumers or
+    /// evicting the retained or pending decoded entries.
+    pub fn clear_live_images(&self) {
+        live_streams::clear(self);
+    }
+
     /// Detaches an individual pending decode and/or releases its retained
     /// image. Existing waiters still receive the original outcome.
     pub fn evict(&self, key: &AssetBundleImageKey) -> bool {
+        self.evict_with_live(key, true)
+    }
+
+    /// Evicts the pending or retained decode. If `include_live` is false,
+    /// an externally observed stream can still satisfy a later resolve.
+    pub fn evict_with_live(&self, key: &AssetBundleImageKey, include_live: bool) -> bool {
         let key = BundleDecodeKey::plain(key.clone());
+        if include_live {
+            live_streams::remove(self, &key);
+        }
         let (removed, detached, blocking) = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             let removed = state.ready.pop_entry(&key);
@@ -398,15 +458,37 @@ impl BundleImageCache {
         asset: AssetBundleImageKey,
         resize: Option<ImageResizeOptions>,
     ) -> Option<ImageStream> {
-        let key = BundleDecodeKey { asset, resize };
-        let pending = {
+        self.resolve_cached_key(&BundleDecodeKey { asset, resize })
+    }
+
+    fn resolve_cached_key(&self, key: &BundleDecodeKey) -> Option<ImageStream> {
+        let (ready, pending) = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-            if let Some(image) = state.ready.get(&key) {
-                return Some(ImageStream::ready(image.clone()));
-            }
-            state.pending.get(&key).cloned()?
+            let ready = state.ready.get(key).cloned();
+            let pending = state.pending.get(key).cloned();
+            (ready, pending)
         };
-        Some(stream_for_pending(&pending))
+        if let Some(pending) = pending {
+            let stream = stream_for_pending(&pending);
+            live_streams::remember(self, key, &stream, Some(&pending));
+            return Some(stream);
+        }
+        if let Some(stream) = live_streams::stream(self, key) {
+            if ready.is_none()
+                && let crate::ImageLoadState::Ready(image) = stream.untracked_state()
+            {
+                let mut removed = Vec::new();
+                {
+                    let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+                    let _ = state.admit(key.clone(), &image, &mut removed);
+                }
+                drop(removed);
+            }
+            return Some(stream);
+        }
+        let stream = ImageStream::ready(ready?);
+        live_streams::remember(self, key, &stream, None);
+        Some(stream)
     }
 
     /// Resolves an exact asset key on the current UI thread. Concurrent
@@ -422,23 +504,26 @@ impl BundleImageCache {
         asset: AssetBundleImageKey,
         resize: Option<ImageResizeOptions>,
     ) -> ImageStream {
-        if let Some(stream) = self.resolve_cached(asset.clone(), resize) {
+        let key = BundleDecodeKey { asset, resize };
+        if let Some(stream) = self.resolve_cached_key(&key) {
             return stream;
         }
         let mut pending = None;
-        let stream = ImageStream::from_load_callback(|done| {
-            pending = self.start_async_with_size(asset, resize, done);
+        let mut stream = ImageStream::from_load_callback(|done| {
+            pending = self.start_async_with_key(key.clone(), done);
         });
-        if let Some(pending) = pending {
+        if let Some(pending) = &pending {
             // A reentrant provider can resolve the same key while it
             // starts. Use the already-published view rather than replacing
             // the view another caller has received.
-            let existing = PENDING_STREAMS.with(|memo| memo.borrow().get(&pending));
+            let existing = PENDING_STREAMS.with(|memo| memo.borrow().get(pending));
             if let Some(existing) = existing {
-                return existing;
+                stream = existing;
+            } else {
+                PENDING_STREAMS.with(|memo| memo.borrow_mut().remember(pending, &stream));
             }
-            PENDING_STREAMS.with(|memo| memo.borrow_mut().remember(&pending, &stream));
         }
+        live_streams::remember(self, &key, &stream, pending.as_ref());
         stream
     }
 
@@ -455,16 +540,14 @@ impl BundleImageCache {
         resize: Option<ImageResizeOptions>,
         done: ImageLoadCallback,
     ) {
-        let _ = self.start_async_with_size(asset, resize, done);
+        let _ = self.start_async_with_key(BundleDecodeKey { asset, resize }, done);
     }
 
-    fn start_async_with_size(
+    fn start_async_with_key(
         &self,
-        asset: AssetBundleImageKey,
-        resize: Option<ImageResizeOptions>,
+        key: BundleDecodeKey,
         done: ImageLoadCallback,
     ) -> Option<Pending> {
-        let key = BundleDecodeKey { asset, resize };
         let pending = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             if let Some(image) = state.ready.get(&key).cloned() {
