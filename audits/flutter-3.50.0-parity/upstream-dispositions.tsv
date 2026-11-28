@@ -4571,3 +4571,6 @@ packages/flutter/test/widgets/shortcuts_test.dart	1018	Shortcuts can override in
 packages/flutter/test/widgets/shortcuts_test.dart	1058	Shortcuts can override intents that apply to text fields with DoNothingAndStopPropagationIntent	paired-match	upstream-shortcuts-text-routing.md
 packages/flutter/test/widgets/editable_text_test.dart	2165	does not refocus when it is hidden by a new route	reference-skipped	upstream-text-input-reattach.md#a-retained-editor-covered-by-another-route
 packages/flutter/test/services/text_input_test.dart	1497	the platform input control receives isMultiline true on attach	paired-match	upstream-text-input-controls.md#browser-keyboard-type-keeps-the-multiline-flag
+packages/flutter/test/services/default_binary_messenger_test.dart	45	can check the mock handler	paired-match	upstream-mock-messenger.md
+packages/flutter/test/services/platform_channel_test.dart	301	can check the mock handler	paired-match	upstream-mock-messenger.md
+packages/flutter/test/services/platform_messages_test.dart	14	Mock binary message handler control test	paired-match	upstream-mock-messenger.md

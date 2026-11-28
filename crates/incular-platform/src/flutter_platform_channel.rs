@@ -158,7 +158,7 @@ pub enum FlutterJsonMethodResult {
 }
 
 impl FlutterJsonMethodResult {
-    fn encode(self) -> Result<Option<Vec<u8>>, JsonMethodCodecError> {
+    pub(crate) fn encode(self) -> Result<Option<Vec<u8>>, JsonMethodCodecError> {
         let bytes = match self {
             Self::Success(value) => JsonMethodCodec::encode_success_envelope(&value)?,
             Self::NotImplemented => return Ok(None),

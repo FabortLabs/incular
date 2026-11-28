@@ -36,6 +36,7 @@ mod flutter_inbound_messenger;
 mod flutter_event_channel;
 mod flutter_floating_cursor;
 mod flutter_platform_channel;
+mod flutter_mock_messenger;
 mod flutter_text_input_config;
 mod flutter_text_input_controls;
 mod flutter_text_input_style;
@@ -144,6 +145,7 @@ pub use flutter_event_channel::{
     FlutterEventOperation, FlutterEventSubscription, FlutterEventTask, FlutterJsonBroadcast,
     FlutterJsonEventChannel, FlutterJsonStreamEvent,
 };
+pub use flutter_mock_messenger::{FlutterMockHandler, FlutterMockMessenger, FlutterMockNullTransport};
 pub use flutter_platform_channel::{
     FlutterJsonMethodChannel, FlutterJsonMethodReply, FlutterJsonMethodResult,
     FlutterPlatformChannelError, FlutterPlatformMessenger,
