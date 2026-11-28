@@ -67,7 +67,7 @@ use crate::advanced_scrolling::{
     wheel::WheelViewportConfig,
 };
 use crate::compositing::ShaderCallback;
-use crate::drag_drop::{RetainedDragSource, RetainedDragTarget};
+use crate::drag_drop::{DragSessionId, RetainedDragSource, RetainedDragTarget};
 use crate::external_drop::{ExternalDropTargetBinding, ExternalDropTargetMarker};
 use crate::fast_hash::{FastHashMap, FastHashSet};
 use crate::focus_keyboard::FocusTraversalPolicyKind;
@@ -1258,6 +1258,7 @@ struct ActiveRawGesture {
 }
 
 struct ActiveDrag {
+    session: DragSessionId,
     source: Rc<dyn RetainedDragSource>,
     source_element: ElementId,
     /// The target that accepted the payload (Flutter `_activeTarget`).

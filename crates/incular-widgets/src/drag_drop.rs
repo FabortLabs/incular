@@ -25,16 +25,36 @@ pub struct DragFeedback {
     pub child: Widget,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DragSessionId(u64);
+
+impl DragSessionId {
+    pub(crate) fn next() -> Self {
+        thread_local! {
+            static NEXT: Cell<u64> = const { Cell::new(0) };
+        }
+        NEXT.with(|next| {
+            let value = next.get().checked_add(1).expect("too many drag sessions");
+            next.set(value);
+            Self(value)
+        })
+    }
+}
+
 struct DragState<T> {
-    payload: Option<T>,
+    id: DragSessionId,
+    source: Rc<Cell<u64>>,
+    payload: T,
+    anchor: Offset,
     position: Offset,
+    pointer: Offset,
     feedback: Option<Widget>,
 }
 
 /// Typed local state shared by related drag sources and targets.
 #[derive(Clone)]
 pub struct DragDropContext<T> {
-    state: Rc<RefCell<DragState<T>>>,
+    state: Rc<RefCell<Vec<DragState<T>>>>,
 }
 impl<T> Default for DragDropContext<T> {
     fn default() -> Self {
@@ -45,28 +65,45 @@ impl<T> DragDropContext<T> {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            state: Rc::new(RefCell::new(DragState {
-                payload: None,
-                position: Offset::ZERO,
-                feedback: None,
-            })),
+            state: Rc::new(RefCell::new(Vec::new())),
         }
     }
-    /// Returns an overlay-ready feedback snapshot during an active local drag.
+    /// Returns the most recently started live feedback in this context.
     #[must_use]
     pub fn feedback(&self) -> Option<DragFeedback> {
-        let state = self.state.borrow();
-        state.feedback.clone().map(|child| DragFeedback {
-            position: state.position,
-            child,
+        self.state.borrow().iter().rev().find_map(|drag| {
+            drag.feedback.clone().map(|child| DragFeedback {
+                position: drag.position - drag.anchor,
+                child,
+            })
         })
     }
     #[must_use]
     pub fn is_dragging(&self) -> bool {
-        self.state.borrow().payload.is_some()
+        !self.state.borrow().is_empty()
     }
     fn id(&self) -> usize {
         Rc::as_ptr(&self.state) as usize
+    }
+
+    fn feedback_layers_for_source(&self, source: &Rc<Cell<u64>>) -> Vec<Widget> {
+        self.state
+            .borrow()
+            .iter()
+            .filter(|drag| Rc::ptr_eq(&drag.source, source))
+            .filter_map(|drag| {
+                let feedback = drag.feedback.clone()?;
+                let origin = drag.position - drag.anchor;
+                Some(
+                    Widget::from(
+                        Positioned::new(IgnorePointer::new(feedback))
+                            .left(origin.x)
+                            .top(origin.y),
+                    )
+                    .with_key(drag.id.0),
+                )
+            })
+            .collect()
     }
 }
 
@@ -97,19 +134,19 @@ pub trait RetainedDragSource {
         None
     }
     /// `position` is the pointer, `origin` the draggable's global top-left.
-    fn start(&self, position: Offset, origin: Offset);
-    fn update(&self, position: Offset) -> DragPosition;
+    fn start(&self, session: DragSessionId, position: Offset, origin: Offset);
+    fn update(&self, session: DragSessionId, position: Offset) -> Option<DragPosition>;
     /// The drag ended; `accepted` when a target took the payload.
-    fn finish(&self, accepted: bool, velocity: Velocity);
-    fn cancel(&self);
+    fn finish(&self, session: DragSessionId, accepted: bool, velocity: Velocity);
+    fn cancel(&self, session: DragSessionId);
 }
 pub trait RetainedDragTarget {
     fn context_id(&self) -> usize;
-    fn enter(&self) -> bool;
+    fn enter(&self, session: DragSessionId) -> bool;
     /// `offset` is the feedback's top-left.
-    fn update(&self, offset: Offset);
-    fn leave(&self);
-    fn drop_payload(&self, offset: Offset);
+    fn update(&self, session: DragSessionId, offset: Offset);
+    fn leave(&self, session: DragSessionId);
+    fn drop_payload(&self, session: DragSessionId, offset: Offset);
 }
 
 /// Flutter `DragAnchorStrategy`: where the feedback sits relative to the
@@ -304,10 +341,6 @@ struct DragSourceBinding<T: Clone + 'static> {
     active: Rc<Cell<usize>>,
     /// Rebuilds the child for `childWhenDragging`.
     revision: Rc<Cell<u64>>,
-    /// `dragStartPoint`, the axis-restricted position and the last pointer.
-    anchor: Cell<Offset>,
-    position: Cell<Offset>,
-    pointer: Cell<Offset>,
 }
 impl<T: Clone + 'static> DragSourceBinding<T> {
     /// Flutter `_restrictAxis`.
@@ -322,14 +355,16 @@ impl<T: Clone + 'static> DragSourceBinding<T> {
         self.active.set(active);
         self.revision.set(self.revision.get().wrapping_add(1));
     }
-    fn end(&self, accepted: bool, velocity: Velocity) {
-        let offset = self.position.get() - self.anchor.get();
-        self.set_active(self.active.get().saturating_sub(1));
-        {
+    fn end(&self, session: DragSessionId, accepted: bool, velocity: Velocity) -> bool {
+        let offset = {
             let mut state = self.context.state.borrow_mut();
-            state.payload = None;
-            state.feedback = None;
-        }
+            let Some(index) = state.iter().position(|drag| drag.id == session) else {
+                return false;
+            };
+            let drag = state.remove(index);
+            drag.position - drag.anchor
+        };
+        self.set_active(self.active.get().saturating_sub(1));
         if let Some(callback) = &self.on_drag_end {
             callback(DraggableDetails {
                 was_accepted: accepted,
@@ -344,6 +379,7 @@ impl<T: Clone + 'static> DragSourceBinding<T> {
         } else if let Some(callback) = &self.on_draggable_canceled {
             callback(velocity, offset);
         }
+        true
     }
 }
 impl<T: Clone + 'static> RetainedDragSource for DragSourceBinding<T> {
@@ -360,64 +396,71 @@ impl<T: Clone + 'static> RetainedDragSource for DragSourceBinding<T> {
         self.max_simultaneous_drags
             .is_none_or(|max| self.active.get() < max)
     }
-    fn start(&self, position: Offset, origin: Offset) {
+    fn start(&self, session: DragSessionId, position: Offset, origin: Offset) {
         // Flutter `childDragAnchorStrategy` is the pointer's position within
         // the child; `pointerDragAnchorStrategy` is zero.
-        self.anchor.set(match self.drag_anchor_strategy {
+        let anchor = match self.drag_anchor_strategy {
             DragAnchorStrategy::Child => position - origin,
             DragAnchorStrategy::Pointer => Offset::ZERO,
-        });
-        self.position.set(position);
-        self.pointer.set(position);
+        };
         self.set_active(self.active.get() + 1);
         let feedback = self
             .feedback
             .as_ref()
             .map(|builder| builder(self.payload.clone()));
-        let mut state = self.context.state.borrow_mut();
-        state.payload = Some(self.payload.clone());
-        state.position = position - self.anchor.get();
-        state.feedback = feedback;
-        drop(state);
+        self.context.state.borrow_mut().push(DragState {
+            id: session,
+            source: self.revision.clone(),
+            payload: self.payload.clone(),
+            anchor,
+            position,
+            pointer: position,
+            feedback,
+        });
         if let Some(callback) = &self.on_start {
             callback(self.payload.clone());
         }
     }
-    fn update(&self, pointer: Offset) -> DragPosition {
-        let delta = pointer - self.pointer.get();
-        self.pointer.set(pointer);
-        let old = self.position.get();
-        let position = old + self.restrict(delta);
-        self.position.set(position);
-        if position != old {
+    fn update(&self, session: DragSessionId, pointer: Offset) -> Option<DragPosition> {
+        let (delta, moved, position, feedback_origin) = {
+            let mut state = self.context.state.borrow_mut();
+            let drag = state.iter_mut().find(|drag| drag.id == session)?;
+            let delta = pointer - drag.pointer;
+            let old = drag.position;
+            drag.pointer = pointer;
+            drag.position = old + self.restrict(delta);
+            (
+                delta,
+                drag.position != old,
+                drag.position,
+                drag.position - drag.anchor,
+            )
+        };
+        if moved {
             // The feedback overlay follows the pointer: rebuild it.
             self.revision.set(self.revision.get().wrapping_add(1));
         }
-        let feedback_origin = position - self.anchor.get();
-        self.context.state.borrow_mut().position = feedback_origin;
-        if position != old
-            && let Some(callback) = &self.on_drag_update
-        {
+        if moved && let Some(callback) = &self.on_drag_update {
             callback(delta);
         }
-        DragPosition {
+        Some(DragPosition {
             hit_point: position + self.feedback_offset,
             feedback_origin,
-        }
+        })
     }
-    fn finish(&self, accepted: bool, velocity: Velocity) {
-        let payload = self.payload.clone();
+    fn finish(&self, session: DragSessionId, accepted: bool, velocity: Velocity) {
         let velocity = Velocity::new(self.restrict(velocity.pixels_per_second));
-        self.end(accepted, velocity);
-        if let Some(callback) = &self.on_end {
-            callback(payload);
+        if self.end(session, accepted, velocity)
+            && let Some(callback) = &self.on_end
+        {
+            callback(self.payload.clone());
         }
     }
-    fn cancel(&self) {
-        let payload = self.payload.clone();
-        self.end(false, Velocity::ZERO);
-        if let Some(callback) = &self.on_cancel {
-            callback(payload);
+    fn cancel(&self, session: DragSessionId) {
+        if self.end(session, false, Velocity::ZERO)
+            && let Some(callback) = &self.on_cancel
+        {
+            callback(self.payload.clone());
         }
     }
 }
@@ -445,21 +488,19 @@ impl<T: Clone + 'static> From<Draggable<T>> for Widget {
         // and ignoring pointer hits (`ignoringFeedbackPointer`).
         let child = if value.feedback.is_some() {
             let context = value.context.clone();
+            let source = revision.clone();
             Widget::stateful_builder(revision.clone(), move |_| {
                 let portal = OverlayPortal::new(child.clone()).root_overlay(true);
-                match context.feedback() {
-                    None => portal.into(),
-                    Some(feedback) => portal
+                let avatars = context.feedback_layers_for_source(&source);
+                if avatars.is_empty() {
+                    portal.into()
+                } else {
+                    portal
                         .show(true)
                         .overlay_child_layout_builder(move |_, _| {
-                            let placed: Widget =
-                                Positioned::new(IgnorePointer::new(feedback.child.clone()))
-                                    .left(feedback.position.x)
-                                    .top(feedback.position.y)
-                                    .into();
-                            Widget::from(Stack::new(vec![placed]))
+                            Stack::new(avatars.clone()).into()
                         })
-                        .into(),
+                        .into()
                 }
             })
         } else {
@@ -485,9 +526,6 @@ impl<T: Clone + 'static> From<Draggable<T>> for Widget {
                 on_draggable_canceled: value.on_draggable_canceled,
                 active,
                 revision,
-                anchor: Cell::new(Offset::ZERO),
-                position: Cell::new(Offset::ZERO),
-                pointer: Cell::new(Offset::ZERO),
             }),
             child,
         )
@@ -498,8 +536,8 @@ impl<T: Clone + 'static> From<Draggable<T>> for Widget {
 /// `_rejectedAvatars`), with the revision that rebuilds the child when either
 /// list changes.
 struct DragTargetHover<T> {
-    candidates: RefCell<Vec<T>>,
-    rejected: RefCell<Vec<T>>,
+    candidates: RefCell<Vec<(DragSessionId, T)>>,
+    rejected: RefCell<Vec<(DragSessionId, T)>>,
     revision: Rc<Cell<u64>>,
 }
 impl<T> DragTargetHover<T> {
@@ -611,13 +649,24 @@ struct DragTargetBinding<T: Clone + 'static> {
     hover: Rc<DragTargetHover<T>>,
 }
 impl<T: Clone + 'static> DragTargetBinding<T> {
-    fn payload(&self) -> Option<T> {
-        self.context.state.borrow().payload.clone()
+    fn payload(&self, session: DragSessionId) -> Option<T> {
+        self.context
+            .state
+            .borrow()
+            .iter()
+            .find(|drag| drag.id == session)
+            .map(|drag| drag.payload.clone())
     }
-    fn clear_hover(&self) {
-        self.hover.candidates.borrow_mut().clear();
-        self.hover.rejected.borrow_mut().clear();
-        self.hover.changed();
+    fn remove_hover(&self, session: DragSessionId) -> bool {
+        for entries in [&self.hover.candidates, &self.hover.rejected] {
+            let mut entries = entries.borrow_mut();
+            if let Some(index) = entries.iter().position(|(id, _)| *id == session) {
+                entries.remove(index);
+                self.hover.changed();
+                return true;
+            }
+        }
+        false
     }
 }
 impl<T: Clone + 'static> RetainedDragTarget for DragTargetBinding<T> {
@@ -626,8 +675,8 @@ impl<T: Clone + 'static> RetainedDragTarget for DragTargetBinding<T> {
     }
     /// Flutter `didEnter`: `onWillAccept` sorts the payload into the candidate
     /// or rejected list. Only a candidate reports `onEnter`.
-    fn enter(&self) -> bool {
-        let Some(payload) = self.payload() else {
+    fn enter(&self, session: DragSessionId) -> bool {
+        let Some(payload) = self.payload(session) else {
             return false;
         };
         let accepts = self
@@ -635,39 +684,46 @@ impl<T: Clone + 'static> RetainedDragTarget for DragTargetBinding<T> {
             .as_ref()
             .is_none_or(|callback| callback(payload.clone()));
         if accepts {
-            self.hover.candidates.borrow_mut().push(payload.clone());
+            self.hover
+                .candidates
+                .borrow_mut()
+                .push((session, payload.clone()));
             if let Some(callback) = &self.on_enter {
                 callback(payload);
             }
         } else {
-            self.hover.rejected.borrow_mut().push(payload);
+            self.hover.rejected.borrow_mut().push((session, payload));
         }
         self.hover.changed();
         accepts
     }
     /// Flutter `didMove`, which reaches candidates and rejected targets alike.
-    fn update(&self, offset: Offset) {
+    fn update(&self, session: DragSessionId, offset: Offset) {
         let Some(callback) = &self.on_update else {
             return;
         };
-        if let Some(payload) = self.payload() {
+        if let Some(payload) = self.payload(session) {
             callback(payload, offset);
         }
     }
     /// Flutter `didLeave`.
-    fn leave(&self) {
-        self.clear_hover();
+    fn leave(&self, session: DragSessionId) {
+        if !self.remove_hover(session) {
+            return;
+        }
         let Some(callback) = &self.on_leave else {
             return;
         };
-        if let Some(payload) = self.payload() {
+        if let Some(payload) = self.payload(session) {
             callback(payload);
         }
     }
     /// Flutter `didDrop`: the candidate leaves the candidate list and accepts.
-    fn drop_payload(&self, offset: Offset) {
-        self.clear_hover();
-        let Some(payload) = self.payload() else {
+    fn drop_payload(&self, session: DragSessionId, offset: Offset) {
+        if !self.remove_hover(session) {
+            return;
+        }
+        let Some(payload) = self.payload(session) else {
             return;
         };
         if let Some(callback) = &self.on_drop {
@@ -681,7 +737,7 @@ impl<T: Clone + 'static> RetainedDragTarget for DragTargetBinding<T> {
 impl<T: Clone + 'static> From<DragTarget<T>> for Widget {
     fn from(value: DragTarget<T>) -> Self {
         let revision = Rc::new(Cell::new(0_u64));
-        let hover = Rc::new(DragTargetHover {
+        let hover = Rc::new(DragTargetHover::<T> {
             candidates: RefCell::new(Vec::new()),
             rejected: RefCell::new(Vec::new()),
             revision: revision.clone(),
@@ -692,8 +748,18 @@ impl<T: Clone + 'static> From<DragTarget<T>> for Widget {
                 let hover = hover.clone();
                 Widget::stateful_builder(revision, move |_| {
                     builder(
-                        hover.candidates.borrow().clone(),
-                        hover.rejected.borrow().clone(),
+                        hover
+                            .candidates
+                            .borrow()
+                            .iter()
+                            .map(|(_, payload)| payload.clone())
+                            .collect(),
+                        hover
+                            .rejected
+                            .borrow()
+                            .iter()
+                            .map(|(_, payload)| payload.clone())
+                            .collect(),
                     )
                 })
             }

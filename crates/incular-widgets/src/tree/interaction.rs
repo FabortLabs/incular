@@ -2899,9 +2899,11 @@ impl WidgetTree {
         let origin = self
             .element_bounds(element)
             .map_or(start, |bounds| bounds.origin);
-        self.input.active_drags.entry(key).or_insert_with(|| {
-            source.start(start, origin);
+        let active = self.input.active_drags.entry(key).or_insert_with(|| {
+            let session = DragSessionId::next();
+            source.start(session, start, origin);
             ActiveDrag {
+                session,
                 source: source.clone(),
                 source_element: element,
                 target: None,
@@ -2910,8 +2912,9 @@ impl WidgetTree {
                 velocity: crate::gestures::Velocity::ZERO,
             }
         });
-        let position = source.update(position);
-        self.update_drag_target(key, position);
+        if let Some(position) = active.source.update(active.session, position) {
+            self.update_drag_target(key, position);
+        }
     }
     pub(super) fn drag_source(&self, element: ElementId) -> Option<Rc<dyn RetainedDragSource>> {
         match self.elements.get(element.0)?.widget.kind() {
@@ -2975,16 +2978,16 @@ impl WidgetTree {
                 .all(|((entered, _), (current, _))| entered == current);
         if lists_match {
             for (_, target) in &active.entered {
-                target.update(position.feedback_origin);
+                target.update(active.session, position.feedback_origin);
             }
             return;
         }
         active.target = None;
         for (_, target) in active.entered.drain(..) {
-            target.leave();
+            target.leave(active.session);
         }
         for (element, target) in path {
-            let accepts = target.enter();
+            let accepts = target.enter(active.session);
             if accepts {
                 active.target = Some((element, target.clone()));
             }
@@ -2994,7 +2997,7 @@ impl WidgetTree {
             }
         }
         for (_, target) in &active.entered {
-            target.update(position.feedback_origin);
+            target.update(active.session, position.feedback_origin);
         }
     }
     fn finish_drag(&mut self, key: GestureArenaKey, cancelled: bool) {
@@ -3006,16 +3009,16 @@ impl WidgetTree {
         let accepted = active.target.is_some() && !cancelled;
         let mut entered = active.entered;
         if let Some((accepting, target)) = active.target.filter(|_| !cancelled) {
-            target.drop_payload(active.feedback_origin);
+            target.drop_payload(active.session, active.feedback_origin);
             entered.retain(|(element, _)| *element != accepting);
         }
         for (_, target) in entered {
-            target.leave();
+            target.leave(active.session);
         }
         if cancelled {
-            active.source.cancel();
+            active.source.cancel(active.session);
         } else {
-            active.source.finish(accepted, active.velocity);
+            active.source.finish(active.session, accepted, active.velocity);
         }
     }
     pub(super) fn detach_gesture_member(&mut self, element: ElementId) {

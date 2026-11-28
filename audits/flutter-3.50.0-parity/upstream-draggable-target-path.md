@@ -53,8 +53,8 @@ Separate pinned registrations :2849 and :2514 confirm that Flutter
 keeps an established avatar alive when only its source disappears and
 can present two independent avatars from one source. Incular's
 separate mouse-source removal check currently cancels its local
-avatar, and the typed context still exposes a single feedback slot.
-Those are open lifecycle differences, not additional paired cases.
+avatar, and the typed context then had a single feedback slot.
+Independent feedback was repaired below; source lifetime remains open.
 
 ## Terminal pointer samples and diagonal locked-axis updates
 
@@ -87,3 +87,22 @@ leave. The Dart callback signatures vary between precise and widened
 types; native uses their equivalent typed closure and compares the
 same delivered values and behavior. Both focused native tests ran
 with the extracted embedded FlutterTest font.
+
+## Independent active contacts and the drag limit
+
+Pinned :2514 now pairs. A zero limit starts no feedback; a limit of
+two admits two genuine touch contacts, rejects the third, and retains
+both independently placed feedback widgets. Releasing one drops
+payload 1 at (358,57) and removes only its own widget. Releasing the
+second produces the same drop once; the refused third emits nothing.
+Before the fix one contact replaced the other's feedback and could
+clear its payload on release.
+
+Each live drag now owns its position, grab offset, feedback, payload
+and target-candidate identity. The same-context authored comparison
+uses two separate sources and payloads 7 and 9. They track different
+positions and both enter the same target. Canceling 7 leaves only 9
+as a live candidate and does not remove 9's feedback or drop. This
+does not change the context's single-snapshot convenience API; its
+automatic overlay presents every active contact. The 44-case focused
+regression run and both multi-contact checks passed.
