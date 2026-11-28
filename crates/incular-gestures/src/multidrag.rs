@@ -39,10 +39,13 @@ enum MultiDragKind {
 /// Timer deadline, followed by creation order when deadlines tie.
 type DragTimer = (Instant, u64);
 
-/// Flutter `MultiDragPointerState`.
-struct PointerState {
+/// Per-contact state shared by the multi-drag recognizers. The debug
+/// lifecycle belongs to the state, not to the client returned on drag start.
+pub struct MultiDragPointerState {
+    _allocation: incular_core::memory::allocations::ObjectLifetime,
     initial_position: Offset,
     kind: PointerDeviceKind,
+    gesture_settings: DeviceGestureSettings,
     velocity: VelocityTracker,
     client: Option<Box<dyn Drag>>,
     pending_delta: Option<Offset>,
@@ -52,6 +55,52 @@ struct PointerState {
     timer: Option<DragTimer>,
     /// `_DelayedPointerState._starter`: accepted while the delay runs.
     starter: bool,
+}
+
+impl MultiDragPointerState {
+    #[must_use]
+    pub fn new(
+        initial_position: Offset,
+        kind: PointerDeviceKind,
+        gesture_settings: DeviceGestureSettings,
+    ) -> Self {
+        Self {
+            _allocation: incular_core::memory::allocations::ObjectLifetime::new(
+                "gestures",
+                "MultiDragPointerState",
+            ),
+            initial_position,
+            kind,
+            gesture_settings,
+            velocity: VelocityTracker::default(),
+            client: None,
+            pending_delta: Some(Offset::ZERO),
+            last_pending_event_time: None,
+            has_entry: false,
+            timer: None,
+            starter: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn initial_position(&self) -> Offset {
+        self.initial_position
+    }
+
+    #[must_use]
+    pub const fn kind(&self) -> PointerDeviceKind {
+        self.kind
+    }
+
+    #[must_use]
+    pub const fn pending_delta(&self) -> Option<Offset> {
+        self.pending_delta
+    }
+
+    #[must_use]
+    pub const fn gesture_settings(&self) -> DeviceGestureSettings {
+        self.gesture_settings
+    }
 }
 
 /// Flutter's `MultiDragGestureRecognizer` family. Construct one with
@@ -64,7 +113,7 @@ pub struct MultiDragGestureRecognizer {
     gesture_settings: DeviceGestureSettings,
     allowed_buttons: Option<Rc<dyn Fn(u32) -> bool>>,
     on_start: Option<MultiDragStartCallback>,
-    pointers: BTreeMap<u64, PointerState>,
+    pointers: BTreeMap<u64, MultiDragPointerState>,
     timers: BTreeMap<DragTimer, u64>,
     timer_sequence: u64,
     link: ArenaLink,
@@ -174,20 +223,11 @@ impl MultiDragGestureRecognizer {
             }
             MultiDragKind::Immediate | MultiDragKind::Horizontal | MultiDragKind::Vertical => None,
         };
-        self.pointers.insert(
-            event.pointer,
-            PointerState {
-                initial_position: event.position,
-                kind: event.kind,
-                velocity: VelocityTracker::default(),
-                client: None,
-                pending_delta: Some(Offset::ZERO),
-                last_pending_event_time: None,
-                has_entry: true,
-                timer,
-                starter: false,
-            },
-        );
+        let mut state =
+            MultiDragPointerState::new(event.position, event.kind, self.gesture_settings);
+        state.has_entry = true;
+        state.timer = timer;
+        self.pointers.insert(event.pointer, state);
         self.link.add(event.pointer);
     }
 
@@ -303,7 +343,7 @@ impl MultiDragGestureRecognizer {
         let Some(pending) = state.pending_delta else {
             return;
         };
-        let slop = compute_hit_slop(state.kind, self.gesture_settings);
+        let slop = compute_hit_slop(state.kind, state.gesture_settings);
         match self.kind {
             MultiDragKind::Immediate => {
                 if distance(pending) > slop {

@@ -88,7 +88,7 @@ pub use managed_arena::{
     GestureArenaTraceHandler, GestureArenaTracePhase, GestureArenaWinCause,
 };
 pub use mouse::MouseRegion;
-pub use multidrag::{Drag, MultiDragGestureRecognizer, MultiDragStartCallback};
+pub use multidrag::{Drag, MultiDragGestureRecognizer, MultiDragPointerState, MultiDragStartCallback};
 pub use multitap::{
     MultiTapGestureRecognizer, SerialTapCancelDetails, SerialTapDownDetails,
     SerialTapGestureRecognizer, SerialTapUpDetails,

@@ -236,3 +236,56 @@ fn independent_delayed_drags_fire_by_deadline_then_registration_order() {
         ]
     );
 }
+
+#[cfg(debug_assertions)]
+#[test]
+fn direct_pointer_state_and_recognizer_contacts_publish_matched_lifetimes() {
+    use PointerPhase::{Cancel, Down};
+    use incular_core::{
+        DeviceGestureSettings,
+        memory::allocations::{MemoryAllocations, ObjectEventKind},
+    };
+    use incular_gestures::MultiDragPointerState;
+
+    let observed = Rc::new(RefCell::new(Vec::new()));
+    let captured = observed.clone();
+    let _subscription = MemoryAllocations::current().add_listener(move |event| {
+        if event.class_name == "MultiDragPointerState" && event.library == "gestures" {
+            captured.borrow_mut().push(event);
+        }
+    });
+    let state = MultiDragPointerState::new(
+        Offset::ZERO,
+        PointerDeviceKind::Touch,
+        DeviceGestureSettings::default(),
+    );
+    assert_eq!(state.initial_position(), Offset::ZERO);
+    assert_eq!(state.pending_delta(), Some(Offset::ZERO));
+    assert_eq!(state.kind(), PointerDeviceKind::Touch);
+    assert_eq!(observed.borrow()[0].kind, ObjectEventKind::Created);
+    drop(state);
+
+    let t = Instant::now();
+    let included = touch(t, 1);
+    let rejected = Input {
+        buttons: 4,
+        ..touch(t, 2)
+    };
+    let mut recognizer = MultiDragGestureRecognizer::delayed(None);
+    recognizer.handle_raw(rejected.event(0, Down, 0., 0.));
+    assert_eq!(observed.borrow().len(), 2);
+    recognizer.handle_raw(included.event(0, Down, 0., 0.));
+    recognizer.handle_raw(included.event(1, Cancel, 0., 0.));
+    // An already cancelled contact is not disposed a second time.
+    recognizer.handle_raw(included.event(2, Cancel, 0., 0.));
+    assert_eq!(recognizer.next_deadline(), None);
+    drop(recognizer);
+    let events = observed.borrow();
+    assert_eq!(events.len(), 4);
+    for events in events.chunks_exact(2) {
+        assert_eq!(events[0].id, events[1].id);
+        assert_eq!(events[0].kind, ObjectEventKind::Created);
+        assert_eq!(events[1].kind, ObjectEventKind::Disposed);
+    }
+    assert_ne!(events[0].id, events[2].id);
+}

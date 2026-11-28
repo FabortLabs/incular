@@ -7,8 +7,6 @@ and is replayed to the client (:43); touch-only delayed drag ignores a mouse
 press and its moves even after expiration (:72); both an omitted button
 filter and an explicit default accept primary and reject middle (:105).
 Incular exposes explicit reset with `set_allowed_buttons_filter(None)`.
-Flutter's Dart memory-event registration (:130) passed only on the pinned
-reference; it is not counted as an Incular comparison.
 
 The authored `multidrag_pointer_deadlines_test.dart` probe advances past
 three overlapping timers in one pump. Flutter starts the earliest deadline
@@ -18,3 +16,13 @@ The corresponding Rust case reproduced the inverse start order when
 pointer IDs ran in reverse. Pending timers are now keyed by deadline and
 creation order rather than pointer ID, and removed on rejection and
 release. This authored comparison is not a fifth upstream registration.
+
+## Pointer-state lifetime
+
+Pinned :130 passed. A standalone `MultiDragPointerState` publishes
+creation and disposal under the same debug allocation identity. The
+native test also checks the exact state used by the actual recognizer:
+a rejected button creates no state, an admitted contact creates one,
+and cancel removes its timer and disposes that identity once. Extra
+cancel and recognizer teardown do not duplicate disposal. Slop settings
+are captured with the individual pointer instead of read afresh.
