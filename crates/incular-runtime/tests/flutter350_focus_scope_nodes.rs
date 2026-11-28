@@ -1529,3 +1529,40 @@ fn scope_requests_restore_the_last_focused_leaf_after_focus_switches_branches() 
     runtime.run_frame(bounds).unwrap();
     check(false);
 }
+
+#[test]
+fn selecting_a_direct_child_preserves_the_inactive_nested_scopes_history() {
+    use incular_widgets::Column;
+
+    let outer = FocusScopeNode::new();
+    let nested = FocusScopeNode::new();
+    let direct = FocusNode::new();
+    let leaf = FocusNode::new();
+    let scene = FocusScope::new(Column::new([
+        Widget::from(Focus::new(SizedBox::shrink()).node(direct.clone())),
+        Widget::from(
+            FocusScope::new(Focus::new(SizedBox::shrink()).node(leaf.clone())).node(nested.clone()),
+        ),
+    ]))
+    .node(outer.clone());
+    let mut runtime = Runtime::new(scene.into()).unwrap();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+
+    leaf.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(nested.focused_child(), Some(leaf.clone()));
+    assert_eq!(outer.focused_child(), Some(nested.scope_focus_node()));
+    assert!(!direct.has_focus());
+    assert!(!direct.has_primary_focus());
+    assert!(leaf.has_focus());
+    assert!(leaf.has_primary_focus());
+
+    direct.request_focus();
+    runtime.run_frame(bounds).unwrap();
+    assert_eq!(nested.focused_child(), Some(leaf.clone()));
+    assert_eq!(outer.focused_child(), Some(direct.clone()));
+    assert!(direct.has_focus());
+    assert!(direct.has_primary_focus());
+    assert!(!leaf.has_focus());
+    assert!(!leaf.has_primary_focus());
+}

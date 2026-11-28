@@ -257,3 +257,13 @@ scope's selected parent intact. The native focused test also checks fallback
 to the previous sibling, no accidental pending primary request on a linked
 but unmanaged node, and rejection of an ancestry cycle. The eight targeted
 scope transitions and diagnostics tests passed.
+
+## Inactive child scope remembers its selection
+
+The pinned original `widgets/focus_manager_test.dart:701` and the
+native mounted `selecting_a_direct_child_preserves_the_inactive_nested_scopes_history`
+test passed. While a nested leaf owns primary focus, its parent scope owns
+the leaf's history and the outer scope records the nested scope, not its
+leaf. Moving primary focus to a direct child replaces the outer selection
+without clearing the inactive nested scope's selection. The entire focused
+`flutter350_focus_scope_nodes` target passed all 33 cases.

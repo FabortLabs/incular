@@ -3901,3 +3901,4 @@ packages/flutter/test/foundation/diagnostics_test.dart	864	transition test	paire
 packages/flutter/test/widgets/focus_manager_test.dart	246	implements debugFillProperties	paired-match	upstream-focus-diagnostics.md#node-and-scope-properties
 packages/flutter/test/widgets/focus_manager_test.dart	1641	implements debugFillProperties	paired-match	upstream-focus-diagnostics.md#node-and-scope-properties
 packages/flutter/test/widgets/focus_manager_test.dart	489	Can setFirstFocus on a scope with no manager.	paired-match	upstream-mounted-focus-scope-nodes.md#first-focus-before-a-manager-attaches
+packages/flutter/test/widgets/focus_manager_test.dart	701	Adding a focusedChild to a scope sets scope as focusedChild in parent scope	paired-match	upstream-mounted-focus-scope-nodes.md#inactive-child-scope-remembers-its-selection
