@@ -3970,3 +3970,4 @@ packages/flutter/test/widgets/grid_view_test.dart	847	SliverGridDelegateWithFixe
 packages/flutter/test/widgets/grid_view_test.dart	875	SliverGridDelegateWithMaxCrossAxisExtent mainAxisExtent works as expected	paired-match	upstream-grid-extents.md
 packages/flutter/test/widgets/grid_view_test.dart	903	SliverGridDelegateWithMaxCrossAxisExtent throws assertion error when maxCrossAxisExtent is 0	paired-match	upstream-grid-extents.md
 packages/flutter/test/widgets/grid_view_test.dart	961	SliverGridDelegate mainAxisExtent add assert	paired-match	upstream-grid-extents.md
+packages/flutter/test/widgets/grid_view_test.dart	346	SliverGridRegularTileLayout - can handle close to zero mainAxisStride	paired-match	upstream-grid-extents.md#regular-tile-geometry-and-scroll-boundaries

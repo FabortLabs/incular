@@ -116,11 +116,13 @@ mod sliver_paint_geometry;
 pub(crate) mod sliver_layer;
 pub(crate) mod sliver_clip;
 pub use sliver_clip::{ClipOverlapBehavior, SliverClipRRect, SliverClipRect};
+mod grid_geometry;
 mod sliver_lists;
 mod sliver_semantics;
 
 #[doc(hidden)]
 pub use geometry::SliverKeepAliveSource;
+pub use grid_geometry::{SliverGridGeometry, SliverGridRegularTileLayout};
 pub use geometry::{
     RenderSliver, ScrollCacheExtent, SliverChildId, SliverChildLayout, SliverChildPlacement,
     SliverLayout, SliverPaintOrder, SliverScrollDependency, SliverViewportConfig,

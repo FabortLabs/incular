@@ -149,3 +149,25 @@ fn a_zero_stride_grid_keeps_explicitly_retained_siblings_without_materializing_o
     assert_eq!(find(&runtime, 1), Some(retained));
     assert!(find(&runtime, 2).is_some());
 }
+
+#[test]
+fn zero_main_axis_cache_window_samples_one_tile_even_when_stride_is_positive() {
+    let grid = GridView::count(
+        4,
+        (0..20u64).map(|index| Widget::from(Text::new(index.to_string())).with_key(index)),
+    )
+    .cache_extent(0.);
+    let mut runtime = mount(Widget::from(grid).with_key(VIEWPORT));
+    let (hidden, _) = runtime
+        .run_frame(Constraints::tight(Size::new(800., 0.)))
+        .unwrap();
+    assert_eq!(viewport_size(&runtime), Size::new(800., 0.));
+    assert!(runtime.tree().element_with_key(&Key::Value(0)).is_some());
+    assert!(runtime.tree().element_with_key(&Key::Value(1)).is_none());
+    assert!(
+        !hidden
+            .commands()
+            .iter()
+            .any(|paint| matches!(paint, PaintCommand::GlyphRun { .. }))
+    );
+}

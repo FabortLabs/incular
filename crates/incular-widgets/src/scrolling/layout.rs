@@ -376,41 +376,30 @@ impl RenderSliver for GridRenderSliver {
     }
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
-        let cross_extent = constraints.cross_axis_extent.max(0.);
-        let columns = self.delegate.cross_axis_count(cross_extent).max(1);
-        let main_extent = self
-            .delegate
-            .resolve_main_axis_extent(cross_extent, columns);
-        let main_spacing = self.delegate.resolved_main_axis_spacing();
+        let layout = self.delegate.get_layout(constraints);
+        let columns = layout.cross_axis_count();
         let cross_spacing = self.delegate.resolved_cross_axis_spacing();
-        let rows = self.item_count.div_ceil(columns);
-        let row_step = main_extent + main_spacing;
-        let total = if rows == 0 {
-            0.
-        } else {
-            rows as f32 * main_extent + rows.saturating_sub(1) as f32 * main_spacing
-        };
+        let cell = layout.geometry_for_child_index(0);
+        let main_extent = cell.main_axis_extent;
+        let cell_cross_extent = cell.cross_axis_extent;
+        let total = layout.compute_max_scroll_offset(self.item_count);
         let cache_start = (constraints.scroll_offset + constraints.cache_origin).max(0.);
         let cache_end = (cache_start + constraints.remaining_cache_extent).max(cache_start);
-        // Flutter's regular tile layout reports tile zero for a zero
-        // stride, without constructing its entire first row.
-        let (start_row, end_row) = if row_step > 0. {
-            (
-                (cache_start / row_step).floor() as usize,
-                (cache_end / row_step).ceil() as usize,
-            )
+        let first_item = layout.min_child_index_for_scroll_offset(cache_start).min(self.item_count);
+        let last_item = layout
+            .max_child_index_for_scroll_offset(cache_end)
+            .saturating_add(1)
+            .min(self.item_count)
+            .max(first_item);
+        let start_row = first_item / columns;
+        let row_range = if first_item < last_item {
+            start_row..last_item.div_ceil(columns)
         } else {
-            (0, 1)
+            start_row..start_row
         };
-        let row_range = start_row.min(rows)..end_row.min(rows).max(start_row.min(rows));
-        let first_item = row_range.start.saturating_mul(columns).min(self.item_count);
-        let last_item = if row_step == 0. {
-            self.item_count.min(1)
-        } else {
-            row_range.end.saturating_mul(columns).min(self.item_count)
-        };
+        let active = first_item..last_item;
         let parked_tiles =
-            retain_fixed_cache(&mut self.widgets, &(first_item..last_item), self.item_count);
+            retain_fixed_cache(&mut self.widgets, &active, self.item_count);
         let mut parked_rows: Vec<_> = parked_tiles
             .iter()
             .map(|index| index / columns)
@@ -418,12 +407,6 @@ impl RenderSliver for GridRenderSliver {
             .collect();
         parked_rows.dedup();
 
-        let cell_cross_extent = if columns == 0 {
-            0.
-        } else {
-            (cross_extent - cross_spacing * columns.saturating_sub(1) as f32).max(0.)
-                / columns as f32
-        };
         let axis = self.axis;
         let children = fixed_cache_slots(row_range, &parked_rows)
             .map(|(row, placement)| {
@@ -432,7 +415,7 @@ impl RenderSliver for GridRenderSliver {
                 let mut keep_row = false;
                 let cells: Vec<_> = (start..end)
                     .filter_map(|index| {
-                        if (placement == SliverChildPlacement::Parked || index >= last_item)
+                        if !active.contains(&index)
                             && !self.widgets.contains_key(&index)
                         {
                             return None;
@@ -462,7 +445,7 @@ impl RenderSliver for GridRenderSliver {
                     id: SliverChildId::list_item(row),
                     widget,
                     semantic_index: Some(row),
-                    offset: row as f32 * row_step,
+                    offset: layout.geometry_for_child_index(start).scroll_offset,
                     cross_offset: 0.,
                     constraints: sliver_child_constraints(
                         constraints.axis,

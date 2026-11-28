@@ -15,3 +15,19 @@ positive fractional boundary: a 2-pixel grid allows four 0.5-pixel
 columns, rather than silently growing the maximum extent to 1 pixel.
 All fourteen focused Rust checks passed; the fractional custom probe
 does not add an original registration.
+
+## Regular tile geometry and scroll boundaries
+
+The original `grid_view_test.dart:346` passed. A positive step below
+Flutter's precision tolerance resolves the minimum child to tile zero
+even for a large scroll offset. The native fixture uses a representable
+ratio with that same sub-tolerance behavior; an above-tolerance control
+uses normal row indexing. The grid renderer now uses the same public
+regular layout as this test to compute materialization bounds and total
+extent. A zero cache window samples only tile zero without painting it,
+even with a positive tile stride.
+
+The authored Flutter geometry check also pins the strict end-of-row
+boundary, mirrored cross-axis position, tight box constraints, and the
+total extent without trailing spacing. All nineteen focused native
+geometry, viewport, cache and keep-alive tests passed.

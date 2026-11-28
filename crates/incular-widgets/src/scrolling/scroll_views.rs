@@ -329,7 +329,29 @@ impl SliverGridDelegate {
         }
     }
 
-    pub(super) fn cross_axis_count(&self, available_extent: f32) -> usize {
+    /// Resolves the regular tile geometry against the sliver's current
+    /// available cross extent and ambient direction.
+    #[must_use]
+    pub fn get_layout(&self, constraints: SliverConstraints) -> SliverGridRegularTileLayout {
+        let cross_extent = constraints.cross_axis_extent.max(0.);
+        let columns = self.cross_axis_count(cross_extent);
+        let cross_spacing = self.resolved_cross_axis_spacing();
+        let child_cross = (cross_extent - cross_spacing * columns.saturating_sub(1) as f32)
+            .max(0.) / columns as f32;
+        let child_main = self.resolve_main_axis_extent(cross_extent, columns);
+        let reverse_cross_axis = constraints.axis == Axis::Vertical
+            && constraints.text_direction == Some(incular_config::TextDirection::Rtl);
+        SliverGridRegularTileLayout::new(
+            columns,
+            child_main + self.resolved_main_axis_spacing(),
+            child_cross + cross_spacing,
+            child_main,
+            child_cross,
+            reverse_cross_axis,
+        )
+    }
+
+    fn cross_axis_count(&self, available_extent: f32) -> usize {
         match *self {
             Self::FixedCrossAxisCount {
                 cross_axis_count, ..
