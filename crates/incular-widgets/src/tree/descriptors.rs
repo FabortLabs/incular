@@ -22,7 +22,7 @@ pub enum ImageFit {
 pub type BoxFit = ImageFit;
 
 /// Repetition policy for raster image painting inside its allocated bounds.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum ImageRepeat {
     #[default]
     NoRepeat,

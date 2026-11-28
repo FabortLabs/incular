@@ -22,6 +22,7 @@ pub use rounded_circle_outline::RoundedCircleOutline;
 mod shape_borders;
 mod shape_decoration;
 mod table_border;
+mod value_hash;
 pub use table_border::TableBorder;
 
 pub use box_painter::DecorationPosition;

@@ -28,3 +28,14 @@ diagnostics, and hash changes. The public copy operation replaces each
 field independently without changing the other four. Both older partial
 controls are now paired. The shadow value cases do not check GPU
 blur-style golden pixels.
+
+## Box decoration equality and hashes
+
+Pinned `painting/decoration_test.dart:161` passed. Separate white box
+decorations with equal default shadows are equal with matching hashes.
+Native controls show that removed shadows remain unequal and that
+the hashes compose normalized gradients and erased image providers,
+including signed zero, inferred versus identical explicit stops, and
+different error callbacks excluded from paint equality. Shape
+decorations share the same image and brush hashing. Fifteen focused
+native decoration and gradient tests passed.

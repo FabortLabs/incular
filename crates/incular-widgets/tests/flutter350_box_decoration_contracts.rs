@@ -76,3 +76,59 @@ fn flutter_350_distinct_but_equal_decorations_still_interpolate() {
     assert_eq!(from, to);
     assert_eq!(from.lerp(&to, 0.5).background_blend_mode, None);
 }
+
+#[test]
+fn identical_box_decoration_values_have_matching_hashes() {
+    use incular_core::Color;
+    use incular_widgets::BoxShadow;
+    use std::hash::{DefaultHasher, Hash, Hasher};
+
+    let make = || {
+        BoxDecoration::new()
+            .color(Color::WHITE)
+            .box_shadow([BoxShadow::default()])
+    };
+    let hash = |value: &BoxDecoration| {
+        let mut state = DefaultHasher::new();
+        value.hash(&mut state);
+        state.finish()
+    };
+    let (first, second) = (make(), make());
+    assert_eq!(first, second);
+    assert_eq!(hash(&first), hash(&second));
+    assert_ne!(first, BoxDecoration::new().color(Color::WHITE));
+}
+
+#[test]
+fn hashes_follow_normalized_paint_values_including_erased_image_sources() {
+    use incular_config::Alignment;
+    use incular_core::Color;
+    use incular_rendering::GradientStops;
+    use incular_widgets::{BoxLinearGradient, DecorationImage, MemoryImage};
+    use std::hash::{DefaultHasher, Hash, Hasher};
+
+    let gradient = |stops, rotation| {
+        BoxDecoration::new().aligned_gradient(
+            BoxLinearGradient::new(Alignment::TOP_LEFT, Alignment::BOTTOM_RIGHT, stops)
+                .rotated(rotation),
+        )
+    };
+    let colors = [Color::BLACK, Color::WHITE];
+    let first = gradient(GradientStops::even(&colors), 0.).image(
+        DecorationImage::from_provider(MemoryImage::new(&b"encoded image"[..])).on_error(|_| {}),
+    );
+    let second = gradient(
+        GradientStops::from_colors(&colors, Some(&[0., 1.])).unwrap(),
+        -0.,
+    )
+    .image(DecorationImage::from_provider(MemoryImage::new(
+        &b"encoded image"[..],
+    )));
+    assert_eq!(first, second);
+    let hash = |value: &BoxDecoration| {
+        let mut state = DefaultHasher::new();
+        value.hash(&mut state);
+        state.finish()
+    };
+    assert_eq!(hash(&first), hash(&second));
+}

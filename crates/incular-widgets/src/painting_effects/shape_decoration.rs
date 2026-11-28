@@ -28,7 +28,7 @@ use crate::{
 };
 
 /// A gradient whose coordinates are relative to a shape's paint box.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Hash)]
 pub enum AlignedShapeGradient {
     Linear(Arc<BoxLinearGradient>),
     Radial(Arc<BoxRadialGradient>),
@@ -120,11 +120,9 @@ impl Hash for ShapeDecoration {
         self.color.hash(state);
         self.shadows.hash(state);
         self.shape.hash(state);
-        // Gradient and image descriptors compare their values above. Their
-        // resources do not require usable hashes; use stable discriminants.
-        self.gradient.as_ref().map(std::mem::discriminant).hash(state);
-        self.aligned_gradient.as_ref().map(std::mem::discriminant).hash(state);
-        self.image.is_some().hash(state);
+        super::value_hash::brush_option(self.gradient.as_ref(), state);
+        self.aligned_gradient.hash(state);
+        self.image.hash(state);
     }
 }
 
