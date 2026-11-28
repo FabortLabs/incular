@@ -1188,16 +1188,63 @@ impl WidgetTree {
         let RenderKind::TextField(field) = node.object.kind() else {
             return None;
         };
-        let layout = node.field_layout();
+        let point = self.unscrolled_editable_point(render, node, field, point)?;
+        Self::editable_position_in_content(node, field, point)
+    }
+
+    /// Captures a pointer origin in the editable's content coordinate
+    /// system, before its own viewport or any ancestor scrolls.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_drag_anchor(&self, id: ElementId, point: Offset) -> Option<Offset> {
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        self.unscrolled_editable_point(render, node, field, point)
+    }
+
+    /// Reads the live paragraph at an earlier content-space drag origin.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_position_at_drag_anchor(
+        &self,
+        id: ElementId,
+        anchor: Offset,
+    ) -> Option<(usize, incular_text::TextAffinity)> {
+        let node = self.renders.get(self.render_id(id)?.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        Self::editable_position_in_content(node, field, anchor)
+    }
+
+    fn unscrolled_editable_point(
+        &self,
+        render: RenderObjectId,
+        node: &RenderNode,
+        field: &TextFieldRender,
+        point: Offset,
+    ) -> Option<Offset> {
         let state = node.text_field_state()?;
         let scroll = field.scroll_offset(state.scroll_x, state.scroll_y);
-        let (multiline, padding) = (field.multiline, field.content_padding);
+        let padding = field.content_padding;
+        let local = self.render_world_transform(render).inverse_transform_point(point)?;
+        Some(Offset::new(
+            local.x - padding.left + scroll.x,
+            local.y - if field.multiline { padding.top } else { 0. } + scroll.y,
+        ))
+    }
+
+    fn editable_position_in_content(
+        node: &RenderNode,
+        field: &TextFieldRender,
+        point: Offset,
+    ) -> Option<(usize, incular_text::TextAffinity)> {
+        let Offset { x, y } = point;
+        let layout = node.field_layout();
         let mask = field.obscure_text.then_some(field.obscuring_character);
-        let local = self
-            .render_world_transform(render)
-            .inverse_transform_point(point)?;
-        let x = local.x - padding.left + scroll.x;
-        let y = local.y - if multiline { padding.top } else { 0. } + scroll.y;
         if !x.is_finite()
             || !y.is_finite()
             || layout.as_ref().is_some_and(|layout| {

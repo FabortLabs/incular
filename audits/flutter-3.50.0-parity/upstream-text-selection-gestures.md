@@ -71,7 +71,23 @@ editor, without adding a new retained layout node or changing callers
 that install no builder. Without it the rapid Android finger drag
 incorrectly selected 2 to 14 when the expected value was a caret at 10.
 
-Builder-level force press and the movement of drag anchors while the
-editable viewport scrolls remain separate comparisons. The generic
+Builder-level force press remains a separate comparison. The generic
 detector's pressure recognition does not establish the builder's editor
 selection and toolbar behavior.
+
+## Drag anchor during editor scroll
+
+Pinned :1145 checks a vertical viewport-offset change from 20 to 150
+while a mouse drag is captured; the original global anchor adjusts by
+exactly 130 pixels but the end follows the mouse. The native mounted
+editor verifies the equivalent stable document anchor, its projected
+point after scrolling, and the actual selection extent at the release.
+
+A second, neutral reference fixture verifies the same contract during
+a word-wise double-press drag. The prior native code remapped the original
+screen coordinate against the new viewport, moving the anchored word
+from offset 303 to 503 while its extent was already correct at 799.
+The runtime now captures the initial point in content coordinates once
+the word drag starts and resolves that point against live text layout.
+This preserves the anchor without freezing the current pointer, and
+without caching a byte offset that could be invalidated by text changes.

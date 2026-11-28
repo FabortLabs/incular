@@ -711,3 +711,109 @@ fn scrolling_out_a_pending_ios_long_press_disposes_its_editor() {
     assert_eq!(controller.selection(), initial);
     assert!(!menu.is_showing());
 }
+
+#[test]
+fn drag_keeps_the_document_anchor_when_the_editor_viewport_scrolls() {
+    for word_drag in [false, true] {
+        check_drag_anchor_across_editor_scroll(word_drag);
+    }
+}
+
+fn check_drag_anchor_across_editor_scroll(word_drag: bool) {
+    use incular_widgets::TextSelectionGestureDetectorBuilder;
+
+    let Some(style) = ahem_style() else {
+        return;
+    };
+    let text = (0..45)
+        .map(|row| format!("{row:02} alpha beta gamma"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let controller = TextEditingController::with_text(text);
+    let build = |scroll| {
+        let editor = EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .style(style.clone())
+            .max_lines(None)
+            .renderer_ignores_pointer(word_drag)
+            .fixed_scroll_offset(scroll);
+        TextSelectionGestureDetectorBuilder::new().build_gesture_detector(editor)
+    };
+    let mut runtime = Runtime::new(build(20.).into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let constraints = Constraints::tight(Size::new(400., 450.));
+    let start = Instant::now();
+    let tick = |runtime: &mut Runtime, ms| {
+        runtime
+            .run_frame_at(constraints, start + Duration::from_millis(ms))
+            .unwrap();
+    };
+    tick(&mut runtime, 0);
+    let origin = Offset::new(82., 200.);
+    let first = Offset::new(224., 200.);
+    let last = Offset::new(224., 400.);
+    let editor = runtime.tree().text_field_at(origin).unwrap();
+    let position = |runtime: &Runtime, point| {
+        runtime
+            .tree()
+            .text_field_position_at(editor, point)
+            .unwrap()
+            .0
+    };
+    assert_eq!(
+        runtime.tree().text_field_scroll_offset(editor),
+        Some(Offset::new(0., 20.))
+    );
+    let anchor = position(&runtime, origin);
+
+    let send = |runtime: &mut Runtime, phase, point, ms| {
+        let _ = runtime.handle_raw_pointer_event(
+            RawPointerEvent::new(
+                1,
+                1,
+                PointerDeviceKind::Mouse,
+                if phase == PointerPhase::Up {
+                    0
+                } else {
+                    PRIMARY_POINTER_BUTTON
+                },
+                point,
+                phase,
+                start + Duration::from_millis(ms),
+            )
+            .with_button((phase != PointerPhase::Move).then_some(PRIMARY_POINTER_BUTTON)),
+        );
+        tick(runtime, ms);
+    };
+    let expected = |end| {
+        if word_drag {
+            controller.with_value(|value| {
+                let start = incular_text::word_boundary_at(&value.text, anchor).0;
+                let end = incular_text::word_boundary_at(&value.text, end).1;
+                TextSelection::new(start, end)
+            })
+        } else {
+            TextSelection::new(anchor, end)
+        }
+    };
+    if word_drag {
+        send(&mut runtime, PointerPhase::Down, origin, 2);
+        send(&mut runtime, PointerPhase::Up, origin, 6);
+    }
+    send(&mut runtime, PointerPhase::Down, origin, 10);
+    send(&mut runtime, PointerPhase::Move, first, 30);
+    assert_eq!(controller.selection(), expected(position(&runtime, first)));
+
+    runtime.schedule_update(editor, build(150.).into()).unwrap();
+    tick(&mut runtime, 50);
+    assert_eq!(
+        runtime.tree().text_field_scroll_offset(editor),
+        Some(Offset::new(0., 150.))
+    );
+    assert_eq!(position(&runtime, origin - Offset::new(0., 130.)), anchor);
+    assert_ne!(position(&runtime, origin), anchor);
+    let expected = expected(position(&runtime, last));
+    send(&mut runtime, PointerPhase::Move, last, 80);
+    send(&mut runtime, PointerPhase::Up, last, 90);
+    assert_eq!(controller.selection(), expected, "word_drag={word_drag}");
+}

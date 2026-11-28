@@ -4666,3 +4666,4 @@ packages/flutter/test/widgets/text_selection_test.dart	871	Mouse drag does not s
 packages/flutter/test/widgets/text_selection_test.dart	896	Mouse drag selects and cannot drag cursor	paired-match	upstream-text-selection-gestures.md#drag-device-and-competing-renderer
 packages/flutter/test/widgets/text_selection_test.dart	1015	Stylus drag selects text	paired-match	upstream-text-selection-gestures.md#drag-device-and-competing-renderer
 packages/flutter/test/widgets/text_selection_test.dart	1086	Drag of unknown type moves the cursor	paired-match	upstream-text-selection-gestures.md#drag-device-and-competing-renderer
+packages/flutter/test/widgets/text_selection_test.dart	1145	test TextSelectionGestureDetectorBuilder drag with RenderEditable viewport offset change	paired-match	upstream-text-selection-gestures.md#drag-anchor-during-editor-scroll

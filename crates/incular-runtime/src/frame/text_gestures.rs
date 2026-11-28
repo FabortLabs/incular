@@ -829,6 +829,7 @@ fn previous_word(text: &str, offset: usize) -> Option<(usize, usize)> {
 pub(crate) struct TextTapRun {
     pub(super) field: ElementId,
     down_position: Offset,
+    word_drag_anchor: Option<Offset>,
     last_up: Option<Instant>,
     raw_count: u32,
     effective_count: u32,
@@ -950,6 +951,7 @@ impl Runtime {
         self.text_taps = Some(TextTapRun {
             field,
             down_position: position,
+            word_drag_anchor: None,
             last_up: None,
             raw_count,
             effective_count,
@@ -1077,7 +1079,20 @@ impl Runtime {
                 self.tree.text_field_set_caret(field, position, true, now);
             }
             Some(run) if run.effective_count == 2 => {
-                self.text_field_select_words_in_range(field, run.down_position, position, now);
+                let anchor = run.word_drag_anchor.or_else(|| {
+                    let delta = position - run.down_position;
+                    if delta.x.hypot(delta.y) <= editor_tap_slop(kind) {
+                        return None;
+                    }
+                    self.tree.text_field_drag_anchor(field, run.down_position)
+                });
+                if let Some(anchor) = anchor {
+                    if let Some(live) = self.text_taps.as_mut() {
+                        live.word_drag_anchor = Some(anchor);
+                    }
+                    let from = self.tree.text_field_position_at_drag_anchor(field, anchor);
+                    self.text_field_select_words_from_position(field, from, position, now);
+                }
             }
             Some(run) if run.effective_count == 3 => {
                 self.text_field_select_boundaries_in_range(field, run.down_position, position, now);
@@ -1325,9 +1340,20 @@ impl Runtime {
         to: Offset,
         now: Instant,
     ) -> bool {
+        let from = self.tree.text_field_position_at(field, from);
+        self.text_field_select_words_from_position(field, from, to, now)
+    }
+
+    fn text_field_select_words_from_position(
+        &mut self,
+        field: ElementId,
+        from: Option<(usize, TextAffinity)>,
+        to: Offset,
+        now: Instant,
+    ) -> bool {
         let (Some(controller), Some((from_offset, from_affinity)), Some((to_offset, to_affinity))) = (
             self.tree.text_controller(field),
-            self.tree.text_field_position_at(field, from),
+            from,
             self.tree.text_field_position_at(field, to),
         ) else {
             return false;
