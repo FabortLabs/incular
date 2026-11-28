@@ -805,7 +805,10 @@ impl WidgetTree {
                     // The region is always recorded, but only an opaque region
                     // absorbs the pointer for the siblings behind it.
                     Some(opaque) => hit_target && opaque,
-                    None => behavior == Opaque,
+                    // A Listener or other raw proxy returning a child hit
+                    // still blocks siblings that the child already excluded.
+                    // Only MouseRegion's separate opaque flag can override it.
+                    None => result.blocks_siblings || behavior == Opaque,
                 };
             }
             result.accepts_hit |= behavior == Opaque;

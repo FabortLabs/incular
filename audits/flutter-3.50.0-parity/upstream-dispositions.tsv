@@ -4046,3 +4046,8 @@ packages/flutter/test/widgets/basic_test.dart	991	UnconstrainedBox warns only wh
 packages/flutter/test/widgets/basic_test.dart	1058	toString	reference-ran-incular-open	upstream-constraints-transform.md
 packages/flutter/test/widgets/basic_test.dart	118	properties	partial-match	upstream-physical-surfaces.md
 packages/flutter/test/widgets/basic_test.dart	134	hit test	paired-match	upstream-physical-surfaces.md
+packages/flutter/test/widgets/basic_test.dart	1414	IgnorePointer ignores pointers	paired-match	upstream-box-block-user-actions.md
+packages/flutter/test/widgets/basic_test.dart	1512	does not change semantics when not ignoring	paired-match	upstream-box-block-user-actions.md
+packages/flutter/test/widgets/basic_test.dart	1537	can toggle the ignoring.	paired-match	upstream-box-block-user-actions.md
+packages/flutter/test/widgets/basic_test.dart	1611	ignores user interactions	paired-match	upstream-box-block-user-actions.md
+packages/flutter/test/widgets/basic_test.dart	1635	AbsorbPointer absorbs pointers	paired-match	upstream-box-block-user-actions.md

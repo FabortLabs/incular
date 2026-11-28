@@ -31,3 +31,27 @@ or removing long-press changes the projection while retaining node ID and
 bounds. The second fixture verifies the complete original add/remove
 sequence, including the three clipboard actions, the selection payload and
 both accessibility focus notifications. No stale disabled handler can run.
+
+## IgnorePointer and AbsorbPointer over a sibling
+
+Pinned `widgets/basic_test.dart:1414,1512,1537,1611,1635` passed.
+The exact mouse sequence moves from (200,200) to (50,50), presses and
+releases, toggles the pointer wrapper without moving the device,
+presses and releases again, then restores the wrapper. IgnorePointer
+passes through to the overlapping sibling. AbsorbPointer blocks that
+sibling but not its listener ancestor. The enter, exit and down
+callbacks match Flutter in order.
+
+Before the fix, an ordinary Listener erased the sibling-blocking
+decision of the opaque MouseRegion it wrapped. A stationary pointer
+then left both overlapping regions hovered or missed the expected
+exit on the covered sibling. Raw input proxies now preserve the
+child's existing hit decision. MouseRegion's deliberate non-opaque
+override still allows hits through. The semantic checks additionally
+verify three stable nested nodes across four toggle states and a
+button retaining label, role, focusability and enabled state while
+its tap and accessibility focus actions are suppressed. An actual
+dispatch verifies no blocked tap invokes the callback.
+
+All 42 native checks in the pointer blocker, mouse hit policy, mouse
+tracker and pointer input targets passed.
