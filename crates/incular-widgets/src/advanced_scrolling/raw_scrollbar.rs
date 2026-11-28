@@ -690,7 +690,9 @@ impl RawScrollbar {
             self.fade.queue(ScrollbarFadeCommand::StartTimer);
         }
         self.was_active = active;
-        let scrollable = self.controller.max_offset() > 0.0;
+        // A centered sliver viewport can have a zero maximum and a negative
+        // minimum. Its scrollbar is governed by the span, not the sign.
+        let scrollable = self.controller.max_offset() > self.controller.min_offset();
         let show = self.show_scrollbar();
         self.fade.advance(now, show, scrollable)
     }

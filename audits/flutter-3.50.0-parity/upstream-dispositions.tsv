@@ -4552,3 +4552,6 @@ packages/flutter/test/widgets/scrollbar_test.dart	1843	shape property of RawScro
 packages/flutter/test/widgets/scrollbar_test.dart	679	Scrollbar never goes away until finger lift	paired-match	upstream-raw-scrollbar-fade.md
 packages/flutter/test/widgets/scrollbar_test.dart	728	Scrollbar does not fade away while hovering	partial-match	upstream-raw-scrollbar-fade.md
 packages/flutter/test/widgets/scrollbar_test.dart	769	Scrollbar will fade back in when hovering over known track area	paired-match	upstream-raw-scrollbar-fade.md
+packages/flutter/test/widgets/scrollbar_test.dart	1605	Scrollbar thumb can be dragged in reverse	paired-match	upstream-raw-scrollbar-drag-range.md
+packages/flutter/test/widgets/scrollbar_test.dart	2170	Scrollbar thumb can be dragged when the scrollable widget has a negative minScrollExtent - desktop	paired-match	upstream-raw-scrollbar-drag-range.md
+packages/flutter/test/widgets/scrollbar_test.dart	2244	Scrollbar thumb can be dragged when the scrollable widget has a negative minScrollExtent - mobile	paired-match	upstream-raw-scrollbar-drag-range.md

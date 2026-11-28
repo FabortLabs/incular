@@ -311,3 +311,94 @@ fn another_hover_event_in_the_same_scrollbar_cancels_a_restarted_timer() {
     assert_eq!(fading_thumb(&scene.frame(2850)), Some((rect(3., 90.), 79)));
     assert_eq!(fading_thumb(&scene.frame(3000)), None);
 }
+
+fn scroll_position_scene(
+    controller: ScrollController,
+    child: impl Into<Widget>,
+    platform: incular_config::TargetPlatform,
+) -> Scene {
+    let bar = RawScrollbar::new(controller.clone())
+        .thumb_visibility(true)
+        .with_child(child);
+    let view = Directionality::new(
+        TextDirection::Ltr,
+        ScrollConfiguration::new(bar)
+            .behavior(ScrollBehavior::new().platform(platform).scrollbars(false)),
+    );
+    let mut scene = Scene {
+        runtime: Runtime::new(view.into()).unwrap(),
+        controller,
+        at: Instant::now(),
+    };
+    scene.frame(0);
+    scene
+}
+
+fn centered_view(count: usize, platform: incular_config::TargetPlatform) -> Scene {
+    use incular_widgets::{CustomScrollView, Sliver, SliverToBoxAdapter};
+
+    let controller = ScrollController::new();
+    let slivers = (0..count).map(|_| {
+        Box::new(SliverToBoxAdapter::new(Widget::box_(
+            Size::new(800., 600.),
+            Color::WHITE,
+        ))) as Box<dyn Sliver>
+    });
+    let view = CustomScrollView::new(slivers)
+        .center(1)
+        .controller(controller.clone());
+    scroll_position_scene(controller, view, platform)
+}
+
+#[test]
+fn a_centered_view_scrolls_negative_without_making_its_thumb_jump() {
+    use incular_config::TargetPlatform::*;
+
+    for platform in [Linux, MacOs, Windows, Android, Ios, Fuchsia] {
+        let mut scene = centered_view(3, platform);
+        assert_eq!(
+            (scene.controller.min_offset(), scene.controller.max_offset()),
+            (-600., 600.)
+        );
+        assert_eq!(scene.controller.offset(), 0.);
+        assert_eq!(thumb(&scene.frame(300)), Some(rect(200., 200.)));
+
+        scene.touch(310, PointerPhase::Down, 300.);
+        scene.touch(340, PointerPhase::Move, 290.);
+        scene.touch(370, PointerPhase::Up, 290.);
+        assert!(scene.controller.offset() < -20.);
+        assert_eq!(thumb(&scene.frame(400)), Some(rect(190., 200.)));
+    }
+}
+
+#[test]
+fn a_centered_view_with_only_negative_scroll_is_still_scrollable() {
+    let mut scene = centered_view(2, incular_config::TargetPlatform::Linux);
+    assert_eq!(
+        (scene.controller.min_offset(), scene.controller.max_offset()),
+        (-600., 0.)
+    );
+    assert_eq!(thumb(&scene.frame(300)), Some(rect(300., 300.)));
+    scene.touch(310, PointerPhase::Down, 450.);
+    scene.touch(340, PointerPhase::Move, 440.);
+    scene.touch(370, PointerPhase::Up, 440.);
+    assert!((scene.controller.offset() + 20.).abs() < 0.001);
+    assert_eq!(thumb(&scene.frame(400)), Some(rect(290., 300.)));
+}
+
+#[test]
+fn dragging_a_reversed_thumb_up_increases_the_logical_offset() {
+    let controller = ScrollController::new();
+    let view = SingleChildScrollView::new(Widget::box_(Size::new(4000., 4000.), Color::WHITE))
+        .controller(controller.clone())
+        .reverse(true);
+    let mut scene =
+        scroll_position_scene(controller, view, incular_config::TargetPlatform::Android);
+    assert_eq!(scene.controller.offset(), 0.);
+    assert_eq!(thumb(&scene.frame(300)), Some(rect(510., 90.)));
+    scene.touch(310, PointerPhase::Down, 550.);
+    scene.touch(340, PointerPhase::Move, 540.);
+    scene.touch(370, PointerPhase::Up, 540.);
+    assert!(scene.controller.offset() > 20.);
+    assert_eq!(thumb(&scene.frame(400)), Some(rect(500., 90.)));
+}
