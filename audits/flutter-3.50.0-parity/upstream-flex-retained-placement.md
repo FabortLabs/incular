@@ -121,3 +121,20 @@ builder and raw-widget conversion paths for Flex, Row and Column.
 Positive spacing still preserves placement. Incular leaves its previous
 zero-gap sanitization unchanged in release; the pinned case describes
 Flutter's debug assertion.
+
+## Multiline alphabetic baseline in Row
+
+Pinned widget registrations `widgets/basic_test.dart:832,896` both
+passed. The native fixture uses the original FlutterTest face,
+glyphs, 52/12 px text sizes, line-height multiplier 1, and seven
+lines. The rendered paragraph heights are exactly 52 and 84; their
+top offsets are 0 and 30. The Row is 114 px high because the tallest
+ascent and descent come from different children.
+
+Adding a 250 px child without an alphabetic baseline grows the Row to
+250 px without moving either aligned text; the additional child is
+top-aligned. A fixed square represents only the FlutterLogo's
+geometry, since the original never asserts logo painting. Removing
+that child restores 114 px in the retained runtime. All three tests
+in the focused Flex baseline target passed with
+`INCULAR_FLUTTER_TEST_FONT_PATH` set to the extracted pinned face.

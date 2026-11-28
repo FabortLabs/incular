@@ -108,3 +108,67 @@ fn a_nested_row_reports_the_highest_positioned_baseline_and_clears_it_on_update(
     // than the first child's 40px. When both are removed, the row top-aligns.
     assert_eq!([initial, cleared], [55., 0.]);
 }
+
+#[test]
+fn row_unions_real_multiline_font_extents_and_respects_a_larger_baselineless_child() {
+    use incular_config::Alignment;
+    use incular_widgets::{Align, Row, SizedBox};
+
+    let Some(path) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    const FONT: &str = "Pinned FlutterTest for row baseline";
+    incular_text::register_application_font_as(FONT, std::fs::read(path).unwrap());
+    let text = |value, size, key| {
+        Widget::from(
+            Text::new(value).text_direction(TextDirection::Ltr).style(
+                TextStyle::new()
+                    .font_family(FONT)
+                    .font_size(size)
+                    .height(Some(1.)),
+            ),
+        )
+        .with_key(key)
+    };
+    let scene = |tall_child| {
+        let mut children = vec![
+            text("big text", 52., "large"),
+            text("one\ntwo\nthree\nfour\nfive\nsix\nseven", 12., "multiline"),
+        ];
+        if tall_child {
+            children.push(Widget::from(SizedBox::square(250.)).with_key("baselineless"));
+        }
+        let row = Widget::from(
+            Row::new(children)
+                .cross_axis_alignment(CrossAxisAlignment::Baseline)
+                .text_direction(TextDirection::Ltr),
+        )
+        .with_key("row");
+        Widget::from(Align::new(Alignment::TOP_LEFT, row))
+    };
+    let mut runtime = Runtime::new(scene(false)).unwrap();
+    let root = runtime.tree().root().unwrap();
+    for (tall_child, row_height) in [(false, 114.), (true, 250.), (false, 114.)] {
+        runtime.schedule_update(root, scene(tall_child)).unwrap();
+        runtime
+            .run_frame(Constraints::tight(Size::new(800., 600.)))
+            .unwrap();
+        let bounds = |key| {
+            let tree = runtime.tree();
+            tree.element_bounds(tree.element_with_key(&Key::from(key)).unwrap())
+                .unwrap()
+        };
+        let row = bounds("row");
+        let large = bounds("large");
+        let multiline = bounds("multiline");
+        assert_eq!(
+            row.size.height, row_height,
+            "{row:?} {large:?} {multiline:?}"
+        );
+        assert_eq!((large.size.height, multiline.size.height), (52., 84.));
+        assert_eq!((large.origin.y, multiline.origin.y), (0., 30.));
+        if tall_child {
+            assert_eq!(bounds("baselineless").origin.y, 0.);
+        }
+    }
+}
