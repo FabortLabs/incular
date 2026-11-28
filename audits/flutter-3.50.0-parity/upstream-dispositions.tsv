@@ -3898,3 +3898,5 @@ packages/flutter/test/foundation/diagnostics_test.dart	1674	error message style 
 packages/flutter/test/foundation/diagnostics_test.dart	195	TreeDiagnosticsMixin control test	paired-match	upstream-diagnostic-rendering.md#diagnostic-tree-styles
 packages/flutter/test/foundation/diagnostics_test.dart	371	TreeDiagnosticsMixin tree with properties test	paired-match	upstream-diagnostic-rendering.md#diagnostic-tree-styles
 packages/flutter/test/foundation/diagnostics_test.dart	864	transition test	paired-match	upstream-diagnostic-rendering.md#diagnostic-tree-styles
+packages/flutter/test/widgets/focus_manager_test.dart	246	implements debugFillProperties	paired-match	upstream-focus-diagnostics.md#node-and-scope-properties
+packages/flutter/test/widgets/focus_manager_test.dart	1641	implements debugFillProperties	paired-match	upstream-focus-diagnostics.md#node-and-scope-properties

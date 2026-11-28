@@ -6,6 +6,8 @@ use incular_core::{Offset, Rect, Size, Transform};
 
 use crate::details::PointerDeviceKind;
 
+mod diagnostics;
+
 struct ScopeAutofocusRequest {
     scope: Weak<FocusScopeState>,
     target: Weak<FocusState>,

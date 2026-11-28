@@ -172,6 +172,26 @@ fn repeat_border(output: &mut String, width: usize) {
     output.extend(std::iter::repeat_n('═', width));
 }
 
+impl std::fmt::Display for DiagnosticsNode {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let description = self.text("description").unwrap_or_default();
+        if let Some(label) = self.label() {
+            formatter.write_str(label)?;
+            if !description.is_empty() {
+                if self.flag("showSeparator", true) {
+                    formatter.write_str(":")?;
+                }
+                formatter.write_str(if description.contains('\n') {
+                    "\n"
+                } else {
+                    " "
+                })?;
+            }
+        }
+        formatter.write_str(description)
+    }
+}
+
 impl DiagnosticsNode {
     /// Formats the visible diagnostic tree with the default text width.
     #[must_use]
