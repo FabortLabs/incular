@@ -745,7 +745,7 @@ packages/flutter/test/widgets/single_child_scroll_view_test.dart	52	SingleChildS
 packages/flutter/test/widgets/single_child_scroll_view_test.dart	146	SingleChildScrollView control test	paired-match	upstream-single-child-scroll-basics.md
 packages/flutter/test/widgets/single_child_scroll_view_test.dart	159	Changing controllers changes scroll position	partial-match	upstream-single-child-scroll-basics.md
 packages/flutter/test/widgets/single_child_scroll_view_test.dart	195	Changing scroll controller inside dirty layout builder does not assert	paired-match	upstream-single-child-scroll-basics.md
-packages/flutter/test/widgets/single_child_scroll_view_test.dart	1087	SingleChildScrollView does not crash at zero area	partial-match	upstream-single-child-scroll-basics.md
+packages/flutter/test/widgets/single_child_scroll_view_test.dart	1087	SingleChildScrollView does not crash at zero area	paired-match	upstream-single-child-scroll-basics.md
 packages/flutter/test/gestures/tap_and_drag_test.dart	292	Recognizer rejects pointer that is not the primary one (FIFO) - before acceptance	paired-match	upstream-tap-and-drag.md
 packages/flutter/test/gestures/tap_and_drag_test.dart	313	Calls tap up when the recognizer accepts before handleEvent is called	paired-match	upstream-tap-and-drag.md
 packages/flutter/test/gestures/tap_and_drag_test.dart	326	Recognizer rejects pointer that is not the primary one (FILO) - before acceptance	paired-match	upstream-tap-and-drag.md

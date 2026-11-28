@@ -19,8 +19,13 @@ runtime target passes four, with one paint-clip assertion red:
   controller inside a dirty LayoutBuilder while width changes from 750
   to 700 completes layout without an assertion. An extra Rust check
   confirms the controller attaches to the 1400-pixel scroll range.
-- :1087 partial match: the visible viewport reaches Size.zero without a
-  layout exception at zero constraints. No native monitor is resized.
+- :1087 fully paired: the reference test sets its TestFlutterView physical
+  size to zero. The native test now likewise delivers a zero physical
+  size through the runtime's platform metrics path and verifies that
+  the centered viewport mounts at Size.zero without an exception. Two
+  subsequent 800×600 host metrics at 2× recover the same retained
+  viewport at 400×300 logical pixels, without a remount. Neither test
+  requires resizing a real monitor.
 
 Reference: five exact names in `widgets/single_child_scroll_view_test.dart`.
 Rust: `cargo test --locked -j 2 -p incular-runtime --test flutter350_single_child_scroll_basics -- --test-threads=1`.

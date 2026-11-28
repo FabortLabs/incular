@@ -4,6 +4,7 @@ use incular_core::{
     Color, InputEvent, Offset, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
     PointerSampleMetadata, Rect, Size, time::Instant,
 };
+use incular_platform::{PhysicalSize, PlatformEvent, WindowMetrics};
 use incular_rendering::{ClipCoverage, PaintCommand};
 use incular_runtime::Runtime;
 use incular_scroll::ScrollController;
@@ -222,11 +223,27 @@ fn centered_scroll_view_can_lay_out_at_zero_area() {
     let scene = Center::new(
         Widget::from(SingleChildScrollView::new(Placeholder::new())).with_key(key.clone()),
     );
+    let scene = Directionality::new(TextDirection::Ltr, scene);
     let mut runtime = Runtime::new(scene.into()).unwrap();
-    runtime.run_frame(Constraints::tight(Size::ZERO)).unwrap();
-    let target = runtime.tree().element_with_key(&key).unwrap();
-    assert_eq!(
-        runtime.tree().element_bounds(target).unwrap().size,
-        Size::ZERO
-    );
+    let mut retained = None;
+    for (width, height, scale, expected) in [
+        (0, 0, 1., Size::ZERO),
+        (800, 600, 2., Size::new(400., 300.)),
+        (0, 0, 2., Size::ZERO),
+        (800, 600, 2., Size::new(400., 300.)),
+    ] {
+        let metrics = WindowMetrics::new(PhysicalSize::new(width, height), scale);
+        runtime.handle_platform_event(PlatformEvent::Metrics(metrics));
+        let view = runtime.environment();
+        assert_eq!((view.physical_width, view.physical_height), (width, height));
+        assert_eq!(view.scale_factor, scale);
+        runtime
+            .run_frame(Constraints::tight(view.viewport))
+            .unwrap();
+        let tree = runtime.tree();
+        let viewport = tree.element_with_key(&key).unwrap();
+        let identity = (viewport, tree.render_id(viewport).unwrap());
+        assert_eq!(identity, *retained.get_or_insert(identity));
+        assert_eq!(tree.element_bounds(viewport).unwrap().size, expected);
+    }
 }
