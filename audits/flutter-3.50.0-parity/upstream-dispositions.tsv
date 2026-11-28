@@ -4282,3 +4282,8 @@ packages/flutter/test/services/raw_keyboard_test.dart	276	keysPressed modifiers 
 packages/flutter/test/services/raw_keyboard_test.dart	709	repeat events	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state
 packages/flutter/test/services/raw_keyboard_test.dart	750	sided modifiers without a side set return all sides on Windows	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state
 packages/flutter/test/services/raw_keyboard_test.dart	2379	Win32 VK_PROCESSKEY events are skipped	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state
+packages/flutter/test/rendering/flex_test.dart	979	main axis intrinsics with RenderAspectRatio 1	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
+packages/flutter/test/rendering/flex_test.dart	1003	main/cross axis intrinsics in horizontal direction and RenderFlex.spacing	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
+packages/flutter/test/rendering/flex_test.dart	1027	main/cross axis intrinsics in vertical direction and RenderFlex.spacing	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
+packages/flutter/test/rendering/flex_test.dart	1055	cross axis intrinsics, with ascending flex flow layout	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
+packages/flutter/test/rendering/flex_test.dart	1095	cross axis intrinsics, with descending flex flow layout	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing

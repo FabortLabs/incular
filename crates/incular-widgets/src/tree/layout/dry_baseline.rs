@@ -44,7 +44,7 @@ impl WidgetTree {
         }
     }
 
-    fn dry_size_and_baseline(
+    pub(super) fn dry_size_and_baseline(
         &self,
         id: RenderObjectId,
         constraints: Constraints,
@@ -67,6 +67,22 @@ impl WidgetTree {
             RenderKind::Constrained {
                 constraints: bounds,
             } => child(enforced_constraints(constraints, *bounds)),
+            RenderKind::Flex { flex, .. } => {
+                self.dry_flex_metrics(&node.children, flex, constraints, measure_baseline)
+            }
+            RenderKind::AspectRatio { ratio } => {
+                let size = incular_layout::aspect_ratio_size(
+                    constraints,
+                    incular_layout::AspectRatio::new(*ratio),
+                )?;
+                if measure_baseline {
+                    let (_, baseline) = child(Constraints::tight(size))?;
+                    Some((size, baseline))
+                } else {
+                    Some((size, None))
+                }
+            }
+
             RenderKind::Align {
                 alignment,
                 width_factor,

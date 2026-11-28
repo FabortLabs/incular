@@ -4,6 +4,7 @@ use super::*;
 
 mod behavior;
 mod dry_baseline;
+mod flex_measure;
 mod intrinsics;
 
 use super::rendering::{

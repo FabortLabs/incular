@@ -3,7 +3,7 @@
 use super::*;
 
 #[derive(Clone, Copy)]
-enum IntrinsicKind {
+pub(super) enum IntrinsicKind {
     Min,
     Max,
 }
@@ -22,6 +22,7 @@ pub(super) fn forwards_intrinsic_child(kind: &RenderKind) -> bool {
             }
             | RenderKind::ClipRect { .. }
             | RenderKind::Gesture
+            | RenderKind::Flexible { .. }
             | RenderKind::RepaintBoundary
     )
 }
@@ -63,7 +64,7 @@ impl WidgetTree {
         self.dry_intrinsic_extent(id, Axis::Vertical, IntrinsicKind::Max, width)
     }
 
-    fn dry_intrinsic_extent(
+    pub(super) fn dry_intrinsic_extent(
         &self,
         id: RenderObjectId,
         axis: Axis,
@@ -85,6 +86,32 @@ impl WidgetTree {
             RenderKind::Box { desired, .. } | RenderKind::Shape { desired, .. } => {
                 Some(axis.main_extent(*desired))
             }
+            RenderKind::Flex { flex, .. } => {
+                self.dry_flex_intrinsic_extent(&node.children, flex, axis, kind, cross)
+            }
+            RenderKind::Text {
+                text,
+                style,
+                text_direction,
+                spans,
+                ..
+            } if node.children.is_empty() => match axis {
+                Axis::Horizontal if spans.is_none() => {
+                    let mut engine = self.text_engine.borrow_mut();
+                    if engine.has_pending_application_fonts() {
+                        self.dry_shape_refreshed_fonts.set(true);
+                    }
+                    let widths = engine.intrinsic_widths(text, style, *text_direction);
+                    Some(match kind {
+                        IntrinsicKind::Min => widths.min,
+                        IntrinsicKind::Max => widths.max,
+                    })
+                }
+                Axis::Vertical => self
+                    .dry_leaf_paragraph_metrics(id, Constraints::at_most(cross, f32::INFINITY))
+                    .map(|(size, _)| size.height),
+                _ => None,
+            },
             RenderKind::CustomPaint { desired, .. } => {
                 // Fill-to-constraints is an unbounded preferred size, not
                 // an intrinsic width or height.
@@ -229,6 +256,13 @@ impl WidgetTree {
                 constraints,
                 *additional,
             )),
+            RenderKind::Flex { flex, .. } => self
+                .dry_flex_metrics(&node.children, flex, constraints, false)
+                .map(|(size, _)| size),
+            RenderKind::AspectRatio { ratio } => incular_layout::aspect_ratio_size(
+                constraints,
+                incular_layout::AspectRatio::new(*ratio),
+            ),
             RenderKind::Wrap { wrap, .. } => self.dry_wrap_size(&node.children, wrap, constraints),
             RenderKind::Text { .. } if node.children.is_empty() => self
                 .dry_leaf_paragraph_metrics(id, constraints)
