@@ -6,8 +6,8 @@ use std::{any::Any, rc::Rc};
 use incular_config::Alignment;
 use incular_core::{Offset, Rect};
 use incular_rendering::{
-    Annotation, BackdropKey, BlendMode, GaussianBlur, ImageFilterConfig, LayerAnchor, LayerLink,
-    Shader,
+    Annotation, BackdropKey, BlendMode, GaussianBlur, ImageFilter, ImageFilterConfig, LayerAnchor,
+    LayerLink, Shader, UnsupportedImageFilter,
 };
 
 use crate::macros::widget_from_kind;
@@ -222,32 +222,77 @@ impl BackdropFilter {
     /// [`UnsupportedImageFilter`](incular_rendering::UnsupportedImageFilter)
     /// rather than drawn as a different filter.
     pub fn image_filter(
-        filter: incular_rendering::ImageFilter,
+        filter: ImageFilter,
         child: impl Into<Widget>,
-    ) -> Result<Self, incular_rendering::UnsupportedImageFilter> {
-        use incular_rendering::ImageFilter;
-        incular_rendering::backdrop_image_filter_executable(&filter)?;
-        let stages = filter.stages();
-        match stages.as_slice() {
-            [ImageFilter::Blur(blur)] => Ok(Self::new(*blur, child)),
-            [ImageFilter::Matrix(matrix)] => Ok(Self::matrix(*matrix, child)),
-            _ => Ok(Self {
-                filter_config: Some(ImageFilterConfig::new(filter)),
-                ..Self::new(GaussianBlur::uniform(0.0), child)
-            }),
-        }
+    ) -> Result<Self, UnsupportedImageFilter> {
+        Self::new(GaussianBlur::uniform(0.), child).with_image_filter(filter)
     }
 
     /// Uses a layout-aware filter, resolved against the current box at paint time.
     pub fn filter_config(
         config: ImageFilterConfig,
         child: impl Into<Widget>,
-    ) -> Result<Self, incular_rendering::UnsupportedImageFilter> {
+    ) -> Result<Self, UnsupportedImageFilter> {
+        Self::new(GaussianBlur::uniform(0.), child).with_filter_config(config)
+    }
+
+    /// Replaces the filter while keeping the child, capture key, blend mode,
+    /// and enabled state. A simple blur or matrix uses its specialized stage.
+    pub fn with_image_filter(
+        mut self,
+        filter: ImageFilter,
+    ) -> Result<Self, UnsupportedImageFilter> {
+        incular_rendering::backdrop_image_filter_executable(&filter)?;
+        match filter {
+            ImageFilter::Blur(blur) => Ok(self.filter(blur)),
+            ImageFilter::Matrix(matrix) => {
+                self.blur = GaussianBlur::uniform(0.);
+                self.matrix = Some(matrix);
+                self.filter_config = None;
+                Ok(self)
+            }
+            other => Ok(self.replace_filter_config(ImageFilterConfig::new(other))),
+        }
+    }
+
+    /// Replaces the filter description without changing this widget's child
+    /// or backdrop sampling policy.
+    pub fn with_filter_config(
+        self,
+        config: ImageFilterConfig,
+    ) -> Result<Self, UnsupportedImageFilter> {
         validate_backdrop_config(&config)?;
-        Ok(Self {
-            filter_config: Some(config),
-            ..Self::new(GaussianBlur::uniform(0.), child)
-        })
+        Ok(self.replace_filter_config(config))
+    }
+
+    fn replace_filter_config(mut self, config: ImageFilterConfig) -> Self {
+        self.blur = GaussianBlur::uniform(0.);
+        self.matrix = None;
+        self.filter_config = Some(config);
+        self
+    }
+
+    /// The configured filter before resolving any layout-dependent stages.
+    #[must_use]
+    pub fn filter_configuration(&self) -> ImageFilterConfig {
+        self.filter_config
+            .clone()
+            .unwrap_or_else(|| ImageFilterConfig::new(self.legacy_image_filter()))
+    }
+
+    /// The original direct filter. A layout-aware configuration has no
+    /// equivalent direct filter until its bounds are supplied.
+    #[must_use]
+    pub fn direct_image_filter(&self) -> Option<ImageFilter> {
+        match &self.filter_config {
+            Some(config) => config.filter().cloned(),
+            None => Some(self.legacy_image_filter()),
+        }
+    }
+
+    fn legacy_image_filter(&self) -> ImageFilter {
+        self.matrix
+            .map_or(ImageFilter::Blur(self.blur), ImageFilter::Matrix)
     }
 
     /// Resolves a layout-aware filter and reads the nearest group's backdrop key.

@@ -4000,3 +4000,4 @@ packages/flutter/test/rendering/binding_test.dart	49	root pipeline owner cannot 
 packages/flutter/test/rendering/proxy_box_test.dart	1060	RenderProxyBoxMixin.computeDryBaseline returns null when the child has no baseline	paired-match	upstream-proxy-baselines-and-filters.md#actual-and-dry-baselines
 packages/flutter/test/rendering/proxy_box_test.dart	1074	RenderProxyBoxMixin.computeDistanceToActualBaseline returns null when child is null or child has no baseline	paired-match	upstream-proxy-baselines-and-filters.md#actual-and-dry-baselines
 packages/flutter/test/rendering/proxy_box_test.dart	1087	RenderProxyBoxMixin.computeDryBaseline returns null when child is null	paired-match	upstream-proxy-baselines-and-filters.md#actual-and-dry-baselines
+packages/flutter/test/rendering/proxy_box_test.dart	1033	RenderBackdropFilter handles mix uses of .filter and .filterConfig	paired-match	upstream-proxy-baselines-and-filters.md#mixing-direct-and-layout-aware-backdrop-filters
