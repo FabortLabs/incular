@@ -293,6 +293,8 @@ pub struct Runtime {
     cursor_blink_deadline: Option<Instant>,
     floating_caret: Option<floating_cursor::FloatingCaretRun>,
     debug_deterministic_cursor: bool,
+    #[cfg(debug_assertions)]
+    debug_view_paint: crate::debug_view_paint::DebugViewPaint,
     pub(crate) pending: HashMap<ElementId, Widget>,
     pub(crate) order: VecDeque<ElementId>,
     pub(crate) reactive: Rc<RefCell<ReactiveQueue>>,
@@ -576,6 +578,8 @@ impl Runtime {
             cursor_blink_deadline: None,
             floating_caret: None,
             debug_deterministic_cursor: false,
+            #[cfg(debug_assertions)]
+            debug_view_paint: Default::default(),
             tree,
             system_sound,
             pending: HashMap::new(),
@@ -787,6 +791,42 @@ impl Runtime {
     /// Release builds always leave the scene unchanged.
     pub fn set_debug_paint_focus_boxes(&mut self, enabled: bool) {
         self.frame_requested |= self.tree.set_debug_paint_focus_boxes(enabled);
+    }
+
+    /// The view's allocated layout bounds in physical pixels. This is
+    /// not the compositor's scene bounds: paint-only overflow does not
+    /// enlarge the view itself.
+    #[must_use]
+    pub fn view_paint_bounds(&self) -> Option<Rect> {
+        let layout = self.tree.root_layout_size()?;
+        let ratio = self.environment().scale_factor;
+        Some(Rect::from_origin_size(
+            Offset::ZERO,
+            Size::new(
+                (f64::from(layout.width) * ratio) as f32,
+                (f64::from(layout.height) * ratio) as f32,
+            ),
+        ))
+    }
+
+    /// Adds a view-wide debug painter above the retained scene. Like
+    /// Flutter's RenderView debug callbacks, registration does not request
+    /// a frame. The painter receives logical coordinates and view size.
+    /// Release builds do not install a callback.
+    #[must_use]
+    pub fn debug_add_paint_callback(
+        &mut self,
+        painter: impl Fn(&mut DisplayList, Size) + 'static,
+    ) -> Option<crate::DebugViewPaintSubscription> {
+        #[cfg(debug_assertions)]
+        {
+            Some(self.debug_view_paint.add(painter))
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = painter;
+            None
+        }
     }
 
     fn semantics_activation(&mut self) -> &Rc<crate::semantics_activation::SemanticsActivation> {
@@ -5184,6 +5224,14 @@ impl Runtime {
         let _paint_guard = tracing::info_span!("incular.paint").entered();
         let paint_span = profiling::PhaseSpan::start();
         let display_list = self.tree.try_paint()?;
+        #[cfg(debug_assertions)]
+        let display_list = {
+            let mut output = display_list;
+            if let Some(size) = self.tree.root_layout_size() {
+                self.debug_view_paint.paint(&mut output, size);
+            }
+            output
+        };
         let paint = paint_span.elapsed_us();
         drop(_paint_guard);
         // Flutter `RenderView._updateSystemChrome`: the paint flattened the

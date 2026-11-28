@@ -9,6 +9,8 @@ mod context;
 #[cfg(feature = "devtools")]
 mod devtools_inspection;
 mod environment;
+mod debug_view_paint;
+pub use debug_view_paint::DebugViewPaintSubscription;
 mod executor;
 pub use executor::sleep;
 mod file_dialogs;
