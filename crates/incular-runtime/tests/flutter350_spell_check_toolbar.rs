@@ -3,7 +3,9 @@ use std::{cell::RefCell, rc::Rc};
 use incular_config::{Constraints, Locale};
 use incular_core::{Color, Offset, Rect, Size};
 use incular_runtime::{Runtime, TextShortcutPlatform};
-use incular_text::{TextDecoration, TextEditingController, TextRange, TextSelection, TextStyle};
+use incular_text::{
+    TextAffinity, TextDecoration, TextEditingController, TextRange, TextSelection, TextStyle,
+};
 use incular_widgets::{
     EditableText, FocusNode, IgnorePointer, SizedBox, SpellCheckCallback, SpellCheckConfiguration,
     SpellCheckService, SuggestionSpan, TextContextMenu, TextDirection, Widget,
@@ -13,7 +15,20 @@ struct Checker;
 
 impl SpellCheckService for Checker {
     fn fetch_spell_check_suggestions(&self, _: &Locale, text: &str, respond: SpellCheckCallback) {
-        respond(Some(if text.starts_with("tset ") {
+        respond(Some(if text == "tset tst testt" {
+            vec![
+                SuggestionSpan::new(0..4, ["test"]),
+                SuggestionSpan::new(5..8, ["test"]),
+                SuggestionSpan::new(9..13, ["test"]),
+            ]
+        } else if text == "test tst testt" {
+            vec![
+                SuggestionSpan::new(5..8, ["test"]),
+                SuggestionSpan::new(9..13, ["test"]),
+            ]
+        } else if text == "test test testt" {
+            vec![SuggestionSpan::new(10..15, ["test"])]
+        } else if text.starts_with("tset ") {
             vec![SuggestionSpan::new(0..4, ["test", "sets", "set"])]
         } else if text.starts_with("none ") {
             vec![SuggestionSpan::new(0..4, [] as [&str; 0])]
@@ -35,6 +50,17 @@ fn input(
     obscure: bool,
     read_only: bool,
 ) -> Widget {
+    input_with_suggestion_selection(controller, focus, shown, obscure, read_only, false)
+}
+
+fn input_with_suggestion_selection(
+    controller: &TextEditingController,
+    focus: &FocusNode,
+    shown: &BuiltMenus,
+    obscure: bool,
+    read_only: bool,
+    collapse_suggestion_selection: bool,
+) -> Widget {
     EditableText::new(controller.clone())
         .size(Size::new(260.0, 30.0))
         .text_direction(TextDirection::Ltr)
@@ -47,6 +73,7 @@ fn input(
         .spell_check_configuration(
             SpellCheckConfiguration::new()
                 .spell_check_service(Checker)
+                .collapse_suggestion_selection(collapse_suggestion_selection)
                 .misspelled_text_style(TextStyle::new().decoration(TextDecoration::UNDERLINE))
                 .misspelled_selection_color(SUGGESTION_SELECTION)
                 .spell_check_suggestions_toolbar_builder({
@@ -395,6 +422,103 @@ fn ios_touch_spelling_tap_selects_the_word_and_toggles_but_mouse_only_moves_the_
             assert_eq!(controller.selection().range().as_range(), 0..4);
         } else {
             assert_eq!(controller.selection(), TextSelection::collapsed(2));
+        }
+    }
+}
+
+#[test]
+fn suggestion_replacements_can_place_the_caret_at_the_end_of_the_new_word_on_mobile() {
+    use incular_core::{
+        InputEvent, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase, PointerSampleMetadata,
+    };
+    use std::time::{Duration, Instant};
+
+    for platform in [TextShortcutPlatform::Ios, TextShortcutPlatform::Android] {
+        let controller = TextEditingController::with_text("tset tst test");
+        let focus = FocusNode::new();
+        let shown = BuiltMenus::default();
+        let mut runtime = Runtime::new(input_with_suggestion_selection(
+            &controller,
+            &focus,
+            &shown,
+            false,
+            false,
+            true,
+        ))
+        .unwrap();
+        runtime.set_text_shortcut_platform(platform);
+        focus.request_focus();
+        layout(&mut runtime);
+        let field = runtime.focused_element().unwrap();
+        // Spell-check results arrive through the mounted field's ordinary
+        // user-edit subscription, including after each accepted suggestion.
+        controller.set_selection(TextSelection::collapsed(13));
+        controller.insert_text("t");
+        controller.set_selection(TextSelection::new(0, 4));
+        layout(&mut runtime);
+        assert_eq!(controller.text(), "tset tst testt");
+
+        let start = Instant::now();
+        for (index, (word_start, word_end, expected_text, expected_caret)) in [
+            (0, 4, "test tst testt", 4),
+            (5, 8, "test test testt", 9),
+            (10, 15, "test test test", 14),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let marker = runtime
+                .tree()
+                .text_field_offset_rect(field, word_start, TextAffinity::Downstream)
+                .unwrap();
+            let position =
+                marker.origin + Offset::new(marker.size.width * 0.5, marker.size.height * 0.5);
+            let at = start + Duration::from_millis(600 * index as u64);
+            // A precise pointer leaves presentation to the custom toolbar;
+            // mobile touch auto-presentation is covered independently above.
+            for (phase, buttons) in [
+                (PointerPhase::Down, PRIMARY_POINTER_BUTTON),
+                (PointerPhase::Up, 0),
+            ] {
+                let _ = runtime.handle_input_at(
+                    InputEvent::PointerWithMetadata {
+                        pointer: 1,
+                        device: 3,
+                        kind: PointerDeviceKind::Mouse,
+                        buttons,
+                        button: Some(PRIMARY_POINTER_BUTTON),
+                        sample: PointerSampleMetadata::default(),
+                        phase,
+                        position,
+                    },
+                    at,
+                );
+            }
+            layout(&mut runtime);
+            assert_eq!(controller.selection(), TextSelection::collapsed(word_start));
+            assert!(runtime.show_spell_check_suggestions_toolbar(field));
+            layout(&mut runtime);
+            let menu = last_menu(&shown);
+            assert_eq!(menu.spell_check_span().unwrap().range, word_start..word_end);
+            assert_eq!(menu.button_items.len(), 1);
+            assert_eq!(menu.button_items[0].resolved_label(), "test");
+
+            menu.button_items[0].press();
+            layout(&mut runtime);
+            assert_eq!(controller.text(), expected_text);
+            assert_eq!(
+                controller.selection(),
+                TextSelection::collapsed(expected_caret)
+            );
+            assert_eq!(controller.caret_affinity(), TextAffinity::Downstream);
+            assert!(focus.has_primary_focus());
+            assert!(
+                !runtime
+                    .tree()
+                    .text_field_toolbar_state(field)
+                    .unwrap()
+                    .is_showing()
+            );
         }
     }
 }

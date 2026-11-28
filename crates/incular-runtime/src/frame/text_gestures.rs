@@ -633,17 +633,28 @@ impl Runtime {
             return false;
         };
         let content_revision = controller.revisions().0;
-        let buttons = span.suggestions.iter().map(|suggestion| {
-            let suggestion = suggestion.clone();
-            let controller = controller.clone();
-            ContextMenuButtonItem::custom(suggestion.clone(), move || {
-                if controller.revisions().0 == content_revision
-                    && controller.selection_if_set() == Some(selection)
-                {
-                    let _ = controller.replace_range_as_user_edit(range, &suggestion);
-                }
+        let collapse_selection = self.tree.text_field_collapses_suggestion_selection(field);
+        let buttons = span
+            .suggestions
+            .iter()
+            .map(|suggestion| {
+                let suggestion = suggestion.clone();
+                let controller = controller.clone();
+                ContextMenuButtonItem::custom(suggestion.clone(), move || {
+                    if controller.revisions().0 != content_revision
+                        || controller.selection_if_set() != Some(selection)
+                    {
+                        return;
+                    }
+                    if collapse_selection {
+                        let _ = controller
+                            .replace_range_as_user_edit_and_collapse(range, &suggestion);
+                    } else {
+                        let _ = controller.replace_range_as_user_edit(range, &suggestion);
+                    }
+                })
             })
-        }).collect();
+            .collect();
         let anchors = self.text_field_menu_anchors(field, snapshot.caret_rect.origin);
         self.hide_text_field_handles(field);
         self.frame_requested = true;

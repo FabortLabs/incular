@@ -1430,6 +1430,18 @@ impl WidgetTree {
         }
     }
 
+    /// The configured selection behavior of a suggestion button.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_collapses_suggestion_selection(&self, id: ElementId) -> bool {
+        match self.elements.get(id.0).map(|element| element.widget.kind()) {
+            Some(WidgetKind::TextField(spec)) => spec.spell_check.as_ref().is_some_and(
+                crate::SpellCheckConfiguration::collapses_suggestion_selection,
+            ),
+            _ => false,
+        }
+    }
+
     /// Returns the selectable label under `point`, if it belongs to a selection area.
     #[must_use]
     pub fn selectable_text_at(&self, point: Offset) -> Option<ElementId> {

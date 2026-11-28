@@ -58,3 +58,20 @@ The Incular fixture drives actual pointer events under the iOS runtime
 policy. Touch-down alone does not select the word before the tap wins.
 This is an authored comparison, not a physical-device run or a new row
 in the upstream registration count.
+
+## Replacement caret policy
+
+Both pinned mobile variants of `widgets/editable_text_test.dart:16888`
+passed. Both intentionally supply a toolbar builder that moves the caret
+to the end of the accepted word, independent of the target platform.
+Incular exposes that editing behavior to a neutral toolbar without
+importing a design system. Its default still adjusts the existing
+selection, as the earlier neutral fixture verifies.
+
+The mounted native editor uses a live spell service and real pointer
+events at character offsets to select each misspelling. Its configured
+toolbar action replaces equal-length, shorter, and longer words and
+places the caret at 4, 9, and 14 respectively while keeping focus and
+closing the toolbar. The new text and selection commit atomically
+through the controller's user-edit path. All seven focused native
+toolbar tests passed.

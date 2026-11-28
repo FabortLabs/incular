@@ -969,7 +969,28 @@ impl TextEditingController {
         range: TextRange,
         replacement: &str,
     ) -> Result<bool, InvalidTextDeltaRange> {
-        let (next, selection) = {
+        self.replace_range_as_user_edit_impl(range, replacement, false)
+    }
+
+    /// Replaces a byte range through the user-edit path and moves a collapsed
+    /// downstream caret to the end of the replacement in the same transaction.
+    /// An identical replacement can move the caret without running formatters.
+    #[doc(hidden)]
+    pub fn replace_range_as_user_edit_and_collapse(
+        &self,
+        range: TextRange,
+        replacement: &str,
+    ) -> Result<bool, InvalidTextDeltaRange> {
+        self.replace_range_as_user_edit_impl(range, replacement, true)
+    }
+
+    fn replace_range_as_user_edit_impl(
+        &self,
+        range: TextRange,
+        replacement: &str,
+        collapse: bool,
+    ) -> Result<bool, InvalidTextDeltaRange> {
+        let (next, selection, content_changed) = {
             let state = self.inner.borrow();
             let value = &state.value;
             if !range.is_valid_for(&value.text) {
@@ -979,12 +1000,25 @@ impl TextEditingController {
                 });
             }
             let removed = &value.text[range.as_range()];
-            if removed == replacement {
+            let content_changed = removed != replacement;
+            if !content_changed && !collapse {
                 return Ok(false);
             }
-            let same_length = removed.encode_utf16().count() == replacement.encode_utf16().count();
-            (
-                value.clone().replace(range, replacement),
+            let mut next = if content_changed {
+                value.clone().replace(range, replacement)
+            } else {
+                value.clone()
+            };
+            let selection = if collapse {
+                next.selection = TextSelection::collapsed(range.start + replacement.len());
+                CommitSelection::Explicit {
+                    is_set: true,
+                    affinity: TextAffinity::Downstream,
+                    is_directional: false,
+                }
+            } else {
+                let same_length =
+                    removed.encode_utf16().count() == replacement.encode_utf16().count();
                 CommitSelection::Explicit {
                     is_set: !state.selection_unset,
                     affinity: if same_length {
@@ -993,11 +1027,12 @@ impl TextEditingController {
                         TextAffinity::Downstream
                     },
                     is_directional: same_length && state.selection_is_directional,
-                },
-            )
+                }
+            };
+            (next, selection, content_changed)
         };
-        self.commit_with_selection(next, true, false, true, selection);
-        Ok(true)
+        self.commit_with_selection(next, content_changed, false, content_changed, selection);
+        Ok(content_changed)
     }
 
     /// Replaces the selection as a user edit: input formatters run on the

@@ -25,6 +25,7 @@ pub struct SpellCheckConfiguration {
     misspelled_text_style: Option<TextStyle>,
     misspelled_selection_color: Option<incular_core::Color>,
     toolbar_builder: Option<crate::EditableTextContextMenuBuilder>,
+    collapse_suggestion_selection: bool,
     enabled: bool,
 }
 
@@ -96,6 +97,20 @@ impl SpellCheckConfiguration {
         self.toolbar_builder.as_ref()
     }
 
+    /// Move the caret to the end of a toolbar replacement. By default,
+    /// the existing selection is adjusted to the edit without collapsing it.
+    #[must_use]
+    pub fn collapse_suggestion_selection(mut self, collapse: bool) -> Self {
+        self.collapse_suggestion_selection = collapse;
+        self
+    }
+
+    /// Whether a suggestion moves the caret to the end of its replacement.
+    #[must_use]
+    pub fn collapses_suggestion_selection(&self) -> bool {
+        self.collapse_suggestion_selection
+    }
+
     /// Flutter `spellCheckEnabled`: false only for
     /// [`Self::disabled`].
     #[must_use]
@@ -135,6 +150,7 @@ impl PartialEq for SpellCheckConfiguration {
             && self.misspelled_text_style == other.misspelled_text_style
             && self.misspelled_selection_color == other.misspelled_selection_color
             && crate::util::same_rc(&self.toolbar_builder, &other.toolbar_builder)
+            && self.collapse_suggestion_selection == other.collapse_suggestion_selection
             && self.enabled == other.enabled
     }
 }
@@ -143,6 +159,7 @@ impl fmt::Debug for SpellCheckConfiguration {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SpellCheckConfiguration")
             .field("enabled", &self.enabled)
+            .field("collapse_suggestion_selection", &self.collapse_suggestion_selection)
             .field("service", &self.spell_check_service.is_some())
             .field("misspelled_text_style", &self.misspelled_text_style)
             .field("misspelled_selection_color", &self.misspelled_selection_color)
