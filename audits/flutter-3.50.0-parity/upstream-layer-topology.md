@@ -36,3 +36,23 @@ published generation. These two registrations remain partial: there
 is no equivalent engine dirty bit, and number of link resolution
 passes is separate from picture reuse. All 16 focused compositor
 topology and mutation tests passed.
+
+## Picture ownership and hidden boundaries
+
+Five additional pinned layer registrations passed. Clearing a
+PictureLayer's payload drops the previously owned display list.
+Removing the layer releases its unshared payload and the stale
+generational ID cannot readopt a new resource. Native tests verify
+actual weak references and flattened draws, not a guessed object
+count. An independently held display list survives removal only
+until its last owner drops.
+
+A zero-opacity nested boundary contributes no drawing and returns
+with the identical stored picture when restored to 0.5, without a
+repaint. That is partial because Flutter visibly detaches its
+boundary, whereas Incular leaves its retained subtree structurally
+owned. Flutter's handle-count and manual-dispose assertions likewise
+remain partial: Rust separates detachment from removal, and uses Arc
+lifetime instead of allowing manual disposal of a live reference.
+The two picture-release cases pair. This checks CPU picture lifetime,
+not GPU fence retirement. All six focused tests passed.

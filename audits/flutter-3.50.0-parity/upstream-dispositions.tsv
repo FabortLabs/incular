@@ -4093,3 +4093,8 @@ packages/flutter/test/rendering/layers_test.dart	183	layer link attach/detach or
 packages/flutter/test/rendering/layers_test.dart	199	leader layers not dirty when connected to follower layer	partial-match	upstream-layer-topology.md
 packages/flutter/test/rendering/layers_test.dart	216	leader layers are not dirty when all followers disconnects	partial-match	upstream-layer-topology.md
 packages/flutter/test/rendering/layers_test.dart	253	LeaderLayer.applyTransform can be called after retained rendering	paired-match	upstream-layer-topology.md
+packages/flutter/test/rendering/layers_test.dart	16	non-painted layers are detached	partial-match	upstream-layer-topology.md
+packages/flutter/test/rendering/layers_test.dart	562	PictureLayer does not let you call dispose unless refcount is 0	partial-match	upstream-layer-topology.md
+packages/flutter/test/rendering/layers_test.dart	578	Layer append/remove increases/decreases handle count	partial-match	upstream-layer-topology.md
+packages/flutter/test/rendering/layers_test.dart	612	PictureLayer.picture (set) disposes the picture	paired-match	upstream-layer-topology.md
+packages/flutter/test/rendering/layers_test.dart	621	PictureLayer disposes the picture	paired-match	upstream-layer-topology.md
