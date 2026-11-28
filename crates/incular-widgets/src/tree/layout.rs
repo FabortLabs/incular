@@ -1386,8 +1386,15 @@ impl WidgetTree {
         // above, and whoever places this node marks it. A new size changes
         // this node's bounds alone; a new content transform moves everything
         // below it.
+        let viewport_paint_visibility_changed =
+            super::painting::viewport_has_no_paint_extent(&kind, geometry_before.0)
+                != super::painting::viewport_has_no_paint_extent(&kind, size);
+        if viewport_paint_visibility_changed && let Some(element) = self.element_for_render(id) {
+            self.sync_render_children(element);
+        }
         if semantic_clip_active != geometry_before.2
             || (semantic_clip_active && size != geometry_before.0)
+            || viewport_paint_visibility_changed
         {
             // Descendants can enter or leave the accessibility clip even
             // when their own layout size and offset remain unchanged.

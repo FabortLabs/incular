@@ -11,10 +11,18 @@ use super::text::{
     with_text_field_display,
 };
 
-/// The paintable subset. Hidden IndexedStack and paragraph children keep
-/// retained state and pending paint until their layer is attached again.
+/// RenderViewport paints only slivers with a positive main-axis paint
+/// extent. Its cache may still contain children at a zero viewport extent.
+pub(super) fn viewport_has_no_paint_extent(kind: &RenderKind, size: Size) -> bool {
+    matches!(kind, RenderKind::SliverViewport { config } if config.axis.main_extent(size) <= 0.)
+}
+
+/// The paintable subset. Hidden viewport, IndexedStack and paragraph
+/// children keep retained state and pending paint until reattached.
 fn visible_paint_children(node: &RenderNode) -> &[RenderObjectId] {
-    if let Some(order) = node.flow_paint_order().or_else(|| node.inline_visible_children()) {
+    if viewport_has_no_paint_extent(node.object.kind(), node.size) {
+        &[]
+    } else if let Some(order) = node.flow_paint_order().or_else(|| node.inline_visible_children()) {
         order
     } else if let RenderKind::IndexedStack { index, .. } = node.object.kind() {
         index
@@ -1583,7 +1591,9 @@ impl WidgetTree {
         id: RenderObjectId,
         node: &'a RenderNode,
     ) -> std::borrow::Cow<'a, [RenderObjectId]> {
-        if self.viewport_ignores_child_pointers(id, node.object.kind()) {
+        if viewport_has_no_paint_extent(node.object.kind(), node.size)
+            || self.viewport_ignores_child_pointers(id, node.object.kind())
+        {
             return std::borrow::Cow::Borrowed(&[]);
         }
         if let Some(slots) = self.viewport_paint_slots(id, node) {

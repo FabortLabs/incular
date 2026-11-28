@@ -3336,12 +3336,16 @@ impl WidgetTree {
         if !measuring_sliver && scoped {
             child_layers = self.arrange_sliver_layer_scopes(id, &render_children, child_layers);
         }
-        let object = &self
-            .renders
-            .get(render.0)
-            .expect("render verified live above")
-            .object;
+        let node = self.renders.get(render.0).expect("render verified live above");
+        let object = &node.object;
         match *object.kind() {
+            RenderKind::SliverViewport { .. }
+                if super::painting::viewport_has_no_paint_extent(object.kind(), node.size) =>
+            {
+                // A zero paint window retains the slivers' layout/cache
+                // but submits none of their attached pictures or effects.
+                child_layers.clear();
+            }
             RenderKind::FittedBox { .. } if !self.fitted_content_is_visible(render) => {
                 // Retain the measured render child, but do not submit its
                 // painting or effects while the FittedBox draws nothing.

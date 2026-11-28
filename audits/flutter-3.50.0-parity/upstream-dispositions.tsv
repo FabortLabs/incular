@@ -3932,3 +3932,7 @@ packages/flutter/test/painting/image_cache_binding_test.dart	15	PaintingBinding 
 packages/flutter/test/painting/image_provider_resize_image_test.dart	25	Two identical instances should be equal and have same hashCode	paired-match	upstream-resized-cache-identity.md#shared-provider-value-and-hash
 packages/flutter/test/painting/decoration_test.dart	161	Decoration equality	paired-match	upstream-decoration-values.md#box-decoration-equality-and-hashes
 packages/flutter/test/gestures/drag_test.dart	1596	Drag details	paired-match	upstream-drag-details-diagnostics.md
+packages/flutter/test/widgets/custom_scroll_view_test.dart	169	CustomScrollView does not crash at zero area	paired-match	upstream-scroll-zero-area.md
+packages/flutter/test/widgets/list_view_test.dart	1178	ListView does not crash at zero area	paired-match	upstream-scroll-zero-area.md
+packages/flutter/test/widgets/grid_view_test.dart	483	GridView in zero context	paired-match	upstream-scroll-zero-area.md
+packages/flutter/test/widgets/shrink_wrapping_viewport_test.dart	60	ShrinkWrappingViewport does not crash at zero area	paired-match	upstream-scroll-zero-area.md

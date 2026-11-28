@@ -392,8 +392,8 @@ impl RenderSliver for GridRenderSliver {
         };
         let cache_start = (constraints.scroll_offset + constraints.cache_origin).max(0.);
         let cache_end = (cache_start + constraints.remaining_cache_extent).max(cache_start);
-        // Flutter's regular tile layout reports the first row for a zero stride
-        // instead of dividing by it.
+        // Flutter's regular tile layout reports tile zero for a zero
+        // stride, without constructing its entire first row.
         let (start_row, end_row) = if row_step > 0. {
             (
                 (cache_start / row_step).floor() as usize,
@@ -404,10 +404,18 @@ impl RenderSliver for GridRenderSliver {
         };
         let row_range = start_row.min(rows)..end_row.min(rows).max(start_row.min(rows));
         let first_item = row_range.start.saturating_mul(columns).min(self.item_count);
-        let last_item = row_range.end.saturating_mul(columns).min(self.item_count);
+        let last_item = if row_step == 0. {
+            self.item_count.min(1)
+        } else {
+            row_range.end.saturating_mul(columns).min(self.item_count)
+        };
         let parked_tiles =
             retain_fixed_cache(&mut self.widgets, &(first_item..last_item), self.item_count);
-        let mut parked_rows: Vec<_> = parked_tiles.iter().map(|index| index / columns).collect();
+        let mut parked_rows: Vec<_> = parked_tiles
+            .iter()
+            .map(|index| index / columns)
+            .filter(|row| !row_range.contains(row))
+            .collect();
         parked_rows.dedup();
 
         let cell_cross_extent = if columns == 0 {
@@ -424,7 +432,7 @@ impl RenderSliver for GridRenderSliver {
                 let mut keep_row = false;
                 let cells: Vec<_> = (start..end)
                     .filter_map(|index| {
-                        if placement == SliverChildPlacement::Parked
+                        if (placement == SliverChildPlacement::Parked || index >= last_item)
                             && !self.widgets.contains_key(&index)
                         {
                             return None;
