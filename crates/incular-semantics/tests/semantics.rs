@@ -428,3 +428,41 @@ fn diagnostic_names_custom_actions_in_order_and_bounds_the_list() {
     assert!(!limited.contains("action2"));
     assert_eq!(tree.revision(), stamp);
 }
+
+#[test]
+fn exhausting_the_flutter_id_range_never_aliases_a_recycled_semantic_node() {
+    use std::collections::HashSet;
+
+    let mut tree = SemanticsTree::new();
+    // Flutter caps framework identifiers at u16::MAX and the pinned
+    // original removes ID 1400 after filling that range.
+    let count = usize::from(u16::MAX);
+    let mut live = HashSet::with_capacity(count + 1);
+    let mut removed = None;
+    for index in 0..count {
+        let id = tree.insert(node(placeholder()));
+        assert!(live.insert(id), "two live nodes shared ID {id:?}");
+        if index == 1400 {
+            removed = Some(id);
+        }
+    }
+    let removed = removed.unwrap();
+    let cutover = tree.revision();
+    assert_eq!(tree.iter().count(), count);
+    assert!(tree.remove(removed).is_some());
+    assert!(live.remove(&removed));
+
+    let replacement = tree.insert(node(placeholder()));
+    assert!(live.insert(replacement));
+    assert_eq!(replacement.0.index(), removed.0.index());
+    assert_ne!(replacement, removed, "the recycled slot has a new generation");
+    assert_eq!(tree.iter().count(), count);
+    assert!(tree.node(removed).is_none());
+    assert!(!tree.update(removed, node(removed)));
+    assert!(tree.remove(removed).is_none());
+    assert!(tree.node(replacement).is_some());
+    assert_eq!(
+        tree.changed_since(cutover).map(|(id, _)| id).collect::<Vec<_>>(),
+        [replacement]
+    );
+}

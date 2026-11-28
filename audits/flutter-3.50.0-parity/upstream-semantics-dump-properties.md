@@ -20,3 +20,16 @@ rectangles rather than detached transform metadata, and its
 portable node removes blocked user actions instead of retaining
 separate debug marks for them. Those exact diagnostic behaviors
 have not been credited.
+
+## Identity at the Flutter allocation limit
+
+Pinned `semantics/semantics_test.dart:928` passed. It keeps 65,535
+framework IDs live, removes ID 1400, and expects the next object to
+reuse that exact numeric ID. The native test holds the same number of
+live nodes and reuses the retired node's storage slot. The generational
+identity changes deliberately: neither a lookup, an update, nor
+another removal through the old ID reaches the replacement. Incremental
+observers see the replacement only. The adjacent AccessKit test confirms
+that a delayed action for the old native ID cannot hit the replacement.
+Both focused native checks passed. This is partial: Incular does not
+reproduce the Flutter engine's 16-bit numeric reuse contract.
