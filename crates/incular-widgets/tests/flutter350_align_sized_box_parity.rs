@@ -1,10 +1,12 @@
 //! Flutter 3.50.0 Align and SizedBox public layout fixtures.
-use incular_config::{Alignment, Constraints, CrossAxisAlignment, MainAxisAlignment};
+use incular_config::{
+    Alignment, AlignmentDirectional, Constraints, CrossAxisAlignment, MainAxisAlignment,
+};
 use incular_core::{Offset, Size};
 use incular_widgets::{
     Align, Center, Column, Container, Directionality, LayoutBuilder, Placeholder, Row,
     SingleChildScrollView, SizedBox, TextDirection, Widget,
-    internal::{Key, WidgetTree},
+    internal::{Key, TreeError, WidgetTree},
 };
 use std::{cell::Cell, rc::Rc};
 
@@ -45,16 +47,87 @@ fn align_absolute_control_ignores_ambient_direction() {
     }
 }
 #[test]
-fn align_smoke_for_absolute_values_and_empty_child_analogs() {
-    for w in [
-        Align::new(Alignment::new(0.5, 0.5), Container::new()),
-        Align::builder().child(Container::new()).build(),
-        Align::new(Alignment::TOP_LEFT, SizedBox::shrink()),
-        Align::new(Alignment::TOP_RIGHT, SizedBox::shrink()),
+fn align_mounts_with_default_physical_and_directional_alignment_and_optional_child() {
+    let mut tree = mount(
+        Center::new(Align::new(Alignment::new(0.5, 0.5), Container::new())),
+        VIEW,
+    );
+    let root = tree.root().unwrap();
+    for widget in [
+        Widget::from(Align::builder().child(Container::new()).build()),
+        Align::empty(Alignment::TOP_LEFT).into(),
+        Directionality::new(
+            TextDirection::Rtl,
+            Align::builder()
+                .alignment(AlignmentDirectional::TOP_START)
+                .build(),
+        )
+        .into(),
+        Align::empty(Alignment::TOP_LEFT).into(),
     ] {
-        mount(w, VIEW);
+        tree.update(root, Center::new(widget).into()).unwrap();
+        tree.layout(Constraints::tight(VIEW)).unwrap();
+        assert_eq!(tree.element_bounds(root).unwrap().size, VIEW);
     }
 }
+
+#[test]
+fn align_logical_start_tracks_ambient_direction_without_replacing_the_child() {
+    let child = keyed(SizedBox::from_size(Size::new(100., 80.)));
+    let logical = || Align::new(AlignmentDirectional::TOP_START, child.clone());
+    assert_eq!(
+        logical().get_alignment_geometry(),
+        AlignmentDirectional::TOP_START.into()
+    );
+    let ltr = Directionality::new(TextDirection::Ltr, logical());
+    let mut tree = mount(ltr, VIEW);
+    assert_eq!(bounds(&tree).origin, Offset::ZERO);
+    assert_eq!(bounds(&tree).size, Size::new(100., 80.));
+    let root = tree.root().unwrap();
+    let mounted_child = tree.element_with_key(&PROBE).unwrap();
+    for (direction, expected_x) in [(TextDirection::Rtl, 700.), (TextDirection::Ltr, 0.)] {
+        tree.update(root, Directionality::new(direction, logical()).into())
+            .unwrap();
+        tree.layout(Constraints::tight(VIEW)).unwrap();
+        let child_bounds = bounds(&tree);
+        assert_eq!(child_bounds.origin, Offset::new(expected_x, 0.));
+        assert_eq!(
+            child_bounds.origin.x + child_bounds.size.width,
+            expected_x + 100.
+        );
+        assert_eq!(child_bounds.size.height, 80.);
+        assert_eq!(tree.element_with_key(&PROBE), Some(mounted_child));
+    }
+    assert!(matches!(
+        WidgetTree::new().mount(logical().into()),
+        Err(TreeError::MissingDirectionality {
+            widget: "Align",
+            ..
+        }),
+    ));
+}
+
+#[test]
+fn sized_box_constructors_preserve_unspecified_zero_finite_and_infinite_requests() {
+    for (box_widget, axes) in [
+        (SizedBox::new(), (None, None)),
+        (SizedBox::new().width(10.), (Some(10.), None)),
+        (
+            SizedBox::new().width(10.).height(20.),
+            (Some(10.), Some(20.)),
+        ),
+        (SizedBox::from_size(None), (None, None)),
+        (SizedBox::from_size(Size::new(1., 2.)), (Some(1.), Some(2.))),
+        (
+            SizedBox::expand(),
+            (Some(f32::INFINITY), Some(f32::INFINITY)),
+        ),
+        (SizedBox::shrink(), (Some(0.), Some(0.))),
+    ] {
+        assert_eq!((box_widget.get_width(), box_widget.get_height()), axes);
+    }
+}
+
 #[test]
 fn align_shrinks_only_the_unbounded_scroll_axis() {
     let a = keyed(Align::builder().child(SizedBox::square(10.)).build());

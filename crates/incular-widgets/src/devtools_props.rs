@@ -253,7 +253,11 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
         WidgetKind::Align {
             alignment, child, ..
         } => {
-            match alignment_name(*alignment) {
+            let physical_name = match alignment {
+                crate::AlignmentGeometry::Physical(value) => alignment_name(*value),
+                _ => None,
+            };
+            match physical_name {
                 Some(name) => out.push(choice("alignment", name.to_owned(), ALIGNMENTS)),
                 None => out.push(prop(
                     "alignment",

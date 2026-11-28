@@ -567,18 +567,18 @@ packages/flutter/test/widgets/custom_paint_test.dart	193	Raster cache hints cann
 packages/flutter/test/widgets/custom_paint_test.dart	198	RenderCustomPaint consults preferred size for intrinsics when it has no child	paired-match	upstream-custom-paint.md#direct-intrinsics-of-childless-painters
 packages/flutter/test/widgets/custom_paint_test.dart	206	RenderCustomPaint does not return infinity for its intrinsics	paired-match	upstream-custom-paint.md#direct-intrinsics-of-childless-painters
 packages/flutter/test/widgets/custom_paint_test.dart	214	CustomPaint does not crash at zero area	partial-match	upstream-custom-paint.md
-packages/flutter/test/widgets/align_test.dart	9	Align smoke test	partial-match	upstream-align-sized-box.md
-packages/flutter/test/widgets/align_test.dart	24	Align control test (LTR)	partial-match	upstream-align-sized-box.md
-packages/flutter/test/widgets/align_test.dart	49	Align control test (RTL)	partial-match	upstream-align-sized-box.md
+packages/flutter/test/widgets/align_test.dart	9	Align smoke test	paired-match	upstream-align-sized-box.md
+packages/flutter/test/widgets/align_test.dart	24	Align control test (LTR)	paired-match	upstream-align-sized-box.md
+packages/flutter/test/widgets/align_test.dart	49	Align control test (RTL)	paired-match	upstream-align-sized-box.md
 packages/flutter/test/widgets/align_test.dart	74	Shrink wraps in finite space	paired-match	upstream-align-sized-box.md
 packages/flutter/test/widgets/align_test.dart	87	Align widthFactor	paired-match	upstream-align-sized-box.md
 packages/flutter/test/widgets/align_test.dart	102	Align heightFactor	paired-match	upstream-align-sized-box.md
-packages/flutter/test/widgets/align_test.dart	119	Align does not crash at zero area	partial-match	upstream-align-sized-box.md
-packages/flutter/test/widgets/sized_box_test.dart	10	SizedBox constructors	partial-match	upstream-align-sized-box.md
+packages/flutter/test/widgets/align_test.dart	119	Align does not crash at zero area	paired-match	upstream-align-sized-box.md
+packages/flutter/test/widgets/sized_box_test.dart	10	SizedBox constructors	paired-match	upstream-align-sized-box.md
 packages/flutter/test/widgets/sized_box_test.dart	40	SizedBox - no child	paired-match	upstream-align-sized-box.md
 packages/flutter/test/widgets/sized_box_test.dart	65	SizedBox - container child	paired-match	upstream-align-sized-box.md
 packages/flutter/test/widgets/sized_box_test.dart	118	SizedBox.square tests	paired-match	upstream-align-sized-box.md
-packages/flutter/test/widgets/sized_box_test.dart	127	SizedBox does not crash at zero area	partial-match	upstream-align-sized-box.md
+packages/flutter/test/widgets/sized_box_test.dart	127	SizedBox does not crash at zero area	paired-match	upstream-align-sized-box.md
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	73	no siblings	paired-match	upstream-sliver-fill-remaining.md
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	100	one sibling	paired-match	upstream-sliver-fill-remaining.md
 packages/flutter/test/widgets/sliver_fill_remaining_test.dart	130	scrolls beyond viewportMainAxisExtent	partial-match	upstream-sliver-fill-remaining.md

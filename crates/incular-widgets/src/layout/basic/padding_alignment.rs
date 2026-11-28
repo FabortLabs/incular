@@ -1,6 +1,6 @@
 //! Padding and alignment layout primitives.
 
-use incular_config::{Alignment, EdgeInsets};
+use incular_config::{Alignment, AlignmentGeometry, EdgeInsets, TextDirection};
 use typed_builder::TypedBuilder;
 
 use crate::{Widget, WidgetKind, macros::widget_from_kind};
@@ -48,8 +48,8 @@ widget_from_kind!(Padding => Padding { padding, child });
 /// Positions a child inside itself with fractional alignment and optional size factors.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct Align {
-    #[builder(default = Alignment::CENTER)]
-    pub(crate) alignment: Alignment,
+    #[builder(default = AlignmentGeometry::CENTER, setter(into))]
+    pub(crate) alignment: AlignmentGeometry,
     #[builder(
         default,
         setter(transform = |factor: f32| Some(factor.max(0.0)))
@@ -65,17 +65,17 @@ pub struct Align {
 }
 
 impl Align {
-    /// Creates an align widget with explicit alignment and a child.
+    /// Creates an align widget with a physical or direction-relative alignment.
     #[must_use]
-    pub fn new(alignment: Alignment, child: impl Into<Widget>) -> Self {
-        Self::empty(alignment).child(child)
+    pub fn new(alignment: impl Into<AlignmentGeometry>, child: impl Into<Widget>) -> Self {
+        Self::builder().alignment(alignment).child(child).build()
     }
 
     /// Creates an Align with no child.
     #[must_use]
     pub const fn empty(alignment: Alignment) -> Self {
         Self {
-            alignment,
+            alignment: AlignmentGeometry::Physical(alignment),
             width_factor: None,
             height_factor: None,
             child: None,
@@ -102,8 +102,17 @@ impl Align {
         self
     }
 
+    /// Returns the physical alignment with a left-to-right fallback for
+    /// callers of the original physical-only getter. To inspect directional
+    /// values before layout, use [Self::get_alignment_geometry].
     #[must_use]
     pub fn get_alignment(&self) -> Alignment {
+        self.alignment.resolve(TextDirection::Ltr)
+    }
+
+    /// Returns the description before it is resolved against Directionality.
+    #[must_use]
+    pub const fn get_alignment_geometry(&self) -> AlignmentGeometry {
         self.alignment
     }
 }

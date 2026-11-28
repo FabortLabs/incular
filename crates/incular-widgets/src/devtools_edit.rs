@@ -288,7 +288,7 @@ pub(crate) fn apply_edit(kind: &mut WidgetKind, name: &str, value: &DebugValue) 
             set(run_spacing, non_negative(value)?.min(4096.))
         }
         (WidgetKind::Align { alignment, .. }, "alignment") => {
-            set(alignment, parse_alignment(enum_name(value)?)?)
+            set(alignment, parse_alignment(enum_name(value)?)?.into())
         }
         (
             WidgetKind::Opacity {

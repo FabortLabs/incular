@@ -83,14 +83,27 @@ impl SizedBox {
         }
     }
 
-    /// Convenience constructor with `Size`.
+    /// Uses both dimensions of a size, or leaves them unspecified for `None`.
     #[must_use]
-    pub fn from_size(size: Size) -> Self {
+    pub fn from_size(size: impl Into<Option<Size>>) -> Self {
+        let size = size.into();
         Self {
-            width: Some(size.width),
-            height: Some(size.height),
+            width: size.map(|size| size.width),
+            height: size.map(|size| size.height),
             child: None,
         }
+    }
+
+    /// The requested width, before applying the incoming layout constraints.
+    #[must_use]
+    pub const fn get_width(&self) -> Option<f32> {
+        self.width
+    }
+
+    /// The requested height, before applying the incoming layout constraints.
+    #[must_use]
+    pub const fn get_height(&self) -> Option<f32> {
+        self.height
     }
 
     /// Shrinks to zero size or tight minimum child constraints.

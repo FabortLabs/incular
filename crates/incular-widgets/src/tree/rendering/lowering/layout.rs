@@ -133,7 +133,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             height_factor,
             ..
         } => RenderKind::Align {
-            alignment: *alignment,
+            alignment: resolve_box_alignment(*alignment, context),
             width_factor: *width_factor,
             height_factor: *height_factor,
         },

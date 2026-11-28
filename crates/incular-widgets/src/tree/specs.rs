@@ -938,7 +938,7 @@ pub(crate) enum WidgetKind {
         child: Widget,
     },
     Align {
-        alignment: Alignment,
+        alignment: crate::AlignmentGeometry,
         width_factor: Option<f32>,
         height_factor: Option<f32>,
         child: Option<Widget>,
