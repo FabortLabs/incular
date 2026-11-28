@@ -1713,8 +1713,8 @@ packages/flutter/test/widgets/editable_text_test.dart	16478	findSuggestionSpanAt
 packages/flutter/test/widgets/editable_text_test.dart	16518	findSuggestionSpanAtCursorIndex finds correct span with cursor on edge of a word	paired-match	upstream-spell-check-at-caret.md
 packages/flutter/test/widgets/editable_text_test.dart	16557	findSuggestionSpanAtCursorIndex finds no span when cursor out of range of spans	paired-match	upstream-spell-check-at-caret.md
 packages/flutter/test/widgets/editable_text_test.dart	16595	findSuggestionSpanAtCursorIndex finds no span when word correctly spelled	paired-match	upstream-spell-check-at-caret.md
-packages/flutter/test/widgets/text_selection_test.dart	597	TextSelectionGestureDetectorBuilder right click Apple platforms	partial-match	upstream-secondary-editor-focus.md
-packages/flutter/test/widgets/text_selection_test.dart	648	TextSelectionGestureDetectorBuilder right click non-Apple platforms	partial-match	upstream-secondary-editor-focus.md
+packages/flutter/test/widgets/text_selection_test.dart	597	TextSelectionGestureDetectorBuilder right click Apple platforms	paired-match	upstream-secondary-editor-focus.md
+packages/flutter/test/widgets/text_selection_test.dart	648	TextSelectionGestureDetectorBuilder right click non-Apple platforms	paired-match	upstream-secondary-editor-focus.md
 packages/flutter/test/widgets/editable_text_test.dart	16633	can show spell check suggestions toolbar when there are spell check results	partial-match	upstream-spell-check-toolbar.md
 packages/flutter/test/widgets/editable_text_test.dart	16693	can show spell check suggestions toolbar when there are no spell check results on iOS	partial-match	upstream-spell-check-toolbar.md
 packages/flutter/test/widgets/editable_text_test.dart	16997	tapping on a misspelled word hides the handles	partial-match	upstream-spell-check-toolbar.md#android-single-tap-handles

@@ -252,22 +252,42 @@ fn selection_area_right_click_on_macos_selects_the_word_to_copy() {
 
 #[test]
 fn right_click_focus_keeps_the_hit_word_or_caret_and_preserves_both_selection_orders() {
+    use incular_config::TargetPlatform;
+    use incular_text::SelectionChangedCause::Tap;
+
     for (platform, word_on_first_click) in [
-        (TextShortcutPlatform::Ios, true),
-        (TextShortcutPlatform::MacOs, true),
-        (TextShortcutPlatform::Android, false),
-        (TextShortcutPlatform::Linux, false),
-        (TextShortcutPlatform::Windows, false),
+        (TargetPlatform::Ios, true),
+        (TargetPlatform::MacOs, true),
+        (TargetPlatform::Android, false),
+        (TargetPlatform::Fuchsia, false),
+        (TargetPlatform::Linux, false),
+        (TargetPlatform::Windows, false),
     ] {
-        let (mut runtime, controller, _) = mount("one two three four five", platform);
+        let changes = Rc::new(RefCell::new(Vec::new()));
+        let (mut runtime, controller, _) = mount_with(
+            "one two three four five six seven",
+            TextShortcutPlatform::Linux,
+            |field| {
+                field.on_selection_changed({
+                    let changes = changes.clone();
+                    move |selection, cause| changes.borrow_mut().push((selection, cause))
+                })
+            },
+        );
+        runtime.set_text_target_platform(platform);
         let field = runtime.tree().text_field_at(Offset::new(20., 10.)).unwrap();
         controller.set_selection(TextSelection::collapsed(10));
         runtime.run_frame(bounds()).unwrap();
-        let glyph = runtime.tree().text_field_input_geometry(field).unwrap().caret_rect;
+        let glyph = runtime
+            .tree()
+            .text_field_input_geometry(field)
+            .unwrap()
+            .caret_rect;
         let pos = Offset::new(glyph.origin.x, glyph.origin.y + glyph.size.height / 2.0);
         controller.set_selection(TextSelection::collapsed(0));
         runtime.run_frame(bounds()).unwrap();
 
+        assert!(changes.borrow().is_empty(), "{platform:?}");
         secondary_click(&mut runtime, pos);
         assert_eq!(runtime.focused_element(), Some(field), "{platform:?}");
         let selection = controller.selection();
@@ -277,10 +297,14 @@ fn right_click_focus_keeps_the_hit_word_or_caret_and_preserves_both_selection_or
             assert_eq!(selection, TextSelection::collapsed(10), "{platform:?}");
         }
 
+        assert_eq!(*changes.borrow(), [(selection, Tap)], "{platform:?}");
+        changes.borrow_mut().clear();
+
         for selection in [TextSelection::new(3, 20), TextSelection::new(20, 3)] {
             controller.set_selection(selection);
             secondary_click(&mut runtime, pos);
             assert_eq!(controller.selection(), selection, "{platform:?}");
+            assert!(changes.borrow().is_empty(), "{platform:?}");
         }
     }
 }
@@ -540,7 +564,8 @@ fn selectable_region_share_matches_android_long_press_and_clears_selection() {
                 IgnorePointer::new(SizedBox::shrink()).into()
             }
         });
-        let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, region).into()).unwrap();
+        let mut runtime =
+            Runtime::new(Directionality::new(TextDirection::Ltr, region).into()).unwrap();
         runtime.set_text_shortcut_platform(platform);
         runtime.run_frame(bounds()).unwrap();
         let label = runtime
