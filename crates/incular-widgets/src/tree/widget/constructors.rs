@@ -1130,10 +1130,14 @@ impl Widget {
             semantics: None,
         })
     }
-    pub(crate) fn drag_target(target: Rc<dyn RetainedDragTarget>, child: Self) -> Self {
+    pub(crate) fn drag_target(
+        target: Rc<dyn RetainedDragTarget>,
+        behavior: crate::gestures::HitTestBehavior,
+        child: Self,
+    ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
-            kind: WidgetKind::DragTarget { target, child },
+            kind: WidgetKind::DragTarget { target, behavior, child },
             semantics: None,
         })
     }

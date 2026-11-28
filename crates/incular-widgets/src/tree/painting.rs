@@ -157,6 +157,7 @@ fn claims_own_bounds(kind: Option<&WidgetKind>) -> bool {
         kind,
         Some(
             WidgetKind::Gesture { .. }
+                | WidgetKind::DragTarget { .. }
                 | WidgetKind::RawInput { .. }
                 | WidgetKind::Scroll { .. }
                 | WidgetKind::SliverViewport { .. }
@@ -211,7 +212,8 @@ fn hit_box_contains(
     if matches!(
         kind,
         RenderKind::Colored { .. } | RenderKind::CustomPaint { .. } | RenderKind::Image { .. }
-    ) || matches!(widget, Some(WidgetKind::RawInput { kind, .. }) if kind.mouse_region_opaque().is_some())
+    ) || matches!(widget, Some(WidgetKind::DragTarget { .. }))
+        || matches!(widget, Some(WidgetKind::RawInput { kind, .. }) if kind.mouse_region_opaque().is_some())
     {
         // Flutter's RenderBox covers its half-open layout box, even if
         // its fill is transparent or the image has no decoded source.
@@ -784,6 +786,13 @@ impl WidgetTree {
         {
             result.elements.push(element);
         }
+        if let (Some(element), Some(WidgetKind::DragTarget { behavior, .. })) = (element, kind)
+            && (*behavior != crate::gestures::HitTestBehavior::DeferToChild || result.accepts_hit)
+        {
+            // RenderMetaData adds the target even without a hitting child
+            // when translucent. Lower siblings remain in the path.
+            result.elements.push(element);
+        }
         if let (Some(element), Some(WidgetKind::RawInput { kind, .. })) = (element, kind) {
             use crate::gestures::HitTestBehavior::{DeferToChild, Opaque};
             let behavior = kind.hit_test_behavior();
@@ -834,7 +843,9 @@ impl WidgetTree {
             // listeners too. Translucent gestures still get their own
             // contender without blocking the hit behind an empty child.
             result.blocks_siblings |= matches!(
-                kind, Some(WidgetKind::Gesture { behavior: Opaque, .. })
+                kind,
+                Some(WidgetKind::Gesture { behavior: Opaque, .. }
+                    | WidgetKind::DragTarget { behavior: Opaque, .. })
             );
             result.accepts_hit |= match kind {
                 Some(WidgetKind::Gesture { behavior, .. })
@@ -1880,6 +1891,9 @@ fn retained_self_hit(kind: Option<&WidgetKind>) -> bool {
     match kind {
         Some(WidgetKind::Gesture { behavior, .. }) => {
             *behavior != crate::gestures::HitTestBehavior::DeferToChild
+        }
+        Some(WidgetKind::DragTarget { behavior, .. }) => {
+            *behavior == crate::gestures::HitTestBehavior::Opaque
         }
         Some(WidgetKind::RawInput { kind, .. }) => {
             use crate::gestures::HitTestBehavior::{DeferToChild, Opaque};

@@ -1049,12 +1049,14 @@ impl PartialEq for WidgetKind {
                 Self::DragTarget {
                     target: a,
                     child: b,
+                    behavior: left,
                 },
                 Self::DragTarget {
                     target: c,
                     child: d,
+                    behavior: right,
                 },
-            ) => Rc::ptr_eq(a, c) && b == d,
+            ) => Rc::ptr_eq(a, c) && b == d && left == right,
             (
                 Self::IgnorePointer {
                     ignoring: a,

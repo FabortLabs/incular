@@ -2925,23 +2925,6 @@ impl WidgetTree {
             _ => None,
         }
     }
-    /// Every drag target from `element` outward, innermost first: the drag
-    /// path that Flutter's `_getDragTargets` reads from the hit-test path.
-    pub(super) fn drag_target_ancestors(
-        &self,
-        mut element: ElementId,
-    ) -> Vec<(ElementId, Rc<dyn RetainedDragTarget>)> {
-        let mut targets = Vec::new();
-        loop {
-            if let Some(target) = self.drag_target(element) {
-                targets.push((element, target));
-            }
-            match self.parent(element) {
-                Some(parent) => element = parent,
-                None => return targets,
-            }
-        }
-    }
     /// Flutter `_DragAvatar.updateDrag`. Entered targets are the innermost
     /// targets on the path up to the first one that accepts the payload. A
     /// rejected target stays entered: it still receives `update` and `leave`
@@ -2952,19 +2935,28 @@ impl WidgetTree {
         key: GestureArenaKey,
         position: crate::drag_drop::DragPosition,
     ) {
-        let mut path = self
-            .hit_test(position.hit_point)
-            .and_then(|render| self.element_for_render(render))
-            .map(|element| self.drag_target_ancestors(element))
-            .unwrap_or_default();
+        let Some(source_context) = self.input.active_drags.get(&key).map(|drag| drag.source.context_id()) else {
+            return;
+        };
+        let path: Vec<_> = self
+            .pointer_hit_test(position.hit_point)
+            .raw()
+            .iter()
+            .copied()
+            .filter_map(|element| {
+                self.drag_target(element)
+                    .filter(|target| target.context_id() == source_context)
+                    .map(|target| (element, target))
+            })
+            .collect();
         let Some(active) = self.input.active_drags.get_mut(&key) else {
             return;
         };
-        let source_context = active.source.context_id();
-        path.retain(|(_, target)| target.context_id() == source_context);
-        // `listsMatch`: the entered targets are the leading targets of the path.
+        // A matching prefix is sufficient only when a target accepted.
+        // With all rejections, a newly appended lower target must be offered.
         let lists_match = !active.entered.is_empty()
             && path.len() >= active.entered.len()
+            && (active.target.is_some() || path.len() == active.entered.len())
             && active
                 .entered
                 .iter()

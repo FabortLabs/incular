@@ -4113,3 +4113,5 @@ packages/flutter/test/widgets/editable_text_test.dart	6137	default keyboardAppea
 packages/flutter/test/widgets/editable_text_test.dart	6809	custom keyboardAppearance is respected	paired-match	upstream-editable-defaults.md#keyboard-appearance-on-the-attached-input-client
 packages/flutter/test/widgets/editable_text_test.dart	11405	EditableText changes mouse cursor when hovered	paired-match	upstream-editable-defaults.md#pointer-cursor-follows-the-editor-before-the-containing-mouseregion
 packages/flutter/test/widgets/mouse_region_test.dart	1992	Handle mouse events should ignore the detached MouseTrackerAnnotation	paired-match	upstream-mouse-tracker-callbacks.md#dragging-after-the-original-hovered-child-detaches
+packages/flutter/test/widgets/draggable_test.dart	92	Drag and drop - a lower DragTarget is recognized after entering an upper rejecting target	paired-match	upstream-draggable-target-path.md
+packages/flutter/test/widgets/draggable_test.dart	173	Drag and drop - an accepting upper DragTarget is not bypassed by a lower overlapping target	paired-match	upstream-draggable-target-path.md

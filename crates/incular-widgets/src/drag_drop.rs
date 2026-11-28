@@ -16,7 +16,7 @@ use std::{
 use incular_config::Axis;
 use incular_core::Offset;
 
-use crate::gestures::Velocity;
+use crate::gestures::{HitTestBehavior, Velocity};
 use crate::{IgnorePointer, OverlayPortal, Positioned, Stack, Widget};
 
 #[derive(Clone)]
@@ -518,6 +518,7 @@ type DragTargetBuilder<T> = Rc<dyn Fn(Vec<T>, Vec<T>) -> Widget>;
 pub struct DragTarget<T: Clone + 'static> {
     context: DragDropContext<T>,
     child: Widget,
+    hit_test_behavior: HitTestBehavior,
     builder: Option<DragTargetBuilder<T>>,
     on_will_accept: Option<Rc<dyn Fn(T) -> bool>>,
     on_enter: Option<Rc<dyn Fn(T)>>,
@@ -532,6 +533,7 @@ impl<T: Clone + 'static> DragTarget<T> {
         Self {
             context,
             child: child.into(),
+            hit_test_behavior: HitTestBehavior::Translucent,
             builder: None,
             on_will_accept: None,
             on_enter: None,
@@ -557,6 +559,14 @@ impl<T: Clone + 'static> DragTarget<T> {
     #[must_use]
     pub fn on_will_accept(mut self, callback: impl Fn(T) -> bool + 'static) -> Self {
         self.on_will_accept = Some(Rc::new(callback));
+        self
+    }
+    /// Controls how the target joins the drag hit path. The default is
+    /// translucent: the target is offered a drag without hiding targets
+    /// behind it when its children did not accept the hit.
+    #[must_use]
+    pub fn hit_test_behavior(mut self, behavior: HitTestBehavior) -> Self {
+        self.hit_test_behavior = behavior;
         self
     }
     #[must_use]
@@ -697,6 +707,7 @@ impl<T: Clone + 'static> From<DragTarget<T>> for Widget {
                 on_accept_with_details: value.on_accept_with_details,
                 hover,
             }),
+            value.hit_test_behavior,
             child,
         )
     }

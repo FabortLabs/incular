@@ -917,6 +917,7 @@ pub(crate) enum WidgetKind {
     },
     DragTarget {
         target: Rc<dyn RetainedDragTarget>,
+        behavior: crate::gestures::HitTestBehavior,
         child: Widget,
     },
     IgnorePointer {
