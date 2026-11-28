@@ -2727,6 +2727,19 @@ impl WidgetTree {
         event: &KeyboardEvent,
         delivery: incular_gestures::RawKeyDelivery<'_>,
     ) {
+        self.notify_raw_keyboard_observers_with_report(focused, event, delivery, |error| {
+            eprintln!("raw keyboard listener failed: {}", error.message());
+        });
+    }
+
+    #[doc(hidden)]
+    pub fn notify_raw_keyboard_observers_with_report(
+        &self,
+        focused: Option<ElementId>,
+        event: &KeyboardEvent,
+        delivery: incular_gestures::RawKeyDelivery<'_>,
+        mut report: impl FnMut(crate::RawKeyboardListenerError),
+    ) {
         use incular_gestures::RawKeyDelivery;
         if matches!(delivery, RawKeyDelivery::Absent) {
             return;
@@ -2743,7 +2756,11 @@ impl WidgetTree {
                     RawKeyDelivery::Supplied(raw) => raw.clone(),
                     RawKeyDelivery::Absent => unreachable!("typed-only records are excluded"),
                 });
-                observer(raw.clone());
+                if let Some(error) =
+                    crate::RawKeyboardListenerError::catch(raw, || observer(raw.clone()))
+                {
+                    report(error);
+                }
             }
             current = self.mounted_focus_parent(id);
         }

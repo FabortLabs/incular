@@ -4254,3 +4254,5 @@ packages/flutter/test/services/raw_keyboard_test.dart	1624	Control keyboard keys
 packages/flutter/test/services/raw_keyboard_test.dart	1636	Modifier keyboard keys are correctly translated	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
 packages/flutter/test/services/raw_keyboard_test.dart	1648	data.toString	partial-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
 packages/flutter/test/services/raw_keyboard_test.dart	1664	data.equality	paired-match	upstream-raw-keyboard.md#fuchsia-key-payload-interpretation
+packages/flutter/test/services/raw_keyboard_test.dart	1018	Dispatch events to all handlers	paired-match	upstream-raw-keyboard.md#passive-listener-ordering-and-error-recovery
+packages/flutter/test/services/raw_keyboard_test.dart	1080	Exceptions from RawKeyboard listeners are caught and reported	paired-match	upstream-raw-keyboard.md#passive-listener-ordering-and-error-recovery

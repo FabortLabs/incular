@@ -354,6 +354,8 @@ pub struct Runtime {
     hardware_keyboard: incular_core::HardwareKeyboardState,
     hardware_key_handlers: incular_core::HardwareKeyHandlers,
     hardware_key_error_handler: Option<Box<dyn Fn(HardwareKeyHandlerError)>>,
+    raw_keyboard_listeners: crate::raw_keyboard::RawKeyboardListeners,
+    raw_keyboard_error_handler: Option<Box<dyn Fn(crate::RawKeyboardListenerError)>>,
     key_message_route: KeyMessageRoute,
     key_message_error_handler: Option<Box<dyn Fn(KeyMessageHandlerError)>>,
     early_focus_key_handlers: FocusKeyHandlers,
@@ -635,6 +637,8 @@ impl Runtime {
             hardware_keyboard: incular_core::HardwareKeyboardState::default(),
             hardware_key_handlers: incular_core::HardwareKeyHandlers::default(),
             hardware_key_error_handler: None,
+            raw_keyboard_listeners: crate::raw_keyboard::RawKeyboardListeners::default(),
+            raw_keyboard_error_handler: None,
             key_message_route: KeyMessageRoute::default(),
             key_message_error_handler: None,
             early_focus_key_handlers: FocusKeyHandlers::default(),
@@ -4182,6 +4186,36 @@ impl Runtime {
         self.hardware_key_error_handler = None;
     }
 
+    /// Adds a passive raw keyboard listener after the mounted raw route.
+    /// Its return cannot consume the event or stop other raw listeners.
+    pub fn add_raw_keyboard_listener(
+        &mut self,
+        listener: impl Fn(&incular_widgets::RawKeyEvent) + 'static,
+    ) -> crate::RawKeyboardSubscription {
+        self.raw_keyboard_listeners.add(listener)
+    }
+
+    /// Receives caught raw listener failures with the original event and
+    /// Rust panic payload. Without a reporter the error is logged.
+    pub fn set_raw_keyboard_error_handler(
+        &mut self,
+        handler: impl Fn(crate::RawKeyboardListenerError) + 'static,
+    ) {
+        self.raw_keyboard_error_handler = Some(Box::new(handler));
+    }
+
+    pub fn clear_raw_keyboard_error_handler(&mut self) {
+        self.raw_keyboard_error_handler = None;
+    }
+
+    fn report_raw_keyboard_error(&self, error: crate::RawKeyboardListenerError) {
+        if let Some(handler) = &self.raw_keyboard_error_handler {
+            handler(error);
+        } else {
+            tracing::error!(message = %error.message(), "raw keyboard listener failed");
+        }
+    }
+
     /// Replaces the default focus and editing route for key messages.
     /// Window-wide hardware callbacks still run independently, first.
     pub fn set_key_message_handler(&mut self, handler: impl Fn(&KeyMessage) -> bool + 'static) {
@@ -4339,7 +4373,13 @@ impl Runtime {
         // without going through runtime pointer/Tab handling. Adopt that
         // external selection before routing the event through retained parents.
         self.adopt_external_focus_change();
-        self.tree.notify_raw_keyboard_observers(self.focused, &event, message_source.raw_delivery());
+        let raw_delivery = message_source.raw_delivery();
+        self.tree.notify_raw_keyboard_observers_with_report(
+            self.focused, &event, raw_delivery, |error| self.report_raw_keyboard_error(error),
+        );
+        self.raw_keyboard_listeners.dispatch(&event, raw_delivery, |error| {
+            self.report_raw_keyboard_error(error);
+        });
 
         let hardware = self.hardware_key_handlers.dispatch(&event);
         for failure in hardware.failures {

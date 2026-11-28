@@ -237,7 +237,7 @@ pub use focus_keyboard::{
     FocusTraversalOrder, FocusTraversalPolicy, FocusTraversalPolicyKind, FocusTraversalRequest, FocusableActionDetector,
     Intent, KeyEventResult, KeyboardListener, LockState, LogicalKeySet, LogicalShortcutKey,
     NextFocusAction, NextFocusIntent, PreviousFocusAction, PreviousFocusIntent,
-    RawKeyboardListener, RequestFocusAction, RequestFocusIntent, SequentialFocusHost,
+    RawKeyboardListener, RawKeyboardListenerError, RequestFocusAction, RequestFocusIntent, SequentialFocusHost,
     OrderedTraversalPolicy, ReadingOrderTraversalPolicy, ScopedActionDispatcher, ShortcutActivator,
     ShortcutKey, ShortcutScope, ShortcutTrigger, Shortcuts, SingleActivator, VoidCallbackAction, VoidCallbackIntent,
     WidgetOrderTraversalPolicy,

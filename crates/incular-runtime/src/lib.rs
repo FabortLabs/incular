@@ -20,6 +20,7 @@ mod frame;
 mod global_shortcuts;
 mod image_playback;
 mod profiling;
+mod raw_keyboard;
 mod reactive;
 mod request_admission;
 mod request_channel;
@@ -82,6 +83,8 @@ pub use frame::{
     KeyMessage, KeyMessageHandlerError, MouseCursorUpdate, PointerPacketCancellation,
     PointerPacketDispatchError, Runtime,
 };
+pub use incular_widgets::RawKeyboardListenerError;
+pub use raw_keyboard::RawKeyboardSubscription;
 pub use global_shortcuts::{
     GlobalShortcutCompletionStatus, GlobalShortcutRegistration, GlobalShortcutRegistrationRequest,
     GlobalShortcutRequestId, GlobalShortcutService, GlobalShortcutUnregistrationRequest,

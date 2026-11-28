@@ -934,6 +934,29 @@ pub enum RuntimeKeyIntent {
     ExtendSelectionByCharacter(ExtendSelectionByCharacterIntent),
 }
 
+/// A failure reported by a passive raw keyboard listener.
+pub struct RawKeyboardListenerError {
+    pub event: crate::RawKeyEvent,
+    pub payload: Box<dyn std::any::Any + Send + 'static>,
+}
+
+impl RawKeyboardListenerError {
+    #[doc(hidden)]
+    pub fn catch(event: &crate::RawKeyEvent, listener: impl FnOnce()) -> Option<Self> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(listener))
+            .err()
+            .map(|payload| Self { event: event.clone(), payload })
+    }
+
+    /// Returns the panic's text when it was raised with a string payload.
+    #[must_use]
+    pub fn message(&self) -> &str {
+        self.payload.downcast_ref::<&str>().copied()
+            .or_else(|| self.payload.downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("non-string panic payload")
+    }
+}
+
 /// A widget that listens for keyboard events routed from platform input.
 #[derive(Clone)]
 pub struct KeyboardListener {
