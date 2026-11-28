@@ -4295,3 +4295,9 @@ packages/flutter/test/rendering/flex_test.dart	119	Vertical Overflow with Render
 packages/flutter/test/rendering/flex_test.dart	140	Horizontal Overflow	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
 packages/flutter/test/rendering/flex_test.dart	160	Horizontal Overflow with RenderFlex.spacing	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
 packages/flutter/test/rendering/flex_test.dart	181	Vertical Flipped Constraints	paired-match	upstream-render-flex-intrinsics.md#overflow-and-flipped-constraints
+packages/flutter/test/widgets/interactive_viewer_test.dart	792	Can scale with mouse	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	809	Cannot scale with mouse when scale is disabled	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	827	Scale with mouse returns onInteraction properties	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	1540	discrete scroll pointer events	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	1611	trackpadScrollCausesScale	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll
+packages/flutter/test/widgets/interactive_viewer_test.dart	1648	trackpad pointer scroll events cause scale	paired-match	upstream-interactive-viewer-signals.md#mouse-wheel-and-trackpad-scroll

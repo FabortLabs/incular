@@ -2303,10 +2303,17 @@ impl Runtime {
         match input.kind {
             ConvertedPointerKind::Contact { event, .. } => self.dispatch_packet_contact(event),
             ConvertedPointerKind::Scroll(event) => {
-                let _ = self.handle_input_at(
-                    InputEvent::ScrollAt { position: event.position, delta: event.scroll_delta },
-                    event.time,
-                );
+                let started = Instant::now();
+                let diagnostic = InputEvent::ScrollAt {
+                    position: event.position,
+                    delta: event.scroll_delta,
+                };
+                self.tree.set_diagnostic_input_trigger(None, &diagnostic, diagnostic_input_trigger);
+                self.advance_text_history_clock(event.time);
+                self.frame_requested |= self.tree.scroll_signal_at(event, self.keyboard_modifiers.shift());
+                self.settle_drag_keyboard_dismissal();
+                self.pending_event_processing_us = self.pending_event_processing_us
+                    .saturating_add(us_since_instant(started));
             }
             ConvertedPointerKind::PanZoom { event, pan_delta } => {
                 let traced_at = Instant::now();

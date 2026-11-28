@@ -4268,7 +4268,10 @@ impl WidgetTree {
         delta: Offset,
         flip_axes: bool,
     ) -> bool {
-        let (claimed, observed) = self.route_pointer_scroll(point, delta, flip_axes);
+        let (claimed, observed) = self.route_pointer_scroll(
+            mouse_wheel_event(point, delta),
+            flip_axes,
+        );
         claimed || observed
     }
 
@@ -4282,25 +4285,40 @@ impl WidgetTree {
         flip_axes: bool,
         respond: impl FnOnce(bool),
     ) -> bool {
-        let (claimed, observed) = self.route_pointer_scroll(point, delta, flip_axes);
+        let (claimed, observed) = self.route_pointer_scroll(
+            mouse_wheel_event(point, delta),
+            flip_axes,
+        );
         if !claimed {
             respond(true);
         }
         claimed || observed
     }
 
+    /// Delivers a metadata-bearing discrete scroll without treating a
+    /// trackpad as a mouse wheel. The axis modifier applies only to mice.
+    pub fn scroll_signal_at(
+        &mut self,
+        event: crate::raw_input::RawPointerEvent,
+        flip_axes: bool,
+    ) -> bool {
+        let (claimed, observed) = self.route_pointer_scroll(event, flip_axes);
+        claimed || observed
+    }
+
     fn route_pointer_scroll(
         &mut self,
-        point: Offset,
-        delta: Offset,
+        event: crate::raw_input::RawPointerEvent,
         flip_axes: bool,
     ) -> (bool, bool) {
+        let point = event.position;
+        let delta = event.scroll_delta;
         // Flutter dispatches the `PointerScrollEvent` to every listener on
         // the hit path; scrollables then claim it through the resolver.
         let signal = crate::raw_input::PointerSignalResolver::begin();
-        let signaled = self.dispatch_pointer_signal(point, delta);
+        let signaled = self.dispatch_pointer_signal(event);
         let claim = signal.finish();
-        let delta = if flip_axes {
+        let delta = if flip_axes && event.kind == crate::raw_input::PointerDeviceKind::Mouse {
             Offset::new(delta.y, delta.x)
         } else {
             delta
@@ -4985,4 +5003,15 @@ fn force_press_event(
         raw.local_position = local.transform_point(event.position);
     }
     raw
+}
+
+fn mouse_wheel_event(point: Offset, delta: Offset) -> crate::raw_input::RawPointerEvent {
+    crate::raw_input::RawPointerEvent::scroll(
+        0,
+        0,
+        crate::raw_input::PointerDeviceKind::Mouse,
+        point,
+        delta,
+        incular_core::time::Instant::now(),
+    )
 }

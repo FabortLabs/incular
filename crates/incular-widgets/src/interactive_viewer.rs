@@ -357,7 +357,7 @@ impl InteractiveViewer {
 
     /// Flutter `trackpadScrollCausesScale` (default `false`): whether trackpad
     /// scrolling scales the child like a mouse wheel. By default a trackpad
-    /// scroll is ignored here, as Flutter ignores it.
+    /// scroll pans instead.
     #[must_use]
     pub fn trackpad_scroll_causes_scale(mut self, causes_scale: bool) -> Self {
         self.trackpad_scroll_causes_scale = causes_scale;
@@ -686,17 +686,14 @@ impl ViewerState {
         }
     }
 
-    /// `_receivedPointerSignal` for a mouse wheel: scales about the pointer.
+    /// Discrete trackpad scroll pans by default. Mouse-wheel input and
+    /// opt-in trackpad scrolling zoom around the viewport-local pointer.
     fn pointer_signal(&self, event: RawPointerEvent) {
-        if event.scroll_delta.y == 0.0 {
+        let trackpad_pan = event.kind == incular_gestures::PointerDeviceKind::Trackpad
+            && !self.config.trackpad_scroll_causes_scale;
+        if !trackpad_pan && event.scroll_delta.y == 0.0 {
             return;
         }
-        if event.kind == incular_gestures::PointerDeviceKind::Trackpad
-            && !self.config.trackpad_scroll_causes_scale
-        {
-            return;
-        }
-        let scale_change = (-event.scroll_delta.y / self.config.scale_factor).exp();
         let (global, local) = (event.position, event.local_position);
         if let Some(callback) = &self.config.on_interaction_start {
             callback(ScaleStartDetails {
@@ -707,10 +704,11 @@ impl ViewerState {
                 kind: None,
             });
         }
-        let update = ScaleUpdateDetails {
+
+        let mut update = ScaleUpdateDetails {
             focal_point: global,
             local_focal_point: local,
-            scale: scale_change,
+            scale: 1.0,
             horizontal_scale: 1.0,
             vertical_scale: 1.0,
             rotation: 0.0,
@@ -718,11 +716,25 @@ impl ViewerState {
             pointer_count: 0,
             source_time: None,
         };
-        if self.gesture_is_supported(Some(GestureType::Scale)) {
-            let focal_point_scene = self.to_scene(local);
-            self.set_matrix(self.matrix_scale(self.matrix(), scale_change));
-            let scaled = self.to_scene(local);
-            self.set_matrix(self.matrix_translate(self.matrix(), scaled - focal_point_scene));
+        if trackpad_pan {
+            let delta = event.local_scroll_delta;
+            let supported = self.gesture_is_supported(Some(GestureType::Pan));
+            if supported {
+                let from = self.to_scene(local);
+                let to = self.to_scene(local - delta);
+                self.set_matrix(self.matrix_translate(self.matrix(), to - from));
+            }
+            update.focal_point = global - event.scroll_delta;
+            update.local_focal_point = local - if supported { delta } else { event.scroll_delta };
+            update.focal_point_delta = Offset::ZERO - delta;
+        } else {
+            update.scale = (-event.scroll_delta.y / self.config.scale_factor).exp();
+            if self.gesture_is_supported(Some(GestureType::Scale)) {
+                let focal_point_scene = self.to_scene(local);
+                self.set_matrix(self.matrix_scale(self.matrix(), update.scale));
+                let scaled = self.to_scene(local);
+                self.set_matrix(self.matrix_translate(self.matrix(), scaled - focal_point_scene));
+            }
         }
         self.notify_update(update);
         if let Some(callback) = &self.config.on_interaction_end {
@@ -851,6 +863,8 @@ impl From<InteractiveViewer> for Widget {
         let last_focal_point = Rc::new(Cell::new(Offset::ZERO));
         let detector = GestureDetector::new(Widget::animation_ticker(inertia_controller, built))
             .behavior(HitTestBehavior::Opaque)
+            .trackpad_scroll_causes_scale(state.config.trackpad_scroll_causes_scale)
+            .trackpad_scroll_to_scale_factor(Offset::new(0., -1. / state.config.scale_factor))
             .on_scale_start({
                 let state = state.clone();
                 move |details| state.scale_start(details)

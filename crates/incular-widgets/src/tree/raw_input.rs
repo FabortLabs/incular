@@ -872,18 +872,9 @@ impl WidgetTree {
         }
     }
 
-    /// Delivers a wheel scroll to the `on_pointer_signal` listeners under
-    /// `point`, innermost first. Returns whether any listener received it.
-    pub(super) fn dispatch_pointer_signal(&self, point: Offset, scroll_delta: Offset) -> bool {
-        let hit = self.pointer_hit_test(point);
-        let event = RawPointerEvent::scroll(
-            0,
-            0,
-            crate::raw_input::PointerDeviceKind::Mouse,
-            point,
-            scroll_delta,
-            incular_core::time::Instant::now(),
-        );
+    /// Delivers the pointer signal innermost first, preserving device and time.
+    pub(super) fn dispatch_pointer_signal(&self, event: RawPointerEvent) -> bool {
+        let hit = self.pointer_hit_test(event.position);
         let listeners = self
             .listener_ids(hit.raw())
             .into_iter()

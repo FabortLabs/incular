@@ -283,6 +283,7 @@ fn convert(datum: PointerData, ratio: f64) -> Option<ConvertedPointerEvent> {
             }
             ConvertedPointerKind::Scroll(RawPointerEvent {
                 scroll_delta,
+                local_scroll_delta: scroll_delta,
                 ..raw_event(0, 0, PointerPhase::Move)
             })
         }
