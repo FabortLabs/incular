@@ -294,3 +294,93 @@ fn a_zero_alpha_leader_unlinks_its_follower_for_paint_and_hits_until_visible_aga
         }
     }
 }
+
+#[test]
+fn rebinding_both_layers_inside_layout_keeps_the_follower_at_the_same_point() {
+    use incular_widgets::{Directionality, GlobalKey, LayoutBuilder, TextDirection};
+
+    let key = GlobalKey::new();
+    let link = LayerLink::new();
+    let replacement = LayerLink::new();
+    let scene = |link: LayerLink| {
+        Directionality::new(
+            TextDirection::Ltr,
+            LayoutBuilder::new(move |_, _| {
+                let target = CompositedTransformTarget::new(link.clone(), SizedBox::square(10.));
+                let child = Widget::box_(Size::new(20., 20.), MARKER).with_key(key);
+                let follower = CompositedTransformFollower::new(link.clone(), child)
+                    .target_anchor(Alignment::CENTER)
+                    .follower_anchor(Alignment::CENTER);
+                Stack::new([
+                    Positioned::new(target).left(123.).top(456.),
+                    Positioned::new(follower).left(787.).top(343.),
+                ])
+                .into()
+            }),
+        )
+        .into()
+    };
+    let viewport = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(link.clone())).unwrap();
+    runtime.run_frame(viewport).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let child = runtime.tree().element_with_key(&key.into()).unwrap();
+    let expected = rect(118., 451., 20., 20.);
+    assert_eq!(runtime.tree().element_bounds(child), Some(expected));
+    assert!(link.is_linked());
+
+    runtime
+        .schedule_update(root, scene(replacement.clone()))
+        .unwrap();
+    let (frame, _) = runtime.run_frame(viewport).unwrap();
+    assert_eq!(runtime.tree().element_with_key(&key.into()), Some(child));
+    assert_eq!(runtime.tree().element_bounds(child), Some(expected));
+    assert_eq!(painted_marker(&frame), expected);
+    assert!(!link.is_linked());
+    assert!(replacement.is_linked());
+}
+
+#[test]
+fn a_leader_updates_padding_then_survives_an_independent_sibling_repaint() {
+    use incular_config::EdgeInsets;
+    use incular_widgets::{ClipRect, ColoredBox, RepaintBoundary};
+
+    let link = LayerLink::new();
+    let clear_red = Color::rgba(255, 0, 0, 0);
+    let clear_green = Color::rgba(0, 255, 0, 0);
+    let build = |left, sibling_color| {
+        let layer = CompositedTransformTarget::new(
+            link.clone(),
+            RepaintBoundary::new(ClipRect::new(ColoredBox::new(
+                clear_red,
+                SizedBox::expand(),
+            ))),
+        );
+        let target = Padding::new(EdgeInsets::only(left, 0., 0., 0.), layer);
+        let sibling = RepaintBoundary::new(ColoredBox::new(sibling_color, SizedBox::expand()));
+        Widget::from(Stack::new([
+            Widget::from(target),
+            Positioned::fill(sibling).into(),
+        ]))
+    };
+    let viewport = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(build(10., Color::BLACK)).unwrap();
+    let root = runtime.tree().root().unwrap();
+    for (left, color) in [(10., Color::BLACK), (0., Color::BLACK), (0., clear_green)] {
+        runtime.schedule_update(root, build(left, color)).unwrap();
+        let (paint, _) = runtime.run_frame(viewport).unwrap();
+        assert_eq!(
+            link.leader_transform(),
+            Some(CoreTransform::translation(Offset::new(left, 0.)))
+        );
+        assert_eq!(link.leader_size(), Some(Size::new(800. - left, 600.)));
+        assert_eq!(
+            paint
+                .commands()
+                .iter()
+                .filter(|op| matches!(op, PaintCommand::Rect { color: fill, .. } if *fill == color))
+                .count(),
+            1
+        );
+    }
+}

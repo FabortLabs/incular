@@ -72,3 +72,15 @@ draw commands, real hit targets, and restored 20×20 placement.
 A direct compositor control also verifies that a hidden first
 candidate cannot displace a visible target. All 18 focused tests
 passed. This authored probe does not add an upstream registration.
+
+## Relinking during layout and repainting a sibling
+
+Both pinned `widgets/composited_transform_test.dart` cases passed.
+Rebinding the target and follower inside the layout callback kept
+the same keyed 20×20 child at (118,451), and native paint confirmed
+that placement. The old link was cleared and the new one published.
+A separate fixture changed a clipped leader's left padding from 10
+to 0, then repainted only its sibling. The leader's transform and
+size stayed correct through all three frames, and the sibling
+produced its expected fill exactly once. All ten focused native
+composited transform tests passed.
