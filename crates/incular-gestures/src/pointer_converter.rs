@@ -136,10 +136,7 @@ impl ConvertedPointerEvent {
         &'a self,
         transform: Option<&'a Matrix4>,
     ) -> PointerEventProjection<'a> {
-        PointerEventProjection {
-            source: self,
-            transform,
-        }
+        PointerEventProjection::new(self, transform)
     }
 }
 
@@ -150,24 +147,29 @@ pub struct PointerMotionCoordinates {
     pub delta: OffsetPair,
 }
 
-/// A borrowed projection of a view-scoped pointer event. Multiple listeners
-/// can project the same source without allocating or composing their matrices.
+/// A borrowed view of a pointer event in another coordinate space. Multiple
+/// listeners can project the same source without allocating or composing
+/// their matrices. The source can be a converted packet or a raw sample.
 #[derive(Clone, Copy, Debug)]
-pub struct PointerEventProjection<'a> {
-    source: &'a ConvertedPointerEvent,
+pub struct PointerEventProjection<'a, Event = ConvertedPointerEvent> {
+    source: &'a Event,
     transform: Option<&'a Matrix4>,
 }
 
-impl<'a> PointerEventProjection<'a> {
+impl<'a, Event> PointerEventProjection<'a, Event> {
+    pub(crate) const fn new(source: &'a Event, transform: Option<&'a Matrix4>) -> Self {
+        Self { source, transform }
+    }
+
     /// The source event, with its global coordinates and untouched metadata.
     #[must_use]
-    pub const fn source(self) -> &'a ConvertedPointerEvent {
+    pub const fn source(self) -> &'a Event {
         self.source
     }
 
     /// The original event of a transformed view, or none in global space.
     #[must_use]
-    pub fn original(self) -> Option<&'a ConvertedPointerEvent> {
+    pub fn original(self) -> Option<&'a Event> {
         self.transform.map(|_| self.source)
     }
 
@@ -176,6 +178,26 @@ impl<'a> PointerEventProjection<'a> {
         self.transform
     }
 
+    fn map_motion(&self, position: Offset, delta: Offset) -> PointerMotionCoordinates {
+        let (local_position, local_delta) = self.transform.map_or((position, delta), |transform| {
+            project_motion(*transform, position, delta)
+        });
+        PointerMotionCoordinates {
+            position: OffsetPair::new(local_position, position),
+            delta: OffsetPair::new(local_delta, delta),
+        }
+    }
+}
+
+impl PointerEventProjection<'_, RawPointerEvent> {
+    /// Pointer position and movement in the original and target spaces.
+    #[must_use]
+    pub fn coordinates(self) -> PointerMotionCoordinates {
+        self.map_motion(self.source.position, self.source.delta)
+    }
+}
+
+impl PointerEventProjection<'_> {
     /// Pointer position and movement in both source and target coordinates.
     /// Wheel motion and cumulative pan are distinct from pointer movement.
     #[must_use]
@@ -204,16 +226,6 @@ impl<'a> PointerEventProjection<'a> {
                 pan_delta,
             } => Some(self.map_motion(pan, pan_delta)),
             _ => None,
-        }
-    }
-
-    fn map_motion(self, position: Offset, delta: Offset) -> PointerMotionCoordinates {
-        let (local_position, local_delta) = self.transform.map_or((position, delta), |transform| {
-            project_motion(*transform, position, delta)
-        });
-        PointerMotionCoordinates {
-            position: OffsetPair::new(local_position, position),
-            delta: OffsetPair::new(local_delta, delta),
         }
     }
 }

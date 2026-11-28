@@ -75,9 +75,15 @@ projection. Enter/exit samples also preserve metadata via the raw value
 path. A separate projective pan control verifies that motion is mapped
 from both endpoints. All 35 targeted native tests passed.
 
-The original remains partial: the raw enter/exit value path does not
-expose Flutter's identity backlink, normalized force is not Flutter's raw
-pressure reading, and retained widget hit testing is still affine.
+The original now pairs. Raw enter and exit samples also have a
+borrowed view with the source identity and exact target matrix, as do
+converted packets. Global motion and metadata stay on that source;
+local motion is computed from it, not from another target's projection.
+The native fixture distinguishes raw contact pressure 34 from
+normalized force 0.5, and verifies zero boundary pressure with the
+original range of 10–60. The pinned original and 22 focused native
+checks passed. This checks event projections, not projective hit
+testing in a retained widget hierarchy.
 
 The desktop adapter now preserves Winit's raw calibrated pressure and
 range separately from the force used by recognizers. The native

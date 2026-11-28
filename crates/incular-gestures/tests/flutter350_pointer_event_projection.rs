@@ -68,7 +68,8 @@ fn converted_contacts_signals_and_pan_zoom_project_without_replacing_the_origina
                 synthesized: true,
                 sample: PointerSampleMetadata::new(NormalizedPressure::new(0.5), None)
                     .with_contact(PointerContactMetadata {
-                        raw_pressure: None,
+                        raw_pressure: matches!(change, Change::Down | Change::Move | Change::Up)
+                            .then_some(34.0),
                         obscured: true,
                         pressure_min: 10.,
                         pressure_max: 60.,
@@ -116,6 +117,10 @@ fn converted_contacts_signals_and_pan_zoom_project_without_replacing_the_origina
             coordinates.delta,
             OffsetPair::new(expected_delta + expected_delta, expected_delta)
         );
+        assert_eq!(
+            unprojected.coordinates().delta,
+            OffsetPair::new(expected_delta, expected_delta)
+        );
         let second = Matrix4::translation(-5., -7., 0.);
         assert_eq!(
             source
@@ -143,16 +148,56 @@ fn converted_contacts_signals_and_pan_zoom_project_without_replacing_the_origina
         }
 
         if let ConvertedPointerKind::Contact { event, .. } = source.kind {
+            let press = matches!(change, Change::Down | Change::Move | Change::Up);
+            let pressure = if press { 34. } else { 0. };
+            let projected = event.projection(Some(&transform));
+            assert_eq!(projected.coordinates(), coordinates);
+            assert_eq!(projected.source().pressure(), pressure);
             let raw = event.transformed_matrix4(Some(transform));
+            assert_eq!(raw.pressure(), pressure);
             assert_eq!(raw.local_position, coordinates.position.local);
             assert_eq!(raw.local_delta, coordinates.delta.local);
             assert_eq!(raw.in_global_coordinates(), event);
+            assert_eq!(
+                source.platform_data,
+                if matches!(change, Change::Move) {
+                    10
+                } else {
+                    0
+                }
+            );
             if matches!(change, Change::Hover | Change::Move) {
                 for boundary in [event.as_mouse_enter(), event.as_mouse_exit()] {
-                    let projected = boundary.transformed_matrix4(Some(transform));
-                    assert_eq!(projected.local_position, local_position);
-                    assert_eq!(projected.local_delta, Offset::new(10., 10.));
-                    assert_eq!(projected.in_global_coordinates(), boundary);
+                    let unprojected = boundary.projection(None);
+                    assert!(unprojected.original().is_none());
+                    assert!(unprojected.transform().is_none());
+                    assert_eq!(
+                        unprojected.coordinates().position,
+                        OffsetPair::new(position, position)
+                    );
+                    assert_eq!(
+                        unprojected.coordinates().delta,
+                        OffsetPair::new(delta, delta)
+                    );
+                    let projected = boundary.projection(Some(&transform));
+                    assert!(std::ptr::eq(projected.original().unwrap(), &boundary));
+                    assert!(std::ptr::eq(projected.transform().unwrap(), &transform));
+                    assert_eq!(projected.coordinates(), coordinates);
+                    assert_eq!(projected.source().pressure(), 0.);
+                    assert_eq!(projected.source().sample.contact.pressure_min, 10.);
+                    assert_eq!(projected.source().sample.contact.pressure_max, 60.);
+                    assert_eq!(
+                        boundary
+                            .projection(Some(&second))
+                            .coordinates()
+                            .position
+                            .local,
+                        Offset::new(15., 23.),
+                    );
+                    let owned = boundary.transformed_matrix4(Some(transform));
+                    assert_eq!(owned.local_position, local_position);
+                    assert_eq!(owned.local_delta, Offset::new(10., 10.));
+                    assert_eq!(owned.in_global_coordinates(), boundary);
                 }
             }
         }

@@ -17,6 +17,7 @@ use crate::keyboard::{
     ErasedShortcutScope, FocusKeyEventHandler, StatefulShortcutHandler,
 };
 
+use crate::pointer_converter::PointerEventProjection;
 use crate::scale::{ScaleEndDetails, ScaleStartDetails, ScaleUpdateDetails};
 
 /// Matching offsets in a target's local space and the global logical space.
@@ -341,6 +342,17 @@ impl RawPointerEvent {
         Matrix4::from_columns(entries)
     }
 
+    /// Borrows this raw event in the receiving target's coordinate space.
+    /// Unlike a value copy, the projection retains its source identity,
+    /// including on enter and exit events that never came from a converter.
+    #[must_use]
+    pub const fn projection<'a>(
+        &'a self,
+        transform: Option<&'a Matrix4>,
+    ) -> PointerEventProjection<'a, Self> {
+        PointerEventProjection::new(self, transform)
+    }
+
     /// Projects local position and delta through a pointer matrix.
     /// A projective displacement is the difference of two mapped points,
     /// not the transform of the delta as an independent vector.
@@ -349,8 +361,9 @@ impl RawPointerEvent {
         let Some(transform) = transform else {
             return self;
         };
-        (self.local_position, self.local_delta) =
-            project_motion(transform, self.position, self.delta);
+        let coordinates = self.projection(Some(&transform)).coordinates();
+        self.local_position = coordinates.position.local;
+        self.local_delta = coordinates.delta.local;
         self
     }
 
