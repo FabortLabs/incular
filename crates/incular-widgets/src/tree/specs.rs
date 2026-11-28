@@ -919,7 +919,7 @@ pub(crate) enum WidgetKind {
         alignment: Alignment,
         width_factor: Option<f32>,
         height_factor: Option<f32>,
-        child: Widget,
+        child: Option<Widget>,
     },
     Flex {
         axis: Axis,

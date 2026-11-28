@@ -89,3 +89,16 @@ counts. It shares the text-shaping helper with the dry size query.
 This is the alphabetic path; the ideographic query and Flutter's
 literally childless positioned box remain separate. All 23 focused
 native baseline and intrinsic tests passed.
+
+## Childless aligned boxes
+
+The exact :14 and :34 pinned registrations now pair. An actual
+Align with no retained child returns no baseline for both the
+default center and top-left alignment. It still fills each
+unfactored bounded axis: at a maximum of 100 × 100 it measures
+100 × 100, and adding a height factor gives 100 × 0. The same
+childless shape is preserved by Center and the alignment transition
+descriptor. All 24 selected baseline, layout, structure, and
+transition tests passed. A separate sliver-alpha fixture was
+also checked and reproduced its pre-existing failure unchanged
+on the prior commit; it is not evidence for this slice.

@@ -60,20 +60,32 @@ pub struct Align {
         setter(transform = |factor: f32| Some(factor.max(0.0)))
     )]
     pub(crate) height_factor: Option<f32>,
-    #[builder(setter(into))]
-    pub(crate) child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    pub(crate) child: Option<Widget>,
 }
 
 impl Align {
     /// Creates an align widget with explicit alignment and a child.
     #[must_use]
     pub fn new(alignment: Alignment, child: impl Into<Widget>) -> Self {
+        Self::empty(alignment).child(child)
+    }
+
+    /// Creates an Align with no child.
+    #[must_use]
+    pub const fn empty(alignment: Alignment) -> Self {
         Self {
             alignment,
             width_factor: None,
             height_factor: None,
-            child: child.into(),
+            child: None,
         }
+    }
+
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
     }
 
     /// Sets the width scaling factor relative to child width.
@@ -111,19 +123,31 @@ pub struct Center {
         setter(transform = |factor: f32| Some(factor.max(0.0)))
     )]
     height_factor: Option<f32>,
-    #[builder(setter(into))]
-    child: Widget,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
 impl Center {
     /// Creates a Center widget with a child.
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
+        Self::empty().child(child)
+    }
+
+    /// Creates a Center with no child.
+    #[must_use]
+    pub const fn empty() -> Self {
         Self {
             width_factor: None,
             height_factor: None,
-            child: child.into(),
+            child: None,
         }
+    }
+
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
     }
 
     /// Sets the width scaling factor relative to child width.
@@ -143,7 +167,8 @@ impl Center {
 
 impl From<Center> for Widget {
     fn from(value: Center) -> Self {
-        let mut align = Align::new(Alignment::CENTER, value.child);
+        let mut align = Align::empty(Alignment::CENTER);
+        align.child = value.child;
         if let Some(wf) = value.width_factor {
             align = align.width_factor(wf);
         }

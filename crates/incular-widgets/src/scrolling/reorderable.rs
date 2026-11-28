@@ -130,6 +130,7 @@ pub(crate) fn install_listener(
         | WidgetKind::SizedOverflow { child, .. }
         | WidgetKind::Unconstrained { child, .. }
         | WidgetKind::ClipPath { child, .. }
+        | WidgetKind::Align { child, .. }
         | WidgetKind::Constrained { child, .. } => child
             .as_mut()
             .and_then(|child| install_listener(child, wrap)),
@@ -148,7 +149,6 @@ pub(crate) fn install_listener(
         | WidgetKind::DragTarget { child, .. }
         | WidgetKind::IgnorePointer { child, .. }
         | WidgetKind::AbsorbPointer { child, .. }
-        | WidgetKind::Align { child, .. }
         | WidgetKind::Flexible { child, .. }
         | WidgetKind::Positioned { child, .. }
         | WidgetKind::ClipOval { child, .. }

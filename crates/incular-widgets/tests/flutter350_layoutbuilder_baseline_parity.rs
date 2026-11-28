@@ -235,3 +235,33 @@ fn querying_a_baseline_at_different_bounds_keeps_the_previous_laid_out_geometry(
     assert_eq!(tree.baseline(render), wet_baseline);
     assert_eq!(tree.diagnostics().layouts, layouts);
 }
+
+#[test]
+fn a_childless_align_answers_the_dry_query_and_expands_only_unfactored_bounded_axes() {
+    use incular_config::Alignment;
+    use incular_widgets::Align;
+
+    let size = Constraints::loose(Size::new(100., 100.));
+    let mut tree = WidgetTree::new();
+    let empty = |alignment| Widget::from(Align::empty(alignment));
+    let root = tree.mount(empty(Alignment::CENTER)).unwrap();
+    for alignment in [Alignment::CENTER, Alignment::TOP_LEFT] {
+        tree.update(root, empty(alignment)).unwrap();
+        let render = tree.render_id(root).unwrap();
+        assert!(tree.children(root).unwrap().is_empty());
+        assert_eq!(tree.dry_alphabetic_baseline(render, size), None);
+        tree.layout(size).unwrap();
+        assert_eq!(tree.render_size(render), Some(Size::new(100., 100.)));
+    }
+
+    tree.update(
+        root,
+        Align::empty(Alignment::CENTER).height_factor(1.5).into(),
+    )
+    .unwrap();
+    tree.layout(size).unwrap();
+    assert_eq!(
+        tree.render_size(tree.render_id(root).unwrap()),
+        Some(Size::new(100., 0.))
+    );
+}

@@ -747,7 +747,7 @@ pub struct AnimatedAlign {
     alignment: AlignmentGeometry,
     width_factor: Option<f32>,
     height_factor: Option<f32>,
-    child: Widget,
+    child: Option<Widget>,
     timing: ImplicitTiming,
 }
 
@@ -764,7 +764,7 @@ impl AnimatedAlign {
             alignment: alignment.into(),
             width_factor: None,
             height_factor: None,
-            child: child.into(),
+            child: Some(child.into()),
             timing: ImplicitTiming::new(duration),
         }
     }
@@ -834,7 +834,8 @@ impl ImplicitlyAnimated for AnimatedAlign {
             AlignmentGeometry::Physical(alignment) => alignment,
             logical => logical.resolve(context.text_direction().unwrap_or(TextDirection::Ltr)),
         };
-        let mut align = Align::new(alignment, self.child.clone());
+        let mut align = Align::empty(alignment);
+        align.child = self.child.clone();
         if let Some(factor) = evaluate(&tweens.height_factor, t) {
             align = align.height_factor(factor);
         }

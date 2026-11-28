@@ -4355,8 +4355,10 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             .map_or(Some(0.0), |child| {
                 if transform.is_some() { None } else { widget_main_extent_hint(child, axis) }
             }),
-        WidgetKind::Align { child, .. }
-        | WidgetKind::ClipOval { child, .. }
+        WidgetKind::Align { child, .. } => child
+            .as_ref()
+            .and_then(|child| widget_main_extent_hint(child, axis)),
+        WidgetKind::ClipOval { child, .. }
         | WidgetKind::Gesture { child, .. }
         | WidgetKind::Draggable { child, .. }
         | WidgetKind::DragTarget { child, .. }

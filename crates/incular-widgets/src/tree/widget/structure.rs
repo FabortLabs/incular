@@ -2567,8 +2567,8 @@ impl WidgetKind {
             WidgetKind::Align { child, .. } => (
                 WidgetType::Align,
                 Layout,
-                Single,
-                WidgetChildren::Single(child),
+                Optional,
+                WidgetChildren::Optional(child.as_ref()),
             ),
             WidgetKind::Flex { children, .. } => {
                 (WidgetType::Flex, Layout, Many, ManyChildren(children))
