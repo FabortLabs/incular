@@ -458,6 +458,21 @@ impl Runtime {
             .unwrap_or_default()
     }
 
+    /// Builds just the buttons explicitly selected by the mounted editor's
+    /// legacy `ToolbarOptions`, without opening a toolbar or moving focus.
+    /// Unset or empty options return `None`, allowing an adaptive fallback;
+    /// nonempty options whose actions are unavailable return an empty list.
+    pub fn editable_button_items_for_toolbar_options(
+        &mut self,
+        field: ElementId,
+    ) -> Option<Vec<ContextMenuButtonItem>> {
+        let (_, options) = self.tree.text_field_toolbar_policy(field)?;
+        if options? == incular_widgets::ToolbarOptions::EMPTY {
+            return None;
+        }
+        Some(self.text_field_context_menu_items(field))
+    }
+
     fn text_field_context_menu_items(&mut self, field: ElementId) -> Vec<ContextMenuButtonItem> {
         let dispatcher = self.dispatcher();
         self.text_field_context_menu_button_types(field)

@@ -141,3 +141,20 @@ toolbar and clicks its actual Paste control. The clipboard text reaches
 the editor and `on_changed` exactly once, the caret ends after the inserted
 text, the toolbar closes, and the editing focus remains. All 32 focused
 native menu, clipboard and scrolling tests passed.
+
+## Explicit toolbar action options
+
+All nine pinned `buttonItemsForToolbarOptions` cases at **3264, 3285,
+3311, 3354, 3380, 3423, 3449, 3492, 3519** passed. The native
+`Runtime::editable_button_items_for_toolbar_options` query is independent
+of mounting a menu and of gaining focus. Empty options yield no override
+(`None`), while explicit but unavailable actions yield an empty list.
+Read-only blocks Cut and Paste, obscuring blocks Copy, and combining both
+blocks Select All.
+
+The four allowed one-action cases invoke their actual retained runtime
+callbacks. Cut clears the selected text and writes it to the clipboard,
+Copy leaves the text in place, Paste inserts new clipboard contents at the
+end even if those contents arrive after the query, and Select All selects
+the whole buffer without editing it. Nineteen focused native cases passed.
+No Material or Cupertino toolbar widgets are part of the native fixture.
