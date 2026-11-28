@@ -4020,3 +4020,7 @@ packages/flutter/test/widgets/transform_test.dart	321	Transform with inf value s
 packages/flutter/test/widgets/transform_test.dart	332	Transform with -inf value short-circuits rendering	paired-match	upstream-transform-paint-culling.md
 packages/flutter/test/widgets/transform_test.dart	343	Transform.rotate does not remove layers due to singular short-circuit	paired-match	upstream-transform-paint-culling.md
 packages/flutter/test/widgets/transform_test.dart	471	Transform.scale with 0.0 does not paint child layers	paired-match	upstream-transform-paint-culling.md
+packages/flutter/test/widgets/transform_test.dart	207	Composited transform offset	partial-match	upstream-transform-quarter-turns.md#default-affine-matrices-in-the-original-viewport
+packages/flutter/test/widgets/transform_test.dart	231	Transform.rotate	paired-match	upstream-transform-quarter-turns.md#default-affine-matrices-in-the-original-viewport
+packages/flutter/test/widgets/transform_test.dart	277	Transform.translate	partial-match	upstream-transform-quarter-turns.md#default-affine-matrices-in-the-original-viewport
+packages/flutter/test/widgets/transform_test.dart	291	Transform.scale	paired-match	upstream-transform-quarter-turns.md#default-affine-matrices-in-the-original-viewport

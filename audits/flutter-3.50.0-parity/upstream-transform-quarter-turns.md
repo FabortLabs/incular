@@ -86,3 +86,21 @@ reinstates the native stage, but Rust's Transform takes a required child
 and the Dart absent-child intermediate state was not compared. These
 fixtures verify retained command semantics with the wgpu renderer
 unchanged, not an external filter golden or native GPU pixels.
+
+## Default affine matrices in the original viewport
+
+Pinned `widgets/transform_test.dart:207,231,277,291` passed. With an
+800×600 retained child, a default quarter-turn gives the exact affine
+coefficients [0,1,-1,0,700,-100] and a default double scale gives
+[2,0,0,2,-400,-300]. The native compositor applies each matrix
+to the actual child picture and keeps the (400,300) center fixed for
+the scale. These two cases pair.
+
+The (100,50) translation moves the native child origin without a
+resampling pass. In the 400×300 centered clipped case, plain half scale
+maps the painted child to a 200×150 rectangle at (200,150); the
+offset adjustment relative to scaling the outer origin is (100,75),
+as in Flutter. These are partial: Incular's retained layers keep
+translation bookkeeping and flatten the local adjustment into a
+world matrix, rather than allocating Flutter's particular layer
+arrangement. All four focused native checks passed.
