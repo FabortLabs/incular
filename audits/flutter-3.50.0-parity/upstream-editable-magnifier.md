@@ -45,3 +45,20 @@ placement; the native test preserves the rectangle dimensions and
 asserts all four exact positions. The empty geometry display string
 matches Flutter's position, line, caret, and field order and number
 format. The six focused native magnifier tests passed.
+
+## Magnifier controller lifecycle and ordering
+
+Pinned `widgets/magnifier_test.dart:123,151,205,240` all passed.
+A mounted controller without an animation clears its overlay entry on
+hide. With a real animation controller, the lens reports shown while
+entering or completed, but not while reversing or dismissed. Its
+mounted child stays available during reverse and is removed after
+completion. The native clock advances past the terminal tick, as
+Flutter's pump-and-settle does.
+
+The controller can mount a lens below a preexisting higher overlay
+child without remounting that child. The native paint stream verifies
+that the lens's backdrop capture precedes the higher child's paint.
+Replacing a showing lens never starts a reverse animation, and a
+canceled old exit cannot remove the new lens. All four focused
+mounted native tests passed.
