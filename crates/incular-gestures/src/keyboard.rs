@@ -987,6 +987,9 @@ pub enum ShortcutMatch {
     Intent(ErasedIntent),
 }
 
+mod shortcut_manager;
+pub use shortcut_manager::ShortcutManager;
+
 type ScopedShortcutFinder =
     dyn Fn(&KeyboardEvent, Option<&HardwareKeyboardState>) -> Option<ShortcutMatch>;
 
@@ -994,6 +997,7 @@ type ScopedShortcutFinder =
 /// local shortcut precedence before walking to an ancestor scope.
 pub struct ErasedShortcutScope {
     finder: Rc<ScopedShortcutFinder>,
+    modal: Option<Rc<dyn Fn() -> bool>>,
 }
 
 impl ErasedShortcutScope {
@@ -1001,6 +1005,7 @@ impl ErasedShortcutScope {
     pub fn from_shortcuts<C: CommandId>(shortcuts: Rc<Shortcuts<C>>) -> Rc<Self> {
         Rc::new(Self {
             finder: Rc::new(move |event, keyboard| shortcuts.find_match(event, keyboard)),
+            modal: None,
         })
     }
 
@@ -1017,6 +1022,12 @@ impl ErasedShortcutScope {
         keyboard: Option<&HardwareKeyboardState>,
     ) -> Option<ShortcutMatch> {
         (self.finder)(event, keyboard)
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn is_modal(&self) -> bool {
+        self.modal.as_ref().is_some_and(|check| check())
     }
 }
 

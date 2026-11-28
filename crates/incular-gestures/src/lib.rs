@@ -72,6 +72,7 @@ pub use force_press::{
 };
 pub use incular_core::DeviceGestureSettings;
 pub use keyboard::{
+    ShortcutManager,
     Action, ActionContext, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase, ActionInvocationSubscription,
     ActionListenerSubscription,
     ActionOutput, ActionResult, Actions, CallbackAction, CharacterActivator, Command, CommandId, ErasedActionScope, ErasedIntent,

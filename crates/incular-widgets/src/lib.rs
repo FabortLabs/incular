@@ -230,6 +230,7 @@ pub use incular_gestures::{
 pub use incular_gestures::RawKeyDelivery;
 pub use focus_keyboard::{
     DoNothingAction, DoNothingAndStopPropagationIntent, DoNothingIntent,
+    ShortcutManager,
     ActivateIntent, ButtonActivateIntent,
     Action, ActionContext, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase, ActionListener,
     ActionLookupError, ActionOutput, ActionResult, ActionScope, Actions, CallbackAction, CallbackShortcuts,

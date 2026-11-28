@@ -1618,7 +1618,11 @@ impl WidgetTree {
                 return Some(KeyEventResult::Handled);
             }
         }
-        None
+        callbacks
+            .shortcut_scope
+            .as_ref()
+            .is_some_and(|scope| scope.is_modal())
+            .then_some(KeyEventResult::SkipRemainingHandlers)
     }
 
     /// Routes a native accessibility increment/decrement through the same

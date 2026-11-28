@@ -4578,3 +4578,8 @@ packages/flutter/test/services/hardware_keyboard_test.dart	263	Correctly convert
 packages/flutter/test/services/hardware_keyboard_test.dart	312	Instantly dispatch synthesized key events when the queue is empty	paired-match	upstream-raw-keyboard.md#separate-engine-key-data-and-raw-streams
 packages/flutter/test/services/hardware_keyboard_test.dart	352	Postpone synthesized key events when the queue is not empty	paired-match	upstream-raw-keyboard.md#separate-engine-key-data-and-raw-streams
 packages/flutter/test/services/hardware_keyboard_test.dart	425	Empty keyData yields no event but triggers inference	paired-match	upstream-raw-keyboard.md#separate-engine-key-data-and-raw-streams
+packages/flutter/test/widgets/shortcuts_test.dart	723	Default constructed Shortcuts.manager has empty shortcuts	paired-match	upstream-shortcut-manager.md
+packages/flutter/test/widgets/shortcuts_test.dart	736	Shortcuts.manager passes on shortcuts	paired-match	upstream-shortcut-manager.md
+packages/flutter/test/widgets/shortcuts_test.dart	750	ShortcutManager handles shortcuts	paired-match	upstream-shortcut-manager.md
+packages/flutter/test/widgets/shortcuts_test.dart	786	Shortcuts.manager lets manager handle shortcuts	paired-match	upstream-shortcut-manager.md
+packages/flutter/test/widgets/shortcuts_test.dart	822	ShortcutManager ignores key presses with no primary focus	paired-match	upstream-shortcut-manager.md

@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use incular_core::KeyboardEvent;
 pub use incular_gestures::{
+    ShortcutManager,
     Action, ActionContext, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase, ActionOutput, ActionResult, Actions,
     CallbackAction, Command, CommandId,
     FocusBehavior,
@@ -115,6 +116,13 @@ impl ShortcutScope {
     #[must_use]
     pub fn new<C: CommandId>(shortcuts: Rc<Shortcuts<C>>, child: impl Into<Widget>) -> Self {
         Self::from_erased(shortcuts.erased_scope(), child.into())
+    }
+
+    /// Installs an externally managed mapping. Changing its bindings does
+    /// not remount this focus boundary or its child.
+    #[must_use]
+    pub fn manager<C: CommandId>(manager: ShortcutManager<C>, child: impl Into<Widget>) -> Self {
+        Self::from_erased(manager.erased_scope(), child.into())
     }
 
     pub(crate) fn from_erased(
