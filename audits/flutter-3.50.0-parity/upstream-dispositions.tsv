@@ -4012,3 +4012,6 @@ packages/flutter/test/semantics/semantics_test.dart	831	validation result debug 
 packages/flutter/test/semantics/semantics_test.dart	848	Custom actions debug properties	paired-match	upstream-semantics-dump-properties.md
 packages/flutter/test/semantics/semantics_test.dart	928	Semantics id does not repeat	partial-match	upstream-semantics-dump-properties.md#identity-at-the-flutter-allocation-limit
 packages/flutter/test/semantics/semantics_test.dart	580	toStringDeep respects childOrder parameter	paired-match	upstream-semantics-dump-properties.md#selectable-child-order-in-semantic-dumps
+packages/flutter/test/widgets/fade_transition_test.dart	10	FadeTransition	paired-match	upstream-fade-transition.md
+packages/flutter/test/widgets/fade_transition_test.dart	35	No exception when calling markNeedsPaint during opacity changes	paired-match	upstream-fade-transition.md
+packages/flutter/test/widgets/fade_transition_test.dart	58	FadeTransition does not crash at zero area	paired-match	upstream-fade-transition.md

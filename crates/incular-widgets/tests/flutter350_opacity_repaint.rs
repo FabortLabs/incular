@@ -180,3 +180,98 @@ fn fading_to_zero_omits_child_pixels_without_repainting() {
     assert!(!shows_child(&zero));
     assert_eq!(opacity_group(&zero), Some((layer, 0., 0)));
 }
+
+#[test]
+fn a_two_second_fade_updates_compositing_without_reentering_child_build() {
+    use incular_widgets::{Builder, Placeholder};
+
+    let builds = Rc::new(Cell::new(0));
+    let controller = AnimationController::new(Duration::from_secs(2));
+    let child_key = incular_widgets::internal::Key::from("fade build counter");
+    let builder = Widget::from(Builder::new({
+        let builds = builds.clone();
+        move |_| {
+            builds.set(builds.get() + 1);
+            Placeholder::new().into()
+        }
+    }))
+    .with_key(child_key.clone());
+    let mut tree = WidgetTree::new();
+    tree.mount(FadeTransition::from_animation(controller.clone(), builder))
+        .unwrap();
+    let start = Instant::now();
+    frame(&mut tree, start);
+    assert_eq!(builds.get(), 1);
+    let child = tree.element_with_key(&child_key).unwrap();
+    let render = tree.render_id(child);
+    frame(&mut tree, start);
+    assert_eq!(builds.get(), 1);
+
+    let _ = controller.forward(start);
+    for (milliseconds, expected) in [
+        (0, 0.),
+        (500, 64. / 255.),
+        (1_000, 128. / 255.),
+        (2_000, 1.),
+    ] {
+        let list = frame(&mut tree, start + Duration::from_millis(milliseconds));
+        assert_eq!(
+            opacity_group(&list).map(|(_, alpha, _)| alpha),
+            Some(expected)
+        );
+        assert_eq!(builds.get(), 1);
+        assert_eq!(tree.element_with_key(&child_key), Some(child));
+        assert_eq!(tree.render_id(child), render);
+    }
+}
+
+#[test]
+fn requesting_paint_between_alpha_changes_neither_throws_nor_exposes_hidden_pixels() {
+    let paints = Rc::new(Cell::new(0));
+    let controller = AnimationController::new(Duration::from_secs(2)).with_value(1.);
+    let leaf_key = incular_widgets::internal::Key::from("fade invalidated leaf");
+    let mut tree = WidgetTree::new();
+    tree.mount(FadeTransition::from_animation(
+        controller.clone(),
+        child(&paints).with_key(leaf_key.clone()),
+    ))
+    .unwrap();
+    let start = Instant::now();
+    let initial = frame(&mut tree, start);
+    assert!(shows_child(&initial));
+    assert_eq!(paints.get(), 1);
+    let leaf = tree.element_with_key(&leaf_key).unwrap();
+    let render = tree.render_id(leaf);
+
+    controller.set_value(0.5);
+    tree.mark_paint(leaf).unwrap();
+    controller.set_value(0.);
+    let hidden = frame(&mut tree, start + Duration::from_millis(16));
+    assert!(!shows_child(&hidden));
+    assert_eq!(paints.get(), 1);
+
+    controller.set_value(1.);
+    let visible = frame(&mut tree, start + Duration::from_millis(32));
+    assert!(shows_child(&visible));
+    assert_eq!(paints.get(), 2, "paint dirtiness survives the hidden frame");
+    assert_eq!(tree.element_with_key(&leaf_key), Some(leaf));
+    assert_eq!(tree.render_id(leaf), render);
+}
+
+#[test]
+fn a_visible_fade_under_tight_zero_constraints_finishes_at_zero_area() {
+    use incular_config::TextDirection;
+    use incular_widgets::{Center, Directionality, Placeholder, internal::Key};
+
+    let key = Key::from("zero-area fade");
+    let controller = AnimationController::new(Duration::from_secs(2)).with_value(1.);
+    let fade = FadeTransition::from_animation(controller, Placeholder::new()).with_key(key.clone());
+    let mut tree = WidgetTree::new();
+    tree.mount(Directionality::new(TextDirection::Ltr, Center::new(fade)).into())
+        .unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    tree.update_compositor(Instant::now()).unwrap();
+    tree.try_paint().unwrap();
+    let element = tree.element_with_key(&key).unwrap();
+    assert_eq!(tree.element_layout_size(element), Some(Size::ZERO));
+}
