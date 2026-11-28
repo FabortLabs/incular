@@ -4552,4 +4552,3 @@ packages/flutter/test/widgets/scrollbar_test.dart	1843	shape property of RawScro
 packages/flutter/test/widgets/scrollbar_test.dart	679	Scrollbar never goes away until finger lift	paired-match	upstream-raw-scrollbar-fade.md
 packages/flutter/test/widgets/scrollbar_test.dart	728	Scrollbar does not fade away while hovering	partial-match	upstream-raw-scrollbar-fade.md
 packages/flutter/test/widgets/scrollbar_test.dart	769	Scrollbar will fade back in when hovering over known track area	paired-match	upstream-raw-scrollbar-fade.md
-packages/flutter/test/widgets/scrollbar_test.dart	823	Scrollbar will show on hover without needing to scroll first for metrics	paired-match	upstream-raw-scrollbar-fade.md
