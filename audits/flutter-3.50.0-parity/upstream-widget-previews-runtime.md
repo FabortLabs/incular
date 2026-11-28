@@ -319,3 +319,16 @@ accessibility and checks the real execution queue. Nothing is queued at mount
 or pointer down, and each activation is consumed once. This does not claim
 wire compatibility with Dart Tooling Daemon or that a real process restarted;
 Flutter uses a fake DTD endpoint for this scaffold case.
+
+## Source links in construction diagnostics
+
+The pinned scaffold's `error_widget_test.dart:40` passed. A fallible
+native preview factory reports its construction error in that preview's
+slot, leaving its header and sibling previews mounted. The diagnostic
+keeps the full message and selectable frame text. Pointer activation
+forwards exactly the file and package locations, including line and
+column, to the active editor callback; SDK and unparsed frames remain
+inert. Disconnecting removes link roles without removing frame text and
+suppresses already-rendered pointer targets before the next frame.
+Reconnecting restores the links. The host owns URI resolution; this
+pair does not cover render-layout exception isolation, which is separate.

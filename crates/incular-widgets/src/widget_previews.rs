@@ -3,6 +3,8 @@
 //! This module configures directly supplied widgets. It neither scans source
 //! for preview annotations nor starts a preview server.
 
+mod diagnostic;
+pub use diagnostic::{PreviewDiagnostic, PreviewDiagnosticFrame, PreviewSourceLocation};
 pub mod file_filter;
 mod gallery;
 pub use gallery::{PreviewGallery, PreviewGalleryEntry};
