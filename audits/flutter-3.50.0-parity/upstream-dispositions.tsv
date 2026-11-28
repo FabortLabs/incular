@@ -4287,3 +4287,6 @@ packages/flutter/test/rendering/flex_test.dart	1003	main/cross axis intrinsics i
 packages/flutter/test/rendering/flex_test.dart	1027	main/cross axis intrinsics in vertical direction and RenderFlex.spacing	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
 packages/flutter/test/rendering/flex_test.dart	1055	cross axis intrinsics, with ascending flex flow layout	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
 packages/flutter/test/rendering/flex_test.dart	1095	cross axis intrinsics, with descending flex flow layout	paired-match	upstream-render-flex-intrinsics.md#main-and-cross-axis-intrinsic-sizing
+packages/flutter/test/rendering/flex_test.dart	1133	baseline aligned flex flow computeDryLayout	paired-match	upstream-render-flex-intrinsics.md#reflowing-baseline-aligned-children
+packages/flutter/test/rendering/flex_test.dart	1167	baseline aligned children cross intrinsic size	paired-match	upstream-render-flex-intrinsics.md#reflowing-baseline-aligned-children
+packages/flutter/test/rendering/flex_test.dart	1200	children with no baselines do not affect the baseline location	paired-match	upstream-render-flex-intrinsics.md#reflowing-baseline-aligned-children

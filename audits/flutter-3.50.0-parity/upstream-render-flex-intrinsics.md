@@ -27,3 +27,14 @@ that speculative queries do not change previously laid out sizes
 or baselines. These controls do not by themselves count the later
 upstream custom grid-box baseline tests. Standard flex layout and
 baseline regression targets also passed.
+
+## Reflowing baseline-aligned children
+
+The three pinned originals at :1133, :1167 and :1200 also passed.
+Native fixtures replace the custom RenderFlowBaselineTestBox with
+real 10px grid paragraphs and 0px top/bottom baseline markers.
+An unbaselined grid wraps 10px boxes without any text baseline.
+At 200px and 300px, the tests compare Flutter's exact dry sizes
+and baselines, cross intrinsic heights, and the corresponding
+native retained-layout measurements. A child with no baseline
+reserves its height but cannot move its siblings' common baseline.

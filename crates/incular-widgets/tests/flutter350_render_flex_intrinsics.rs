@@ -203,3 +203,122 @@ fn dry_baseline_uses_actual_offsets_and_does_not_change_live_geometry() {
         assert_eq!(tree.baseline(id), baseline);
     }
 }
+
+#[derive(Clone, Copy)]
+enum GridBaseline {
+    Top,
+    Bottom,
+    None,
+}
+
+// Use an actual reflowing paragraph with the pinned 10px grid advance.
+// A zero-height baseline marker moves before/after the body in a Column
+// without changing the measured grid size. Unbaselined grids wrap fixed boxes.
+fn grid_child(placement: GridBaseline) -> Widget {
+    use incular_config::MainAxisSize;
+    use incular_widgets::{Baseline, Wrap};
+    let body = letter_text(&["A"; 10].join("\u{200b}"), 10.);
+    if matches!(placement, GridBaseline::None) {
+        return Wrap::new((0..10).map(|_| square(10.)))
+            .text_direction(TextDirection::Ltr)
+            .into();
+    }
+    let marker = SizedBox::new()
+        .width(0.)
+        .height(0.)
+        .child(Baseline::new(0., letter_text("A", 10.)));
+    let vertical = match placement {
+        GridBaseline::Top => VerticalDirection::Down,
+        GridBaseline::Bottom => VerticalDirection::Up,
+        GridBaseline::None => unreachable!(),
+    };
+    flex(Axis::Vertical, [marker.into(), body.into()])
+        .main_axis_size(MainAxisSize::Min)
+        .vertical_direction(vertical)
+        .into()
+}
+
+fn baseline_grid_row(first: GridBaseline, second: GridBaseline) -> Widget {
+    use incular_widgets::Flexible;
+    flex(
+        Axis::Horizontal,
+        [
+            Expanded::new(grid_child(first)).flex(2).into(),
+            Flexible::new(grid_child(second)).flex(1).into(),
+        ],
+    )
+    .cross_axis_alignment(CrossAxisAlignment::Baseline)
+    .into()
+}
+
+#[test]
+fn baseline_aligned_flex_dry_size_reserves_greatest_ascent_and_descent() {
+    let Some(mut tree) = flutter_font_tree() else {
+        return;
+    };
+    let root = tree
+        .mount(baseline_grid_row(GridBaseline::Top, GridBaseline::Bottom))
+        .unwrap();
+    let render = tree.render_id(root).unwrap();
+    for (width, height, baseline) in [(200., 30., 20.), (300., 20., 10.)] {
+        let constraints = Constraints::loose(Size::new(width, 100.));
+        assert_eq!(
+            tree.dry_layout_size(render, constraints),
+            Some(Size::new(width, height))
+        );
+        assert_eq!(
+            tree.dry_alphabetic_baseline(render, constraints),
+            Some(baseline)
+        );
+        tree.layout(constraints).unwrap();
+        assert_eq!(
+            tree.element_layout_size(root),
+            Some(Size::new(width, height))
+        );
+        assert_eq!(tree.baseline(render), Some(baseline));
+    }
+}
+
+#[test]
+fn baseline_aligned_flex_cross_intrinsics_reserve_both_sides_of_baseline() {
+    let Some(mut tree) = flutter_font_tree() else {
+        return;
+    };
+    let root = tree
+        .mount(baseline_grid_row(GridBaseline::Top, GridBaseline::Bottom))
+        .unwrap();
+    let render = tree.render_id(root).unwrap();
+    assert_eq!(tree.max_intrinsic_height(render, 200.), Some(30.));
+    assert_eq!(tree.min_intrinsic_height(render, 200.), Some(30.));
+    assert_eq!(tree.max_intrinsic_height(render, 300.), Some(20.));
+    assert_eq!(tree.min_intrinsic_height(render, 300.), Some(20.));
+    assert_eq!(tree.element_layout_size(root), None);
+}
+
+#[test]
+fn unbaselined_flex_child_reserves_height_but_does_not_move_the_baseline() {
+    let Some(mut tree) = flutter_font_tree() else {
+        return;
+    };
+    let root = tree
+        .mount(baseline_grid_row(GridBaseline::Bottom, GridBaseline::None))
+        .unwrap();
+    let render = tree.render_id(root).unwrap();
+    for (width, height, baseline) in [(200., 20., 10.), (300., 10., 10.)] {
+        let constraints = Constraints::loose(Size::new(width, 100.));
+        assert_eq!(
+            tree.dry_layout_size(render, constraints),
+            Some(Size::new(width, height))
+        );
+        assert_eq!(
+            tree.dry_alphabetic_baseline(render, constraints),
+            Some(baseline)
+        );
+        tree.layout(constraints).unwrap();
+        assert_eq!(
+            tree.element_layout_size(root),
+            Some(Size::new(width, height))
+        );
+        assert_eq!(tree.baseline(render), Some(baseline));
+    }
+}
