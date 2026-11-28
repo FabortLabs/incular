@@ -444,6 +444,10 @@ impl StadiumMorph {
 }
 
 impl ShapeBorder for RoundedCircleOutline {
+    fn equality_value(&self) -> Option<super::shape_borders::ShapeBorderValue<'_>> {
+        Some(super::shape_borders::ShapeBorderValue::RoundedOutline(*self))
+    }
+
     fn rounded_circle_outline(&self) -> Option<Self> {
         Some(*self)
     }

@@ -253,3 +253,48 @@ fn shape_padding_remains_directional_until_the_caller_supplies_direction() {
         EdgeInsetsGeometry::ZERO
     );
 }
+
+#[test]
+fn separately_constructed_shape_decorations_have_value_equality_and_matching_hashes() {
+    use incular_widgets::BoxShadow;
+    use std::hash::{DefaultHasher, Hash, Hasher};
+
+    let make = || {
+        ShapeDecoration::new(Border::default())
+            .color(Color::WHITE)
+            .shadows([BoxShadow::default()])
+    };
+    let hash = |shape: &ShapeDecoration| {
+        let mut hasher = DefaultHasher::new();
+        shape.hash(&mut hasher);
+        hasher.finish()
+    };
+    let a = make();
+    let b = make();
+    assert!(!Rc::ptr_eq(&a.shape, &b.shape));
+    assert!(a == b);
+    assert_eq!(hash(&a), hash(&b));
+    assert!(
+        a != ShapeDecoration::new(Border::new(1., Color::BLACK))
+            .color(Color::WHITE)
+            .shadows([BoxShadow::default()])
+    );
+    assert!(a != make().color(RED));
+
+    let separately_compound = || {
+        ShapeDecoration::new(incular_widgets::CompoundBorder::new(
+            Border::new(1., Color::BLACK),
+            RoundedRectangleBorder::new(
+                BorderSide::NONE,
+                incular_widgets::BorderRadius::circular(8.),
+            ),
+        ))
+    };
+    let (first, second) = (separately_compound(), separately_compound());
+    assert!(first == second);
+    assert_eq!(hash(&first), hash(&second));
+
+    let custom = ShapeDecoration::new(LoggingBorder(Calls::default()));
+    assert!(custom == custom.clone());
+    assert!(custom != ShapeDecoration::new(LoggingBorder(Calls::default())));
+}

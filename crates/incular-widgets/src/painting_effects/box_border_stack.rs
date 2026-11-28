@@ -12,7 +12,7 @@ use super::{
 };
 
 /// One physical or directional layer in a compound box outline.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 pub enum BoxBorderLayer {
     Physical(Border),
     Directional(BorderDirectional),
@@ -252,6 +252,10 @@ impl Lerp for BoxBorderStack {
 }
 
 impl ShapeBorder for BoxBorderStack {
+    fn equality_value(&self) -> Option<super::shape_borders::ShapeBorderValue<'_>> {
+        Some(super::shape_borders::ShapeBorderValue::BoxLayers(&self.layers))
+    }
+
     fn dimensions_geometry(&self) -> EdgeInsetsGeometry {
         BoxBorderStack::dimensions_geometry(self)
     }

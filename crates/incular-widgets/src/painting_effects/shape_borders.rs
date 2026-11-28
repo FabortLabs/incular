@@ -19,9 +19,53 @@ use super::decoration::{Border, BorderDirectional, BorderSide, BorderStyle, BoxS
 use super::geometry::{BorderRadius, BorderRadiusGeometry, Radius, contains_half_open};
 use super::rounded_circle_outline::RoundedCircleOutline;
 
+/// A built-in border's value without allocating or resolving its direction.
+#[doc(hidden)]
+#[derive(PartialEq, Hash)]
+pub enum ShapeBorderValue<'a> {
+    Physical(Border),
+    Directional(BorderDirectional),
+    PhysicalPair(Border, Border),
+    BoxLayers(&'a [super::BoxBorderLayer]),
+    Compound(&'a [Rc<dyn ShapeBorder>]),
+    RoundedOutline(RoundedCircleOutline),
+    Oval(OvalBorder),
+    Beveled(BorderSide, BorderRadiusGeometry),
+    Continuous(BorderSide, BorderRadiusGeometry),
+    Star(StarBorder),
+    Linear(LinearBorder),
+}
+
+impl PartialEq for dyn ShapeBorder + '_ {
+    fn eq(&self, other: &Self) -> bool {
+        match (self.equality_value(), other.equality_value()) {
+            (Some(a), Some(b)) => a == b,
+            (None, None) => std::ptr::eq(self, other),
+            _ => false,
+        }
+    }
+}
+
+impl Hash for dyn ShapeBorder + '_ {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if let Some(value) = self.equality_value() {
+            value.hash(state);
+        } else {
+            std::ptr::hash(std::ptr::from_ref(self).cast::<()>(), state);
+        }
+    }
+}
+
 /// Flutter's `ShapeBorder` for the outlined shapes Incular paints itself:
 /// the shape's outline and the area inside its stroke, and the stroke.
 pub trait ShapeBorder {
+    /// Returns a stable paint value for built-in borders. Opaque custom
+    /// borders without a value compare by shared instance.
+    #[doc(hidden)]
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        None
+    }
+
     /// The space consumed along each edge before a nested border is painted.
     fn dimensions(&self, _direction: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::ZERO
@@ -181,6 +225,10 @@ impl CompoundBorder {
 }
 
 impl ShapeBorder for CompoundBorder {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        Some(ShapeBorderValue::Compound(&self.borders))
+    }
+
     fn dimensions_geometry(&self) -> EdgeInsetsGeometry {
         self.borders
             .iter()
@@ -302,6 +350,10 @@ impl std::ops::Add for Border {
 }
 
 impl ShapeBorder for Border {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        Some(ShapeBorderValue::Physical(*self))
+    }
+
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
         Some(Rc::new(self.scale(factor)))
     }
@@ -347,6 +399,10 @@ impl ShapeBorder for Border {
 }
 
 impl ShapeBorder for BorderDirectional {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        Some(ShapeBorderValue::Directional(*self))
+    }
+
     fn dimensions_geometry(&self) -> EdgeInsetsGeometry {
         BorderDirectional::dimensions(*self).into()
     }
@@ -397,6 +453,13 @@ impl ShapeBorder for BorderDirectional {
 }
 
 impl ShapeBorder for BorderComposition {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        Some(match *self {
+            Self::Merged(border) => ShapeBorderValue::Physical(border),
+            Self::Layered { outside, inside } => ShapeBorderValue::PhysicalPair(outside, inside),
+        })
+    }
+
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
         Some(Rc::new(match self {
             Self::Merged(border) => Self::Merged(border.scale(factor)),
@@ -586,6 +649,10 @@ impl StadiumBorder {
 }
 
 impl ShapeBorder for StadiumBorder {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        self.rounded_circle_outline().map(ShapeBorderValue::RoundedOutline)
+    }
+
     fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
         Some((*self).into())
     }
@@ -690,6 +757,10 @@ impl<R: Copy + Into<BorderRadiusGeometry>> RoundedRectangleBorder<R> {
 }
 
 impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for RoundedRectangleBorder<R> {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        self.rounded_circle_outline().map(ShapeBorderValue::RoundedOutline)
+    }
+
     fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
         Some((*self).into())
     }
@@ -855,6 +926,10 @@ impl<R: Copy + Into<BorderRadiusGeometry>> RoundedSuperellipseBorder<R> {
 }
 
 impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for RoundedSuperellipseBorder<R> {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        self.rounded_circle_outline().map(ShapeBorderValue::RoundedOutline)
+    }
+
     fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
         Some((*self).into())
     }
@@ -1007,6 +1082,10 @@ impl Hash for CircleBorder {
 }
 
 impl ShapeBorder for CircleBorder {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        self.rounded_circle_outline().map(ShapeBorderValue::RoundedOutline)
+    }
+
     fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
         Some((*self).into())
     }
@@ -1102,6 +1181,10 @@ impl OvalBorder {
 }
 
 impl ShapeBorder for OvalBorder {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        Some(ShapeBorderValue::Oval(*self))
+    }
+
     fn rounded_circle_outline(&self) -> Option<RoundedCircleOutline> {
         Some(CircleBorder::new(self.side).with_eccentricity(1.).into())
     }
@@ -1194,6 +1277,10 @@ impl<R: Copy + Into<BorderRadiusGeometry>> BeveledRectangleBorder<R> {
 }
 
 impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for BeveledRectangleBorder<R> {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        Some(ShapeBorderValue::Beveled(self.side, self.border_radius.into()))
+    }
+
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
         Some(Rc::new(BeveledRectangleBorder::new(self.side.scale(factor), self.border_radius.into() * factor)))
     }
@@ -1712,6 +1799,10 @@ impl StarBorder {
 }
 
 impl ShapeBorder for StarBorder {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        Some(ShapeBorderValue::Star(*self))
+    }
+
     fn star_geometry(&self) -> Option<StarBorder> {
         Some(*self)
     }
@@ -2150,6 +2241,10 @@ impl<R: Copy + Into<BorderRadiusGeometry>> ContinuousRectangleBorder<R> {
 }
 
 impl<R: Copy + Into<BorderRadiusGeometry>> ShapeBorder for ContinuousRectangleBorder<R> {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        Some(ShapeBorderValue::Continuous(self.side, self.border_radius.into()))
+    }
+
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
         Some(Rc::new(ContinuousRectangleBorder::new(self.side.scale(factor), self.border_radius.into() * factor)))
     }
@@ -2458,6 +2553,10 @@ fn hairline() -> Stroke {
 }
 
 impl ShapeBorder for LinearBorder {
+    fn equality_value(&self) -> Option<ShapeBorderValue<'_>> {
+        Some(ShapeBorderValue::Linear(*self))
+    }
+
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
         Some(Rc::new(self.scale(factor)))
     }

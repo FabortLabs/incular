@@ -2,7 +2,12 @@
 //! `ClipPath.shape` (`ShapeBorderClipper`): a [`ShapeBorder`] used as a
 //! decoration and as a clip.
 
-use std::{borrow::Cow, rc::Rc, sync::Arc};
+use std::{
+    borrow::Cow,
+    hash::{Hash, Hasher},
+    rc::Rc,
+    sync::Arc,
+};
 
 use incular_animation::OptionalColorTween;
 use incular_config::{Clip, EdgeInsetsGeometry, TextDirection};
@@ -96,6 +101,31 @@ pub struct ShapeDecoration {
     /// clipped to the shape's inner path, excluding the border's stroke.
     pub image: Option<DecorationImage>,
     pub shape: Rc<dyn ShapeBorder>,
+}
+
+impl PartialEq for ShapeDecoration {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other)
+            || (self.color == other.color
+                && self.gradient == other.gradient
+                && self.aligned_gradient == other.aligned_gradient
+                && self.shadows == other.shadows
+                && self.image == other.image
+                && self.shape.as_ref() == other.shape.as_ref())
+    }
+}
+
+impl Hash for ShapeDecoration {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.color.hash(state);
+        self.shadows.hash(state);
+        self.shape.hash(state);
+        // Gradient and image descriptors compare their values above. Their
+        // resources do not require usable hashes; use stable discriminants.
+        self.gradient.as_ref().map(std::mem::discriminant).hash(state);
+        self.aligned_gradient.as_ref().map(std::mem::discriminant).hash(state);
+        self.image.is_some().hash(state);
+    }
 }
 
 impl ShapeDecoration {

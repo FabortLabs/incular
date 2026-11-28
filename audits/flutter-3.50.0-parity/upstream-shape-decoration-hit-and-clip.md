@@ -216,3 +216,13 @@ bounds. They now share centered, normalized bounds and skip empty draws.
 Native tests check the emitted bounds around zero, including translated
 shadows, and the mounted shape regressions passed (seven focused tests).
 No original registration count was changed by this authored probe.
+
+## Shape decoration value comparison
+
+The pinned original `widgets/shape_decoration_test.dart:132` passed.
+Two separately allocated default physical borders produce equal white
+decorations with the same shadow and matching hashes. The native test
+also checks unequal fill or stroke values, independently allocated
+compound borders, and shared-instance comparison for opaque custom
+borders. Built-in shapes compare their paint descriptors without
+resolving direction. Nine focused native tests passed.
