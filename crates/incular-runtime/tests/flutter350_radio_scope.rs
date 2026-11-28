@@ -129,12 +129,16 @@ fn controlled_radios_select_toggle_and_retain_focus_without_duplicate_callbacks(
 
 fn radio_key(runtime: &mut Runtime, code: Code, shift: bool) {
     use incular_core::Modifiers;
-    let named = if code == Code::Tab {
-        NamedKey::Tab
-    } else {
-        NamedKey::Unidentified
+    let key = match code {
+        Code::Tab => KeyboardKey::Named(NamedKey::Tab),
+        Code::ArrowDown => KeyboardKey::Named(NamedKey::ArrowDown),
+        Code::ArrowUp => KeyboardKey::Named(NamedKey::ArrowUp),
+        Code::ArrowLeft => KeyboardKey::Named(NamedKey::ArrowLeft),
+        Code::ArrowRight => KeyboardKey::Named(NamedKey::ArrowRight),
+        Code::Space => KeyboardKey::Character(" ".into()),
+        _ => KeyboardKey::Named(NamedKey::Unidentified),
     };
-    let mut event = KeyboardEvent::key_down(KeyboardKey::Named(named), code);
+    let mut event = KeyboardEvent::key_down(key, code);
     if shift {
         event.modifiers = Modifiers::SHIFT;
     }
@@ -255,4 +259,323 @@ fn tab_visits_only_the_first_or_selected_radio_between_editable_neighbors() {
     radio_key(&mut runtime, Code::Tab, true);
     assert!(focus[1].has_focus());
     assert!(!focus[0].has_focus() && !fields[1].has_focus());
+}
+
+#[test]
+fn radio_shortcuts_leave_the_parent_shortcuts_alone_when_an_editor_has_focus() {
+    use incular_core::Modifiers;
+    use incular_widgets::{CallbackShortcuts, EditableText, SingleActivator, TextDirection};
+
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let selected = Signal::new(None::<u32>);
+    let radio = FocusNode::new();
+    let field = FocusNode::new();
+    let children: [Widget; 4] = [
+        RawRadio::new(0_u32, None).focus_node(radio.clone()).into(),
+        RawRadio::new(1_u32, None).into(),
+        RawRadio::new(2_u32, None).into(),
+        EditableText::new(incular_text::TextEditingController::new())
+            .text_direction(TextDirection::Ltr)
+            .focus_node(field.clone())
+            .into(),
+    ];
+    let child: Widget = Column::new(children).into();
+    let group = Builder::new({
+        let selected = selected.clone();
+        move |_| {
+            let notify = selected.clone();
+            RadioGroup::new(child.clone())
+                .value(selected.get())
+                .on_changed_optional(move |value| {
+                    notify.set(value);
+                })
+                .into()
+        }
+    });
+    let mut command = CallbackShortcuts::new(group);
+    for (binding, code) in [
+        (KeyboardKey::Named(NamedKey::ArrowLeft), Code::ArrowLeft),
+        (KeyboardKey::Named(NamedKey::ArrowRight), Code::ArrowRight),
+        (KeyboardKey::Named(NamedKey::ArrowDown), Code::ArrowDown),
+        (KeyboardKey::Named(NamedKey::ArrowUp), Code::ArrowUp),
+        (KeyboardKey::Character(" ".into()), Code::Space),
+    ] {
+        let log = log.clone();
+        command = command.shortcut(
+            SingleActivator::new(binding, Modifiers::empty()),
+            move || log.borrow_mut().push(code),
+        );
+    }
+    let mut runtime =
+        Runtime::new(incular_widgets::Directionality::new(TextDirection::Ltr, command).into())
+            .unwrap();
+    pump(&mut runtime);
+
+    radio.request_focus();
+    pump(&mut runtime);
+    assert_eq!(
+        runtime
+            .focused_element()
+            .and_then(|id| runtime.tree().focus_node_at(id)),
+        Some(radio.clone())
+    );
+    assert!(radio.has_focus());
+    for (code, value) in [
+        (Code::Space, 0),
+        (Code::ArrowRight, 1),
+        (Code::ArrowLeft, 0),
+    ] {
+        radio_key(&mut runtime, code, false);
+        assert_eq!(
+            selected.get(),
+            Some(value),
+            "event {code:?}, parent recorded {:?}",
+            log.borrow()
+        );
+        assert!(log.borrow().is_empty());
+    }
+
+    field.request_focus();
+    pump(&mut runtime);
+    assert!(field.has_focus());
+    let expected = [
+        Code::ArrowLeft,
+        Code::ArrowRight,
+        Code::ArrowDown,
+        Code::ArrowUp,
+        Code::Space,
+    ];
+    for (index, key) in expected.into_iter().enumerate() {
+        radio_key(&mut runtime, key, false);
+        assert_eq!(selected.get(), Some(0));
+        assert_eq!(&*log.borrow(), &expected[..=index]);
+    }
+
+    log.borrow_mut().clear();
+    radio.request_focus();
+    pump(&mut runtime);
+    assert!(radio.has_focus());
+    for (code, value) in [(Code::ArrowDown, 1), (Code::ArrowUp, 0)] {
+        radio_key(&mut runtime, code, false);
+        assert_eq!(selected.get(), Some(value));
+        assert!(log.borrow().is_empty());
+    }
+}
+
+#[test]
+fn a_zero_area_group_mounts_raw_radios_with_independent_registries() {
+    use incular_widgets::{
+        MouseCursor, RadioGroupRegistry, Text, TextDirection, internal::WidgetTree,
+    };
+    let radio = |value, label| {
+        RawRadio::new(value, None)
+            .group_registry(RadioGroupRegistry::new(None, |_| {}))
+            .focus_node(FocusNode::new())
+            .mouse_cursor(MouseCursor::Click)
+            .builder(move |_| Text::new(label).text_direction(TextDirection::Ltr).into())
+    };
+    let group = RadioGroup::<u32>::new(Column::new([radio(1, "X"), radio(2, "Y")]));
+    let mut tree = WidgetTree::new();
+    tree.mount(group.into()).unwrap();
+    tree.layout(Constraints::tight(Size::ZERO)).unwrap();
+    assert_eq!(tree.root_layout_size(), Some(Size::ZERO));
+}
+
+fn radio_fixture(values: &[(u32, bool)]) -> (Runtime, Signal<Option<u32>>) {
+    let selected = Signal::new(None::<u32>);
+    let controls: Widget =
+        Column::new(values.iter().enumerate().map(|(index, &(value, enabled))| {
+            Widget::from(
+                RawRadio::new(value, None)
+                    .enabled(enabled)
+                    .builder(|_| Widget::box_(Size::new(25., 16.), Color::WHITE)),
+            )
+            .with_key(1 + index as u64)
+        }))
+        .into();
+    let mut runtime = Runtime::new(
+        Builder::new({
+            let selected = selected.clone();
+            move |_| {
+                let notify = selected.clone();
+                RadioGroup::<u32>::new(controls.clone())
+                    .value(selected.get())
+                    .on_changed_optional(move |value| {
+                        notify.set(value);
+                    })
+                    .into()
+            }
+        })
+        .into(),
+    )
+    .unwrap();
+    pump(&mut runtime);
+    (runtime, selected)
+}
+
+#[test]
+fn radio_group_control_updates_exclusive_semantics_and_a_disabled_tap_does_nothing() {
+    use incular_semantics::SemanticAnnotationFlag;
+    let inspect = |runtime: &Runtime| {
+        let semantics = runtime.tree().semantics();
+        let group = semantics.node(semantics.root().unwrap()).unwrap();
+        group
+            .children
+            .iter()
+            .map(|&id| {
+                let child = semantics.node(id).unwrap();
+                assert_eq!(
+                    child
+                        .state
+                        .annotation_flags
+                        .get(SemanticAnnotationFlag::MutuallyExclusiveGroup),
+                    Some(true)
+                );
+                (child.state.checked, child.state.enabled_state())
+            })
+            .collect::<Vec<_>>()
+    };
+    use CheckedState::{Checked, Unchecked};
+    let (mut runtime, selected) = radio_fixture(&[(0, true), (1, true)]);
+    assert_eq!(inspect(&runtime), [(Some(Unchecked), Some(true)); 2]);
+    pick(&mut runtime, 1);
+    assert_eq!(selected.get(), Some(0));
+    assert_eq!(
+        inspect(&runtime),
+        [(Some(Checked), Some(true)), (Some(Unchecked), Some(true))]
+    );
+    pick(&mut runtime, 2);
+    assert_eq!(selected.get(), Some(1));
+    assert_eq!(
+        inspect(&runtime),
+        [(Some(Unchecked), Some(true)), (Some(Checked), Some(true))]
+    );
+
+    let (mut runtime, selected) = radio_fixture(&[(0, false), (1, true)]);
+    let expected = [
+        (Some(Unchecked), Some(false)),
+        (Some(Unchecked), Some(true)),
+    ];
+    assert_eq!(inspect(&runtime), expected);
+    pick(&mut runtime, 1);
+    assert_eq!(selected.get(), None);
+    assert_eq!(inspect(&runtime), expected);
+}
+
+#[test]
+fn a_radio_group_is_a_semantic_container_between_independent_checkboxes() {
+    use incular_widgets::{Semantics, SizedBox, internal::WidgetTree};
+    let checkbox = || {
+        Widget::from(
+            Semantics::new(SizedBox::square(12.))
+                .role(Role::Checkbox)
+                .checked(true),
+        )
+    };
+    let raw = |value| {
+        RawRadio::new(value, None).builder(|_| Widget::box_(Size::new(12., 12.), Color::WHITE))
+    };
+    let scene = Semantics::new(Column::new([
+        checkbox(),
+        RadioGroup::<u32>::new(Column::new([raw(0), raw(1)])).into(),
+        checkbox(),
+    ]))
+    .container(true);
+    let mut tree = WidgetTree::new();
+    tree.mount(scene.into()).unwrap();
+    tree.layout(Constraints::tight(Size::new(200., 120.)))
+        .unwrap();
+    tree.update_semantics();
+    let semantics = tree.semantics();
+    let parent = semantics.node(semantics.root().unwrap()).unwrap();
+    let group = parent
+        .children
+        .iter()
+        .find_map(|id| {
+            semantics
+                .node(*id)
+                .filter(|node| node.role == Role::RadioGroup)
+        })
+        .expect("radio group remains a child container of the outer semantics");
+    assert_eq!(group.children.len(), 2);
+    assert!(
+        group
+            .children
+            .iter()
+            .all(|id| semantics.node(*id).unwrap().role == Role::Radio)
+    );
+}
+
+#[test]
+fn repeated_values_only_raise_a_group_diagnostic_when_the_repeated_value_is_selected() {
+    use incular_semantics::SemanticRoleIssueKind;
+    let (mut runtime, selected) = radio_fixture(&[(0, true), (1, true), (1, true), (2, true)]);
+    assert!(runtime.tree().debug_semantic_role_issues().is_empty());
+    pick(&mut runtime, 2);
+    assert_eq!(selected.get(), Some(1));
+    let [issue] = runtime.tree().debug_semantic_role_issues() else {
+        panic!("expected one duplicate selection diagnostic");
+    };
+    assert_eq!(issue.role, Role::RadioGroup);
+    assert_eq!(
+        issue.kind,
+        SemanticRoleIssueKind::RadioGroupWithMultipleCheckedChildren
+    );
+}
+
+#[test]
+fn removing_a_radio_preserves_other_checked_nodes_and_drops_its_arrow_registration() {
+    let skip = Signal::new(0_usize);
+    let selected = Signal::new(Some(4_u32));
+    let nodes: Vec<_> = (0..5).map(|_| FocusNode::new()).collect();
+    let controls: Vec<_> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, node)| {
+            Widget::from(
+                RawRadio::new(i as u32, None)
+                    .focus_node(node.clone())
+                    .builder(|_| Widget::box_(Size::new(25., 16.), Color::WHITE)),
+            )
+            .with_key(50 + i as u64)
+        })
+        .collect();
+    let mut runtime = Runtime::new(
+        Builder::new({
+            let skip = skip.clone();
+            let selected = selected.clone();
+            move |_| {
+                let notify = selected.clone();
+                RadioGroup::<u32>::new(Column::new(controls.iter().skip(skip.get()).cloned()))
+                    .value(selected.get())
+                    .on_changed_optional(move |value| {
+                        notify.set(value);
+                    })
+                    .into()
+            }
+        })
+        .into(),
+    )
+    .unwrap();
+    pump(&mut runtime);
+    assert_eq!(checked(&runtime).len(), 5);
+    assert!(runtime.tree().debug_semantic_role_issues().is_empty());
+
+    skip.set(1);
+    pump(&mut runtime);
+    assert_eq!(
+        checked(&runtime),
+        [
+            CheckedState::Unchecked,
+            CheckedState::Unchecked,
+            CheckedState::Unchecked,
+            CheckedState::Checked
+        ]
+    );
+    assert!(runtime.tree().debug_semantic_role_issues().is_empty());
+    nodes[4].request_focus();
+    pump(&mut runtime);
+    radio_key(&mut runtime, Code::ArrowDown, false);
+    assert_eq!(selected.get(), Some(1));
+    assert!(nodes[1].has_focus());
 }

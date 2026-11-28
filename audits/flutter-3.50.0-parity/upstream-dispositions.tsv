@@ -4514,3 +4514,10 @@ packages/flutter/test/widgets/semantics_role_checks_test.dart	685	success case, 
 packages/flutter/test/widgets/radio_group_test.dart	128	Radio group can use arrow key	paired-match	upstream-radio-group-keyboard.md
 packages/flutter/test/widgets/radio_group_test.dart	182	Radio group arrow key skips disabled radio	paired-match	upstream-radio-group-keyboard.md
 packages/flutter/test/widgets/radio_group_test.dart	235	Radio group can tab in and out	paired-match	upstream-radio-group-keyboard.md
+packages/flutter/test/widgets/radio_group_test.dart	16	Radio group control test	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	65	Radio group can have disabled radio	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	104	Radio group will not merge up	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	308	Radio group throws on multiple selection	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	341	Radio group does not throw when number of children decreases	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	385	Radio group does not intercept key events when no radio is focused	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/radio_group_test.dart	497	RadioGroup does not crash at zero area	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime

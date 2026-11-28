@@ -6,7 +6,7 @@ use crate::{
     FocusTraversalGroup, GestureDetector, KeyEventResult, MouseCursor, MouseRegion, Semantics,
     Text, TextContextMenu, Widget,
 };
-use incular_core::{Code, KeyState, Modifiers, Rect};
+use incular_core::{Code, KeyState, KeyboardKey, Modifiers, NamedKey, Rect};
 use incular_gestures::reading_order_by;
 use incular_semantics::Role;
 use std::{
@@ -53,6 +53,18 @@ fn radio_order_rect(mut rect: Rect, rtl: bool) -> Rect {
 }
 
 impl<T> RadioGroupRegistry<T> {
+    /// Supplies independent controlled state for a RawRadio that is not
+    /// registered with a mounted RadioGroup's traversal policy.
+    #[must_use]
+    pub fn new(value: Option<T>, on_changed: impl Fn(Option<T>) + 'static) -> Self {
+        Self {
+            value,
+            change: Some(Rc::new(on_changed)),
+            clients: None,
+            rtl: false,
+        }
+    }
+
     #[must_use]
     pub fn group_value(&self) -> Option<&T> {
         self.value.as_ref()
@@ -406,7 +418,16 @@ impl<T: Clone + PartialEq + 'static> From<RawRadio<T>> for Widget {
                         {
                             return KeyEventResult::Ignored;
                         }
-                        let handled = match event.code {
+                        let key = match &event.key {
+                            KeyboardKey::Character(value) if value == " " => Code::Space,
+                            KeyboardKey::Named(NamedKey::ArrowDown) => Code::ArrowDown,
+                            KeyboardKey::Named(NamedKey::ArrowRight) => Code::ArrowRight,
+                            KeyboardKey::Named(NamedKey::ArrowUp) => Code::ArrowUp,
+                            KeyboardKey::Named(NamedKey::ArrowLeft) => Code::ArrowLeft,
+                            KeyboardKey::Named(NamedKey::Unidentified) => event.code,
+                            _ => return KeyEventResult::Ignored,
+                        };
+                        let handled = match key {
                             Code::Space => {
                                 activate();
                                 true
