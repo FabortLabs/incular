@@ -1,6 +1,7 @@
 //! Text-field editing, selectable text, caret geometry, and static selection.
 
 use super::*;
+use super::selection_order::{ScreenSelectable, sort_in_screen_order};
 use crate::selection::{
     SelectedContentRange, SelectionGeometry, SelectionHandleType, SelectionPoint, SelectionStatus,
     TextSelectionPoint,
@@ -2195,7 +2196,47 @@ impl WidgetTree {
         }
     }
     pub(super) fn selectable_texts_in_area(&self, area: ElementId) -> Vec<ElementId> {
-        self.selection_command_members(area, false).0
+        self.selection_command_members(area, false, true).0
+    }
+
+    /// Orders only direct selectable members. A nested container is one
+    /// member here; its descendants are ordered in their own coordinate group.
+    fn selection_command_children(
+        &self,
+        area: ElementId,
+        visual_order: bool,
+    ) -> Vec<ElementId> {
+        let Some(element) = self.elements.get(area.0) else {
+            return Vec::new();
+        };
+        let mut direct = Vec::new();
+        let mut work: Vec<_> = element.children.iter().rev().copied().collect();
+        while let Some(id) = work.pop() {
+            let Some(element) = self.elements.get(id.0) else {
+                continue;
+            };
+            match element.widget.kind() {
+                WidgetKind::SelectableText { .. } | WidgetKind::Text { .. } => direct.push(id),
+                WidgetKind::SelectionContainer { delegate, .. } => {
+                    if delegate.is_enabled() && self.external_selection_registrar(id).is_none() {
+                        direct.push(id);
+                    }
+                }
+                WidgetKind::SelectionArea { .. } | WidgetKind::SelectionListener { .. } => {}
+                _ => work.extend(element.children.iter().rev().copied()),
+            }
+        }
+        if visual_order && direct.len() > 1 {
+            let mut spatial: Vec<_> = direct
+                .iter()
+                .map(|&id| ScreenSelectable { id, bounds: self.element_bounds(id).unwrap_or_default() })
+                .collect();
+            sort_in_screen_order(&mut spatial);
+            for (id, item) in direct.iter_mut().zip(spatial) {
+                *id = item.id;
+            }
+        }
+        direct
     }
 
     /// Layout order of the actual leaf targets of a selection command. A
@@ -2205,6 +2246,7 @@ impl WidgetTree {
         &self,
         area: ElementId,
         project_to_proxies: bool,
+        visual_order: bool,
     ) -> (Vec<ElementId>, Vec<SelectionProxyRange>) {
         enum Work {
             Enter(ElementId),
@@ -2223,7 +2265,8 @@ impl WidgetTree {
 
         let mut entries = Vec::new();
         let mut proxies = Vec::new();
-        let mut work: Vec<_> = element.children.iter().rev().copied().map(Work::Enter).collect();
+        let mut work: Vec<_> = self.selection_command_children(area, visual_order)
+            .into_iter().rev().map(Work::Enter).collect();
         while let Some(next) = work.pop() {
             let id = match next {
                 Work::Enter(id) => id,
@@ -2239,16 +2282,14 @@ impl WidgetTree {
                 WidgetKind::SelectableText { .. } | WidgetKind::Text { .. } => {
                     entries.push(id);
                 }
-                WidgetKind::SelectionContainer { delegate, .. } => {
-                    if delegate.is_enabled() && self.external_selection_registrar(id).is_none() {
-                        if project_to_proxies {
-                            work.push(Work::Finish(id, entries.len()));
-                        }
-                        work.extend(element.children.iter().rev().copied().map(Work::Enter));
+                WidgetKind::SelectionContainer { .. } => {
+                    if project_to_proxies {
+                        work.push(Work::Finish(id, entries.len()));
                     }
+                    work.extend(self.selection_command_children(id, visual_order)
+                        .into_iter().rev().map(Work::Enter));
                 }
-                WidgetKind::SelectionArea { .. } | WidgetKind::SelectionListener { .. } => {}
-                _ => work.extend(element.children.iter().rev().copied().map(Work::Enter)),
+                _ => {}
             }
         }
         (entries, proxies)
@@ -2296,8 +2337,13 @@ impl WidgetTree {
     }
 
     pub(super) fn sync_static_selection(&mut self, area: ElementId) {
-        let (entries, proxies) = self.selection_command_members(area, true);
         let selection = self.static_selections.get(&area).copied();
+        let (entries, proxies) = self.selection_command_members(area, true, selection.is_some());
+        if selection.is_some() {
+            self.selection_paint_order.insert(area, entries.clone());
+        } else {
+            self.selection_paint_order.remove(&area);
+        }
         let indexes = if proxies.is_empty() {
             None
         } else {
@@ -2433,6 +2479,9 @@ impl WidgetTree {
     pub(super) fn static_selection_range(&self, element: ElementId) -> Option<TextRange> {
         let area = self.selection_area_ancestor(element)?;
         let selection = self.static_selections.get(&area).copied()?;
+        if let Some(entries) = self.selection_paint_order.get(&area) {
+            return static_selection_range(self, entries, selection, element);
+        }
         let entries = self.selectable_texts_in_area(selection.area);
         static_selection_range(self, &entries, selection, element)
     }
@@ -2633,6 +2682,7 @@ impl WidgetTree {
                 self.sync_static_selection(area);
             } else {
                 self.static_selections.remove(&area);
+                self.selection_paint_order.remove(&area);
             }
         }
     }

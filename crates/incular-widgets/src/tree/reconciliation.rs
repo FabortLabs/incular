@@ -1141,6 +1141,7 @@ impl WidgetTree {
             && old.controller() != new.controller()
         {
             self.static_selections.remove(&id);
+            self.selection_paint_order.remove(&id);
             let old = old.controller();
             old.set_registered_child_count(0);
             old.clear_selection();
@@ -3046,18 +3047,21 @@ impl WidgetTree {
                         } => {
                             notifier.unregister();
                             self.static_selections.remove(&id);
+                            self.selection_paint_order.remove(&id);
                             let controller = delegate.controller();
                             controller.set_registered_child_count(0);
                             controller.clear_selection();
                         }
                         WidgetKind::SelectionArea { controller, .. } => {
                             self.static_selections.remove(&id);
+                            self.selection_paint_order.remove(&id);
                             controller.set_registered_child_count(0);
                             controller.clear_selection();
                         }
                         WidgetKind::SelectionContainer { delegate, .. } => {
                             self.selection_registrations.remove(&id);
                             self.static_selections.remove(&id);
+                            self.selection_paint_order.remove(&id);
                             let controller = delegate.controller();
                             controller.set_registered_child_count(0);
                             controller.clear_selection();

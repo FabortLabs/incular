@@ -119,6 +119,7 @@ mod retained;
 mod retained_state;
 pub(crate) use retained_state::RetainedState;
 mod semantics;
+mod selection_order;
 mod specs;
 mod text;
 pub use text::FloatingCaretGeometry;
@@ -1663,6 +1664,8 @@ pub struct WidgetTree {
     /// them lifted above everything else. Empty while no popup is open.
     lifted_scene: Option<(DisplayList, DisplayList)>,
     static_selections: FastHashMap<ElementId, StaticSelection>,
+    /// Last command order for paint; it avoids sorting every selected leaf.
+    selection_paint_order: FastHashMap<ElementId, Vec<ElementId>>,
     selection_registrations: FastHashMap<ElementId, crate::selection_container::SelectionRegistration>,
     dependency_root: DependencyContext,
     automatic_keep_alives: crate::advanced_slivers::AutomaticKeepAliveQueue,
