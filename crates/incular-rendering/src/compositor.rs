@@ -2895,6 +2895,9 @@ impl LayerTree {
                         return None;
                     }
                 }
+                // Zero effective alpha skips painting the subtree. A retained
+                // but invisible leader cannot keep an unrelated follower live.
+                LayerKind::Opacity { alpha } if opacity_is_transparent(*alpha) => return None,
                 LayerKind::Leader { offset, .. } => {
                     world = leader_world_transform(world, *offset);
                 }

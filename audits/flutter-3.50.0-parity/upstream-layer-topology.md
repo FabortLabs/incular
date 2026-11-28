@@ -56,3 +56,19 @@ remain partial: Rust separates detachment from removal, and uses Arc
 lifetime instead of allowing manual disposal of a live reference.
 The two picture-release cases pair. This checks CPU picture lifetime,
 not GPU fence retirement. All six focused tests passed.
+
+## Leaders hidden by a zero-alpha ancestor
+
+The authored pinned Flutter probe uses one target and a sibling
+follower with `showWhenUnlinked: false`. At opacity 1.0, 0.0,
+0.001, and 0.5 the link and actual tap delivery alternate visible,
+hidden, hidden, visible. Incular used to publish the retained leader
+even when its ancestor skipped painting, leaving the follower able
+to draw and receive hits at a hidden anchor.
+
+Link publication now uses the same effective-alpha threshold as
+flattening. The runtime test verifies retained follower identity,
+draw commands, real hit targets, and restored 20×20 placement.
+A direct compositor control also verifies that a hidden first
+candidate cannot displace a visible target. All 18 focused tests
+passed. This authored probe does not add an upstream registration.

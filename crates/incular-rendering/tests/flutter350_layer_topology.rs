@@ -277,3 +277,31 @@ fn a_retained_leader_still_projects_its_offset_after_its_parent_repaints() {
         .unwrap();
     assert_eq!(retained.world_bounds.origin, offset);
 }
+
+#[test]
+fn a_hidden_leader_cannot_claim_the_link_before_a_visible_one() {
+    use incular_rendering::LayerLink;
+
+    let mut tree = LayerTree::new();
+    let link = LayerLink::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let hidden = tree.create_opacity(0.0);
+    let placed = tree.create_leader_at(link.clone(), unit().size, Offset::new(10., 10.));
+    let fallback = tree.create_leader_at(link.clone(), unit().size, Offset::new(30., 30.));
+    tree.set_children(root, vec![hidden, fallback]);
+    tree.set_children(hidden, vec![placed]);
+    tree.set_root(root);
+    for (alpha, origin) in [
+        (0.0, Offset::new(30., 30.)),
+        (0.001, Offset::new(30., 30.)),
+        (0.5, Offset::new(10., 10.)),
+        (0.0, Offset::new(30., 30.)),
+    ] {
+        tree.update_opacity(hidden, alpha);
+        let _ = tree.flatten();
+        assert_eq!(
+            link.leader_transform(),
+            Some(Transform::translation(origin))
+        );
+    }
+}

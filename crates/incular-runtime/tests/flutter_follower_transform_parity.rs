@@ -175,18 +175,23 @@ fn original_leader_inside_follower_reports_the_paint_order_error_and_then_recove
             Ok(_) => panic!("a follower cannot transform its own leader"),
         };
         assert_eq!(error, TreeError::LeaderAfterFollower);
-        assert!(error.to_string().contains(
-            "LeaderLayer anchor must come before FollowerLayer in paint order"
-        ));
+        assert!(
+            error
+                .to_string()
+                .contains("LeaderLayer anchor must come before FollowerLayer in paint order")
+        );
     }
     let root = runtime.tree().root().unwrap();
-    runtime.schedule_update(
-        root,
-        Center::new(CompositedTransformTarget::new(
-            link.clone(),
-            CompositedTransformFollower::new(link.clone(), paint()),
-        )).into(),
-    ).unwrap();
+    runtime
+        .schedule_update(
+            root,
+            Center::new(CompositedTransformTarget::new(
+                link.clone(),
+                CompositedTransformFollower::new(link.clone(), paint()),
+            ))
+            .into(),
+        )
+        .unwrap();
     runtime.run_frame(viewport).unwrap();
     assert!(link.is_linked());
 }
@@ -239,6 +244,53 @@ fn rotated_anchors(nested: bool) {
                 (a.x - b.x).abs() < 0.001 && (a.y - b.y).abs() < 0.001,
                 "{target_anchor:?}, {follower_anchor:?}, {axis:?}: {a:?} != {b:?}"
             );
+        }
+    }
+}
+
+#[test]
+fn a_zero_alpha_leader_unlinks_its_follower_for_paint_and_hits_until_visible_again() {
+    use incular_widgets::Opacity;
+
+    let link = LayerLink::new();
+    let scene = |opacity| {
+        let leader = CompositedTransformTarget::new(link.clone(), SizedBox::square(24.));
+        let follower = CompositedTransformFollower::new(
+            link.clone(),
+            Widget::box_(Size::new(20., 20.), MARKER).with_key(FOLLOWER),
+        )
+        .show_when_unlinked(false);
+        Widget::from(Stack::new([
+            Positioned::new(Opacity::new(opacity, leader))
+                .left(30.)
+                .top(40.),
+            Positioned::new(follower).left(100.).top(100.),
+        ]))
+    };
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(1.)).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let mut first = None;
+    for (opacity, visible) in [(1., true), (0., false), (0.001, false), (0.5, true)] {
+        runtime.schedule_update(root, scene(opacity)).unwrap();
+        let (display, _) = runtime.run_frame(constraints).unwrap();
+        let tree = runtime.tree();
+        let follower = tree.element_with_key(&Key::from(FOLLOWER)).unwrap();
+        let renderer = tree.render_id(follower).unwrap();
+        assert_eq!(renderer, *first.get_or_insert(renderer));
+        assert_eq!(link.is_linked(), visible, "opacity {opacity}");
+        let paints_marker = display.commands().iter().any(|op| {
+            matches!(
+                op, PaintCommand::Rect { color, .. } if *color == MARKER
+            )
+        });
+        assert_eq!(paints_marker, visible);
+        assert_eq!(
+            tree.hit_test(Offset::new(35., 45.)),
+            visible.then_some(renderer)
+        );
+        if visible {
+            assert_eq!(painted_marker(&display), rect(30., 40., 20., 20.));
         }
     }
 }
