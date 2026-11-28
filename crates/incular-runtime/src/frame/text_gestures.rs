@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::text_shortcuts::{TextIntent, TextShortcutPlatform};
+use incular_config::Axis;
 use incular_core::{DragStartBehavior, SECONDARY_POINTER_BUTTON};
 use incular_platform::{TextSelectionAction, TextSelectionActionRequest};
 use incular_text::{SelectionChangedCause, TextAffinity, is_layout_whitespace, word_boundary_at};
@@ -1791,10 +1792,11 @@ impl Runtime {
 
 }
 
-/// A direct finger drag in a multiline editable viewport.
+/// A direct finger drag in an editor's private viewport.
 #[derive(Clone, Copy)]
 pub(crate) struct EditableScrollDrag {
     field: ElementId,
+    axis: Axis,
     down: Offset,
     last: Offset,
     started: bool,
@@ -1815,15 +1817,22 @@ impl Runtime {
         position: Offset,
         toolbar_was_visible: bool,
     ) {
-        if self.tree.editable_can_drag_scroll(field) {
-            self.editable_scroll_drag = Some(EditableScrollDrag {
-                field,
-                down: position,
-                last: position,
-                started: false,
-                remember_toolbar: toolbar_was_visible,
-            });
+        let Some(axis) = self.tree.editable_drag_scroll_axis(field) else {
+            return;
+        };
+        // Flutter's default iOS single-line physics permits implicit caret
+        // reveals but prevents an ordinary finger drag from scrolling.
+        if axis.is_horizontal() && self.text_shortcut_platform == TextShortcutPlatform::Ios {
+            return;
         }
+        self.editable_scroll_drag = Some(EditableScrollDrag {
+            field,
+            axis,
+            down: position,
+            last: position,
+            started: false,
+            remember_toolbar: toolbar_was_visible,
+        });
     }
 
     pub(super) fn move_editable_scroll_drag(&mut self, position: Offset) -> bool {
@@ -1832,12 +1841,17 @@ impl Runtime {
         };
         if !drag.started {
             let delta = position - drag.down;
+            let (main, cross) = if drag.axis.is_vertical() {
+                (delta.y.abs(), delta.x.abs())
+            } else {
+                (delta.x.abs(), delta.y.abs())
+            };
             if self.text_long_press.is_some_and(|press| press.started)
-                || (delta.x.abs() >= delta.y.abs() && delta.x.abs() > TOUCH_SLOP)
+                || (cross >= main && cross > TOUCH_SLOP)
             {
                 return false;
             }
-            if delta.y.abs() <= TOUCH_SLOP || delta.y.abs() <= delta.x.abs() {
+            if main <= TOUCH_SLOP || main <= cross {
                 self.editable_scroll_drag = Some(drag);
                 return false;
             }
@@ -1859,7 +1873,7 @@ impl Runtime {
             }
             self.hide_text_field_toolbar_only(drag.field);
         }
-        self.frame_requested |= self.tree.editable_drag_scroll(drag.field, drag.last, position);
+        self.frame_requested |= self.tree.editable_drag_scroll(drag.field, drag.axis, drag.last, position);
         drag.last = position;
         self.editable_scroll_drag = Some(drag);
         true

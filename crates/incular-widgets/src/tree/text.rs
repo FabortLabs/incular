@@ -1019,21 +1019,21 @@ impl WidgetTree {
         }
     }
 
-    /// Whether a laid-out multiline editor can consume an internal drag.
+    /// Axis of a laid-out editor's freely scrollable private viewport.
     #[doc(hidden)]
-    pub fn editable_can_drag_scroll(&self, id: ElementId) -> bool {
-        let Some(node) = self.render_id(id).and_then(|render| self.renders.get(render.0)) else {
-            return false;
+    pub fn editable_drag_scroll_axis(&self, id: ElementId) -> Option<Axis> {
+        let node = self.renders.get(self.render_id(id)?.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
         };
-        matches!(node.object.kind(), RenderKind::TextField(field)
-            if field.multiline && field.fixed_scroll_offset.is_none())
-            && self.editable_max_scroll_extent(id).is_some_and(|max| max > 0.)
+        (field.fixed_scroll_offset.is_none() && self.editable_max_scroll_extent(id)? > 0.)
+            .then_some(if field.multiline { Axis::Vertical } else { Axis::Horizontal })
     }
 
-    /// Applies a pointer drag in the editor's local vertical coordinates.
+    /// Applies a pointer drag in the editor's private viewport coordinates.
     #[doc(hidden)]
-    pub fn editable_drag_scroll(&mut self, id: ElementId, from: Offset, to: Offset) -> bool {
-        if !self.editable_can_drag_scroll(id) {
+    pub fn editable_drag_scroll(&mut self, id: ElementId, axis: Axis, from: Offset, to: Offset) -> bool {
+        if self.editable_drag_scroll_axis(id) != Some(axis) {
             return false;
         }
         let Some(render) = self.render_id(id) else {
@@ -1045,7 +1045,7 @@ impl WidgetTree {
         else {
             return false;
         };
-        let delta = from.y - to.y;
+        let delta = if axis.is_vertical() { from.y - to.y } else { from.x - to.x };
         if !delta.is_finite() {
             return false;
         }
@@ -1053,11 +1053,12 @@ impl WidgetTree {
             return false;
         };
         let state = self.text_field_state_live_mut(render);
-        let next = (state.scroll_y + delta).clamp(0., maximum);
-        if state.scroll_y == next {
+        let offset = if axis.is_vertical() { &mut state.scroll_y } else { &mut state.scroll_x };
+        let next = (*offset + delta).clamp(0., maximum);
+        if *offset == next {
             return false;
         }
-        state.scroll_y = next;
+        *offset = next;
         self.mark_render_paint(render);
         true
     }

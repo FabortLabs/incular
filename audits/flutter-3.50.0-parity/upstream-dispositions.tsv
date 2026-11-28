@@ -4223,3 +4223,5 @@ packages/flutter/test/widgets/editable_text_test.dart	10423	input imm channel ca
 packages/flutter/test/widgets/editable_text_test.dart	10584	setEditingState is not called when text changes	partial-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
 packages/flutter/test/widgets/editable_text_test.dart	10625	setEditingState is called when text changes on controller	partial-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
 packages/flutter/test/widgets/editable_text_test.dart	10672	Synchronous test of local and remote editing values	paired-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
+packages/flutter/test/widgets/editable_text_test.dart	9693	single-line field cannot be scrolled with touch on iOS	paired-match	upstream-editable-scroll-toolbar.md#private-scroll-axis-on-mobile
+packages/flutter/test/widgets/editable_text_test.dart	9767	multi-line field can scroll with touch on iOS	paired-match	upstream-editable-scroll-toolbar.md#private-scroll-axis-on-mobile

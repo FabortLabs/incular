@@ -92,3 +92,20 @@ listener, whose retained state update removes the editor. Both
 operations complete, close the text client, and leave the replacement
 mounted with no stale focus. Reusing the old toolbar callback does
 nothing. Both native tests passed.
+
+## Private scroll axis on mobile
+
+Pinned `editable_text_test.dart:9693,9767` passed. Native carries the same
+100 px-width fixtures and real finger drags. The overflowing single-line
+iOS editor stays at its original offset, while the two-line editor
+scrolls to the last line and stops at its maximum. Its field can scroll
+without the drag being treated as a tap.
+
+An authored Android Flutter probe supplies the same overflowing single-line
+text and a 100 px horizontal drag. Its private viewport scrolls without
+focusing the editor or setting a selection. Native formerly discarded the
+drag because only multiline fields had a recognizer. The recognizer now
+uses the editor's scroll axis and retains iOS's horizontal exclusion.
+This is a touch/viewport comparison, not an equivalence claim for
+post-release velocity, scroll physics overrides, or externally attached
+editable scroll controllers. All 20 focused native editor tests passed.

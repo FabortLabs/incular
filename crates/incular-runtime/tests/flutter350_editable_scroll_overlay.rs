@@ -679,3 +679,99 @@ fn an_inline_menu_builder_update_preserves_the_open_menu_child_state() {
     );
     assert_eq!(runtime.focused_element(), Some(field));
 }
+
+fn run_private_axis_drag(
+    platform: TextShortcutPlatform,
+    multiline: bool,
+) -> (Offset, f32, bool, bool) {
+    use incular_config::Alignment;
+    use incular_text::TextStyle;
+    use incular_widgets::Align;
+
+    let text = TextEditingController::with_text(if multiline {
+        "XXXXX\nXXXXX\nXXXXX"
+    } else {
+        "This is a long string that should overflow the TextField."
+    });
+    let mut style = TextStyle::new().font_size(14.);
+    if let Some(font) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") {
+        const FONT: &str = "FlutterTest editable scroll axis";
+        incular_text::register_application_font_as(FONT, std::fs::read(font).unwrap());
+        style = style.font_family(FONT);
+    }
+    let field_widget = EditableText::new(text.clone())
+        .text_direction(TextDirection::Ltr)
+        .max_lines(Some(if multiline { 2 } else { 1 }))
+        .style(style);
+    let field_widget = Widget::from(field_widget).with_key("scrolling edit");
+    let mut runtime = Runtime::new(
+        Align::new(
+            Alignment::TOP_LEFT,
+            SizedBox::new().width(100.).child(field_widget),
+        )
+        .into(),
+    )
+    .unwrap();
+    runtime.set_text_shortcut_platform(platform);
+    let start = Instant::now();
+    let time = |ms| start + Duration::from_millis(ms);
+    frame(&mut runtime, time(0));
+    let field = runtime
+        .tree()
+        .element_with_key(&Key::from("scrolling edit"))
+        .unwrap();
+    assert_eq!(
+        runtime.tree().text_field_scroll_offset(field),
+        Some(Offset::ZERO)
+    );
+    let max = runtime.tree().editable_max_scroll_extent(field).unwrap();
+    assert!(max > 0.);
+    assert!(runtime.focused_element().is_none());
+    let down = Offset::new(50., if multiline { 14. } else { 7. });
+    let at_delta = |distance| {
+        down - if multiline {
+            Offset::new(0., distance)
+        } else {
+            Offset::new(distance, 0.)
+        }
+    };
+    for (phase, distance, ms) in [
+        (PointerPhase::Down, 0., 10),
+        (PointerPhase::Move, 20., 40),
+        (PointerPhase::Move, 100., 80),
+        (PointerPhase::Up, 100., 120),
+    ] {
+        pointer(&mut runtime, phase, at_delta(distance), time(ms));
+        frame(&mut runtime, time(ms));
+    }
+    frame(&mut runtime, time(500));
+    (
+        runtime.tree().text_field_scroll_offset(field).unwrap(),
+        max,
+        runtime.focused_element().is_some(),
+        text.selection_if_set().is_some(),
+    )
+}
+
+#[test]
+fn ios_single_line_does_not_consume_horizontal_finger_scroll() {
+    let (offset, max, _, _) = run_private_axis_drag(TextShortcutPlatform::Ios, false);
+    assert!(max > 100.);
+    assert_eq!(offset, Offset::ZERO);
+}
+
+#[test]
+fn ios_two_line_editor_scrolls_its_last_line_into_view_on_finger_drag() {
+    let (offset, max, _, _) = run_private_axis_drag(TextShortcutPlatform::Ios, true);
+    assert_eq!(offset, Offset::new(0., max));
+}
+
+#[test]
+fn android_single_line_scrolls_horizontally_without_selecting_or_focusing() {
+    let (offset, max, focused, selected) =
+        run_private_axis_drag(TextShortcutPlatform::Android, false);
+    assert!(max > 100.);
+    assert_eq!(offset, Offset::new(80., 0.));
+    assert!(!focused);
+    assert!(!selected);
+}
