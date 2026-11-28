@@ -594,3 +594,57 @@ fn native_handwriting_discovers_only_touchable_mounted_editors_and_focuses_their
         "a retired target must not focus the replacement"
     );
 }
+
+#[test]
+fn macos_read_only_binding_dispatches_selectors_but_rejects_text_updates() {
+    use incular_runtime::TextShortcutPlatform;
+    use incular_text::TextSelection;
+
+    let text = TextEditingController::with_text("read only");
+    text.set_selection(TextSelection::collapsed(0));
+    let runtime = Rc::new(RefCell::new(
+        Runtime::new(
+            EditableText::new(text.clone())
+                .read_only(true)
+                .autofocus(true)
+                .text_direction(TextDirection::Ltr)
+                .into(),
+        )
+        .unwrap(),
+    ));
+    runtime
+        .borrow_mut()
+        .set_text_shortcut_platform(TextShortcutPlatform::MacOs);
+    let host = Host::new();
+    let _binding = FlutterTextInputBinding::install(&host.inbound, &runtime);
+    runtime
+        .borrow_mut()
+        .run_frame(Constraints::tight(Size::new(320., 120.)))
+        .unwrap();
+    let (client, config) = runtime.borrow().flutter_text_input_configuration().unwrap();
+    assert!(config.read_only);
+    let reply = host
+        .send(
+            "TextInputClient.performSelectors",
+            json!([client.get(), ["moveRight:", "deleteBackward:"]]),
+        )
+        .unwrap();
+    assert_eq!(
+        JsonMethodCodec::decode_envelope(&reply).unwrap(),
+        Value::Null
+    );
+    assert_eq!(text.selection(), TextSelection::collapsed(1));
+    assert_eq!(text.text(), "read only");
+    let reply = host
+        .send(
+            "TextInputClient.updateEditingState",
+            json!([client.get(), {"text":"no","selectionBase":0,"selectionExtent":2}]),
+        )
+        .unwrap();
+    assert_eq!(
+        JsonMethodCodec::decode_envelope(&reply).unwrap(),
+        Value::Null
+    );
+    assert_eq!(text.selection(), TextSelection::collapsed(1));
+    assert_eq!(text.text(), "read only");
+}

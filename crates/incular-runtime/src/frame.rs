@@ -3771,11 +3771,16 @@ impl Runtime {
                 )
             })
         });
-        // Read-only fields still own focus and selection, but Flutter
-        // attaches no input connection for them on native platforms.
+        // macOS selectors and the web need a connection even for
+        // read-only selection and traversal; other native targets do not.
         let snapshot = self
             .focused
-            .filter(|&id| cfg!(target_arch = "wasm32") || self.tree.text_field_is_editable(id))
+            .filter(|&id| {
+                self.tree.text_field_is_editable(id)
+                    || ((cfg!(target_arch = "wasm32")
+                        || self.text_shortcut_platform == TextShortcutPlatform::MacOs)
+                        && self.tree.text_field_is_read_only(id))
+            })
             .and_then(|id| self.tree.text_field_ime_snapshot(id, !unchanged));
         let Some((target, snapshot)) = self.focused.zip(snapshot) else {
             if let Some(MountedTextInputConnection { client, .. }) = self.text_input_client.take() {
@@ -4906,6 +4911,12 @@ impl Runtime {
             field,
             controller: self.tree.text_controller(field)?,
         })
+    }
+
+    pub(crate) fn active_flutter_text_input_client(&self) -> Option<TextInputClientId> {
+        let active = self.text_input_client?;
+        (self.focused == Some(active.target) && self.tree.is_text_field(active.target))
+            .then_some(active.client)
     }
 
     pub(crate) fn active_flutter_editable_client(&self) -> Option<TextInputClientId> {

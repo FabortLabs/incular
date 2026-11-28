@@ -376,7 +376,7 @@ impl crate::Runtime {
     pub fn flutter_text_input_configuration(
         &self,
     ) -> Option<(TextInputClientId, FlutterTextInputConfiguration)> {
-        let client = self.active_flutter_editable_client()?;
+        let client = self.active_flutter_text_input_client()?;
         let editor = self
             .text_input_configuration
             .as_ref()
@@ -426,7 +426,18 @@ impl crate::Runtime {
         if call.method == "TextInputClient.onFocusReceived" {
             return method_result(self.handle_flutter_text_input_lifecycle_method(call), Value::Bool);
         }
-        if self.active_flutter_editable_client().is_none() {
+        let accepts_read_only = matches!(
+            call.method.as_str(),
+            "TextInputClient.performSelectors"
+                | "TextInputClient.requestExistingInputState"
+                | "TextInputClient.onConnectionClosed"
+        );
+        let active = if accepts_read_only {
+            self.active_flutter_text_input_client()
+        } else {
+            self.active_flutter_editable_client()
+        };
+        if active.is_none() {
             // The installed channel acknowledges delivery even before an
             // editor attaches. Encoded Success(null) is not a missing plugin.
             return Success(Value::Null);
@@ -709,7 +720,7 @@ impl crate::Runtime {
             return Ok(None);
         }
         self.adopt_external_focus_change();
-        let Some(active) = self.active_flutter_editable_client() else {
+        let Some(active) = self.active_flutter_text_input_client() else {
             return Ok(Some(false));
         };
         let args = call.arguments.as_array().ok_or(InvalidArguments)?;
@@ -727,7 +738,7 @@ impl crate::Runtime {
             }
         }
         for selector in selectors.iter().filter_map(Value::as_str) {
-            if self.active_flutter_editable_client() != Some(active) {
+            if self.active_flutter_text_input_client() != Some(active) {
                 break;
             }
             self.dispatch_flutter_text_selector(selector);

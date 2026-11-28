@@ -51,6 +51,9 @@ fn click(runtime: &mut Runtime) {
 #[test]
 fn a_read_only_native_editor_can_focus_and_select_without_attaching_an_ime() {
     for (platform, shortcuts) in PLATFORMS {
+        if shortcuts == TextShortcutPlatform::MacOs {
+            continue;
+        }
         let text = TextEditingController::with_text(TEXT);
         let focus = FocusNode::new();
         let mut runtime = Runtime::new(editor(&text, &focus, true).into()).unwrap();
@@ -182,4 +185,60 @@ fn tab_cycles_through_both_editable_and_read_only_editors_on_every_native_platfo
             assert!(!from.has_primary_focus(), "{platform}");
         }
     }
+}
+
+#[test]
+fn macos_read_only_client_accepts_selection_and_traversal_selectors_but_not_deletion() {
+    use serde_json::json;
+    let text = TextEditingController::with_text(TEXT);
+    let focus = FocusNode::new();
+    let other = FocusNode::new();
+    let mut runtime = Runtime::new(
+        FocusScope::new(
+            Column::new([
+                editor(&text, &focus, true).autofocus(true),
+                editor(&TextEditingController::new(), &other, false),
+            ])
+            .text_direction(TextDirection::Ltr),
+        )
+        .into(),
+    )
+    .unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::MacOs);
+    frame(&mut runtime);
+    assert!(focus.has_primary_focus());
+    let (client, config) = runtime.flutter_text_input_configuration().unwrap();
+    assert!(config.read_only);
+    text.set_selection(TextSelection::collapsed(0));
+    frame(&mut runtime);
+    let packet = |selectors: &[&str]| {
+        serde_json::to_vec(&json!({
+            "method": "TextInputClient.performSelectors",
+            "args": [client.get(), selectors],
+        }))
+        .unwrap()
+    };
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_selectors_call(&packet(&["moveRight:", "deleteBackward:"]))
+            .unwrap(),
+        Some(true)
+    );
+    assert_eq!(text.selection(), TextSelection::collapsed(1));
+    assert_eq!(text.text(), TEXT);
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_selectors_call(&packet(&["insertTab:"]))
+            .unwrap(),
+        Some(true)
+    );
+    frame(&mut runtime);
+    assert!(other.has_primary_focus());
+    assert!(!focus.has_primary_focus());
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_selectors_call(&packet(&["moveRight:"]))
+            .unwrap(),
+        Some(false)
+    );
 }
