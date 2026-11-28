@@ -324,53 +324,69 @@ impl WidgetTree {
         wrap: &incular_layout::Wrap,
         constraints: Constraints,
     ) -> Option<Size> {
-        let axis = wrap.direction;
-        let child_constraints = match axis {
-            Axis::Horizontal => Constraints::at_most(constraints.max_width(), f32::INFINITY),
-            Axis::Vertical => Constraints::at_most(f32::INFINITY, constraints.max_height()),
-        };
-        let limit = f64::from(match axis {
-            Axis::Horizontal => child_constraints.max_width(),
-            Axis::Vertical => child_constraints.max_height(),
-        });
-        let spacing = f64::from(wrap.spacing);
-        let run_spacing = f64::from(wrap.run_spacing);
-        let (mut main, mut cross) = (0.0f64, 0.0f64);
-        let (mut run_main, mut run_cross) = (0.0f64, 0.0f64);
-        let mut run_has_child = false;
-        for &child in children {
-            let size =
-                with_recursive_tree_stack(|| self.dry_layout_size(child, child_constraints))?;
-            let item_main = f64::from(axis.main_extent(size));
-            let item_cross = f64::from(axis.cross_extent(size));
-            // Flutter's dry measurement uses a strict limit; live layout's
-            // placement tolerance intentionally does not apply here.
-            if run_has_child && run_main + spacing + item_main > limit {
-                main = main.max(run_main);
-                cross += run_cross + run_spacing;
-                run_main = 0.;
-                run_cross = 0.;
-                run_has_child = false;
-            }
-            run_main += if run_has_child {
-                spacing + item_main
-            } else {
-                item_main
-            };
-            run_cross = run_cross.max(item_cross);
-            run_has_child = true;
-        }
-        let (main, cross) = (main.max(run_main), cross + run_cross);
-        let (width, height) = match axis {
-            Axis::Horizontal => (main, cross),
-            Axis::Vertical => (cross, main),
-        };
-        let clamp = |value: f64, minimum, maximum| {
-            value.clamp(f64::from(minimum), f64::from(maximum)) as f32
-        };
-        Size::maybe_new(
-            clamp(width, constraints.min_width(), constraints.max_width()),
-            clamp(height, constraints.min_height(), constraints.max_height()),
+        let bounds = wrap_child_constraints(wrap.direction, constraints);
+        strict_wrap_size(
+            wrap,
+            constraints,
+            children
+                .iter()
+                .map(|&child| with_recursive_tree_stack(|| self.dry_layout_size(child, bounds))),
         )
     }
+}
+
+pub(super) fn wrap_child_constraints(axis: Axis, constraints: Constraints) -> Constraints {
+    match axis {
+        Axis::Horizontal => Constraints::at_most(constraints.max_width(), f32::INFINITY),
+        Axis::Vertical => Constraints::at_most(f32::INFINITY, constraints.max_height()),
+    }
+}
+
+pub(super) fn strict_wrap_size(
+    wrap: &incular_layout::Wrap,
+    constraints: Constraints,
+    sizes: impl IntoIterator<Item = Option<Size>>,
+) -> Option<Size> {
+    let axis = wrap.direction;
+    let limit = f64::from(match axis {
+        Axis::Horizontal => constraints.max_width(),
+        Axis::Vertical => constraints.max_height(),
+    });
+    let spacing = f64::from(wrap.spacing);
+    let run_spacing = f64::from(wrap.run_spacing);
+    let (mut main, mut cross) = (0.0f64, 0.0f64);
+    let (mut run_main, mut run_cross) = (0.0f64, 0.0f64);
+    let mut run_has_child = false;
+    for size in sizes {
+        let size = size?;
+        let item_main = f64::from(axis.main_extent(size));
+        let item_cross = f64::from(axis.cross_extent(size));
+        // Flutter's dry measurement uses a strict limit; live layout's
+        // placement tolerance intentionally does not apply here.
+        if run_has_child && run_main + spacing + item_main > limit {
+            main = main.max(run_main);
+            cross += run_cross + run_spacing;
+            run_main = 0.;
+            run_cross = 0.;
+            run_has_child = false;
+        }
+        run_main += if run_has_child {
+            spacing + item_main
+        } else {
+            item_main
+        };
+        run_cross = run_cross.max(item_cross);
+        run_has_child = true;
+    }
+    let (main, cross) = (main.max(run_main), cross + run_cross);
+    let (width, height) = match axis {
+        Axis::Horizontal => (main, cross),
+        Axis::Vertical => (cross, main),
+    };
+    let clamp =
+        |value: f64, minimum, maximum| value.clamp(f64::from(minimum), f64::from(maximum)) as f32;
+    Size::maybe_new(
+        clamp(width, constraints.min_width(), constraints.max_width()),
+        clamp(height, constraints.min_height(), constraints.max_height()),
+    )
 }

@@ -206,3 +206,71 @@ fn horizontal_wrap_dry_height_reflows_paragraph_at_the_supplied_width() {
 fn vertical_wrap_dry_width_reflows_a_quarter_turned_paragraph() {
     verify_wrapping_text(Axis::Vertical);
 }
+
+#[test]
+fn flutter_test_font_wrap_propagates_exact_ascent_under_the_baseline_parent() {
+    use incular_text::{TextEngine, TextStyle};
+    use incular_widgets::{Baseline, Center, Text};
+    let Some(font) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    const FONT: &str = "Pinned Flutter Test for Wrap baselines";
+    let mut engine = TextEngine::with_system_fonts(false);
+    assert!(engine.register_font_bytes_as(FONT, std::fs::read(font).unwrap()));
+    let caption: Widget = Text::new("X")
+        .text_direction(TextDirection::Ltr)
+        .style(TextStyle::new().font_family(FONT).font_size(100.))
+        .into();
+    let wrap =
+        Widget::from(Wrap::new([caption]).text_direction(TextDirection::Ltr)).with_key(101_u64);
+    let baseline = Widget::from(Baseline::new(175., wrap)).with_key(102_u64);
+    let mut tree = WidgetTree::with_text_engine(engine);
+    tree.mount(Center::new(baseline).into()).unwrap();
+    let wrap = tree.element_with_key(&101_u64.into()).unwrap();
+    let id = tree.render_id(wrap).unwrap();
+    let viewport = Size::new(800., 600.);
+    assert_eq!(
+        tree.dry_alphabetic_baseline(id, Constraints::loose(viewport)),
+        Some(75.)
+    );
+    tree.layout(Constraints::tight(viewport)).unwrap();
+    assert_eq!(tree.element_layout_size(wrap), Some(Size::new(100., 100.)));
+    assert_eq!(
+        tree.element_layout_size(tree.element_with_key(&102_u64.into()).unwrap()),
+        Some(Size::new(100., 200.))
+    );
+}
+
+#[test]
+fn dry_wrap_baseline_respects_positioned_run_order_without_measuring_live_geometry() {
+    use incular_config::VerticalDirection;
+    use incular_text::{TextEngine, TextStyle};
+    use incular_widgets::Text;
+    let Some(font) = std::env::var_os("INCULAR_FLUTTER_TEST_FONT_PATH") else {
+        return;
+    };
+    const FONT: &str = "Pinned Flutter Test for dry Wrap runs";
+    for (direction, expected) in [(VerticalDirection::Down, 30.), (VerticalDirection::Up, 15.)] {
+        let mut engine = TextEngine::with_system_fonts(false);
+        assert!(engine.register_font_bytes_as(FONT, std::fs::read(&font).unwrap()));
+        let caption = |size| {
+            Text::new("X")
+                .text_direction(TextDirection::Ltr)
+                .style(TextStyle::new().font_family(FONT).font_size(size))
+        };
+        let wrap = Wrap::new([caption(40.), caption(20.)])
+            .text_direction(TextDirection::Ltr)
+            .vertical_direction(direction)
+            .run_spacing(7.);
+        let mut tree = WidgetTree::with_text_engine(engine);
+        let root = tree.mount(wrap.into()).unwrap();
+        let id = tree.render_id(root).unwrap();
+        let bounds = Constraints::at_most(50., 100.);
+        assert_eq!(tree.dry_layout_size(id, bounds), Some(Size::new(40., 67.)));
+        assert_eq!(tree.dry_alphabetic_baseline(id, bounds), Some(expected));
+        assert_eq!(tree.element_layout_size(root), None);
+        tree.layout(Constraints::at_most(50., 101.)).unwrap();
+        assert_eq!(tree.baseline(id), Some(expected));
+        assert_eq!(tree.dry_alphabetic_baseline(id, bounds), Some(expected));
+    }
+}
