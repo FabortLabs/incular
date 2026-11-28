@@ -1644,6 +1644,7 @@ impl Runtime {
         if matches!(
             action,
             SemanticAction::Focus
+                | SemanticAction::ShowOnScreen
                 | SemanticAction::DidGainAccessibilityFocus
                 | SemanticAction::DidLoseAccessibilityFocus
                 | SemanticAction::SetText(_)

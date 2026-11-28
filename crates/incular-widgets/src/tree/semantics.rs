@@ -1894,6 +1894,7 @@ impl WidgetTree {
             || (keyboard_target
                 && declared_focusable != Some(false)
                 && (focus_annotation.is_none() || self.focus_semantic_actions_enabled));
+        state.blocked_user_actions = Default::default();
         let has_user_actions = focus_action
             || state.implicit_show_on_screen
             || !actions.is_empty()
@@ -1904,6 +1905,26 @@ impl WidgetTree {
             // Flutter's blocking configuration masks user actions, not the
             // node or its focusable/focused flags. Accessibility focus
             // lifecycle notifications are separate from our user actions.
+            for &action in &actions {
+                if semantic_action_is_executable(
+                    entry.widget.kind(),
+                    action,
+                    &entry.widget.semantic_properties().callbacks,
+                ) {
+                    state.blocked_user_actions.add(action);
+                }
+            }
+            if focus_action {
+                state.blocked_user_actions.add(SemanticActionKind::Focus);
+            }
+            for (bit, kind) in MERGEABLE_SEMANTIC_ACTIONS.into_iter().enumerate() {
+                if merged.standard_actions & (1 << bit) != 0 {
+                    state.blocked_user_actions.add(kind);
+                }
+            }
+            if merged.has_custom_callback {
+                state.blocked_user_actions.add(SemanticActionKind::Custom);
+            }
             actions.retain(|action| {
                 action.is_accessibility_focus_notification()
                     && entry.widget.semantic_properties().callbacks.supports(*action)

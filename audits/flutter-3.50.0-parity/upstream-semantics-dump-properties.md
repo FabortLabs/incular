@@ -14,12 +14,21 @@ an existing action, not a new custom menu entry. Both native tests
 failed before the richer diagnostics and all 20 focused semantics
 and custom-action tests passed after.
 
-Pinned :492 (the detached node dump without a transform) and :807
-(blocked user-action markers) also passed. Incular stores final
-rectangles rather than detached transform metadata, and its
-portable node removes blocked user actions instead of retaining
-separate debug marks for them. Those exact diagnostic behaviors
-have not been credited.
+Pinned :492 (the detached node dump without a transform) also passed.
+Incular stores final rectangles rather than detached transform metadata;
+the exact detached diagnostics have not been credited.
+
+## Blocked actions stay visible to diagnostics only
+
+Pinned `semantics_test.dart:807` passed. The translated control keeps its
+20×30 bounds at (60,20) and reports long press, scroll-up and show-on-screen
+as blocked. The retained portable action list contains only the independent
+accessibility-focus notification. Native dispatch rejects all three user
+actions and still calls the focus notification. Unblocking the mounted
+node restores all three callbacks and removes the debug markers without a
+new semantic identity. The existing block/merge tests and ordinary action
+inventory passed. The surrounding dump is native format, not Dart's text
+layout.
 
 ## Identity at the Flutter allocation limit
 

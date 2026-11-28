@@ -924,6 +924,13 @@ impl Semantics {
         self.with_bound_callback(SemanticAction::Focus, move |_| callback())
     }
 
+    /// Handles a request to reveal this node instead of the default viewport
+    /// behavior. The callback is masked with the other user actions.
+    #[must_use]
+    pub fn on_show_on_screen(self, callback: impl Fn() + 'static) -> Self {
+        self.with_bound_callback(SemanticAction::ShowOnScreen, move |_| callback())
+    }
+
     /// Notifies the handler when assistive technology focuses this node.
     #[must_use]
     pub fn on_did_gain_accessibility_focus(self, callback: impl Fn() + 'static) -> Self {

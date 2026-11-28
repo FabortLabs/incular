@@ -206,6 +206,74 @@ impl SemanticActionKind {
     }
 }
 
+/// Action declarations masked by user-action blocking. This diagnostic
+/// set is never advertised to platform adapters.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BlockedSemanticActions(u32);
+
+impl BlockedSemanticActions {
+    const REPORT_ORDER: [SemanticActionKind; 26] = {
+        use SemanticActionKind::*;
+        [
+            Activate,
+            LongPress,
+            ScrollLeft,
+            ScrollRight,
+            ScrollUp,
+            ScrollDown,
+            Increment,
+            Decrement,
+            ShowOnScreen,
+            MoveCursorForwardByCharacter,
+            MoveCursorBackwardByCharacter,
+            SetSelection,
+            Copy,
+            Cut,
+            Paste,
+            Dismiss,
+            MoveCursorForwardByWord,
+            MoveCursorBackwardByWord,
+            SetText,
+            Focus,
+            ScrollToOffset,
+            Expand,
+            Collapse,
+            Custom,
+            ScrollForward,
+            ScrollBackward,
+        ]
+    };
+
+    const fn bit(action: SemanticActionKind) -> u32 {
+        const { assert!((SemanticActionKind::DidLoseAccessibilityFocus as u32) < u32::BITS) };
+        1 << action as u32
+    }
+
+    /// Records a masked user action, leaving accessibility lifecycle
+    /// notifications outside the block.
+    pub fn add(&mut self, action: SemanticActionKind) {
+        if !action.is_accessibility_focus_notification() {
+            self.0 |= Self::bit(action);
+        }
+    }
+
+    #[must_use]
+    pub fn contains(self, action: SemanticActionKind) -> bool {
+        self.0 & Self::bit(action) != 0
+    }
+
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    pub fn iter(self) -> impl Iterator<Item = SemanticActionKind> {
+        Self::REPORT_ORDER
+            .into_iter()
+            .filter(move |&action| self.contains(action))
+    }
+}
+
 /// A request received from a native accessibility adapter. Text offsets use
 /// the editing model's UTF-8 byte indexing convention.
 #[derive(Clone, Debug, PartialEq)]
@@ -548,6 +616,9 @@ pub struct SemanticState {
     pub declared_focusable: Option<bool>,
     /// Effective Flutter accessibility focus scope for this semantic node.
     pub accessibility_focus_block_type: AccessibilityFocusBlockType,
+    /// Declared user actions omitted from the native action list because
+    /// this node is covered by a user-action block.
+    pub blocked_user_actions: BlockedSemanticActions,
     /// Preferred hit policy for platforms supporting semantic overlays.
     pub hit_test_behavior: SemanticsHitTestBehavior,
     pub selected: bool,
@@ -759,6 +830,7 @@ impl Default for SemanticState {
             declared_focused: None,
             declared_focusable: None,
             accessibility_focus_block_type: AccessibilityFocusBlockType::None,
+            blocked_user_actions: BlockedSemanticActions::default(),
             hit_test_behavior: SemanticsHitTestBehavior::Defer,
             selected: false,
             has_selected_state: false,
@@ -1277,6 +1349,32 @@ impl SemanticsTree {
                 let _ = write!(output, " indexInParent: {index}");
             }
             output.push('\n');
+            if !node.state.blocked_user_actions.is_empty() {
+                let _ = write!(output, "{indent}  blockedActions: ");
+                let actions = node
+                    .state
+                    .blocked_user_actions
+                    .iter()
+                    .map(|action| match action {
+                        SemanticActionKind::Activate => "tap".to_owned(),
+                        SemanticActionKind::Increment => "increase".to_owned(),
+                        SemanticActionKind::Decrement => "decrease".to_owned(),
+                        other => {
+                            let mut name = format!("{other:?}");
+                            name[..1].make_ascii_lowercase();
+                            name
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("🚫️, ")
+                    + "🚫️";
+                let mut chars = actions.chars();
+                output.extend(chars.by_ref().take(max_text_chars));
+                if chars.next().is_some() {
+                    output.push('…');
+                }
+                output.push('\n');
+            }
             if !node.tags().is_empty() {
                 let mut names = node.tags().iter().enumerate().flat_map(|(index, tag)| {
                     let separator = if index == 0 { "" } else { ", " };

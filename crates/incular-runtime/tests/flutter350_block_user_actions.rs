@@ -159,3 +159,101 @@ fn changing_one_declaration_splits_then_remerges_a_live_container() {
     assert!(runtime.dispatch_semantic_action(stable, SemanticAction::LongPress));
     assert_eq!(*calls.borrow(), ["label2", "label2"]);
 }
+
+#[test]
+fn diagnostics_mark_masked_actions_without_advertising_or_dispatching_them() {
+    use incular_config::Alignment;
+    use incular_core::{Offset, Rect};
+    use incular_widgets::{Align, Transform};
+
+    let calls = Calls::default();
+    let scene = |blocked: bool| {
+        let record = |name: &'static str| {
+            let calls = calls.clone();
+            move || calls.borrow_mut().push(name)
+        };
+        let annotation = Semantics::new(SizedBox::from_size(Size::new(20., 30.)))
+            .label("Translated control")
+            .block_user_actions(blocked)
+            .on_scroll_up(record("scroll"))
+            .on_long_press(record("long"))
+            .on_show_on_screen(record("show"))
+            .on_did_gain_accessibility_focus(record("gain"));
+        Directionality::new(
+            TextDirection::Ltr,
+            Align::new(
+                Alignment::TOP_LEFT,
+                Transform::translation(
+                    Offset::new(50., 10.),
+                    Transform::translation(Offset::new(10., 10.), annotation),
+                ),
+            ),
+        )
+        .into()
+    };
+    let limits = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene(true)).unwrap();
+    runtime.run_frame(limits).unwrap();
+    let blocked = node(&runtime, "Translated control");
+    assert_eq!(
+        blocked.bounds,
+        Rect::from_origin_size(Offset::new(60., 20.), Size::new(20., 30.))
+    );
+    assert_eq!(
+        blocked.actions,
+        [SemanticActionKind::DidGainAccessibilityFocus]
+    );
+    assert_eq!(
+        blocked
+            .state
+            .blocked_user_actions
+            .iter()
+            .collect::<Vec<_>>(),
+        [
+            SemanticActionKind::LongPress,
+            SemanticActionKind::ScrollUp,
+            SemanticActionKind::ShowOnScreen,
+        ]
+    );
+    let id = blocked.id;
+    let dump = runtime.tree().semantics_debug_dump();
+    assert!(
+        dump.contains("actions=[DidGainAccessibilityFocus]"),
+        "{dump}"
+    );
+    assert!(
+        dump.contains("blockedActions: longPress🚫️, scrollUp🚫️, showOnScreen🚫️"),
+        "{dump}"
+    );
+
+    for action in [
+        SemanticAction::LongPress,
+        SemanticAction::ScrollUp,
+        SemanticAction::ShowOnScreen,
+    ] {
+        assert!(!runtime.dispatch_semantic_action(id, action));
+    }
+    assert!(runtime.dispatch_semantic_action(id, SemanticAction::DidGainAccessibilityFocus));
+    assert_eq!(*calls.borrow(), ["gain"]);
+
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, scene(false)).unwrap();
+    runtime.run_frame(limits).unwrap();
+    let unblocked = node(&runtime, "Translated control");
+    assert_eq!(unblocked.id, id);
+    assert!(unblocked.state.blocked_user_actions.is_empty());
+    assert!(
+        !runtime
+            .tree()
+            .semantics_debug_dump()
+            .contains("blockedActions:")
+    );
+    for action in [
+        SemanticAction::LongPress,
+        SemanticAction::ScrollUp,
+        SemanticAction::ShowOnScreen,
+    ] {
+        assert!(runtime.dispatch_semantic_action(id, action));
+    }
+    assert_eq!(*calls.borrow(), ["gain", "long", "scroll", "show"]);
+}
