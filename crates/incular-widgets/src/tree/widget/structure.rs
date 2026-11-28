@@ -822,6 +822,7 @@ impl PartialEq for TextFieldSpec {
             && same_rc(&self.selection_handles, &other.selection_handles)
             && self.spell_check == other.spell_check
             && self.spell_check_suppressed == other.spell_check_suppressed
+            && self.stylus_handwriting_enabled == other.stylus_handwriting_enabled
     }
 }
 

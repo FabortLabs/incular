@@ -230,6 +230,12 @@ impl FlutterTextInputControls {
         }
     }
 
+    /// Whether text editing is forwarded to the browser's input plugin.
+    #[must_use]
+    pub const fn is_web_protocol(&self) -> bool {
+        self.web_protocol
+    }
+
     pub fn set_input_control(&mut self, new: FlutterTextInputControl) {
         if self.current == new {
             return;
@@ -337,6 +343,22 @@ impl FlutterTextInputControls {
         }
         self.forward(update, (method, arguments));
         Ok(true)
+    }
+
+    /// Publishes changed character bounds without copying a settled snapshot.
+    pub fn publish_selection_rects(
+        &mut self,
+        id: TextInputClientId,
+        rects: &[FlutterSelectionRect],
+    ) -> Result<bool, FlutterTextInputControlsError> {
+        let Some(attachment) = self.attached.as_ref().filter(|attachment| attachment.id == id)
+        else {
+            return Ok(false);
+        };
+        if attachment.geometry.selection.as_deref() == Some(rects) {
+            return Ok(false);
+        }
+        self.update(id, FlutterTextInputControlUpdate::SelectionRects(rects.to_vec()))
     }
 
     /// Publishes a mounted editor snapshot only when the value changed.

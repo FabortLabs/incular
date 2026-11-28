@@ -78,13 +78,16 @@ impl Runtime {
         }) {
             controls.update(client, Update::RequestAutofill)?;
         }
+        if shown {
+            self.publish_flutter_handwriting_rects(field, client, controls)?;
+        }
         if let Some(caret) = caret {
             controls.update(client, Update::CaretRect(caret))?;
         }
         Ok(shown)
     }
 
-    /// Publishes changed local composing and caret bounds after layout, for
+    /// Publishes changed local character, composing and caret bounds after layout, for
     /// the active Flutter host attachment. Unchanged rectangles are not
     /// sent. The host may call this after each subsequent frame.
     pub fn publish_flutter_text_input_rects(
@@ -104,7 +107,7 @@ impl Runtime {
         };
         let composing = controller.with_value(|value| value.composing);
         let (marked, caret) = self.flutter_input_rects(field, &controller, composing);
-        let mut sent = false;
+        let mut sent = self.publish_flutter_handwriting_rects(field, connection.client, controls)?;
         if let Some(marked) = marked {
             sent |= controls.update(connection.client, Update::ComposingRect(marked))?;
         }
@@ -112,6 +115,24 @@ impl Runtime {
             sent |= controls.update(connection.client, Update::CaretRect(caret))?;
         }
         Ok(sent)
+    }
+
+    fn publish_flutter_handwriting_rects(
+        &self,
+        field: ElementId,
+        client: TextInputClientId,
+        controls: &mut FlutterTextInputControls,
+    ) -> Result<bool, FlutterTextInputControlsError> {
+        if self.text_shortcut_platform() != crate::TextShortcutPlatform::Ios
+            || cfg!(target_arch = "wasm32")
+            || controls.is_web_protocol()
+        {
+            return Ok(false);
+        }
+        let Some(rects) = self.tree.flutter_handwriting_rects(field) else {
+            return Ok(false);
+        };
+        controls.publish_selection_rects(client, &rects)
     }
 
     fn flutter_input_rects(

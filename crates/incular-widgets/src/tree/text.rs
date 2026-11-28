@@ -2817,6 +2817,98 @@ impl WidgetTree {
         ))
     }
 
+    /// The visible grapheme bounds for the optional Flutter handwriting host.
+    /// Positions are UTF-16 starts in the laid-out display text. The
+    /// rectangles are editor-local and retain their shaped direction.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn flutter_handwriting_rects(
+        &self,
+        id: ElementId,
+    ) -> Option<Rc<[incular_platform::FlutterSelectionRect]>> {
+        use crate::render_object::HandwritingGeometry;
+
+        let element = self.elements.get(id.0)?;
+        let WidgetKind::TextField(spec) = element.widget.kind() else {
+            return None;
+        };
+        if !spec.stylus_handwriting_enabled {
+            return None;
+        }
+        let node = self.renders.get(self.render_id(id)?.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let layout = node.field_layout()?;
+        let state = node.text_field_state()?;
+        if node.dirty.contains(DirtyFlags::LAYOUT)
+            || field.controller.revisions() != (state.content_revision, state.visual_revision)
+        {
+            return None;
+        }
+        let scroll = field.scroll_offset(state.scroll_x, state.scroll_y);
+        let top = text_field_content_top(
+            field.multiline,
+            node.size.height,
+            layout.metrics().line_height,
+            field.content_padding,
+        );
+        let paint_offset = Offset::new(field.content_padding.left - scroll.x, top - scroll.y);
+        let box_style = (field.selection_height_style, field.selection_width_style);
+        let mut cache = state.handwriting_geometry.borrow_mut();
+        if let Some(cached) = cache.as_deref()
+            && cached.layout.same_layout(&layout)
+            && cached.paint_offset == paint_offset
+            && cached.size == node.size
+            && cached.box_style == box_style
+        {
+            return Some(cached.rects.clone());
+        }
+
+        let mask = field.obscure_text.then_some(field.obscuring_character);
+        let rects = with_text_field_display(&field.controller, "", mask, |text| {
+            let mut rects = Vec::new();
+            let mut boundaries = GraphemeClusterSegmenter::new().segment_str(text);
+            let mut start = boundaries.next().unwrap_or(0);
+            let mut position = 0;
+            for end in boundaries {
+                let range = TextRange::new(start, end);
+                if let Some(glyph) = layout
+                    .boxes_for_selection(range, box_style.0, box_style.1)
+                    .into_iter()
+                    .next()
+                {
+                    let origin = glyph.rect.origin + paint_offset;
+                    let size = glyph.rect.size;
+                    if node.size.height <= origin.y {
+                        break;
+                    }
+                    if origin.x + size.width >= 0.
+                        && origin.x <= node.size.width
+                        && origin.y + size.height >= 0.
+                    {
+                        rects.push(incular_platform::FlutterSelectionRect {
+                            position,
+                            bounds: Rect::from_origin_size(origin, size),
+                            direction: glyph.direction,
+                        });
+                    }
+                }
+                position += text[start..end].encode_utf16().count();
+                start = end;
+            }
+            Rc::from(rects)
+        });
+        *cache = Some(Box::new(HandwritingGeometry {
+            layout,
+            paint_offset,
+            size: node.size,
+            box_style,
+            rects: Rc::clone(&rects),
+        }));
+        Some(rects)
+    }
+
     fn text_field_input_snapshot_with(
         &self,
         id: ElementId,

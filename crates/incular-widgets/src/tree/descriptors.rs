@@ -1251,6 +1251,7 @@ pub struct EditableText {
     autofill_hints: Option<Vec<String>>,
     hint_locales: Option<Vec<incular_config::Locale>>,
     enable_ime_personalized_learning: bool,
+    stylus_handwriting_enabled: bool,
     scroll_padding: incular_config::EdgeInsets,
     cursor_opacity_animates: bool,
     /// `None` resolves to [`ToolbarOptions::for_field`].
@@ -1340,6 +1341,7 @@ impl EditableText {
             autofill_hints: Some(Vec::new()),
             hint_locales: None,
             enable_ime_personalized_learning: true,
+            stylus_handwriting_enabled: true,
             scroll_padding: incular_config::EdgeInsets::all(20.0),
             cursor_opacity_animates: false,
             toolbar_options: None,
@@ -1417,6 +1419,14 @@ impl EditableText {
     #[must_use]
     pub fn select_all_on_focus(mut self, select: bool) -> Self {
         self.select_all_on_focus = Some(select);
+        self
+    }
+
+    /// Enables stylus handwriting for this editor. Defaults to true.
+    /// The platform still decides whether handwriting is available.
+    #[must_use]
+    pub fn stylus_handwriting_enabled(mut self, enabled: bool) -> Self {
+        self.stylus_handwriting_enabled = enabled;
         self
     }
 
@@ -2227,6 +2237,7 @@ impl From<EditableText> for Widget {
             toolbar_options: value.toolbar_options,
             selection_handles: None,
             spell_check: value.spell_check,
+            stylus_handwriting_enabled: value.stylus_handwriting_enabled,
             spell_check_suppressed,
             controller: value.controller,
             group_id: value.group_id,

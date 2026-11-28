@@ -4161,3 +4161,4 @@ packages/flutter/test/widgets/editable_text_test.dart	6484	text styling info is 
 packages/flutter/test/widgets/editable_text_test.dart	14881	pasting with the keyboard collapses the selection and places it after the pasted content	paired-match	upstream-editable-defaults.md#paste-replaces-the-selection-and-lands-after-the-inserted-text
 packages/flutter/test/widgets/editable_text_test.dart	14154	Cursor does not jump after undo	paired-match	undo-history-comparisons.md#immediate-undo-after-the-first-insertion
 packages/flutter/test/widgets/editable_text_test.dart	16888	replacing puts cursor at the end of the word	paired-match	upstream-spell-check-toolbar.md#replacement-caret-policy
+packages/flutter/test/widgets/editable_text_scribble_test.dart	34	selection rects re-sent when refocused	paired-match	upstream-scribble-selection-geometry.md#focus-and-connection-lifetime

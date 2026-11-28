@@ -113,6 +113,14 @@ impl FieldLayout {
         }
     }
 
+    pub(crate) fn same_layout(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Whole(left), Self::Whole(right)) => Arc::ptr_eq(left, right),
+            (Self::Paragraphs(left), Self::Paragraphs(right)) => Arc::ptr_eq(left, right),
+            _ => false,
+        }
+    }
+
     fn geometry(&self) -> &dyn TextGeometry {
         match self {
             Self::Whole(layout) => &**layout,
@@ -171,6 +179,15 @@ impl CursorFrame {
     }
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct HandwritingGeometry {
+    pub(crate) layout: FieldLayout,
+    pub(crate) paint_offset: Offset,
+    pub(crate) size: Size,
+    pub(crate) box_style: (BoxHeightStyle, BoxWidthStyle),
+    pub(crate) rects: Rc<[incular_platform::FlutterSelectionRect]>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RenderTextFieldState {
     pub(crate) text: RenderTextState,
@@ -198,6 +215,8 @@ pub(crate) struct RenderTextFieldState {
     /// The spell check answer the layout was built from.
     pub(crate) spell_revision: u64,
     pub(crate) spell_selection_visible: bool,
+    /// Cached on demand by a handwriting-capable host, not ordinary layout.
+    pub(crate) handwriting_geometry: std::cell::RefCell<Option<Box<HandwritingGeometry>>>,
     /// Styled runs of the laid-out text that carry a decoration, painted
     /// over the glyphs (misspelled words and a decorated field style).
     pub(crate) decorations: Arc<[incular_text::StyledTextRun]>,
