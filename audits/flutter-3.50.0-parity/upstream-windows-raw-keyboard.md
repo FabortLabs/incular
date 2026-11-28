@@ -16,3 +16,17 @@ The three tables are reproducible from pinned Flutter source with
 format is partial: all four fields are preserved but the Rust Debug
 spelling differs. These results are framework packet tests, not a
 native Windows desktop or a change to Incular's ordinary host ingress.
+
+## Dispatch, IME filtering and repeat state
+
+Four original registrations passed for Windows pressed-modifier
+reconciliation (including generic-only Shift/Control/Alt), repeat
+detection, and VK_PROCESSKEY suppression. The latter passed in the
+pinned typed-then-raw variant. The local
+`flutter350_windows_key_message` target uses the mounted legacy
+Focus handler and the window raw listener, confirms neither sees
+the IME down or its ordinary virtual-key release, and confirms the
+claimed handled result. Suppression is tracked by physical scan
+identity rather than logical key, and does not ignore unrelated keys
+or an actually delivered typed packet. Duplicate raw downs report
+repeat until release; no extra hardware modifier events are emitted.

@@ -4278,3 +4278,7 @@ packages/flutter/test/services/raw_keyboard_test.dart	2350	Modifier keyboard key
 packages/flutter/test/services/raw_keyboard_test.dart	2365	Unprintable keyboard keys are correctly translated	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
 packages/flutter/test/services/raw_keyboard_test.dart	2432	data.toString	partial-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
 packages/flutter/test/services/raw_keyboard_test.dart	2448	data.equality	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	276	keysPressed modifiers are synchronized with key events on Windows	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state
+packages/flutter/test/services/raw_keyboard_test.dart	709	repeat events	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state
+packages/flutter/test/services/raw_keyboard_test.dart	750	sided modifiers without a side set return all sides on Windows	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state
+packages/flutter/test/services/raw_keyboard_test.dart	2379	Win32 VK_PROCESSKEY events are skipped	paired-match	upstream-windows-raw-keyboard.md#dispatch-ime-filtering-and-repeat-state

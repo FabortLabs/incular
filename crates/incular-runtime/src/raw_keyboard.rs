@@ -85,6 +85,7 @@ impl Drop for RawKeyboardSubscription {
 #[derive(Debug, Default)]
 pub struct LegacyRawKeyboardState {
     pressed: BTreeMap<u64, LogicalKeyboardKey>,
+    skipped_windows: BTreeSet<u64>,
 }
 
 impl LegacyRawKeyboardState {
@@ -107,6 +108,26 @@ impl LegacyRawKeyboardState {
         self.pressed.clear();
     }
 
+    /// Windows sends IME-handled down events with VK_PROCESSKEY, but may
+    /// send their release with an ordinary virtual key. Pair by scan code.
+    pub(crate) fn prepare_windows(&mut self, raw: &mut RawKeyEvent) -> bool {
+        let Some(RawKeyPlatformData::Windows(data)) = raw.data() else {
+            return true;
+        };
+        let key = data.flutter_physical_key_id();
+        if raw.is_key_down() {
+            if !data.should_dispatch_key_down() {
+                self.skipped_windows.insert(key);
+                return false;
+            }
+            self.skipped_windows.remove(&key);
+            raw.set_repeat(self.pressed.contains_key(&key));
+            true
+        } else {
+            !self.skipped_windows.remove(&key)
+        }
+    }
+
     pub(crate) fn observe(&mut self, event: &RawKeyEvent) {
         use LogicalKeyboardKey as L;
         use PhysicalKeyboardKey as P;
@@ -118,6 +139,9 @@ impl LegacyRawKeyboardState {
                 (data.flutter_physical_key_id(), data.flutter_logical_key())
             }
             RawKeyPlatformData::Web(data) => {
+                (data.flutter_physical_key_id(), data.flutter_logical_key())
+            }
+            RawKeyPlatformData::Windows(data) => {
                 (data.flutter_physical_key_id(), data.flutter_logical_key())
             }
             _ => return,
@@ -156,6 +180,10 @@ impl LegacyRawKeyboardState {
                     self.set_modifier(left, data.is_modifier_pressed(modifier, S::Left));
                     self.set_modifier(right, data.is_modifier_pressed(modifier, S::Right));
                 }
+                RawKeyPlatformData::Windows(data) => {
+                    self.set_modifier(left, data.is_modifier_pressed(modifier, S::Left));
+                    self.set_modifier(right, data.is_modifier_pressed(modifier, S::Right));
+                }
                 RawKeyPlatformData::Web(data) => {
                     if data.is_modifier_pressed(modifier, S::Any) {
                         if !self.pressed.contains_key(&left.0)
@@ -181,6 +209,9 @@ impl LegacyRawKeyboardState {
                 RawKeyPlatformData::Fuchsia(data) => {
                     self.set_modifier((key, default), data.is_modifier_pressed(modifier, S::Any));
                 }
+                RawKeyPlatformData::Windows(data) => {
+                    self.set_modifier((key, default), data.is_modifier_pressed(modifier, S::Any));
+                }
                 RawKeyPlatformData::Web(data) => {
                     let remapped_caps = modifier == M::CapsLock
                         && self
@@ -195,8 +226,10 @@ impl LegacyRawKeyboardState {
                 _ => unreachable!("unsupported raw packets returned before modifier processing"),
             }
         }
-        if matches!(data, RawKeyPlatformData::Web(_)) {
+        if !matches!(data, RawKeyPlatformData::Fuchsia(_)) {
             self.pressed.remove(&usb(P::FN));
+        }
+        if matches!(data, RawKeyPlatformData::Web(_)) {
             // Real AltRight may represent browser AltGraph even if the
             // packet does not flag the key as a modifier.
             if event.is_key_down() && physical == usb(P::ALT_RIGHT) {

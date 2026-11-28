@@ -4318,12 +4318,29 @@ impl Runtime {
     /// counterpart. Keys sent through the existing portable ingress keep
     /// their ordinary mirrored view.
     pub fn dispatch_key_message(&mut self, message: KeyMessage) -> bool {
-        let (event, message_source) = match message {
-            KeyMessage::Typed(event) => (event, KeyMessageSource::Typed),
-            KeyMessage::Raw(ref raw) => (raw.portable().clone(), KeyMessageSource::Raw(raw)),
-            KeyMessage::TypedAndRaw { typed, ref raw } => (typed, KeyMessageSource::Paired(raw)),
-        };
-        self.dispatch_keyboard_event_parts(event, KeyboardInputSource::Physical, message_source)
+        let source = KeyboardInputSource::Physical;
+        match message {
+            KeyMessage::Typed(event) => {
+                self.dispatch_keyboard_event_parts(event, source, KeyMessageSource::Typed)
+            }
+            KeyMessage::Raw(mut raw) => {
+                !self.legacy_raw_keyboard.prepare_windows(&mut raw)
+                    || self.dispatch_keyboard_event_parts(
+                        raw.portable().clone(),
+                        source,
+                        KeyMessageSource::Raw(&raw),
+                    )
+            }
+            KeyMessage::TypedAndRaw { typed, mut raw } => {
+                let message_source = if self.legacy_raw_keyboard.prepare_windows(&mut raw) {
+                    KeyMessageSource::Paired(&raw)
+                } else {
+                    // The independently supplied modern packet remains valid.
+                    KeyMessageSource::Typed
+                };
+                self.dispatch_keyboard_event_parts(typed, source, message_source)
+            }
+        }
     }
 
     fn dispatch_keyboard_event_from(
