@@ -467,3 +467,95 @@ fn disabling_the_two_ime_keyboard_traits_changes_only_the_requested_wire_field()
     assert_eq!(no_learning["enableSuggestions"], true);
     assert_eq!(no_learning["enableIMEPersonalizedLearning"], false);
 }
+
+#[test]
+fn max_lines_and_explicit_type_choose_the_keyboard_after_a_real_editable_tap() {
+    use incular_core::{InputEvent, Offset, PointerPhase};
+    use incular_platform::{FlutterTextInputConfiguration, TextInputType};
+    use std::time::{Duration, Instant};
+
+    let viewport = Constraints::tight(Size::new(180., 100.));
+    for (line_override, explicit_type, kind, action) in [
+        (
+            Some(None),
+            None,
+            TextInputType::Multiline,
+            "TextInputAction.newline",
+        ),
+        (
+            Some(None),
+            Some(TextInputType::Text),
+            TextInputType::Text,
+            "TextInputAction.done",
+        ),
+        (
+            Some(Some(3)),
+            Some(TextInputType::Phone),
+            TextInputType::Phone,
+            "TextInputAction.done",
+        ),
+        (
+            Some(Some(3)),
+            None,
+            TextInputType::Multiline,
+            "TextInputAction.newline",
+        ),
+        (None, None, TextInputType::Text, "TextInputAction.done"),
+    ] {
+        let text = TextEditingController::new();
+        let focus = FocusNode::new();
+        let mut field = editable(&focus, &text).autofocus(false);
+        if let Some(lines) = line_override {
+            field = field.max_lines(lines);
+        }
+        if let Some(input_type) = explicit_type {
+            field = field.input_type(input_type);
+        }
+        let mut runtime = Runtime::new(field.into()).unwrap();
+        runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+        let now = Instant::now();
+        runtime.run_frame_at(viewport, now).unwrap();
+        assert!(!focus.has_focus());
+        assert!(runtime.take_text_input_commands().is_empty());
+        for (index, phase) in [PointerPhase::Down, PointerPhase::Up]
+            .into_iter()
+            .enumerate()
+        {
+            let _ = runtime.handle_input_at(
+                InputEvent::Pointer {
+                    phase,
+                    position: Offset::new(12., 12.),
+                },
+                now + Duration::from_millis(index as u64 + 16),
+            );
+        }
+        runtime
+            .run_frame_at(viewport, now + Duration::from_millis(32))
+            .unwrap();
+        assert!(focus.has_primary_focus());
+        let commands = runtime.take_text_input_commands();
+        let config = commands
+            .iter()
+            .find_map(|command| match command {
+                TextInputCommand::SetClient { configuration, .. } => Some(configuration),
+                _ => None,
+            })
+            .expect("a real pointer tap attaches the keyboard");
+        assert!(commands.iter().any(|command| matches!(
+            command,
+            TextInputCommand::Show { client } if *client == config.client
+        )));
+        let wire = FlutterTextInputConfiguration::from_native_editor(config, None).to_json();
+        assert_eq!(wire["inputType"]["name"], kind.flutter_name());
+        assert_eq!(wire["inputAction"], action);
+
+        text.set_text("test");
+        runtime
+            .run_frame_at(viewport, now + Duration::from_millis(48))
+            .unwrap();
+        assert!(runtime.take_text_input_commands().iter().any(|command| matches!(
+            command,
+            TextInputCommand::Update { client, state } if *client == config.client && state.text == "test"
+        )));
+    }
+}

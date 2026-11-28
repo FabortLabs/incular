@@ -144,3 +144,16 @@ and autofill serialization. The styled field retains its previous
 line-based fallback; this change does not audit design systems.
 The privacy flags are checked separately, so turning off either one
 does not turn off the other. Forty-two focused native checks passed.
+
+### Keyboard type after a pointer actually focuses the editor
+
+The five pinned EditableText registrations at :1864, :1900, :1937,
+:1974 and :2008 passed. Native tests start with no focused editor or
+client, dispatch a real pointer down and up, and inspect the attached
+client's configuration and Show command. Controller text changes to
+`test` reach that same client. Unlimited and three-line editors
+default to the multiline keyboard and Newline. An explicit Text
+keyboard on the unlimited editor and Phone on the three-line editor
+both use Done. The untouched one-line editor uses Text and Done.
+All 17 focused tests passed. This compares real runtime keyboard
+requests and wire payloads, not rendering of the host keyboard.

@@ -4103,3 +4103,8 @@ packages/flutter/test/semantics/semantics_test.dart	408	after markNeedsSemantics
 packages/flutter/test/widgets/composited_transform_test.dart	14	Change link during layout	paired-match	upstream-layer-topology.md#relinking-during-layout-and-repainting-a-sibling
 packages/flutter/test/widgets/composited_transform_test.dart	59	LeaderLayer should not cause error	paired-match	upstream-layer-topology.md#relinking-during-layout-and-repainting-a-sibling
 packages/flutter/test/widgets/composited_transform_test.dart	356	'$targetAlignment - $followerAlignment'	paired-match	upstream-layer-topology.md#routed-taps-across-all-anchor-pairs
+packages/flutter/test/widgets/editable_text_test.dart	1864	Multiline keyboard with newline action is requested when maxLines = null	paired-match	upstream-editable-defaults.md#keyboard-type-after-a-pointer-actually-focuses-the-editor
+packages/flutter/test/widgets/editable_text_test.dart	1900	Text keyboard is requested when explicitly set and maxLines = null	paired-match	upstream-editable-defaults.md#keyboard-type-after-a-pointer-actually-focuses-the-editor
+packages/flutter/test/widgets/editable_text_test.dart	1937	Correct keyboard is requested when set explicitly and maxLines > 1	paired-match	upstream-editable-defaults.md#keyboard-type-after-a-pointer-actually-focuses-the-editor
+packages/flutter/test/widgets/editable_text_test.dart	1974	multiline keyboard is requested when set implicitly	paired-match	upstream-editable-defaults.md#keyboard-type-after-a-pointer-actually-focuses-the-editor
+packages/flutter/test/widgets/editable_text_test.dart	2008	single line inputs have correct default keyboard	paired-match	upstream-editable-defaults.md#keyboard-type-after-a-pointer-actually-focuses-the-editor
