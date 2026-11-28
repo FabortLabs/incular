@@ -4379,3 +4379,53 @@ packages/flutter/test/widgets/scrollbar_test.dart	570	trackRadius and radius is 
 packages/flutter/test/widgets/scrollbar_test.dart	2423	Scrollbar track can be drawn	paired-match	upstream-scrollbar-track-paint.md
 packages/flutter/test/widgets/scrollbar_test.dart	2459	RawScrollbar correctly assigns colors	paired-match	upstream-scrollbar-track-paint.md
 packages/flutter/test/widgets/scrollbar_test.dart	2498	trackRadius and radius properties of RawScrollbar can draw RoundedRectangularRect	paired-match	upstream-scrollbar-track-paint.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	53	one SenstiveContent widget sets content sensitivity for tree as expected	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	64	disposing only SensitiveContent widget in the tree sets content sensitivity back to the default as expected	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	82	with another sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	104	when it gets disposed with another sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	130	with two other sensitive widgets	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	144	with two other sensitive widgets and one gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	174	with one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	190	when it gets disposed with one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	227	with one auto sensitive widget that gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	254	with two auto sensitive widgets and one gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	288	with one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	304	when it gets disposed with one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	338	with one not sensitive widget that gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	364	with two not sensitive widgets and one gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	397	with one not sensitive widget and one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	419	when it gets disposed with one not sensitive widget and one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	460	with one not sensitive widget and one auto sensitive widget and auto sensitive widget gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	493	with one not sensitive widget and one auto sensitive widget and not sensitive widget gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	527	with another sensitive widget, one not sensitive widget, and one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	551	when it gets disposed with another sensitive widget, one not sensitive widget, and one auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	588	with another sensitive widget, one not sensitive widget, and one auto sensitive widget and the auto sensitive widget is disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	622	with another sensitive widget, one not sensitive widget, and one auto sensitive widget and the not sensitive widget is disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	657	with two auto sensitive widgets and one not sensitive widget and one auto sensitive widget gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	695	with one auto sensitive widgets and two not sensitive widgets and one not sensitive widget gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	735	with another auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	754	when it gets disposed with another auto sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	786	with one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	805	when it gets disposed with one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	834	with one not sensitive widget that gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	863	with two not sensitive widgets and one gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	899	with another auto sensitive widget and one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	924	when it gets disposed with another auto sensitive widget and one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	960	with another auto sensitive widget and one not sensitive widget and the not sensitive widget gets disposed	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	998	with another not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1017	when it gets disposed with one not sensitive widget	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1051	when one sensitive SensitiveContent widget changes to sensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1082	when one sensitive SensitiveContent widget changes to autoSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1116	when one sensitive SensitiveContent widget changes to notSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1150	when one autoSensitive SensitiveContent widget changes to sensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1181	when one autoSensitive SensitiveContent widget changes to autoSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1212	when one autoSensitive SensitiveContent widget changes to notSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1243	when one notSensitive SensitiveContent widget changes to sensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1277	when one notSensitive SensitiveContent widget changes to autoSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	1311	when one notSensitive SensitiveContent widget changes to notSensitive	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2037	when a sensitive SensitiveContent widget has any SensitiveContent children	reference-ran-incular-open	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2060	when an autoSensitive SensitiveContent widget has a sensitive SensitiveContent child	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2079	when an autoSensitive SensitiveContent widget has an autoSensitive SensitiveContent child	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2101	when an autoSensitive SensitiveContent widget has an notSensitive SensitiveContent child	paired-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2123	when an notSensitive SensitiveContent widget has a sensitive SensitiveContent child	partial-match	upstream-sensitive-content-host.md
+packages/flutter/test/widgets/sensitive_content_host_test.dart	2146	when an notSensitive SensitiveContent widget has an autoSensitive SensitiveContent child	partial-match	upstream-sensitive-content-host.md

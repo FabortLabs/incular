@@ -1694,6 +1694,22 @@ impl Application {
         });
     }
 
+    /// Records the native capture policy discovered by a window adapter
+    /// before Incular applies any widget overrides. The value is also restored
+    /// after the final override leaves the retained tree.
+    pub fn record_native_content_sensitivity(
+        &mut self,
+        window_id: WindowId,
+        sensitivity: incular_config::ContentSensitivity,
+    ) -> bool {
+        self.with_window_mut(window_id, |record| {
+            record.fallback_content_sensitivity = sensitivity;
+            record.last_content_sensitivity = Some(sensitivity);
+            record.runtime.request_frame();
+        })
+        .is_some()
+    }
+
     /// Drains the platform view commands of one native window.
     pub fn take_window_platform_view_commands(
         &mut self,
@@ -1829,8 +1845,15 @@ impl Application {
                                 }
                                 stats.requested_another_frame |= record.runtime.frame_requested();
                             }
-                            let sensitivity = record.runtime.content_sensitivity();
-                            if record.last_content_sensitivity != Some(sensitivity) {
+                            let scoped = record.runtime.tree().calculated_content_sensitivity();
+                            let desired = scoped.or_else(|| {
+                                record
+                                    .last_content_sensitivity
+                                    .map(|_| record.fallback_content_sensitivity)
+                            });
+                            if let Some(sensitivity) = desired
+                                && record.last_content_sensitivity != Some(sensitivity)
+                            {
                                 record.last_content_sensitivity = Some(sensitivity);
                                 sensitivity_update = Some(sensitivity);
                             }
@@ -2507,6 +2530,12 @@ impl Application {
                             | WindowOperation::SetCursorVisible(_)
                             | WindowOperation::SetCursorPosition(_) => {}
                             WindowOperation::SetContentSensitivity(sensitivity) => {
+                                // Explicit host settings made outside a widget
+                                // override become the fallback, not a one-frame
+                                // change overwritten by an empty widget tree.
+                                if record.runtime.tree().calculated_content_sensitivity().is_none() {
+                                    record.fallback_content_sensitivity = *sensitivity;
+                                }
                                 record.last_content_sensitivity = Some(*sensitivity);
                             }
                             WindowOperation::RequestFocus => {}
@@ -3009,7 +3038,11 @@ impl Application {
             skipped_frames: record.skipped_frames,
             input_events: record.input_events,
             surface_generation: record.surface_generation,
-            content_sensitivity: record.runtime.content_sensitivity(),
+            content_sensitivity: record
+                .runtime
+                .tree()
+                .calculated_content_sensitivity()
+                .unwrap_or(record.fallback_content_sensitivity),
             elements: record.runtime.tree().element_count(),
             render_objects: record.runtime.tree().render_object_count(),
             semantics: record.runtime.tree().semantics().len(),
