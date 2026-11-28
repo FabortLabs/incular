@@ -395,6 +395,19 @@ impl WidgetTree {
         deadline
     }
 
+    /// The typography resolved for the mounted editor's text and strut.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn editable_resolved_typography(
+        &self,
+        id: ElementId,
+    ) -> Option<(&TextStyle, Option<&incular_text::StrutStyle>)> {
+        match self.render_object_kind(self.render_id(id)?)? {
+            RenderKind::TextField(field) => Some((&field.style, field.strut.as_deref())),
+            _ => None,
+        }
+    }
+
     /// Returns the optional height behavior from the retained editor.
     /// The outer option is absent for a stale or non-editor element.
     #[must_use]

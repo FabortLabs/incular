@@ -275,3 +275,71 @@ fn changing_keyboard_type_updates_the_existing_client_without_another_show() {
         "TextInputType.number"
     );
 }
+
+fn mounted_media_editor(
+    environment: RuntimeEnvironment,
+    strut: Option<incular_text::StrutStyle>,
+) -> (
+    Runtime,
+    TextEditingController,
+    incular_widgets::internal::ElementId,
+) {
+    use incular_text::FontWeight;
+    use incular_widgets::internal::Key;
+
+    let controller = TextEditingController::new();
+    let mut field = EditableText::new(controller.clone())
+        .text_direction(TextDirection::Ltr)
+        .style(TextStyle::new().font_weight(FontWeight(400)));
+    if let Some(strut) = strut {
+        field = field.strut_style(strut);
+    }
+    let root = MediaQuery::new(environment, Widget::from(field).with_key("editor"));
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    let frame = Constraints::tight(Size::new(800., 600.));
+    runtime.run_frame(frame).unwrap();
+    controller.set_text("foo");
+    runtime.run_frame(frame).unwrap();
+    let editor = runtime
+        .tree()
+        .element_with_key(&Key::from("editor"))
+        .unwrap();
+    (runtime, controller, editor)
+}
+
+#[test]
+fn ambient_bold_text_overrides_the_editors_authored_normal_font_weight() {
+    use incular_text::FontWeight;
+
+    let (runtime, controller, editor) = mounted_media_editor(
+        RuntimeEnvironment {
+            bold_text: true,
+            ..RuntimeEnvironment::default()
+        },
+        None,
+    );
+    let (style, _) = runtime.tree().editable_resolved_typography(editor).unwrap();
+    assert_eq!(style.weight, FontWeight(700));
+    assert_eq!(controller.text(), "foo");
+}
+
+#[test]
+fn ambient_spacing_overrides_both_editable_text_and_its_authored_strut() {
+    use incular_text::{LineHeight, StrutStyle};
+
+    let (runtime, controller, editor) = mounted_media_editor(
+        RuntimeEnvironment {
+            line_height_scale_factor_override: Some(2.),
+            letter_spacing_override: Some(2.),
+            word_spacing_override: Some(2.),
+            ..RuntimeEnvironment::default()
+        },
+        Some(StrutStyle::new().height(0.9)),
+    );
+    let (style, strut) = runtime.tree().editable_resolved_typography(editor).unwrap();
+    assert_eq!(style.line_height, Some(LineHeight::Multiplier(2.)));
+    assert_eq!(style.letter_spacing, 2.);
+    assert_eq!(style.word_spacing, Some(2.));
+    assert_eq!(strut.unwrap().height, Some(2.));
+    assert_eq!(controller.text(), "foo");
+}

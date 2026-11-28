@@ -4,6 +4,7 @@ use super::super::{
     text_field_style,
 };
 use crate::environment::DefaultTextParagraph;
+use crate::tree::context::RuntimeLineHeightScaleFactorOverride;
 pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> RenderKind {
     match widget.kind() {
         WidgetKind::Box { size, color } => RenderKind::Box {
@@ -233,7 +234,12 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                     });
                     strut.font_size = strut.font_size.map(|size| scaler.scale(size));
                     let font_size = strut.font_size.unwrap_or(style.size);
-                    if strut.height.is_none() {
+                    if let Some(height) = context
+                        .depend::<RuntimeLineHeightScaleFactorOverride>()
+                        .and_then(|value| value.0)
+                    {
+                        strut.height = Some(height);
+                    } else if strut.height.is_none() {
                         strut.height = match style.line_height {
                             Some(incular_text::LineHeight::Multiplier(height)) => Some(height),
                             Some(incular_text::LineHeight::Absolute(height)) if font_size > 0. => {
