@@ -4112,3 +4112,4 @@ packages/flutter/test/widgets/mouse_region_test.dart	2031	stylus input works	pai
 packages/flutter/test/widgets/editable_text_test.dart	6137	default keyboardAppearance is respected	paired-match	upstream-editable-defaults.md#keyboard-appearance-on-the-attached-input-client
 packages/flutter/test/widgets/editable_text_test.dart	6809	custom keyboardAppearance is respected	paired-match	upstream-editable-defaults.md#keyboard-appearance-on-the-attached-input-client
 packages/flutter/test/widgets/editable_text_test.dart	11405	EditableText changes mouse cursor when hovered	paired-match	upstream-editable-defaults.md#pointer-cursor-follows-the-editor-before-the-containing-mouseregion
+packages/flutter/test/widgets/mouse_region_test.dart	1992	Handle mouse events should ignore the detached MouseTrackerAnnotation	paired-match	upstream-mouse-tracker-callbacks.md#dragging-after-the-original-hovered-child-detaches

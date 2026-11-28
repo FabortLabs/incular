@@ -2903,6 +2903,7 @@ impl WidgetTree {
             source.start(start, origin);
             ActiveDrag {
                 source: source.clone(),
+                source_element: element,
                 target: None,
                 entered: Vec::new(),
                 start,
@@ -3026,6 +3027,61 @@ impl WidgetTree {
             active.source.finish(accepted, active.velocity);
         }
     }
+    pub(super) fn detach_gesture_member(&mut self, element: ElementId) {
+        let mut cancel = Vec::new();
+        for (&key, active) in &mut self.input.active_gestures {
+            let was_member = active
+                .members
+                .iter()
+                .any(|candidate| candidate.element == element);
+            let drag = self.input.active_drags.get(&key);
+            if !was_member && !(drag.is_some() && active.element == element) {
+                continue;
+            }
+            if let Some(drag) = drag
+                && drag.source_element != element
+                && self.elements.contains(drag.source_element.0)
+                && active.members.iter().any(|candidate| {
+                    candidate.element == drag.source_element
+                        && self.input.gesture_arena.disposition(key, candidate.member)
+                            == Some(GestureDisposition::Accepted)
+                })
+                && active
+                    .members
+                    .iter()
+                    .filter(|candidate| candidate.element == element)
+                    .all(|candidate| {
+                        matches!(
+                            self.input.gesture_arena.disposition(key, candidate.member),
+                            Some(GestureDisposition::Rejected | GestureDisposition::Cancelled)
+                        )
+                    })
+            {
+                // childWhenDragging may remove the losing tap recognizer
+                // and original hit target. Keep the winning source and its
+                // pointer route alive until release or explicit cancel.
+                active
+                    .members
+                    .retain(|candidate| candidate.element != element);
+                active.quiet_taps.retain(|candidate| *candidate != element);
+                active.cancelled_elements.remove(&element);
+                if active.element == element {
+                    active.element = drag.source_element;
+                }
+                if let Some(capture) = self.input.pointer_captures.get_mut(&key)
+                    && *capture == element
+                {
+                    *capture = drag.source_element;
+                }
+            } else {
+                cancel.push(key);
+            }
+        }
+        for key in cancel {
+            self.cancel_gesture_stream(key, true);
+        }
+    }
+
     pub(super) fn cancel_gesture_stream(&mut self, key: GestureArenaKey, notify: bool) {
         self.release_mounted_tap_contact(key);
         // A dying stream closes its scroll bracket with `End` when open;

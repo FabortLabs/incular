@@ -3019,25 +3019,7 @@ impl WidgetTree {
                         }
                         _ => {}
                     }
-                    // Streams pruned here take their full teardown with them:
-                    // cancel through the single stream owner so scroll
-                    // brackets end, drags cancel and recognizers observe
-                    // `on_cancel` before members disappear.
-                    let pruned: Vec<GestureArenaKey> = self
-                        .input
-                        .active_gestures
-                        .iter()
-                        .filter_map(|(stream, active)| {
-                            active
-                                .members
-                                .iter()
-                                .any(|candidate| candidate.element == id)
-                                .then_some(*stream)
-                        })
-                        .collect();
-                    for stream in pruned {
-                        self.cancel_gesture_stream(stream, true);
-                    }
+                    self.detach_gesture_member(id);
                     let stale_pan_zoom: Vec<_> = self
                         .input
                         .active_pan_zoom

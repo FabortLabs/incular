@@ -1259,6 +1259,7 @@ struct ActiveRawGesture {
 
 struct ActiveDrag {
     source: Rc<dyn RetainedDragSource>,
+    source_element: ElementId,
     /// The target that accepted the payload (Flutter `_activeTarget`).
     target: Option<(ElementId, Rc<dyn RetainedDragTarget>)>,
     /// Every target the pointer has entered, innermost first, including the

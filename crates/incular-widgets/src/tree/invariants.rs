@@ -791,6 +791,19 @@ impl WidgetTree {
                 None,
             ));
         }
+        if let Some(drag) = self
+            .input
+            .active_drags
+            .values()
+            .find(|drag| !live(&drag.source_element))
+        {
+            return Err(Self::invariant_error(
+                InvariantCategory::Interaction,
+                "active drag source references a dead element",
+                Some(drag.source_element),
+                None,
+            ));
+        }
         if let Some((element, _)) = self
             .input
             .active_drags

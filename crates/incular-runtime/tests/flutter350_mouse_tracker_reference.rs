@@ -789,3 +789,133 @@ fn mounted_mouse_region_routes_stylus_enter_hover_and_exit() {
     frame(&mut runtime);
     assert_eq!(log.take(), [event("stylus", Exit, outside, outside)]);
 }
+
+#[test]
+fn mouse_drag_continues_after_replacing_its_hover_annotated_child() {
+    for remove_source in [false, true] {
+        exercise_mouse_drag_with_replaced_hover_child(remove_source);
+    }
+}
+
+fn exercise_mouse_drag_with_replaced_hover_child(remove_source: bool) {
+    use incular_core::{Color, PointerPhase::Cancel};
+    use incular_widgets::{Align, DragDropContext, Draggable, GestureDetector};
+    use std::{
+        cell::Cell,
+        time::{Duration, Instant},
+    };
+
+    let context = DragDropContext::<i32>::new();
+    let log = Log::default();
+    let releases = Rc::new(Cell::new(0));
+    let starts = Rc::new(Cell::new(0));
+    let cancels = Rc::new(Cell::new(0));
+    let original: Widget = region(
+        "old",
+        GestureDetector::new(
+            Text::new("Drag me").style(incular_text::TextStyle::new().font_size(14.)),
+        )
+        .on_tap({
+            let releases = releases.clone();
+            move || releases.set(releases.get() + 1)
+        }),
+        &log,
+    )
+    .into();
+    let draggable = Draggable::new(context.clone(), 1, original.with_key("old annotation"))
+        .on_start({
+            let starts = starts.clone();
+            move |_| starts.set(starts.get() + 1)
+        })
+        .on_cancel({
+            let cancels = cancels.clone();
+            move |_| cancels.set(cancels.get() + 1)
+        })
+        .feedback(|_| Widget::box_(Size::new(20., 20.), Color::rgba(0, 0, 255, 255)))
+        .child_when_dragging(
+            Widget::box_(Size::new(20., 20.), Color::rgba(255, 255, 0, 255))
+                .with_key("replacement"),
+        );
+    let mut runtime = Runtime::new(
+        Directionality::new(TextDirection::Ltr, Align::new(Alignment::CENTER, draggable)).into(),
+    )
+    .unwrap();
+    let base = Instant::now();
+    let viewport = Constraints::tight(Size::new(300., 400.));
+    runtime.run_frame_at(viewport, base).unwrap();
+    let center = Offset::new(150., 200.);
+    presence(&mut runtime, Mouse, center, HoverDeviceChange::Added);
+    assert!(!kinds(&log).is_empty());
+    let send = |rt: &mut Runtime, phase, x, millis, pressed| {
+        let _ = rt.handle_input_at(
+            InputEvent::PointerWithMetadata {
+                pointer: 1,
+                device: 1,
+                position: center + Offset::new(x, x),
+                kind: Mouse,
+                phase,
+                buttons: if pressed { PRIMARY_POINTER_BUTTON } else { 0 },
+                button: (phase == Down).then_some(PRIMARY_POINTER_BUTTON),
+                sample: PointerSampleMetadata::default(),
+            },
+            base + Duration::from_millis(millis),
+        );
+    };
+    send(&mut runtime, Down, 0., 16, true);
+    runtime
+        .run_frame_at(viewport, base + Duration::from_secs(2))
+        .unwrap();
+    let exists = |rt: &Runtime, k| rt.tree().element_with_key(&Key::from(k)).is_some();
+    assert!(exists(&runtime, "old annotation"));
+
+    send(&mut runtime, Move, 10., 2016, true);
+    runtime
+        .run_frame_at(viewport, base + Duration::from_millis(2032))
+        .unwrap();
+    assert_eq!(starts.get(), 1);
+    assert!(context.feedback().is_some());
+    assert!(!exists(&runtime, "old annotation"));
+    assert!(exists(&runtime, "replacement"));
+    assert_eq!(runtime.transient_surfaces().len(), 1);
+    kinds(&log);
+    let before = context.feedback().unwrap().position;
+
+    send(&mut runtime, Move, 20., 2048, true);
+    runtime
+        .run_frame_at(viewport, base + Duration::from_millis(2064))
+        .unwrap();
+    assert!(
+        kinds(&log).is_empty(),
+        "detached child is no longer observed"
+    );
+    assert_eq!(
+        context.feedback().unwrap().position,
+        before + Offset::new(10., 10.)
+    );
+    assert_eq!(cancels.get(), 0);
+    if remove_source {
+        let root = runtime.tree().root().unwrap();
+        runtime
+            .schedule_update(
+                root,
+                Directionality::new(
+                    TextDirection::Ltr,
+                    Align::new(Alignment::CENTER, SizedBox::shrink()),
+                )
+                .into(),
+            )
+            .unwrap();
+    } else {
+        send(&mut runtime, Cancel, 20., 2080, false);
+    }
+    runtime
+        .run_frame_at(viewport, base + Duration::from_millis(2096))
+        .unwrap();
+    assert!(!exists(&runtime, "replacement"));
+    assert_eq!(exists(&runtime, "old annotation"), !remove_source);
+    assert!(runtime.transient_surfaces().is_empty());
+    assert!(context.feedback().is_none());
+    assert_eq!(cancels.get(), 1);
+    assert_eq!(starts.get(), 1);
+    assert_eq!(releases.get(), 0);
+}

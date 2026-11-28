@@ -58,3 +58,20 @@ On motion to (5,5) the same stylus produces Enter then Hover; motion
 back to (20,20) adds one Exit. The first outside sample emits no
 callback. The native fixture checks the actual callback order and both
 global and local coordinates, not tablet-driver integration.
+
+### Dragging after the original hovered child detaches
+
+Pinned `widgets/mouse_region_test.dart:1992` passed. The native
+fixture presses a centered Draggable with a mouse, holds for two
+seconds, then moves (10,10) to start a drag with feedback. Replacing
+the original gesture/hover child used to cancel the whole pointer
+stream even though that child had lost the arena. The accepted drag
+source kept its live route after the fix, the actual feedback moves
+by the second (10,10), and the detached child receives no hover
+or tap. Cancel restores the original child and removes feedback;
+removing the source itself still cancels exactly once.
+
+A separate pinned authored comparison confirms child replacement,
+continued drag updates and feedback, no stale hover, and cleanup.
+All 33 focused native tracker, feedback, drop-path and drag option
+tests passed; the authored case adds no registration credit.
