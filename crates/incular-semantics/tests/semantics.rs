@@ -377,3 +377,54 @@ fn merge_membership_follows_ancestor_policy_without_merging_the_owner_into_itsel
         assert_eq!(tree.merge_owner(second, merges), grandchild_owner);
     }
 }
+
+#[test]
+fn diagnostic_reports_effective_validation_and_empty_geometry() {
+    use incular_semantics::SemanticValidationResult;
+    let mut tree = SemanticsTree::new();
+    let mut candidate = node(placeholder());
+    candidate.state.validation_result = SemanticValidationResult::Valid;
+    let id = tree.insert(candidate);
+    tree.set_root(Some(id));
+    let stamp = tree.revision();
+    let dump = tree.debug_dump();
+    assert!(dump.contains("validationResult: valid"), "{dump}");
+    assert!(dump.contains("invisible"), "{dump}");
+    assert_eq!(tree.revision(), stamp);
+
+    let mut visible = tree.node(id).unwrap().clone();
+    visible.bounds = Rect::from_origin_size(Offset::new(50., 10.), Size::new(20., 30.));
+    visible.state.invalid = true;
+    assert!(tree.update(id, visible.clone()));
+    let dump = tree.debug_dump();
+    assert!(dump.contains("validationResult: invalid"), "{dump}");
+    assert!(!dump.contains("validationResult: valid"));
+    assert!(!dump.contains("invisible"));
+
+    visible.state.invalid = false;
+    visible.state.validation_result = SemanticValidationResult::None;
+    assert!(tree.update(id, visible));
+    assert!(!tree.debug_dump().contains("validationResult"));
+}
+
+#[test]
+fn diagnostic_names_custom_actions_in_order_and_bounds_the_list() {
+    use incular_semantics::{CustomSemanticsAction, SemanticActionKind};
+    let mut tree = SemanticsTree::new();
+    let mut candidate = node(placeholder());
+    candidate.actions.push(SemanticActionKind::Custom);
+    candidate.state.custom_actions = ["action1", "action2", "action3"]
+        .into_iter()
+        .map(|label| CustomSemanticsAction::new(label).get_identifier())
+        .collect();
+    let id = tree.insert(candidate);
+    tree.set_root(Some(id));
+    let stamp = tree.revision();
+    let dump = tree.debug_dump();
+    assert!(dump.contains("actions=[Custom]"), "{dump}");
+    assert!(dump.contains("customActions: action1, action2, action3"), "{dump}");
+    let limited = tree.debug_dump_limited(1, 4, 11);
+    assert!(limited.contains("customActions: action1, ac…"), "{limited}");
+    assert!(!limited.contains("action2"));
+    assert_eq!(tree.revision(), stamp);
+}

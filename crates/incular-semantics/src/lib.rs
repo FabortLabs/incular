@@ -1142,6 +1142,41 @@ impl SemanticsTree {
             Some(result)
         }
 
+        fn write_custom_action_labels(
+            output: &mut String,
+            indent: &str,
+            actions: &[CustomSemanticsActionId],
+            mut remaining: usize,
+        ) {
+            let mut wrote = false;
+            'actions: for &id in actions {
+                let Some(action) = CustomSemanticsAction::get_action(id) else {
+                    continue;
+                };
+                let Some(label) = action.label() else {
+                    continue; // An override has a hint, not a custom menu label.
+                };
+                let separator = if wrote {
+                    ", "
+                } else {
+                    let _ = write!(output, "{indent}  customActions: ");
+                    wrote = true;
+                    ""
+                };
+                for ch in separator.chars().chain(label.chars()) {
+                    if remaining == 0 {
+                        output.push('…');
+                        break 'actions;
+                    }
+                    output.push(ch);
+                    remaining -= 1;
+                }
+            }
+            if wrote {
+                output.push('\n');
+            }
+        }
+
         // Visit the roots in logical order, then any other parentless node
         // (a hand-built graph may not declare them) in id order. Each node
         // still prints once under its first-visited parent.
@@ -1207,6 +1242,23 @@ impl SemanticsTree {
                 }
                 output.push('\n');
             }
+            if node.bounds.size.width == 0. || node.bounds.size.height == 0. {
+                let _ = writeln!(output, "{indent}  invisible");
+            }
+            let validation = match node.state.effective_validation_result() {
+                SemanticValidationResult::None => None,
+                SemanticValidationResult::Valid => Some("valid"),
+                SemanticValidationResult::Invalid => Some("invalid"),
+            };
+            if let Some(validation) = validation {
+                let _ = writeln!(output, "{indent}  validationResult: {validation}");
+            }
+            write_custom_action_labels(
+                &mut output,
+                &indent,
+                &node.state.custom_actions,
+                max_text_chars,
+            );
             for (index, &child) in node.children.iter().enumerate().rev() {
                 stack.push((child, depth.saturating_add(1), Some(index)));
             }

@@ -4006,3 +4006,7 @@ packages/flutter/test/widgets/clip_test.dart	409	ClipRect save, overlay, and ant
 packages/flutter/test/widgets/clip_test.dart	439	ClipRRect painting	partial-match	upstream-transformed-clip-geometry.md#rounded-corners-retain-independent-axes
 packages/flutter/test/widgets/clip_test.dart	478	ClipOval painting	partial-match	upstream-transformed-clip-geometry.md#rect-oval-and-beveled-path-geometry-under-rotation
 packages/flutter/test/widgets/clip_test.dart	511	ClipPath painting	partial-match	upstream-transformed-clip-geometry.md#rect-oval-and-beveled-path-geometry-under-rotation
+packages/flutter/test/semantics/semantics_test.dart	492	toStringDeep() does not throw with transform == null	reference-ran-incular-open	upstream-semantics-dump-properties.md
+packages/flutter/test/semantics/semantics_test.dart	807	blocked actions debug properties	reference-ran-incular-open	upstream-semantics-dump-properties.md
+packages/flutter/test/semantics/semantics_test.dart	831	validation result debug properties	paired-match	upstream-semantics-dump-properties.md
+packages/flutter/test/semantics/semantics_test.dart	848	Custom actions debug properties	paired-match	upstream-semantics-dump-properties.md
