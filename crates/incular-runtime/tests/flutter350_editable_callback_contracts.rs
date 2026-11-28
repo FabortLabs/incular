@@ -7,7 +7,7 @@ use incular_config::{Constraints, TextDirection};
 use incular_core::{InputEvent, Offset, PointerPhase, Size};
 use incular_platform::{PlatformEvent, TextInputState};
 use incular_runtime::{Runtime, TextShortcutPlatform};
-use incular_text::{TextEditingController, TextEditingValue, TextSelection};
+use incular_text::{TextEditingController, TextEditingValue, TextRange, TextSelection};
 use incular_widgets::{
     CallbackTextInputFormatter, EditableText, TextEditingCallback, TextEditingCallbackError,
 };
@@ -173,4 +173,129 @@ fn identical_and_selection_only_packets_do_not_run_formatters() {
     assert_eq!(text.selection(), TextSelection::collapsed(1));
     send(&mut runtime, "b", 1, None);
     assert_eq!(calls.get(), 2);
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct FormatterCall {
+    before: TextEditingValue,
+    proposal: TextEditingValue,
+}
+
+fn record_formats(text: &TextEditingController) -> (Runtime, Rc<RefCell<Vec<FormatterCall>>>) {
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let runtime = mount(text, |editor| {
+        editor.input_formatter(CallbackTextInputFormatter::new({
+            let calls = calls.clone();
+            move |before: &TextEditingValue, proposal: &TextEditingValue| {
+                calls.borrow_mut().push(FormatterCall {
+                    before: before.clone(),
+                    proposal: proposal.clone(),
+                });
+                proposal.clone()
+            }
+        }))
+    });
+    (runtime, calls)
+}
+
+#[test]
+fn text_proposals_filter_identical_packets_but_not_repeated_values_after_a_change() {
+    let text = TextEditingController::new();
+    let (mut runtime, calls) = record_formats(&text);
+    for value in [
+        "",
+        "a",
+        "aa",
+        "aaa",
+        "aa",
+        "aaa",
+        "aaaa",
+        "aa",
+        "aaaaaaa",
+        "aa",
+        "aaaaaaaaa",
+        "aaaaaaaaa",
+    ] {
+        send(&mut runtime, value, 0, None);
+        assert_eq!(text.text(), value);
+    }
+    // Each distinct incoming value is compared against the immediately
+    // preceding accepted value, not cached across an intervening edit.
+    let calls = calls.borrow();
+    let edges: Vec<_> = calls
+        .iter()
+        .map(|call| (call.before.text.as_str(), call.proposal.text.as_str()))
+        .collect();
+    assert_eq!(
+        edges,
+        [
+            ("", "a"),
+            ("a", "aa"),
+            ("aa", "aaa"),
+            ("aaa", "aa"),
+            ("aa", "aaa"),
+            ("aaa", "aaaa"),
+            ("aaaa", "aa"),
+            ("aa", "aaaaaaa"),
+            ("aaaaaaa", "aa"),
+            ("aa", "aaaaaaaaa"),
+        ]
+    );
+}
+
+#[test]
+fn repeats_selection_and_composing_open_do_not_mask_the_following_commit() {
+    let text = TextEditingController::new();
+    let (mut runtime, calls) = record_formats(&text);
+    for (value, expected) in [("01", 1), ("012", 2), ("0123", 3), ("0123", 3), ("0123", 3)] {
+        send(&mut runtime, value, 0, None);
+        assert_eq!(calls.borrow().len(), expected);
+    }
+    for _ in 0..3 {
+        send(&mut runtime, "0123", 2, None);
+        assert_eq!(calls.borrow().len(), 3);
+        assert_eq!(text.selection(), TextSelection::collapsed(2));
+    }
+    send(&mut runtime, "0123", 2, Some((1, 2)));
+    assert_eq!(calls.borrow().len(), 3);
+    assert_eq!(calls.borrow()[2].before.composing, None);
+    assert_eq!(calls.borrow()[2].proposal.composing, None);
+    send(&mut runtime, "01234", 2, None);
+    let calls = calls.borrow();
+    assert_eq!(calls.len(), 4);
+    assert_eq!(calls[3].before.composing, Some(TextRange::new(1, 2)));
+    assert_eq!(calls[3].proposal.composing, None);
+    let edges: Vec<_> = calls
+        .iter()
+        .map(|call| (call.before.text.as_str(), call.proposal.text.as_str()))
+        .collect();
+    assert_eq!(
+        edges,
+        [
+            ("", "01"),
+            ("01", "012"),
+            ("012", "0123"),
+            ("0123", "01234")
+        ]
+    );
+}
+
+#[test]
+fn first_matching_packet_keeps_the_later_composition_commit_observable() {
+    let text = TextEditingController::with_text("test");
+    let (mut runtime, calls) = record_formats(&text);
+    text.set_selection(TextSelection::collapsed(4));
+    frame(&mut runtime);
+    assert!(calls.borrow().is_empty());
+    send(&mut runtime, "test", 4, None);
+    assert!(calls.borrow().is_empty());
+    send(&mut runtime, "test", 4, Some((1, 2)));
+    assert!(calls.borrow().is_empty());
+    send(&mut runtime, "test", 4, None);
+    let calls = calls.borrow();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].before.text, "test");
+    assert_eq!(calls[0].before.composing, Some(TextRange::new(1, 2)));
+    assert_eq!(calls[0].proposal.composing, None);
+    assert_eq!(text.text(), "test");
 }

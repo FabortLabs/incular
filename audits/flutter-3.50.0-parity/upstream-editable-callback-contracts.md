@@ -28,3 +28,19 @@ Flutter reports an exception through its framework error channel; Incular
 exposes a typed error through `Runtime::observe_text_editing_error` under Rust's
 unwinding panic strategy. Controller edits remain distinct from callbacks
 invoked directly by application code.
+
+## Repeated proposals and composition commits
+
+- **11188**: The formatter sees ten consecutive before/proposal text pairs
+  from a twelve-packet sequence. Initial and terminal identical values are
+  skipped, but a value revisited after an intervening edit is not.
+- **11261**: Repeated and selection-only packets leave the invocation count
+  unchanged. Opening composition over unchanged text does too. The next
+  commit sees the actual previous composing range and runs once.
+- **11362**: With preexisting text, an initial identical packet is skipped
+  without swallowing the later same-text composition commit. The formatter
+  receives the old active range and the new cleared range.
+
+The pure proposal-order cases compare the formatter inputs; the upstream
+mock logs diagnostic strings for deletion and insertion but returns the
+proposed value unchanged.

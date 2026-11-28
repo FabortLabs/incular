@@ -4209,3 +4209,6 @@ packages/flutter/test/widgets/editable_text_test.dart	6100	Formatters are skippe
 packages/flutter/test/widgets/editable_text_test.dart	12117	onSelectionChanged can throw errors	paired-match	upstream-editable-callback-contracts.md#callback-error-recovery
 packages/flutter/test/widgets/editable_text_test.dart	12146	onChanged can throw errors	paired-match	upstream-editable-callback-contracts.md#callback-error-recovery
 packages/flutter/test/widgets/editable_text_test.dart	12240	input formatters can throw errors	paired-match	upstream-editable-callback-contracts.md#callback-error-recovery
+packages/flutter/test/widgets/editable_text_test.dart	11188	updateEditingValue filters multiple calls from formatter	paired-match	upstream-editable-callback-contracts.md#repeated-proposals-and-composition-commits
+packages/flutter/test/widgets/editable_text_test.dart	11261	formatter logic handles repeat filtering	paired-match	upstream-editable-callback-contracts.md#repeated-proposals-and-composition-commits
+packages/flutter/test/widgets/editable_text_test.dart	11362	formatter logic handles initial repeat edge case	paired-match	upstream-editable-callback-contracts.md#repeated-proposals-and-composition-commits
