@@ -1,9 +1,9 @@
 //! Bounded decoded-resource cache keyed by a Flutter bundle image key.
 
 use std::{
-    cell::OnceCell,
+    cell::{OnceCell, RefCell},
     collections::{HashMap, hash_map::Entry},
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex, PoisonError, Weak},
 };
 
 use lru::LruCache;
@@ -14,6 +14,56 @@ use crate::{
 };
 
 type Pending = Arc<Mutex<PendingImage>>;
+
+/// Decode jobs are Send, but their UI stream cells are not. Intern weak
+/// views in the current UI thread without retaining finished jobs, decoded
+/// frames, or consumers. A geometric sweep bounds stale entries without
+/// forgetting a view that still has a live pending job and a caller.
+struct PendingStreamEntry {
+    job: Weak<Mutex<PendingImage>>,
+    stream: crate::stream::WeakImageStream,
+}
+
+struct PendingStreamMemo {
+    entries: HashMap<usize, PendingStreamEntry>,
+    next_sweep: usize,
+}
+
+impl PendingStreamMemo {
+    fn get(&self, job: &Pending) -> Option<ImageStream> {
+        self.entries.get(&(Arc::as_ptr(job) as usize)).and_then(|entry| {
+            // The weak job protects its allocation identity even after the
+            // caller evicts it; a replacement cannot alias this view.
+            debug_assert_eq!(entry.job.as_ptr(), Arc::as_ptr(job));
+            entry.stream.upgrade()
+        })
+    }
+
+    fn remember(&mut self, job: &Pending, stream: &ImageStream) {
+        if self.entries.len() >= self.next_sweep {
+            self.entries.retain(|_, entry| {
+                entry.job.strong_count() != 0 && entry.stream.is_live()
+            });
+            self.next_sweep = self.entries.len().saturating_mul(2).max(32);
+        }
+        self.entries.insert(
+            Arc::as_ptr(job) as usize,
+            PendingStreamEntry {
+                job: Arc::downgrade(job),
+                stream: stream.downgrade(),
+            },
+        );
+    }
+}
+
+fn stream_for_pending(job: &Pending) -> ImageStream {
+    if let Some(stream) = PENDING_STREAMS.with(|memo| memo.borrow().get(job)) {
+        return stream;
+    }
+    let stream = ImageStream::from_load_callback(|done| attach(job, done));
+    PENDING_STREAMS.with(|memo| memo.borrow_mut().remember(job, &stream));
+    stream
+}
 
 enum PendingImage {
     Loading(Vec<ImageLoadCallback>),
@@ -69,6 +119,10 @@ impl BundleDecodeKey {
 
 thread_local! {
     static SHARED: OnceCell<BundleImageCache> = const { OnceCell::new() };
+    static PENDING_STREAMS: RefCell<PendingStreamMemo> = RefCell::new(PendingStreamMemo {
+        entries: HashMap::new(),
+        next_sweep: 32,
+    });
 }
 
 /// The current UI isolate's decoded bundle images. A worker uses the
@@ -352,9 +406,40 @@ impl BundleImageCache {
             }
             state.pending.get(&key).cloned()?
         };
-        Some(ImageStream::from_load_callback(|done| {
-            attach(&pending, done)
-        }))
+        Some(stream_for_pending(&pending))
+    }
+
+    /// Resolves an exact asset key on the current UI thread. Concurrent
+    /// callers on this thread share its existing pending stream; a ready
+    /// cache hit does not start any I/O.
+    #[must_use]
+    pub fn resolve_stream(&self, key: AssetBundleImageKey) -> ImageStream {
+        self.resolve_stream_with_size(key, None)
+    }
+
+    pub(crate) fn resolve_stream_with_size(
+        &self,
+        asset: AssetBundleImageKey,
+        resize: Option<ImageResizeOptions>,
+    ) -> ImageStream {
+        if let Some(stream) = self.resolve_cached(asset.clone(), resize) {
+            return stream;
+        }
+        let mut pending = None;
+        let stream = ImageStream::from_load_callback(|done| {
+            pending = self.start_async_with_size(asset, resize, done);
+        });
+        if let Some(pending) = pending {
+            // A reentrant provider can resolve the same key while it
+            // starts. Use the already-published view rather than replacing
+            // the view another caller has received.
+            let existing = PENDING_STREAMS.with(|memo| memo.borrow().get(&pending));
+            if let Some(existing) = existing {
+                return existing;
+            }
+            PENDING_STREAMS.with(|memo| memo.borrow_mut().remember(&pending, &stream));
+        }
+        stream
     }
 
     /// Joins an already pending load for the exact key, or starts one. A
@@ -370,25 +455,34 @@ impl BundleImageCache {
         resize: Option<ImageResizeOptions>,
         done: ImageLoadCallback,
     ) {
+        let _ = self.start_async_with_size(asset, resize, done);
+    }
+
+    fn start_async_with_size(
+        &self,
+        asset: AssetBundleImageKey,
+        resize: Option<ImageResizeOptions>,
+        done: ImageLoadCallback,
+    ) -> Option<Pending> {
         let key = BundleDecodeKey { asset, resize };
         let pending = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             if let Some(image) = state.ready.get(&key).cloned() {
                 drop(state);
                 done(Ok(image));
-                return;
+                return None;
             }
             if !state.fits(0) {
                 drop(state);
                 key.read_uncached_async(done);
-                return;
+                return None;
             }
             match state.pending.entry(key.clone()) {
                 Entry::Occupied(entry) => {
                     let pending = entry.get().clone();
                     drop(state);
                     attach(&pending, done);
-                    return;
+                    return Some(pending);
                 }
                 Entry::Vacant(entry) => {
                     let pending = Arc::new(Mutex::new(PendingImage::Loading(vec![done])));
@@ -397,6 +491,7 @@ impl BundleImageCache {
                 }
             }
         };
+        let work = pending.clone();
         let cache = Arc::downgrade(&self.0);
         let completed = key.clone();
         key.read_uncached_async(Box::new(move |mut result| {
@@ -426,5 +521,6 @@ impl BundleImageCache {
                 }
             }
         }));
+        Some(work)
     }
 }

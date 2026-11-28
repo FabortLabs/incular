@@ -91,6 +91,19 @@ pub struct ImageStream {
     debug_label: Option<Arc<str>>,
 }
 
+/// A cache's non-owning reference to one UI-thread stream cell.
+pub(crate) struct WeakImageStream(Weak<StreamCell>);
+
+impl WeakImageStream {
+    pub(crate) fn is_live(&self) -> bool {
+        self.0.strong_count() != 0
+    }
+
+    pub(crate) fn upgrade(&self) -> Option<ImageStream> {
+        self.0.upgrade().map(|cell| ImageStream { cell, debug_label: None })
+    }
+}
+
 impl PartialEq for ImageStream {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.cell, &other.cell)
@@ -110,6 +123,10 @@ impl fmt::Debug for ImageStream {
 }
 
 impl ImageStream {
+    pub(crate) fn downgrade(&self) -> WeakImageStream {
+        WeakImageStream(Rc::downgrade(&self.cell))
+    }
+
     fn with(state: ImageLoadState) -> Self {
         let completed = !matches!(state, ImageLoadState::Loading(_));
         Self {

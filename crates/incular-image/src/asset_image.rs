@@ -479,7 +479,8 @@ impl ImageProvider for ExactAssetImage {
     }
 
     fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
-        ImageStream::from_load_callback(|done| self.obtain_key(configuration).load_async(done))
+        shared_bundle_image_cache()
+            .resolve_stream(self.obtain_key(configuration))
             .with_debug_label(self.key_name().into_owned())
     }
 
@@ -512,10 +513,9 @@ impl ImageProvider for ExactAssetImage {
     ) -> ImageStream {
         let key = self.obtain_key(config);
         let cache = shared_bundle_image_cache();
-        ImageStream::from_load_callback(|done| {
-            cache.load_async_with_size(key, Some(options.physical(config)), done)
-        })
-        .with_debug_label(self.key_name().into_owned())
+        cache
+            .resolve_stream_with_size(key, Some(options.physical(config)))
+            .with_debug_label(self.key_name().into_owned())
     }
 }
 

@@ -478,3 +478,83 @@ fn a_failed_blocking_read_drops_its_pending_ticket() {
     assert!(!cache.contains_key(&key));
     assert!(!cache.evict(&key));
 }
+
+fn finish_pending_streams() {
+    use incular_animation::scheduler::{has_ready_scheduled_task, run_one_scheduled_task};
+
+    for _ in 0..12 {
+        if !has_ready_scheduled_task() {
+            return;
+        }
+        let _ = run_one_scheduled_task();
+    }
+    assert!(!has_ready_scheduled_task(), "pending image streams settle");
+}
+
+#[test]
+fn subsequent_uses_of_a_pending_bundle_key_receive_the_same_stream() {
+    let source = Deferred::default();
+    let bundle = ImageAssetBundle::new(Arc::new(source.clone()));
+    let cache = BundleImageCache::default();
+    let key = key(&bundle, 1);
+    assert!(!cache.contains_key(&key));
+    let first = cache.resolve_stream(key.clone());
+    assert!(cache.contains_key(&key));
+    assert_eq!(cache.pending_image_count(), 1);
+    assert!(matches!(first.state(), ImageLoadState::Loading(_)));
+
+    let second = cache.resolve_stream(key.clone());
+    assert_eq!(first, second);
+    assert_eq!(source.pending(), 1);
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    let ImageLoadState::Ready(image) = first.state() else {
+        panic!("shared stream never received its decoded result");
+    };
+    assert_eq!(second.state(), ImageLoadState::Ready(image));
+    assert_eq!(cache.pending_image_count(), 0);
+    assert_eq!(cache.retained(), (1, BYTES));
+}
+
+#[test]
+fn clearing_a_pending_key_keeps_existing_consumers_but_replaces_its_stream() {
+    let source = Deferred::default();
+    let bundle = ImageAssetBundle::new(Arc::new(source.clone()));
+    let cache = BundleImageCache::default();
+    let key = key(&bundle, 1);
+    let before = cache.resolve_stream(key.clone());
+    cache.clear();
+    assert!(!cache.contains_key(&key));
+
+    let after = cache.resolve_stream(key.clone());
+    assert_ne!(before, after);
+    assert_eq!(source.pending(), 2);
+    assert_eq!(cache.resolve_stream(key), after);
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(before.state(), ImageLoadState::Ready(_)));
+    assert!(matches!(after.state(), ImageLoadState::Loading(_)));
+    assert_eq!(cache.retained(), (0, 0));
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(after.state(), ImageLoadState::Ready(_)));
+    assert_ne!(before.state(), after.state());
+    assert_eq!(cache.retained(), (1, BYTES));
+}
+
+#[test]
+fn exact_asset_resolution_reuses_a_live_pending_stream_and_its_label() {
+    let source = Deferred::default();
+    let image = ExactAssetImage::new("1").bundle(Arc::new(source.clone()));
+    let configuration = ImageConfiguration::empty();
+    clear_shared_bundle_image_cache();
+    let first = image.resolve(&configuration);
+    let second = image.resolve(&configuration);
+    assert_eq!(first, second);
+    assert_eq!(first.debug_label().as_deref(), Some("1"));
+    assert_eq!(second.debug_label().as_deref(), Some("1"));
+    assert_eq!(source.pending(), 1);
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert!(matches!(second.state(), ImageLoadState::Ready(_)));
+}

@@ -67,3 +67,21 @@ results. Native tests check original identity, decode counts, same-key
 replacement after all three invalidation methods, and failed-read
 cleanup. Twelve bundle-cache and 18 image-cache policy tests passed.
 These authored checks do not increase the original registration count.
+
+## Pending stream identity and membership
+
+Two exact pinned registrations now pair (:211 and :311 in
+`painting/image_cache_test.dart`). A pending exact bundle key is
+already in the cache; a second resolution returns the same live
+stream and issues no second provider read. When its only decode
+finishes, both callers see the same frame and the cache no longer
+counts a pending entry.
+
+The native UI memo is weak and keyed by the actual pending
+job, not only by filename. Clearing the cache creates a new
+stream for the same key; old callers still receive their own
+result, which cannot satisfy or replace the new pending job.
+ExactAssetImage uses this path and keeps its decoded-key label.
+Equivalent sharing across different UI threads, the completed
+live-listener registry, and Flutter's separate clearLiveImages
+policy are not claimed. All 44 focused native tests passed.
