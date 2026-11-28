@@ -4108,3 +4108,4 @@ packages/flutter/test/widgets/editable_text_test.dart	1900	Text keyboard is requ
 packages/flutter/test/widgets/editable_text_test.dart	1937	Correct keyboard is requested when set explicitly and maxLines > 1	paired-match	upstream-editable-defaults.md#keyboard-type-after-a-pointer-actually-focuses-the-editor
 packages/flutter/test/widgets/editable_text_test.dart	1974	multiline keyboard is requested when set implicitly	paired-match	upstream-editable-defaults.md#keyboard-type-after-a-pointer-actually-focuses-the-editor
 packages/flutter/test/widgets/editable_text_test.dart	2008	single line inputs have correct default keyboard	paired-match	upstream-editable-defaults.md#keyboard-type-after-a-pointer-actually-focuses-the-editor
+packages/flutter/test/widgets/mouse_region_test.dart	2031	stylus input works	paired-match	upstream-mouse-tracker-callbacks.md#stylus-crossing-a-mounted-mouseregion

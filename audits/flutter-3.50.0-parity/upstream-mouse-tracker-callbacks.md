@@ -49,3 +49,12 @@ without changing its element or renderer, emitting no enter, exit,
 or host cursor activation. Its existing Click cursor remains
 active. All 29 focused mouse tracker and cursor session tests
 passed, including the final enter-count assertion.
+
+### Stylus crossing a mounted MouseRegion
+
+Pinned `widgets/mouse_region_test.dart:2031` and the mounted native
+fixture start a stylus outside a 10×10 top-left region at (20,20).
+On motion to (5,5) the same stylus produces Enter then Hover; motion
+back to (20,20) adds one Exit. The first outside sample emits no
+callback. The native fixture checks the actual callback order and both
+global and local coordinates, not tablet-driver integration.

@@ -761,3 +761,31 @@ fn moving_from_ten_pixels_outside_to_ten_inside_delivers_the_enter_closure_once(
     assert!(HoverFeedback::has(&runtime, "hovering label"));
     assert_eq!(entries.get(), 1);
 }
+
+#[test]
+fn mounted_mouse_region_routes_stylus_enter_hover_and_exit() {
+    let log = Log::default();
+    let mut runtime = mount(Align::new(
+        Alignment::TOP_LEFT,
+        region("stylus", SizedBox::square(10.), &log),
+    ));
+    let outside = Offset::new(20., 20.);
+    let inside = Offset::new(5., 5.);
+    presence(&mut runtime, Stylus, outside, HoverDeviceChange::Added);
+    frame(&mut runtime);
+    assert!(kinds(&log).is_empty());
+
+    pointer(&mut runtime, Stylus, inside, Move, false);
+    frame(&mut runtime);
+    assert_eq!(
+        log.take(),
+        [
+            event("stylus", Enter, inside, inside),
+            event("stylus", Move, inside, inside),
+        ]
+    );
+
+    pointer(&mut runtime, Stylus, outside, Move, false);
+    frame(&mut runtime);
+    assert_eq!(log.take(), [event("stylus", Exit, outside, outside)]);
+}
