@@ -645,6 +645,7 @@ pub struct TextFieldRender {
     pub(crate) expands: bool,
     pub(crate) force_line: bool,
     pub(crate) text_width_basis: incular_text::TextWidthBasis,
+    pub(crate) text_height_behavior: Option<TextHeightBehavior>,
     pub(crate) text_align: TextAlign,
     pub(crate) text_direction: TextDirection,
     pub(crate) enabled: bool,

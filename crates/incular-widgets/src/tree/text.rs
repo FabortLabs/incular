@@ -395,6 +395,19 @@ impl WidgetTree {
         deadline
     }
 
+    /// Returns the optional height behavior from the retained editor.
+    /// The outer option is absent for a stale or non-editor element.
+    #[must_use]
+    pub fn text_field_height_behavior(
+        &self,
+        element: ElementId,
+    ) -> Option<Option<incular_text::TextHeightBehavior>> {
+        match self.render_object_kind(self.render_id(element)?)? {
+            RenderKind::TextField(field) => Some(field.text_height_behavior),
+            _ => None,
+        }
+    }
+
     #[must_use]
     pub fn text_field_at(&self, point: Offset) -> Option<ElementId> {
         let hit = self

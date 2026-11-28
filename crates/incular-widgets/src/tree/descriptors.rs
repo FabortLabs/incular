@@ -1211,6 +1211,7 @@ pub struct EditableText {
     expands: bool,
     force_line: bool,
     text_width_basis: incular_text::TextWidthBasis,
+    text_height_behavior: Option<TextHeightBehavior>,
     text_align: TextAlign,
     enabled: bool,
     read_only: bool,
@@ -1295,6 +1296,7 @@ impl EditableText {
             expands: false,
             force_line: true,
             text_width_basis: incular_text::TextWidthBasis::Parent,
+            text_height_behavior: None,
             text_align: TextAlign::Start,
             enabled: true,
             read_only: false,
@@ -1664,6 +1666,20 @@ impl EditableText {
     pub fn obscure_text(mut self, obscure_text: bool) -> Self {
         self.obscure_text = obscure_text;
         self
+    }
+
+    /// Sets explicit first-ascent, last-descent, and leading behavior.
+    /// Without an override the editor observes DefaultTextHeightBehavior.
+    #[must_use]
+    pub const fn text_height_behavior(mut self, behavior: TextHeightBehavior) -> Self {
+        self.text_height_behavior = Some(behavior);
+        self
+    }
+
+    /// Returns the widget override, independent of the inherited value.
+    #[must_use]
+    pub const fn configured_text_height_behavior(&self) -> Option<TextHeightBehavior> {
+        self.text_height_behavior
     }
 
     /// Flutter `obscuringCharacter`, default `•`. The mask must be one
@@ -2205,6 +2221,7 @@ impl From<EditableText> for Widget {
             expands: value.expands,
             force_line: value.force_line,
             text_width_basis: value.text_width_basis,
+            text_height_behavior: value.text_height_behavior,
             text_align: value.text_align,
             enabled: value.enabled,
             read_only: value.read_only,

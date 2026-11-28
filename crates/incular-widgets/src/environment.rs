@@ -594,7 +594,8 @@ impl From<DefaultTextStyle> for Widget {
 }
 
 /// Flutter's `DefaultTextHeightBehavior`: the [`TextHeightBehavior`] of
-/// descendant [`Text`](crate::Text) widgets that set none.
+/// descendant [`Text`](crate::Text) and [`EditableText`](crate::EditableText)
+/// widgets that set none.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DefaultTextHeightBehavior {
     behavior: TextHeightBehavior,

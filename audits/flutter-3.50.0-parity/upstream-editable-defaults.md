@@ -105,3 +105,22 @@ dropped; both the pinned authored spell-check probe and native test
 now distinguish 10 px with a real end caret from 100 px with no
 selection. Fourteen adjacent spell-check, composing, and fixed viewport
 checks also passed.
+
+## Inherited and explicit editor line height
+
+The pinned widget cases `:657`, `:11543`, and `:11571` passed.
+A raw retained editor now resolves an explicit TextHeightBehavior
+before its inherited DefaultTextHeightBehavior and leaves both
+unset in the default state. The resolution feeds paragraph
+measurement, not just the widget property. A one-line editor uses
+the measured paragraph height rather than restoring trimmed leading
+through a generic line-height minimum.
+
+Both the authored Flutter probe and the native fixture use the
+same embedded FlutterTest face with a disabled strut. Retained
+updates produce heights 25, 20, 40, and 25 px as the parent rule
+and explicit overrides change. The ordinary editor still
+advertises Text input with autocorrection, suggestions and IME
+personalization enabled; locale hints are absent. Its cursor is
+2 px wide with no explicit height, text is unobscured, and LTR
+start remains flush left. All 13 native checks passed.

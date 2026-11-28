@@ -123,6 +123,7 @@ impl WidgetTree {
         .text_direction(field.text_direction)
         .soft_wrap(field.multiline)
         .max_lines(if field.multiline { None } else { field.max_lines })
+        .height_behavior(field.text_height_behavior.unwrap_or_default())
         .strut(strut)
     }
 
@@ -409,7 +410,14 @@ impl WidgetTree {
                     spell_runs.as_ref(),
                     !read_only && self.text_field_state_live(id).focused,
                 );
-                let line_height = metrics.line_height.max(1.0);
+                // A one-line editor uses the paragraph's actual height.
+                // Its first ascent and final descent may trim leading,
+                // unlike the reusable line-height estimate for multiline.
+                let line_height = if max_lines == Some(1) && !multiline {
+                    metrics.size.height.max(1.0)
+                } else {
+                    metrics.line_height.max(1.0)
+                };
                 // editable.dart _preferredHeight: minLines ?? maxLines. The
                 // editor itself has no inset; a wrapper's content padding adds
                 // to it.

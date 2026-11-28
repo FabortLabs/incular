@@ -264,6 +264,9 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 expands: spec.expands,
                 force_line: spec.force_line,
                 text_width_basis: spec.text_width_basis,
+                text_height_behavior: spec
+                    .text_height_behavior
+                    .or_else(|| context.depend::<TextHeightBehavior>()),
                 text_align: spec.text_align,
                 text_direction: direction,
                 enabled: spec.enabled,

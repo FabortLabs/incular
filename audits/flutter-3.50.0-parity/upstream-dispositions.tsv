@@ -4054,3 +4054,6 @@ packages/flutter/test/widgets/basic_test.dart	1635	AbsorbPointer absorbs pointer
 packages/flutter/test/widgets/basic_test.dart	1732	Wrap implements debugFillProperties	paired-match	upstream-wrap-geometry-comparisons.md
 packages/flutter/test/widgets/focus_scope_test.dart	128	Can move focus in and out of FocusScope	partial-match	upstream-focus-detach-history.md
 packages/flutter/test/widgets/focus_scope_test.dart	1331	Nodes are removed when all Focuses are removed.	partial-match	upstream-focus-detach-history.md
+packages/flutter/test/widgets/editable_text_test.dart	657	has expected defaults	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	11543	EditableText inherits DefaultTextHeightBehavior	paired-match	upstream-editable-defaults.md
+packages/flutter/test/widgets/editable_text_test.dart	11571	EditableText defaultTextHeightBehavior is used over inherited widget	paired-match	upstream-editable-defaults.md
