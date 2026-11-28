@@ -256,6 +256,8 @@ impl<T: Clone + 'static> Draggable<T> {
         self
     }
     /// Flutter `onDragUpdate`: the restricted movement since the last update.
+    /// Reports the original pointer delta when the avatar actually moves.
+    /// Restricting an axis changes the movement, not the reported delta.
     #[must_use]
     pub fn on_drag_update(mut self, callback: impl Fn(Offset) + 'static) -> Self {
         self.on_drag_update = Some(Rc::new(callback));
@@ -382,10 +384,10 @@ impl<T: Clone + 'static> RetainedDragSource for DragSourceBinding<T> {
         }
     }
     fn update(&self, pointer: Offset) -> DragPosition {
-        let delta = self.restrict(pointer - self.pointer.get());
+        let delta = pointer - self.pointer.get();
         self.pointer.set(pointer);
         let old = self.position.get();
-        let position = old + delta;
+        let position = old + self.restrict(delta);
         self.position.set(position);
         if position != old {
             // The feedback overlay follows the pointer: rebuild it.

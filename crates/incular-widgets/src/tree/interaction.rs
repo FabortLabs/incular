@@ -1688,7 +1688,7 @@ impl WidgetTree {
             // a snapped position (ScrollDragController.cancel).
             let cancelled = event.phase == PointerPhase::Cancel;
             self.maybe_begin_fling(key, cancelled, kind != PointerDeviceKind::Trackpad);
-            self.finish_drag(key, cancelled, event.position);
+            self.finish_drag(key, cancelled);
             self.cancel_gesture_stream(key, cancelled);
         } else {
             self.remove_scale_recognizers_when_idle();
@@ -2906,7 +2906,7 @@ impl WidgetTree {
                 source_element: element,
                 target: None,
                 entered: Vec::new(),
-                start,
+                feedback_origin: origin,
                 velocity: crate::gestures::Velocity::ZERO,
             }
         });
@@ -2962,6 +2962,7 @@ impl WidgetTree {
         let Some(active) = self.input.active_drags.get_mut(&key) else {
             return;
         };
+        active.feedback_origin = position.feedback_origin;
         // A matching prefix is sufficient only when a target accepted.
         // With all rejections, a newly appended lower target must be offered.
         let lists_match = !active.entered.is_empty()
@@ -2996,28 +2997,16 @@ impl WidgetTree {
             target.update(position.feedback_origin);
         }
     }
-    pub(super) fn finish_drag(&mut self, key: GestureArenaKey, cancelled: bool, position: Offset) {
-        let Some(source) = self
-            .input
-            .active_drags
-            .get(&key)
-            .map(|active| active.source.clone())
-        else {
-            return;
-        };
-        let position = source.update(position);
-        self.update_drag_target(key, position);
+    fn finish_drag(&mut self, key: GestureArenaKey, cancelled: bool) {
         let Some(active) = self.input.active_drags.remove(&key) else {
             return;
         };
-        // Flutter `_DragAvatar.finishDrag`: a drop is accepted by the target
-        // that accepted the payload when it was entered.
-        // Flutter `finishDrag`: the accepting target receives the drop, then
-        // every other entered target leaves.
+        // End and cancel never synthesize a move. Use the last feedback
+        // position and accepted target, then let the other targets leave.
         let accepted = active.target.is_some() && !cancelled;
         let mut entered = active.entered;
         if let Some((accepting, target)) = active.target.filter(|_| !cancelled) {
-            target.drop_payload(position.feedback_origin);
+            target.drop_payload(active.feedback_origin);
             entered.retain(|(element, _)| *element != accepting);
         }
         for (_, target) in entered {
@@ -3089,12 +3078,7 @@ impl WidgetTree {
         // A dying stream closes its scroll bracket with `End` when open;
         // never-accepted streams hold no token and stay silent.
         self.finish_scroll_bracket(key);
-        let position = self
-            .input
-            .active_drags
-            .get(&key)
-            .map_or(Offset::ZERO, |drag| drag.start);
-        self.finish_drag(key, true, position);
+        self.finish_drag(key, true);
         let entries = self.input.gesture_arena.cancel(key);
         if notify {
             self.apply_arena_entries(key, entries);

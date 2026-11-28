@@ -140,7 +140,7 @@ fn axis_restricts_the_feedback_movement() {
     );
     assert_eq!(
         moves.borrow().as_slice(),
-        [Offset::new(30., 0.), Offset::new(10., 0.)]
+        [Offset::new(30., 0.), Offset::new(10., 40.)]
     );
 }
 

@@ -55,3 +55,19 @@ can present two independent avatars from one source. Incular's
 separate mouse-source removal check currently cancels its local
 avatar, and the typed context still exposes a single feedback slot.
 Those are open lifecycle differences, not additional paired cases.
+
+## Terminal pointer samples and diagonal locked-axis updates
+
+The authored pinned cases send a horizontal-axis drag from (20,60)
+through (145,75), then release or cancel at (260,80) over a different
+target. Flutter reports one original pointer delta, (125,15), while
+moving feedback only horizontally. It offers only the first target
+and finishes from feedback position (135,50). Release drops there;
+cancel does not drop. A terminal sample is not a movement update.
+
+The native baseline instead reported (125,0) and a spurious (115,0)
+on both terminal events. Incular now filters displacement but keeps
+the original delta for callbacks that do fire. Release or cancel
+uses the last real drag placement without a new offer or move.
+Both pinned authored probes and all 40 focused native tests passed.
+This authored comparison does not change the upstream count.

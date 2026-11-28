@@ -1265,7 +1265,8 @@ struct ActiveDrag {
     /// Every target the pointer has entered, innermost first, including the
     /// rejecting ones (Flutter `_enteredTargets`).
     entered: Vec<(ElementId, Rc<dyn RetainedDragTarget>)>,
-    start: Offset,
+    /// Top-left of the feedback after the last actual drag update.
+    feedback_origin: Offset,
     /// The release velocity of the drag recognizer's end action.
     velocity: crate::gestures::Velocity,
 }
