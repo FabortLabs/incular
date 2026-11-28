@@ -333,6 +333,11 @@ impl PointerGestureRecognizer {
         self.gesture_settings = settings;
     }
     /// Filters new raw pointer presses by device category.
+    /// Replaces handlers without restarting the current pointer stream.
+    pub fn set_callbacks(&mut self, callbacks: GestureCallbacks) {
+        self.callbacks = callbacks;
+    }
+
     pub fn set_supported_devices(&mut self, kinds: impl IntoIterator<Item = PointerDeviceKind>) {
         self.callbacks.set_supported_devices(kinds);
     }

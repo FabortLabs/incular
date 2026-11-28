@@ -159,6 +159,16 @@ impl ForcePressGestureRecognizer {
         self
     }
 
+    /// Replaces the start and end handlers on an existing recognizer.
+    pub fn set_start_end_callbacks(
+        &mut self,
+        on_start: Option<ForcePressCallback>,
+        on_end: Option<ForcePressCallback>,
+    ) {
+        self.on_start = on_start;
+        self.on_end = on_end;
+    }
+
     #[must_use]
     pub fn on_start(mut self, callback: impl Fn(ForcePressDetails) + 'static) -> Self {
         self.on_start = Some(Rc::new(callback));
@@ -207,7 +217,7 @@ impl ForcePressGestureRecognizer {
     /// Whether a platform sample can participate in force recognition.
     #[must_use]
     pub fn supports_pressure_sample(sample: PointerSampleMetadata) -> bool {
-        sample.pressure.is_some() || calibrated_pressure(sample).is_some()
+        sample.pressure.is_some() || calibrated_pressure(sample).is_some_and(|raw| raw.max > 1.)
     }
 
     /// Flutter `addPointer` for a press.
@@ -451,7 +461,9 @@ fn calibrated_pressure(sample: PointerSampleMetadata) -> Option<ForcePressureSam
     let value = contact.raw_pressure?;
     (contact.pressure_max.is_finite()
         && contact.pressure_min.is_finite()
-        && contact.pressure_max > contact.pressure_min.max(1.0))
+        // The initial press decides device support. A tracked contact can
+        // later report a valid sample in a normalized 0..1 range.
+        && contact.pressure_max > contact.pressure_min)
     .then_some(ForcePressureSample {
         min: contact.pressure_min,
         max: contact.pressure_max,

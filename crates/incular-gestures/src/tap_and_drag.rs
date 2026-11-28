@@ -87,6 +87,19 @@ enum DragAxis {
 
 type Callback<T> = Option<Rc<dyn Fn(T)>>;
 
+/// Callback configuration for retained tap-and-drag recognizers.
+#[derive(Clone, Default)]
+pub struct TapAndDragCallbacks {
+    pub on_tap_down: Callback<TapDragDownDetails>,
+    pub on_tap_up: Callback<TapDragUpDetails>,
+    pub on_drag_start: Callback<TapDragStartDetails>,
+    pub on_drag_update: Callback<TapDragUpdateDetails>,
+    pub on_drag_end: Callback<TapDragEndDetails>,
+    pub on_cancel: Option<Rc<dyn Fn()>>,
+    pub on_tap_track_start: Option<Rc<dyn Fn()>>,
+    pub on_tap_track_reset: Option<Rc<dyn Fn()>>,
+}
+
 /// Flutter's `BaseTapAndDragGestureRecognizer`, as
 /// [`Self::horizontal_drag`] (`TapAndHorizontalDragGestureRecognizer`) or
 /// [`Self::pan`] (`TapAndPanGestureRecognizer`).
@@ -308,6 +321,18 @@ impl TapAndDragGestureRecognizer {
     pub fn on_tap_track_reset(mut self, callback: impl Fn() + 'static) -> Self {
         self.on_tap_track_reset = Some(Rc::new(callback));
         self
+    }
+
+    /// Updates handlers without discarding pointer history or tap timers.
+    pub fn set_callbacks(&mut self, callbacks: TapAndDragCallbacks) {
+        self.on_tap_down = callbacks.on_tap_down;
+        self.on_tap_up = callbacks.on_tap_up;
+        self.on_drag_start = callbacks.on_drag_start;
+        self.on_drag_update = callbacks.on_drag_update;
+        self.on_drag_end = callbacks.on_drag_end;
+        self.on_cancel = callbacks.on_cancel;
+        self.on_tap_track_start = callbacks.on_tap_track_start;
+        self.on_tap_track_reset = callbacks.on_tap_track_reset;
     }
 
     /// The number of the tap in the current series; zero when none is

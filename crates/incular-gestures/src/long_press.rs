@@ -28,6 +28,7 @@ pub struct LongPressGestureRecognizer {
 
 struct Contact {
     pointer: u64,
+    buttons: u32,
     deadline: Option<Instant>,
     routed_down: bool,
     started: bool,
@@ -74,6 +75,17 @@ impl LongPressGestureRecognizer {
         self
     }
 
+    /// Replaces callbacks while retaining the active hold deadline.
+    pub fn set_callbacks(&mut self, callbacks: GestureCallbacks) {
+        self.callbacks = callbacks;
+        if let Some(contact) = &mut self.contact {
+            contact.engine.set_callbacks(Self::long_press_callbacks(
+                &self.callbacks,
+                contact.buttons,
+            ).unwrap_or_default());
+        }
+    }
+
     pub fn set_gesture_settings(&mut self, settings: DeviceGestureSettings) {
         self.gesture_settings = settings;
         if let Some(contact) = &mut self.contact {
@@ -101,18 +113,8 @@ impl LongPressGestureRecognizer {
         {
             return false;
         }
-        let Some(button) = self.callbacks.for_button_mask(down.buttons) else {
+        let Some(callbacks) = Self::long_press_callbacks(&self.callbacks, down.buttons) else {
             return false;
-        };
-        let callbacks = GestureCallbacks {
-            on_long_press_down: button.on_long_press_down,
-            on_long_press_cancel: button.on_long_press_cancel,
-            on_long_press: button.on_long_press,
-            on_long_press_start: button.on_long_press_start,
-            on_long_press_move_update: button.on_long_press_move_update,
-            on_long_press_up: button.on_long_press_up,
-            on_long_press_end: button.on_long_press_end,
-            ..Default::default()
         };
         if callbacks.on_long_press_down.is_none()
             && callbacks.on_long_press_cancel.is_none()
@@ -139,6 +141,7 @@ impl LongPressGestureRecognizer {
         self.arena.add(down.pointer);
         self.contact = Some(Contact {
             pointer: down.pointer,
+            buttons: down.buttons,
             deadline: down.time.checked_add(self.duration),
             routed_down: false,
             started: false,
@@ -146,6 +149,20 @@ impl LongPressGestureRecognizer {
             engine,
         });
         true
+    }
+
+    fn long_press_callbacks(source: &GestureCallbacks, buttons: u32) -> Option<GestureCallbacks> {
+        let button = source.for_button_mask(buttons)?;
+        Some(GestureCallbacks {
+            on_long_press_down: button.on_long_press_down,
+            on_long_press_cancel: button.on_long_press_cancel,
+            on_long_press: button.on_long_press,
+            on_long_press_start: button.on_long_press_start,
+            on_long_press_move_update: button.on_long_press_move_update,
+            on_long_press_up: button.on_long_press_up,
+            on_long_press_end: button.on_long_press_end,
+            ..Default::default()
+        })
     }
 
     /// Closes the standalone (sole-member) arena without starting a hold.

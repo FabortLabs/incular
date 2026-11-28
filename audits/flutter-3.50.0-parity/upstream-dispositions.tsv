@@ -4646,3 +4646,15 @@ packages/flutter/test/widgets/editable_text_test.dart	14426	does not save compos
 packages/flutter/test/widgets/editable_text_test.dart	14550	does save composing changes on Android	paired-match	undo-history-comparisons.md#ime-composition-has-a-separate-target-platform-policy
 packages/flutter/test/widgets/editable_text_test.dart	14715	saves right up to composing change even when throttled	paired-match	undo-history-comparisons.md#ime-composition-has-a-separate-target-platform-policy
 packages/flutter/test/widgets/editable_text_test.dart	17485	when having focus stolen between frames on web	paired-match	upstream-editable-focus-selection.md#focus-requested-by-an-unchanged-editor-value
+packages/flutter/test/widgets/text_selection_test.dart	144	a series of taps all call onTaps	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	160	in a series of rapid taps, onTapDown, onDoubleTapDown, and onTripleTapDown alternate	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	199	quick tap-tap-hold is a double tap down	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	225	a very quick swipe is ignored	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	251	a slower swipe has a tap down and a canceled tap	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	264	a force press initiates a force press	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	338	a tap and then force press initiates a force press and not a double tap	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	386	a long press from a touch device is recognized as a long single tap	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	405	a long press from a mouse is just a tap	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	423	a touch drag is recognized for text selection	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	445	a mouse drag is recognized for text selection	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	470	a slow mouse drag is still recognized for text selection	paired-match	upstream-text-selection-gestures.md
