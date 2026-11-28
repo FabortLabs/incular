@@ -136,7 +136,9 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             ));
             summarize_child(&mut out, child);
         }
-        WidgetKind::SelectionContainer { delegate, child, .. } => {
+        WidgetKind::SelectionContainer {
+            delegate, child, ..
+        } => {
             out.push(prop("enabled", DebugValue::Bool(delegate.is_enabled())));
             out.push(prop(
                 "selectionRevision",
@@ -258,7 +260,9 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
                     DebugValue::Enum(format!("{alignment:?}")),
                 )),
             }
-            summarize_child(&mut out, child);
+            if let Some(child) = child {
+                summarize_child(&mut out, child);
+            }
         }
         WidgetKind::Colored {
             color,
@@ -572,5 +576,27 @@ pub fn kind_display_name(kind: &WidgetKind) -> String {
             incular_config::Axis::Horizontal => "Row".to_owned(),
         },
         _ => kind.structure().widget_type.name().to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use incular_devtools_protocol::DebugValue;
+
+    use super::inspect_properties;
+    use crate::{Align, Text, Widget};
+
+    #[test]
+    fn devtools_align_reports_only_an_existing_child() {
+        let empty: Widget = Align::builder().build().into();
+        let props = inspect_properties(empty.kind());
+        assert!(props.iter().any(|property| property.name == "alignment"));
+        assert!(!props.iter().any(|property| property.name == "child"));
+
+        let populated: Widget = Align::builder().child(Text::new("preview")).build().into();
+        let props = inspect_properties(populated.kind());
+        assert!(props.iter().any(|property| {
+            property.name == "child" && property.value == DebugValue::Str("preview".into())
+        }));
     }
 }
