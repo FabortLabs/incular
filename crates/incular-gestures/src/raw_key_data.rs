@@ -8,6 +8,8 @@ use crate::RawKeyEvent;
 
 #[path = "raw_key_fuchsia_catalog.rs"]
 mod fuchsia;
+#[path = "raw_key_web_catalog.rs"]
+mod web;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -209,12 +211,74 @@ impl WebRawKeyData {
         self.meta_state & mask != 0
     }
 
+    /// Flutter's known USB identity, or a stable value in the Web plane.
+    #[must_use]
+    pub fn flutter_physical_key_id(&self) -> u64 {
+        web::PHYSICAL
+            .binary_search_by(|(code, _)| code.cmp(&self.code.as_str()))
+            .ok()
+            .map_or_else(
+                || web_key_for_code(&self.code),
+                |i| u64::from(web::PHYSICAL[i].1),
+            )
+    }
+
+    /// Logical identity keeps sided modifiers, numpad keys and printable
+    /// case normalization independent of the original DOM key label.
+    #[must_use]
+    pub fn flutter_logical_key(&self) -> LogicalKeyboardKey {
+        let located = web::LOCATION
+            .binary_search_by(|(key, _)| key.cmp(&self.key.as_str()))
+            .ok()
+            .and_then(|i| {
+                web::LOCATION[i]
+                    .1
+                    .get(self.location as usize)
+                    .copied()
+                    .flatten()
+            });
+        let named = || {
+            web::LOGICAL
+                .binary_search_by(|(key, _)| key.cmp(&self.key.as_str()))
+                .ok()
+                .map(|i| web::LOGICAL[i].1)
+        };
+        let printable = || {
+            self.key_label()
+                .and_then(|label| label.chars().next())
+                .and_then(|letter| letter.to_lowercase().next())
+                .map(|letter| u64::from(u32::from(letter)))
+        };
+        LogicalKeyboardKey::new(
+            located
+                .or_else(named)
+                .or_else(printable)
+                .unwrap_or_else(|| web_key_for_code(&self.code)),
+        )
+    }
+
     /// Decode an explicitly supplied legacy Web message for the mounted
     /// keyboard router, preserving the original DOM strings and flags.
     #[must_use]
     pub fn into_event(self, state: KeyState, repeat: bool, is_composing: bool) -> RawKeyEvent {
-        let code = self.code.parse::<Code>().unwrap_or(Code::Unidentified);
-        let key = self.key.parse::<KeyboardKey>().unwrap_or_default();
+        let code = if self.code == "Esc" {
+            "Escape"
+        } else {
+            self.code.as_str()
+        };
+        let code = code.parse::<Code>().unwrap_or(Code::Unidentified);
+        let key = match self.key.as_str() {
+            "Esc" => "Escape",
+            "Del" => "Delete",
+            "Left" => "ArrowLeft",
+            "Right" => "ArrowRight",
+            "Up" => "ArrowUp",
+            "Down" => "ArrowDown",
+            "Spacebar" => " ",
+            key => key,
+        }
+        .parse::<KeyboardKey>()
+        .unwrap_or_default();
         let location = match self.location {
             1 => Location::Left,
             2 => Location::Right,
@@ -246,4 +310,14 @@ impl WebRawKeyData {
             RawKeyPlatformData::Web(self),
         )
     }
+}
+
+// Dart's String hash is runtime-specific. Mint a stable native identity
+// from the physical DOM code, within the same platform plane. Using the
+// textual key would alias all unknown keys reported as "Unidentified".
+fn web_key_for_code(code: &str) -> u64 {
+    let hash = code.bytes().fold(0x811c_9dc5u32, |hash, byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
+    });
+    LogicalKeyboardKey::WEB_PLANE + 1 + u64::from(hash & 0x1fff_ffff)
 }
