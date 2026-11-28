@@ -198,3 +198,14 @@ so native uses that exact face under the advertised family name.
 With the same face the line height is 20; the runner's unrelated
 system fallback has different metrics and is not counted.
 All six focused native style and client-update tests passed.
+
+### Read-only keyboard actions
+
+Pinned `widgets/editable_text_test.dart:7987` passed on all six target
+platform variants. The mounted native editors keep the preset half
+selection and text when Paste is pressed. Select All is still
+allowed and emits one selection callback. Cut does not replace
+the clipboard, Copy sends the entire document, and Delete and
+Backspace leave the text and full range untouched. Native uses
+the corresponding Ctrl and Command shortcut tables, with
+Fuchsia sharing the Android path, and an in-memory clipboard.

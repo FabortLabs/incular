@@ -4155,3 +4155,4 @@ packages/flutter/test/widgets/editable_text_test.dart	6344	size and transform ar
 packages/flutter/test/widgets/editable_text_test.dart	6720	called when the composing range changes	paired-match	upstream-text-input-reattach.md#live-composing-geometry-and-degenerate-transforms
 packages/flutter/test/widgets/editable_text_test.dart	6758	only send updates when necessary	paired-match	upstream-text-input-reattach.md#live-composing-geometry-and-degenerate-transforms
 packages/flutter/test/widgets/editable_text_test.dart	6779	zero matrix paint transform	paired-match	upstream-text-input-reattach.md#live-composing-geometry-and-degenerate-transforms
+packages/flutter/test/widgets/editable_text_test.dart	7987	keyboard shortcuts respect read-only	paired-match	upstream-editable-defaults.md#read-only-keyboard-actions
