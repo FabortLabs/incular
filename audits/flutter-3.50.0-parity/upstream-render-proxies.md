@@ -77,3 +77,19 @@ Flutter's raw animation-value query, while submitting no raster work.
 The generic continuous effect API remains unchanged. Fifty-three
 focused native tests and the authored Flutter control passed; no
 GPU device was required or exercised.
+
+## Empty physical layers and shadow bounds
+
+Pinned `proxy_box_test.dart:65,144` both keep an empty physical layer
+non-composited at elevation 0 → 1 → 0; the shape case exercises each
+Flutter target platform. The mounted Incular regression checks the
+same transitions in the display list wgpu consumes. It also grows the
+same retained render object to a nonzero size and back: a shadow group
+appears only while it has a drawable source.
+
+Previously shadow inflation turned a zero-area source rectangle into
+positive render bounds and submitted an unnecessary GPU effect group.
+The compositor no longer inflates empty source bounds or emits a
+PushDropShadow/PopEffect pair for them, though it keeps retained IDs
+and still visits ordinary children. The comparison targets effective
+compositing, not native layer class names or the look of the shadow.

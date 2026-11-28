@@ -2641,25 +2641,24 @@ impl LayerTree {
                 out.push(PaintCommand::PopEffect);
             }
             LayerKind::DropShadow { shadow } => {
-                if shadow.color.alpha == 0 {
-                    self.visit_children(id, false, |tree, child| {
-                        tree.flatten_layer(child, world_transform, clip, out)
+                let bounds = (shadow.color.alpha != 0)
+                    .then(|| self.subtree_bounds(id, world_transform))
+                    .flatten()
+                    .filter(|bounds| bounds.size.width > 0. && bounds.size.height > 0.);
+                if let Some(bounds) = bounds {
+                    out.push(PaintCommand::PushDropShadow {
+                        layer: id,
+                        shadow,
+                        generation: self.subtree_generation(id),
+                        bounds,
                     });
-                    return;
                 }
-                let bounds = self
-                    .subtree_bounds(id, world_transform)
-                    .unwrap_or_else(|| Rect::from_origin_size(Offset::ZERO, Size::ZERO));
-                out.push(PaintCommand::PushDropShadow {
-                    layer: id,
-                    shadow,
-                    generation: self.subtree_generation(id),
-                    bounds,
-                });
                 self.visit_children(id, false, |tree, child| {
                     tree.flatten_layer(child, world_transform, clip, out)
                 });
-                out.push(PaintCommand::PopEffect);
+                if bounds.is_some() {
+                    out.push(PaintCommand::PopEffect);
+                }
             }
             LayerKind::ColorFilter { filter } => {
                 let bounds = self
@@ -3407,7 +3406,9 @@ impl LayerTree {
             LayerKind::Blur { blur } => child_bounds(self, world_transform)
                 .map(|bounds| blur_bounds(bounds, blur.sigma_x, blur.sigma_y)),
             LayerKind::DropShadow { shadow } => child_bounds(self, world_transform).map(|bounds| {
-                if shadow.color.alpha == 0 {
+                // A zero-area source cannot cast a shadow. Do not turn an
+                // empty rectangle into positive GPU bounds by inflating it.
+                if shadow.color.alpha == 0 || bounds.size.width <= 0. || bounds.size.height <= 0. {
                     bounds
                 } else {
                     drop_shadow_bounds(bounds, shadow.offset, shadow.sigma_x, shadow.sigma_y)

@@ -332,3 +332,53 @@ fn sliver_fade_uses_the_same_live_paints_child_gate() {
     assert!(controller.set_opacity(0.));
     assert!(!tree.paints_child(parent, child));
 }
+
+#[test]
+fn empty_physical_layers_do_not_composite_a_shadow_at_any_elevation() {
+    let magenta = Color::rgba(255, 0, 255, 255);
+    for physical_shape in [false, true] {
+        let scene = |elevation, side| {
+            if physical_shape {
+                PhysicalShape::new(
+                    CircleBorder::new(BorderSide::NONE)
+                        .outer_path(Rect::from_origin_size(Offset::ZERO, Size::new(side, side))),
+                    magenta,
+                    SizedBox::square(side),
+                )
+                .elevation(elevation)
+                .into()
+            } else {
+                PhysicalModel::new(magenta, SizedBox::square(side))
+                    .elevation(elevation)
+                    .into()
+            }
+        };
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(scene(0., 0.)).unwrap();
+        let render = tree.render_id(root).unwrap();
+        let layout = Constraints::loose(Size::new(800., 600.));
+        for (elevation, side, paints_shadow) in [
+            (0., 0., false),
+            (1., 0., false),
+            (1., 10., true),
+            (1., 0., false),
+            (0., 0., false),
+        ] {
+            tree.update(root, scene(elevation, side)).unwrap();
+            tree.layout(layout).unwrap();
+            assert_eq!(tree.render_id(root), Some(render));
+            assert_eq!(
+                tree.element_bounds(root).unwrap().size,
+                Size::new(side, side)
+            );
+            let list = tree.paint();
+            assert_eq!(
+                list.commands()
+                    .iter()
+                    .any(|cmd| matches!(cmd, PaintCommand::PushDropShadow { .. })),
+                paints_shadow,
+                "shape={physical_shape} elevation={elevation} side={side}",
+            );
+        }
+    }
+}
