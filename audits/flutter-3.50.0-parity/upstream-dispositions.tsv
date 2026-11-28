@@ -3976,3 +3976,7 @@ packages/flutter/test/widgets/scroll_position_test.dart	173	scroll alignment is 
 packages/flutter/test/widgets/scroll_position_test.dart	249	jumpTo recommends deferred loading	partial-match	upstream-scroll-position-observers.md
 packages/flutter/test/rendering/view_test.dart	28	accounts for device pixel ratio in paintBounds	paired-match	upstream-view-configuration.md#root-paint-bounds-and-debug-overlay
 packages/flutter/test/rendering/view_test.dart	82	invokes DebugPaintCallback	paired-match	upstream-view-configuration.md#root-paint-bounds-and-debug-overlay
+packages/flutter/test/rendering/view_test.dart	41	does not replace the root layer unnecessarily	partial-match	upstream-view-configuration.md#resizing-and-pre-layout-configuration
+packages/flutter/test/rendering/view_test.dart	57	does not replace the root layer unnecessarily when view resizes	paired-match	upstream-view-configuration.md#resizing-and-pre-layout-configuration
+packages/flutter/test/rendering/view_test.dart	104	Config can be set and changed after instantiation without calling prepareInitialFrame first	paired-match	upstream-view-configuration.md#resizing-and-pre-layout-configuration
+packages/flutter/test/rendering/view_test.dart	121	Constraints are derived from configuration	partial-match	upstream-view-configuration.md#resizing-and-pre-layout-configuration

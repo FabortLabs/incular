@@ -21,3 +21,19 @@ during and after registration, including previously retained buffers.
 Incular keeps registrations view-local and returns a disposable
 subscription rather than altering Flutter's static registry; release
 builds do not install them. All four focused native tests passed.
+
+## Resizing and pre-layout configuration
+
+Pinned `rendering/view_test.dart:41,57,104,121` passed. The native
+runtime preserves its actual compositor root layer through identical
+metrics and the original 100×100 to 100×1117 logical resize at 2×.
+Two configurations supplied before the first layout use the latest
+200×300 logical size at 2× and never prepare from the old metrics.
+Those :57 and :104 contracts pair.
+
+The :41 ratio-change branch differs: Flutter replaces the root scale
+layer; Incular keeps its logical compositor layer and applies DPR at
+presentation. The native constraints fixture also uses the original
+1–2 and 3–4 logical intervals, but :121's no-configuration exception
+does not apply to Incular's initialized runtime. These remain partial.
+All six focused native view and layout tests passed.

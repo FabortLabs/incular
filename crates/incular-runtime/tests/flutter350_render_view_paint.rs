@@ -83,3 +83,52 @@ fn debug_view_painters_draw_after_content_and_can_be_removed_without_requesting_
     assert_eq!(color_order(&after), [BASE]);
     assert_eq!(color_order(&before), [BASE]);
 }
+
+#[test]
+fn prelayout_metrics_replacements_use_the_latest_configuration() {
+    let mut runtime = mount();
+    for (width, height, ratio) in [(300, 600, 3.), (400, 600, 2.)] {
+        runtime.handle_platform_event(PlatformEvent::Metrics(WindowMetrics::new(
+            PhysicalSize::new(width, height),
+            ratio,
+        )));
+    }
+    let view = runtime.environment();
+    runtime
+        .run_frame(Constraints::tight(view.viewport))
+        .unwrap();
+    assert_eq!(
+        runtime.tree().root_layout_size(),
+        Some(Size::new(200., 300.))
+    );
+    assert_eq!(
+        runtime.view_paint_bounds(),
+        Some(Rect::from_origin_size(Offset::ZERO, Size::new(400., 600.))),
+    );
+}
+
+#[test]
+fn retained_root_layer_survives_a_resize_and_unchanged_view_metrics() {
+    let mut runtime = mount();
+    let mut retained = None;
+    for (width, height, ratio) in [
+        (200, 200, 2.),
+        (200, 200, 2.),
+        (200, 2234, 2.),
+        // The native renderer applies DPR at the surface; unlike Flutter's
+        // RenderView it need not replace the logical root to change scale.
+        (200, 2234, 5.),
+    ] {
+        let metrics = WindowMetrics::new(PhysicalSize::new(width, height), ratio);
+        runtime.handle_platform_event(PlatformEvent::Metrics(metrics));
+        runtime
+            .run_frame(Constraints::tight(metrics.logical_size()))
+            .unwrap();
+        let root = runtime.tree().retained_root_layer().unwrap();
+        assert_eq!(root, *retained.get_or_insert(root));
+        assert_eq!(
+            runtime.tree().root_layout_size(),
+            Some(metrics.logical_size())
+        );
+    }
+}

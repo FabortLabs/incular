@@ -207,6 +207,13 @@ impl WidgetTree {
         self.renders.get(render.0).map(|node| node.size)
     }
 
+    /// The identity of the retained root used by compositor diagnostics.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn retained_root_layer(&self) -> Option<incular_rendering::LayerId> {
+        self.compositor.root()
+    }
+
     /// World-space visual bounds of the retained scene produced by this tree.
     ///
     /// The compositor is the authority for transforms and viewport clips, so
