@@ -1,7 +1,7 @@
 use incular_accessibility::MobileAccessibilityProjection;
 use incular_config::Constraints;
 use incular_core::{Size, time::Instant};
-use incular_runtime::{Application, RuntimeWake};
+use incular_runtime::{Application, Runtime, RuntimeWake};
 use incular_widgets::{Semantics, SizedBox};
 use std::{
     cell::RefCell,
@@ -19,6 +19,104 @@ fn app() -> Application {
             .into()
     })
     .unwrap()
+}
+
+#[test]
+fn initializing_application_with_existing_semantics_demand_publishes_on_first_frame() {
+    let mut runtime =
+        Runtime::new(Semantics::new(SizedBox::expand()).label("startup").into()).unwrap();
+    runtime.set_platform_semantics_enabled(false);
+    let startup_demand = runtime.ensure_semantics();
+    let mut app = Application::from_runtime(runtime, |_| {});
+    let primary = app.primary_window();
+    let replay = Rc::new(RefCell::new(Vec::new()));
+    let _binding = app
+        .bind_semantics_tree_enabled(primary, {
+            let replay = replay.clone();
+            move |enabled| replay.borrow_mut().push(enabled)
+        })
+        .unwrap();
+    assert_eq!(*replay.borrow(), [true]);
+    assert_eq!(app.semantics_enabled(primary), Some(true));
+
+    let constraints = Constraints::tight(Size::new(400., 300.));
+    let mut projection = MobileAccessibilityProjection::new();
+    app.run_window_frame_at(primary, constraints, Instant::now())
+        .unwrap()
+        .unwrap();
+    let first = app
+        .sync_semantics_projection(primary, &mut projection)
+        .unwrap();
+    let [node] = first.nodes.as_slice() else {
+        panic!("only the mounted startup label should be published");
+    };
+    assert_eq!(node.semantic.label.as_deref(), Some("startup"));
+    let native_id = node.native_id;
+    assert!(!app.frame_requested(primary));
+
+    let wake = Arc::new(WakeCount::default());
+    app.set_wake_handler(wake.clone());
+    drop(startup_demand);
+    assert_eq!(*replay.borrow(), [true, false]);
+    assert_eq!(app.semantics_enabled(primary), Some(false));
+    assert!(app.frame_requested(primary));
+    assert!(wake.0.load(Ordering::Relaxed) > 0);
+
+    app.run_window_frame_at(primary, constraints, Instant::now())
+        .unwrap()
+        .unwrap();
+    let cleared = app
+        .sync_semantics_projection(primary, &mut projection)
+        .unwrap();
+    assert!(cleared.nodes.is_empty());
+    assert!(cleared.removed.contains(&native_id));
+}
+
+#[test]
+fn native_pre_frame_activation_replays_without_enabling_a_neighbor_window() {
+    let mut app = app();
+    let primary = app.primary_window();
+    let second = app
+        .open_window(
+            incular_platform::WindowOptions::default(),
+            Semantics::new(SizedBox::expand()).label("neighbor").into(),
+        )
+        .unwrap()
+        .id();
+    // Native hosts opt out until their respective adapters request a tree.
+    app.set_semantics_enabled(primary, false);
+    app.set_semantics_enabled(second, false);
+    app.set_semantics_enabled(primary, true);
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let _first_binding = app
+        .bind_semantics_tree_enabled(primary, {
+            let events = events.clone();
+            move |enabled| events.borrow_mut().push(("primary", enabled))
+        })
+        .unwrap();
+    let _second_binding = app
+        .bind_semantics_tree_enabled(second, {
+            let events = events.clone();
+            move |enabled| events.borrow_mut().push(("second", enabled))
+        })
+        .unwrap();
+    assert_eq!(*events.borrow(), [("primary", true), ("second", false)]);
+
+    let constraints = Constraints::tight(Size::new(400., 300.));
+    for (window, label) in [(primary, Some("target")), (second, None)] {
+        app.run_window_frame_at(window, constraints, Instant::now())
+            .unwrap()
+            .unwrap();
+        let mut projection = MobileAccessibilityProjection::new();
+        let update = app.sync_semantics_projection(window, &mut projection);
+        let labels: Vec<_> = update
+            .iter()
+            .flat_map(|update| &update.nodes)
+            .filter_map(|node| node.semantic.label.as_deref())
+            .collect();
+        assert_eq!(labels, label.into_iter().collect::<Vec<_>>());
+    }
+    assert_eq!(*events.borrow(), [("primary", true), ("second", false)]);
 }
 
 #[test]
