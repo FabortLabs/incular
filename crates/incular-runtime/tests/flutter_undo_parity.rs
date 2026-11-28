@@ -520,3 +520,166 @@ fn a_new_insertion_from_inside_history_replaces_only_the_redo_branch() {
         );
     }
 }
+
+fn replace_with_composition(editor: &mut Editor, text: &str, composing: Option<(usize, usize)>) {
+    use incular_platform::{PlatformEvent, TextInputState};
+    use incular_text::TextRange;
+
+    let _ = editor
+        .runtime
+        .handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+            text: text.into(),
+            selection_start: text.len(),
+            selection_end: text.len(),
+            composing,
+        }));
+    editor.controller.with_value(|value| {
+        assert_eq!(value.text, text);
+        assert_eq!(value.selection, TextSelection::collapsed(text.len()));
+        assert_eq!(
+            value.composing,
+            composing.map(|(start, end)| TextRange::new(start, end))
+        );
+    });
+}
+
+const EDITING_TARGETS: [incular_config::TargetPlatform; 6] = {
+    use incular_config::TargetPlatform::*;
+    [Android, Fuchsia, Ios, Linux, MacOs, Windows]
+};
+
+fn editor_for_composition(
+    target: incular_config::TargetPlatform,
+) -> (Editor, TextShortcutPlatform) {
+    use incular_config::TargetPlatform;
+
+    let (mut editor, _) = empty_editing_history(TextShortcutPlatform::Linux, false);
+    // Change the target on a live editor before its first history sample.
+    // The shortcut and history policies must both reach this existing field.
+    editor.runtime.set_text_target_platform(target);
+    let shortcuts = editor.runtime.text_shortcut_platform();
+    if target == TargetPlatform::Fuchsia {
+        assert_eq!(shortcuts, TextShortcutPlatform::Android);
+    }
+    editor.advance(500);
+    (editor, shortcuts)
+}
+
+#[test]
+fn android_records_composing_text_but_undo_and_redo_return_without_composing_spans() {
+    use incular_config::TargetPlatform;
+
+    let (mut editor, shortcuts) = editor_for_composition(TargetPlatform::Android);
+    replace_with_composition(&mut editor, "1 ", None);
+    editor.advance(500);
+    replace_with_composition(&mut editor, "1 ni", Some((2, 4)));
+    editor.advance(500);
+    replace_with_composition(&mut editor, "1 nihao", Some((2, 7)));
+    editor.advance(500);
+    replace_with_composition(&mut editor, "1 你好", None);
+    editor.advance(500);
+    shortcut_expect(
+        &mut editor,
+        shortcuts,
+        &[
+            (false, "1 nihao"),
+            (false, "1 ni"),
+            (false, "1 "),
+            (true, "1 ni"),
+            (true, "1 nihao"),
+            (true, "1 你好"),
+            (true, "1 你好"),
+            (false, "1 nihao"),
+            (false, "1 ni"),
+            (false, "1 "),
+            (false, ""),
+            (false, ""),
+            (true, "1 "),
+            (true, "1 ni"),
+            (true, "1 nihao"),
+            (true, "1 你好"),
+        ],
+    );
+}
+
+#[test]
+fn a_delay_between_android_composition_undos_does_not_create_an_entry() {
+    let (mut editor, shortcuts) = editor_for_composition(incular_config::TargetPlatform::Android);
+    replace_with_composition(&mut editor, "1 ni", Some((2, 4)));
+    editor.advance(500);
+    replace_with_composition(&mut editor, "1 nihao", Some((2, 7)));
+    editor.advance(500);
+    replace_with_composition(&mut editor, "1 你好", None);
+    editor.advance(500);
+    shortcut_expect(&mut editor, shortcuts, &[(false, "1 nihao")]);
+    editor.advance(500);
+    shortcut_expect(&mut editor, shortcuts, &[(false, "1 ni")]);
+}
+
+#[test]
+fn non_android_and_fuchsia_skip_composition_while_retaining_the_commit() {
+    use incular_config::TargetPlatform;
+
+    for target in EDITING_TARGETS
+        .into_iter()
+        .filter(|target| *target != TargetPlatform::Android)
+    {
+        let (mut editor, shortcuts) = editor_for_composition(target);
+        replace_with_composition(&mut editor, "1 ", None);
+        editor.advance(500);
+        replace_with_composition(&mut editor, "1 ni", Some((2, 4)));
+        editor.advance(500);
+        replace_with_composition(&mut editor, "1 nihao", Some((2, 7)));
+        editor.advance(500);
+        replace_with_composition(&mut editor, "1 你好", None);
+        editor.advance(500);
+        shortcut_expect(
+            &mut editor,
+            shortcuts,
+            &[
+                (false, "1 "),
+                (true, "1 你好"),
+                (true, "1 你好"),
+                (false, "1 "),
+                (false, ""),
+                (false, ""),
+                (true, "1 "),
+                (true, "1 你好"),
+            ],
+        );
+    }
+}
+
+#[test]
+fn a_pending_plain_edit_before_composition_is_not_lost_on_non_android_targets() {
+    use incular_config::TargetPlatform;
+
+    for target in EDITING_TARGETS {
+        let (mut editor, shortcuts) = editor_for_composition(target);
+        replace_with_composition(&mut editor, "1 ", None);
+        editor.advance(500);
+        replace_with_composition(&mut editor, "1 2 ", None);
+        replace_with_composition(&mut editor, "1 2 ni", Some((4, 6)));
+        editor.advance(500);
+        replace_with_composition(&mut editor, "1 2 你", None);
+        editor.advance(500);
+        let intermediate = if target == TargetPlatform::Android {
+            "1 2 ni"
+        } else {
+            "1 2 "
+        };
+        shortcut_expect(
+            &mut editor,
+            shortcuts,
+            &[
+                (false, intermediate),
+                (false, "1 "),
+                (false, ""),
+                (false, ""),
+                (true, "1 "),
+                (true, intermediate),
+                (true, "1 2 你"),
+            ],
+        );
+    }
+}

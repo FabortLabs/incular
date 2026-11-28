@@ -420,6 +420,7 @@ pub struct Runtime {
     pub(crate) editing_diagnostics: EditingDiagnostics,
     /// Which platform's `DefaultTextEditingShortcuts` table applies.
     pub(crate) text_shortcut_platform: TextShortcutPlatform,
+    text_history_keeps_composing_edits: bool,
     pub(crate) frame_requested: bool,
     warm_up_frame: Option<incular_animation::scheduler::WarmUpFrame>,
     pub(crate) scheduler: Rc<RefCell<tasks::TaskScheduler>>,
@@ -709,6 +710,7 @@ impl Runtime {
             clipboard: Box::new(MemoryClipboard::default()),
             editing_diagnostics: EditingDiagnostics::default(),
             text_shortcut_platform: TextShortcutPlatform::current(),
+            text_history_keeps_composing_edits: TargetPlatform::current() == TargetPlatform::Android,
             frame_requested: true,
             semantics_activation: None,
             warm_up_frame: None,
@@ -1898,9 +1900,29 @@ impl Runtime {
     /// lines on macOS and iOS, Control for words elsewhere. Defaults to the
     /// platform this build targets.
     pub fn set_text_shortcut_platform(&mut self, platform: TextShortcutPlatform) {
-        self.text_shortcut_platform = platform;
+        self.configure_text_platform(platform, platform == TextShortcutPlatform::Android);
+    }
+
+    /// Configures native editor shortcuts and history for the target OS.
+    /// Fuchsia shares Android's chords, but only Android adds composing text
+    /// to undo history. Previously committed history is not rewritten.
+    pub fn set_text_target_platform(&mut self, platform: TargetPlatform) {
+        self.configure_text_platform(
+            TextShortcutPlatform::for_target_platform(platform),
+            platform == TargetPlatform::Android,
+        );
+    }
+
+    fn configure_text_platform(&mut self, shortcuts: TextShortcutPlatform, android_history: bool) {
+        self.text_shortcut_platform = shortcuts;
+        if self.text_history_keeps_composing_edits != android_history {
+            self.text_history_keeps_composing_edits = android_history;
+            for history in self.text_histories.values() {
+                history.set_android_composition_history(android_history);
+            }
+        }
         self.tree
-            .set_focus_semantic_actions_enabled(platform != TextShortcutPlatform::Ios);
+            .set_focus_semantic_actions_enabled(shortcuts != TextShortcutPlatform::Ios);
         self.sync_focused_selection_lease();
     }
 
@@ -3737,7 +3759,7 @@ impl Runtime {
         }
         self.text_history_epoch = Some(epoch);
         let clock = self.text_history_time.unwrap_or_else(|| self.input_now());
-        let android = self.text_shortcut_platform == TextShortcutPlatform::Android;
+        let android = self.text_history_keeps_composing_edits;
         for field in self.tree.text_field_elements() {
             Self::mounted_text_history(&self.tree, &mut self.text_histories, field, clock, android);
         }
@@ -3745,7 +3767,7 @@ impl Runtime {
 
     fn ensure_text_history(&mut self, field: ElementId) -> Option<UndoHistoryController> {
         let clock = self.text_history_time.unwrap_or_else(|| self.input_now());
-        let android = self.text_shortcut_platform == TextShortcutPlatform::Android;
+        let android = self.text_history_keeps_composing_edits;
         Self::mounted_text_history(&self.tree, &mut self.text_histories, field, clock, android).cloned()
     }
 

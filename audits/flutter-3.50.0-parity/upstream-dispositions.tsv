@@ -4641,3 +4641,7 @@ packages/flutter/test/widgets/editable_text_test.dart	14048	Can undo/redo multip
 packages/flutter/test/widgets/editable_text_test.dart	14213	Can make changes in the middle of the history	paired-match	undo-history-comparisons.md#autofocus-duplicate-changes-and-replacing-a-redo-branch
 packages/flutter/test/widgets/editable_text_test.dart	14270	inside EditableText, duplicate changes	paired-match	undo-history-comparisons.md#autofocus-duplicate-changes-and-replacing-a-redo-branch
 packages/flutter/test/widgets/editable_text_test.dart	14366	inside EditableText, autofocus	paired-match	undo-history-comparisons.md#autofocus-duplicate-changes-and-replacing-a-redo-branch
+packages/flutter/test/widgets/editable_text_test.dart	14095	Can undo as intented when adding a delay between undos	paired-match	undo-history-comparisons.md#ime-composition-has-a-separate-target-platform-policy
+packages/flutter/test/widgets/editable_text_test.dart	14426	does not save composing changes (except Android)	paired-match	undo-history-comparisons.md#ime-composition-has-a-separate-target-platform-policy
+packages/flutter/test/widgets/editable_text_test.dart	14550	does save composing changes on Android	paired-match	undo-history-comparisons.md#ime-composition-has-a-separate-target-platform-policy
+packages/flutter/test/widgets/editable_text_test.dart	14715	saves right up to composing change even when throttled	paired-match	undo-history-comparisons.md#ime-composition-has-a-separate-target-platform-policy

@@ -26,7 +26,12 @@ impl TextShortcutPlatform {
     /// the browser OS on web builds.
     #[must_use]
     pub fn current() -> Self {
-        match TargetPlatform::current() {
+        Self::for_target_platform(TargetPlatform::current())
+    }
+
+    #[must_use]
+    pub(crate) const fn for_target_platform(target: TargetPlatform) -> Self {
+        match target {
             TargetPlatform::Android | TargetPlatform::Fuchsia => Self::Android,
             TargetPlatform::Ios => Self::Ios,
             TargetPlatform::Linux => Self::Linux,

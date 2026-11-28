@@ -350,6 +350,12 @@ impl UndoHistoryController {
         )
     }
 
+    pub(crate) fn set_android_composition_history(&self, enabled: bool) {
+        if let Some(group) = self.inner.history.borrow_mut().grouped.as_mut() {
+            group.android = enabled;
+        }
+    }
+
     fn with_grouping(editor: TextEditingController, grouped: Option<Box<GroupedHistory>>) -> Self {
         let initial = editor.value();
         let inner = Rc::new_cyclic(|weak: &Weak<Inner>| {

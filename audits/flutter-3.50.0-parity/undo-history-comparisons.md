@@ -194,3 +194,21 @@ each exact string, caret and empty composing range at deterministic
 The five native shortcut policies cover the Flutter target bindings;
 Fuchsia shares Android's non-composing undo/redo chords. No history
 implementation change was needed for these cases.
+
+## IME composition has a separate target-platform policy
+
+All 13 pinned expansions of `widgets/editable_text_test.dart:14095,
+14426,14550,14715` passed. Android's undo/redo history retains the
+intermediate text but never restores its composing marker. Waiting
+between Android undos does not create a new history entry. The other
+five platforms skip active composition, retain the committed CJK text,
+and preserve a pending plain-text edit just before preedit. Every
+transition checks exact text, caret, and composition state.
+
+Incular previously inferred the history policy from the shortcut table,
+which Fuchsia shares with Android. A Runtime can now select the real
+target OS independently of that shared table. The mounted Fuchsia
+test uses the Android key chord yet skips composing history, matching
+Flutter. Sixteen focused native history checks and four platform undo
+checks passed. The tests feed target-specific input policy through the
+Linux runtime without claiming an actual device or native IME session.
