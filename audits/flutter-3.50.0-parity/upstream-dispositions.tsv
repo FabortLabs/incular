@@ -4187,3 +4187,4 @@ packages/flutter/test/widgets/magnifier_test.dart	151	should update shown based 
 packages/flutter/test/widgets/magnifier_test.dart	205	should insert below below widget	paired-match	upstream-editable-magnifier.md#magnifier-controller-lifecycle-and-ordering
 packages/flutter/test/widgets/magnifier_test.dart	240	should insert newly built widget without animating out if overlay != null	paired-match	upstream-editable-magnifier.md#magnifier-controller-lifecycle-and-ordering
 packages/flutter/test/widgets/editable_text_test.dart	18939	Prevent last character visibility in obscure text when obscureText is toggled on mobile	partial-match	upstream-editable-focus-selection.md#obscuring-restored-on-a-focused-mobile-editor
+packages/flutter/test/widgets/editable_text_test.dart	19006	context menu reappears after a non-fling scroll that keeps selection in view while semantics are disabled	paired-match	upstream-editable-scroll-toolbar.md#short-touch-scroll-with-semantics-off

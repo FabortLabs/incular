@@ -347,6 +347,8 @@ pub struct Runtime {
     pub(crate) text_long_press: Option<text_gestures::TextLongPress>,
     /// A press on the focused field's selection handles, until it lifts.
     pub(crate) text_handle_drag: Option<text_gestures::TextHandleDrag>,
+    editable_scroll_drag: Option<text_gestures::EditableScrollDrag>,
+    editable_toolbar_restore: Option<text_gestures::EditableToolbarRestore>,
     /// Modifier keys held, from the latest key event (`HardwareKeyboard`).
     pub(crate) keyboard_modifiers: incular_core::Modifiers,
     hardware_keyboard: incular_core::HardwareKeyboardState,
@@ -627,6 +629,8 @@ impl Runtime {
             text_taps: None,
             text_long_press: None,
             text_handle_drag: None,
+            editable_scroll_drag: None,
+            editable_toolbar_restore: None,
             keyboard_modifiers: incular_core::Modifiers::empty(),
             hardware_keyboard: incular_core::HardwareKeyboardState::default(),
             hardware_key_handlers: incular_core::HardwareKeyHandlers::default(),
@@ -2740,6 +2744,11 @@ impl Runtime {
             // deadlines that fire on the frame clock, so a frame must run.
             self.frame_requested = true;
         }
+        let focused_toolbar_before_down = (phase == PointerPhase::Down).then_some(self.focused)
+            .flatten()
+            .filter(|&field| self.tree.text_field_toolbar_state(field).is_some_and(|menu| {
+                menu.is_showing() && !menu.is_spell_check_showing()
+            }));
         let text_menu_was_showing = phase == PointerPhase::Down
             && (button == Some(incular_core::SECONDARY_POINTER_BUTTON)
                 || (self.text_shortcut_platform == TextShortcutPlatform::Ios
@@ -2917,6 +2926,9 @@ impl Runtime {
                 unreachable!("pointer boundary handled above")
             }
             PointerPhase::Move => {
+                if self.move_editable_scroll_drag(position) {
+                    return None;
+                }
                 self.text_handle_drag_move(position);
                 if let Some(press) = self.pending_mobile_text_touch
                     && !press.within_slop(position)
@@ -3084,6 +3096,9 @@ impl Runtime {
                     && !ignores_text_pointer
                 {
                     let shift = self.keyboard_modifiers.shift();
+                    if mobile_touch {
+                        self.begin_editable_scroll_drag(field, position, focused_toolbar_before_down == Some(field));
+                    }
                     if deferred_text_touch {
                         self.pending_mobile_text_touch = Some(text_gestures::PendingMobileTextTouch {
                             field,
@@ -3131,6 +3146,10 @@ impl Runtime {
                 target.map(|(element, action)| EventTarget { element, action })
             }
             PointerPhase::Up => {
+                if self.finish_editable_scroll_drag() {
+                    self.release_legacy_pointer(device, pointer, phase, primary_changed);
+                    return None;
+                }
                 if let Some(press) = self.pending_mobile_text_touch {
                     if press.within_slop(position)
                         && text_target == Some(press.field)
@@ -3190,6 +3209,7 @@ impl Runtime {
                 self.captured_text_field = None;
                 self.cancel_text_long_press();
                 self.cancel_text_handle_drag();
+                self.finish_editable_scroll_drag();
                 self.captured_selectable_text = None;
                 if let Some(element) = self.pressed_button.take() {
                     let _ = self
@@ -5342,12 +5362,14 @@ impl Runtime {
         // A focused field whose value or selection changed scrolls its
         // ancestors to show the caret; the next frame lays that out.
         let caret_revealed = self.show_focused_caret_on_screen();
+        let editor_toolbar_restored = self.restore_editable_toolbar_after_scroll();
         // End-of-frame reset: recomputed from every demand source, not
         // blindly cleared. `fling_live` above is one source — a write
         // before layout alone would not survive this assignment, so it
         // is ORed back in. Nothing else in this frame clears the flag:
         // intermediate paths only ever set it.
         self.frame_requested = fling_live
+            || editor_toolbar_restored
             || caret_revealed
             || gesture_timers_live
             || tooltip_timers_live

@@ -1791,6 +1791,116 @@ impl Runtime {
 
 }
 
+/// A direct finger drag in a multiline editable viewport.
+#[derive(Clone, Copy)]
+pub(crate) struct EditableScrollDrag {
+    field: ElementId,
+    down: Offset,
+    last: Offset,
+    started: bool,
+    remember_toolbar: bool,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct EditableToolbarRestore {
+    field: ElementId,
+    revisions: (u64, u64),
+    after_drag: bool,
+}
+
+impl Runtime {
+    pub(super) fn begin_editable_scroll_drag(
+        &mut self,
+        field: ElementId,
+        position: Offset,
+        toolbar_was_visible: bool,
+    ) {
+        if self.tree.editable_can_drag_scroll(field) {
+            self.editable_scroll_drag = Some(EditableScrollDrag {
+                field,
+                down: position,
+                last: position,
+                started: false,
+                remember_toolbar: toolbar_was_visible,
+            });
+        }
+    }
+
+    pub(super) fn move_editable_scroll_drag(&mut self, position: Offset) -> bool {
+        let Some(mut drag) = self.editable_scroll_drag.take() else {
+            return false;
+        };
+        if !drag.started {
+            let delta = position - drag.down;
+            if self.text_long_press.is_some_and(|press| press.started)
+                || (delta.x.abs() >= delta.y.abs() && delta.x.abs() > TOUCH_SLOP)
+            {
+                return false;
+            }
+            if delta.y.abs() <= TOUCH_SLOP || delta.y.abs() <= delta.x.abs() {
+                self.editable_scroll_drag = Some(drag);
+                return false;
+            }
+            drag.started = true;
+            self.cancel_pending_mobile_text_touch();
+            self.captured_text_field = None;
+            self.text_taps = None;
+            self.cancel_text_long_press();
+            if drag.remember_toolbar && let Some(controller) = self.tree.text_controller(drag.field) {
+                self.editable_toolbar_restore = Some(EditableToolbarRestore {
+                    field: drag.field,
+                    revisions: controller.revisions(),
+                    after_drag: false,
+                });
+            }
+            self.hide_text_field_toolbar_only(drag.field);
+        }
+        self.frame_requested |= self.tree.editable_drag_scroll(drag.field, drag.last, position);
+        drag.last = position;
+        self.editable_scroll_drag = Some(drag);
+        true
+    }
+
+    pub(super) fn finish_editable_scroll_drag(&mut self) -> bool {
+        let Some(drag) = self.editable_scroll_drag.take().filter(|drag| drag.started) else {
+            return false;
+        };
+        if let Some(restore) = self.editable_toolbar_restore.as_mut()
+            && drag.field == restore.field
+        {
+            restore.after_drag = true;
+        }
+        self.frame_requested = true;
+        true
+    }
+
+    pub(super) fn restore_editable_toolbar_after_scroll(&mut self) -> bool {
+        let Some(restore) = self.editable_toolbar_restore else {
+            return false;
+        };
+        let current = self.tree.text_controller(restore.field).map(|controller| controller.revisions());
+        if self.focused != Some(restore.field) || current != Some(restore.revisions) {
+            self.editable_toolbar_restore = None;
+            return false;
+        }
+        if !restore.after_drag || self.editable_scroll_drag.is_some_and(|drag| drag.started) {
+            return false;
+        }
+        let field = restore.field;
+        let in_field = self.tree.element_bounds(field).is_some_and(|bounds| {
+            self.tree.editable_selection_menu_rect(field).is_some_and(|selection| {
+                bounds.intersects(selection)
+                    || (selection.size.width == 0. && bounds.contains(selection.origin))
+            })
+        });
+        if in_field {
+            self.editable_toolbar_restore = None;
+            return self.show_flutter_editor_toolbar();
+        }
+        false
+    }
+}
+
 /// A press on one of the focused field's visible selection handles, from
 /// touch down to lift. Flutter `_SelectionHandleOverlay`'s pan gesture feeds
 /// the `TextSelectionOverlay` drag handlers, and the knob's tap is

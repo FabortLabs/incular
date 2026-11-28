@@ -987,6 +987,49 @@ impl WidgetTree {
         })
     }
 
+    /// Whether a laid-out multiline editor can consume an internal drag.
+    #[doc(hidden)]
+    pub fn editable_can_drag_scroll(&self, id: ElementId) -> bool {
+        let Some(node) = self.render_id(id).and_then(|render| self.renders.get(render.0)) else {
+            return false;
+        };
+        matches!(node.object.kind(), RenderKind::TextField(field)
+            if field.multiline && field.fixed_scroll_offset.is_none())
+            && self.editable_max_scroll_extent(id).is_some_and(|max| max > 0.)
+    }
+
+    /// Applies a pointer drag in the editor's local vertical coordinates.
+    #[doc(hidden)]
+    pub fn editable_drag_scroll(&mut self, id: ElementId, from: Offset, to: Offset) -> bool {
+        if !self.editable_can_drag_scroll(id) {
+            return false;
+        }
+        let Some(render) = self.render_id(id) else {
+            return false;
+        };
+        let world = self.render_world_transform(render);
+        let (Some(from), Some(to)) =
+            (world.inverse_transform_point(from), world.inverse_transform_point(to))
+        else {
+            return false;
+        };
+        let delta = from.y - to.y;
+        if !delta.is_finite() {
+            return false;
+        }
+        let Some(maximum) = self.editable_max_scroll_extent(id) else {
+            return false;
+        };
+        let state = self.text_field_state_live_mut(render);
+        let next = (state.scroll_y + delta).clamp(0., maximum);
+        if state.scroll_y == next {
+            return false;
+        }
+        state.scroll_y = next;
+        self.mark_render_paint(render);
+        true
+    }
+
     /// The text field's current scroll offsets in content pixels.
     #[must_use]
     pub fn text_field_scroll_offset(&self, id: ElementId) -> Option<Offset> {
