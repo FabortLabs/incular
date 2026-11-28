@@ -234,3 +234,13 @@ the same text with the caret at 5. Replacing forward range (4,5)
 yields `123412345` with the caret at 9. Selecting all and pasting
 the shorter value returns `12345` and caret 5. The test compares
 the retained editing action, not Material toolbar styling.
+
+## Multiline size notification
+
+Pinned `widgets/editable_text_test.dart:18171` passed. A mounted native
+multiline editor with limits 1–3 receives a newline through the normal
+platform editing event. Before the fix the editor changed height but
+its enclosing listener received no notification. It now receives exactly
+one `SizeChangedLayoutNotification` when the height changes and none
+on mount, focus, or a subsequent unchanged frame. Width and retained
+focus identity stay unchanged. The focused native regression passed.

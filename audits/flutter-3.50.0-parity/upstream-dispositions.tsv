@@ -4174,3 +4174,4 @@ packages/flutter/test/widgets/editable_text_test.dart	17259	_CompositionCallback
 packages/flutter/test/widgets/editable_text_test.dart	17194	can handle the partial selection of a multi-code-unit glyph	partial-match	upstream-text-input-reattach.md#partial-grapheme-selections
 packages/flutter/test/widgets/editable_text_test.dart	17710	EditableText respects MediaQuery.boldText	paired-match	upstream-editable-input-styles.md#mounted-text-and-strut-accessibility-overrides
 packages/flutter/test/widgets/editable_text_test.dart	17733	EditableText respects MediaQueryData.lineHeightScaleFactorOverride, MediaQueryData.letterSpacingOverride, and MediaQueryData.wordSpacingOverride	paired-match	upstream-editable-input-styles.md#mounted-text-and-strut-accessibility-overrides
+packages/flutter/test/widgets/editable_text_test.dart	18171	should notify on size change	paired-match	upstream-editable-defaults.md#multiline-size-notification
