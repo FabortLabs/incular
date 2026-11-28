@@ -6,11 +6,24 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use incular_core::{Color, Lerp, Offset};
+use incular_core::{Color, Lerp, Offset, Rect, Size};
 
 use super::{BlurStyle, BoxShadow};
 
 impl BoxShadow {
+    /// The raster bounds after translating/inflating the shadow. Flutter's
+    /// painter sorts an axis when a negative spread crosses both edges.
+    pub(super) fn paint_bounds(&self, rect: Rect) -> Rect {
+        let spread = self.spread_radius;
+        let width = rect.size.width + 2.0 * spread;
+        let height = rect.size.height + 2.0 * spread;
+        Rect::from_origin_size(
+            rect.origin + self.offset - Offset::new(spread, spread)
+                + Offset::new(width.min(0.0), height.min(0.0)),
+            Size::new(width.abs(), height.abs()),
+        )
+    }
+
     /// Replaces only the supplied shadow values.
     #[must_use]
     pub fn copy_with(

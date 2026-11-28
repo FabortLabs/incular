@@ -304,21 +304,11 @@ impl ShapeDecoration {
         self.shape.outer_path_with_direction(rect, direction)
     }
 
-    /// Flutter `BoxShadow.toPaint`'s path: the outline of the shape in
-    /// `rect` shifted by the shadow's offset and inflated by its spread.
+    /// Returns the shadow's paint bounds after translation and spread.
+    /// Sorts the edges if a negative spread inverts either axis.
     #[must_use]
     pub fn shadow_rect(rect: Rect, shadow: &BoxShadow) -> Rect {
-        let spread = shadow.spread_radius;
-        Rect::from_origin_size(
-            Offset::new(
-                rect.origin.x + shadow.offset.x - spread,
-                rect.origin.y + shadow.offset.y - spread,
-            ),
-            Size::new(
-                rect.size.width + 2.0 * spread,
-                rect.size.height + 2.0 * spread,
-            ),
-        )
+        shadow.paint_bounds(rect)
     }
 
     /// `_ShapeDecorationPainter.paint` without the shadows and image: the
@@ -444,7 +434,9 @@ impl ShapeDecoration {
     ) -> DisplayList {
         let rect = Self::shadow_rect(Rect::from_origin_size(Offset::ZERO, size), shadow);
         let mut canvas = Canvas::default();
-        self.paint_interior_or_path(&mut canvas, rect, Brush::Solid(shadow.color), direction);
+        if rect.size.width > 0.0 && rect.size.height > 0.0 {
+            self.paint_interior_or_path(&mut canvas, rect, Brush::Solid(shadow.color), direction);
+        }
         canvas.finish()
     }
 }

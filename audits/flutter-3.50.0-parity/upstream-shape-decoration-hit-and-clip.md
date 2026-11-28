@@ -203,3 +203,16 @@ not physical padding silently resolved to LTR. It resolves to the left in
 LTR and to the right in RTL. The native test also verifies mixed physical
 and directional compound insets and zero padding for an unpainted border.
 All eight focused tests passed.
+
+## Negative shadow spread across the center
+
+The authored pinned Flutter pixel probe draws box and shape decoration
+shadows for rectangles, circles, and rounded rectangles. When negative
+spread crosses an axis from positive to negative size, the painted edges
+are sorted; at exactly zero extent, there is no shadow. On a 20 × 16
+rectangle, spread -15 paints a centered 10 × 14 rectangle, or a fitted
+10 × 10 circle. Both native painters previously panicked for inverted
+bounds. They now share centered, normalized bounds and skip empty draws.
+Native tests check the emitted bounds around zero, including translated
+shadows, and the mounted shape regressions passed (seven focused tests).
+No original registration count was changed by this authored probe.

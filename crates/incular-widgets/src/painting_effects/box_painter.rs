@@ -77,13 +77,11 @@ impl BoxDecoration {
     /// shifted and inflated, filled with its color before the blur.
     #[must_use]
     pub fn paint_shadow(&self, size: Size, shadow: &BoxShadow) -> DisplayList {
-        let rect = Rect::from_origin_size(Offset::ZERO, size);
-        let bounds = inflate(
-            Rect::from_origin_size(Offset::new(shadow.offset.x, shadow.offset.y), rect.size),
-            shadow.spread_radius,
-        );
+        let bounds = shadow.paint_bounds(Rect::from_origin_size(Offset::ZERO, size));
         let mut canvas = Canvas::default();
-        self.fill_box(&mut canvas, bounds, Brush::Solid(shadow.color));
+        if bounds.size.width > 0.0 && bounds.size.height > 0.0 {
+            self.fill_box(&mut canvas, bounds, Brush::Solid(shadow.color));
+        }
         canvas.finish()
     }
 
