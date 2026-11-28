@@ -51,3 +51,27 @@ controller jumps to 8,000 logical pixels. Both the first row and its
 editor are disposed. Crossing the former deadline and releasing the
 contact leaves focus, the editing value, and the old toolbar unchanged.
 The comparison covers framework behavior, not OS toolbar presentation.
+
+## Drag device and competing renderer
+
+Pinned :871, :896, :959, :1015 and :1086 passed nine exact Flutter variants.
+The mounted native regressions verify that mouse selection does not open
+touch handles or the toolbar (including on a read-only field); mouse and
+stylus select from offsets 4 to 10, while Android touch and unknown-device
+drags move a collapsed caret to offset 10. The stylus variants cover
+Android, Fuchsia, Linux, macOS and Windows.
+
+A narrower neutral probe demonstrates why a rapid tap followed by a drag
+doesn't necessarily select a word range: when the renderer participates,
+its tap wins the completed first contact and the outer builder's drag
+restarts at count 1. When the renderer ignores input, the builder can
+carry its own tap into a count-2 drag and select the word range 2 to 14.
+The mounted Incular builder now preserves that distinction on the same
+editor, without adding a new retained layout node or changing callers
+that install no builder. Without it the rapid Android finger drag
+incorrectly selected 2 to 14 when the expected value was a caret at 10.
+
+Builder-level force press and the movement of drag anchors while the
+editable viewport scrolls remain separate comparisons. The generic
+detector's pressure recognition does not establish the builder's editor
+selection and toolbar behavior.

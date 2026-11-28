@@ -4662,3 +4662,7 @@ packages/flutter/test/widgets/text_selection_test.dart	497	test TextSelectionGes
 packages/flutter/test/widgets/text_selection_test.dart	520	test TextSelectionGestureDetectorBuilder long press on iOS - renderEditable not focused	paired-match	upstream-text-selection-gestures.md#long-press-in-a-mounted-editor
 packages/flutter/test/widgets/text_selection_test.dart	538	test TextSelectionGestureDetectorBuilder long press on non-Apple Platforms	paired-match	upstream-text-selection-gestures.md#long-press-in-a-mounted-editor
 packages/flutter/test/widgets/text_selection_test.dart	558	does not crash when long press is cancelled after unmounting	paired-match	upstream-text-selection-gestures.md#long-press-in-a-mounted-editor
+packages/flutter/test/widgets/text_selection_test.dart	871	Mouse drag does not show handles nor toolbar	paired-match	upstream-text-selection-gestures.md#drag-device-and-competing-renderer
+packages/flutter/test/widgets/text_selection_test.dart	896	Mouse drag selects and cannot drag cursor	paired-match	upstream-text-selection-gestures.md#drag-device-and-competing-renderer
+packages/flutter/test/widgets/text_selection_test.dart	1015	Stylus drag selects text	paired-match	upstream-text-selection-gestures.md#drag-device-and-competing-renderer
+packages/flutter/test/widgets/text_selection_test.dart	1086	Drag of unknown type moves the cursor	paired-match	upstream-text-selection-gestures.md#drag-device-and-competing-renderer

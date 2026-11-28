@@ -15,3 +15,8 @@ verifies both the focus gate and the exact collapsed offsets.
 
 This is a behavioral comparison on the Android runtime policy, not a
 physical device or native keyboard test.
+
+The [mounted builder follow-up](upstream-text-selection-gestures.md#drag-device-and-competing-renderer)
+also verifies the original's fast timing: an immediate drag after a
+completed tap moves the caret if the renderer won that tap, but a
+builder-owned tap retains the separate double-tap-drag word behavior.

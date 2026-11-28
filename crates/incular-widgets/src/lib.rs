@@ -456,7 +456,9 @@ pub use spell_check::{
     DefaultSpellCheckProvider, SpellCheckConfiguration, build_text_span_with_spell_check_suggestions,
 };
 pub use stateful_builder::{StateSetter, StatefulBuilder};
-pub use text_selection_gestures::{TextSelectionGestureCallbacks, TextSelectionGestureDetector};
+pub use text_selection_gestures::{
+    TextSelectionGestureCallbacks, TextSelectionGestureDetector, TextSelectionGestureDetectorBuilder,
+};
 pub use text_selection_handles::{
     SELECTION_HANDLE_SIZE, TextSelectionHandle, TextSelectionHandleLayout, TextSelectionHandles,
     TextSelectionHandlesBuilder,

@@ -3679,7 +3679,19 @@ impl WidgetTree {
     #[must_use]
     pub fn text_field_uses_platform_tap_selection(&self, target: ElementId) -> bool {
         self.elements.get(target.0).is_some_and(|element| {
-            matches!(element.widget.kind(), WidgetKind::TextField(spec) if spec.platform_tap_selection)
+            matches!(element.widget.kind(), WidgetKind::TextField(spec)
+                if spec.platform_tap_selection
+                    || (spec.has_selection_gesture_builder && spec.renderer_ignores_pointer))
+        })
+    }
+
+    /// Whether the standard editor selection builder is installed.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_has_selection_gesture_builder(&self, target: ElementId) -> bool {
+        self.elements.get(target.0).is_some_and(|element| {
+            matches!(element.widget.kind(), WidgetKind::TextField(spec)
+                if spec.has_selection_gesture_builder)
         })
     }
 

@@ -1261,6 +1261,7 @@ pub struct EditableText {
     /// Flutter's `contextMenuBuilder`; `None` shows no context menu.
     renderer_ignores_pointer: bool,
     platform_tap_selection: bool,
+    has_selection_gesture_builder: bool,
     context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
     selection_handles_builder: Option<crate::TextSelectionHandlesBuilder>,
     on_selection_handle_tapped: Option<Rc<dyn Fn()>>,
@@ -1354,6 +1355,7 @@ impl EditableText {
             toolbar_options: None,
             renderer_ignores_pointer: false,
             platform_tap_selection: false,
+            has_selection_gesture_builder: false,
             context_menu_builder: None,
             selection_handles_builder: None,
             on_selection_handle_tapped: None,
@@ -2005,6 +2007,11 @@ impl EditableText {
         self
     }
 
+    pub(crate) fn with_selection_gesture_builder(mut self) -> Self {
+        self.has_selection_gesture_builder = true;
+        self
+    }
+
     /// Builds the menu a secondary click opens (Flutter's
     /// `EditableText.contextMenuBuilder`). Unset, like Flutter's bare
     /// `EditableText`, the field has no context menu; Material and Controls
@@ -2362,6 +2369,7 @@ impl From<EditableText> for Widget {
             read_only: value.read_only,
             renderer_ignores_pointer: value.renderer_ignores_pointer,
             platform_tap_selection: value.platform_tap_selection,
+            has_selection_gesture_builder: value.has_selection_gesture_builder,
             obscure_text: value.obscure_text,
             obscuring_character: value.obscuring_character,
             keyboard_selection_enabled,

@@ -78,7 +78,7 @@ impl Runtime {
                         self.selectable_text_right_click(label, position, menu_was_showing)
                     });
                 };
-                if self.tree.text_field_renderer_ignores_pointer(field) {
+                if self.text_field_leaves_pointer_to_caller(field) {
                     self.secondary_text_press = None;
                     return false;
                 }
@@ -132,7 +132,7 @@ impl Runtime {
         // `delegate.selectionEnabled`.
         if !snapshot.traits.enable_interactive_selection
             || !self.text_field_pointer_selection_enabled(field)
-            || self.tree.text_field_renderer_ignores_pointer(field)
+            || self.text_field_leaves_pointer_to_caller(field)
         {
             return false;
         }
@@ -882,6 +882,11 @@ impl Runtime {
         }
     }
 
+    pub(super) fn text_field_leaves_pointer_to_caller(&self, field: ElementId) -> bool {
+        self.tree.text_field_renderer_ignores_pointer(field)
+            && !self.tree.text_field_has_selection_gesture_builder(field)
+    }
+
     /// `onTapDown`, `onDoubleTapDown` and `onTripleTapDown` of Flutter's
     /// `TextSelectionGestureDetectorBuilder` for a primary press.
     pub(super) fn continues_text_tap_series(
@@ -891,6 +896,14 @@ impl Runtime {
         now: Instant,
     ) -> bool {
         use incular_widgets::internal::gesture_constants::{DOUBLE_TAP_SLOP, DOUBLE_TAP_TIMEOUT};
+        // With both recognizers installed, the renderer wins an ordinary
+        // tap on Up. The outer builder loses that arena entry and does not
+        // carry that tap into a subsequent builder drag.
+        if self.tree.text_field_has_selection_gesture_builder(field)
+            && !self.tree.text_field_renderer_ignores_pointer(field)
+        {
+            return false;
+        }
         self.text_taps.is_some_and(|run| {
             run.field == field
                 && run

@@ -875,3 +875,100 @@ fn visible_touch_handles_follow_the_retained_editors_larger_font() {
     assert_eq!(after.start.anchor.y - before.start.anchor.y, 12.);
     assert_eq!(after_end.anchor.y - before_end.anchor.y, 12.);
 }
+
+#[test]
+fn drag_device_controls_whether_an_editor_extends_a_range_or_moves_the_caret() {
+    use PointerDeviceKind::{Mouse, Stylus, Touch, Unknown};
+    use incular_config::TargetPlatform::{Android, Fuchsia, Linux, MacOs, Windows};
+    use incular_widgets::TextSelectionGestureDetectorBuilder;
+
+    for (os, kind, renderer_ignores_pointer, expected) in [
+        (Android, Mouse, false, TextSelection::new(4, 10)),
+        (Android, Touch, false, TextSelection::collapsed(10)),
+        (Android, Touch, true, TextSelection::new(2, 14)),
+        (Android, Unknown, false, TextSelection::collapsed(10)),
+        (Android, Stylus, false, TextSelection::new(4, 10)),
+        (Fuchsia, Stylus, false, TextSelection::new(4, 10)),
+        (Linux, Stylus, false, TextSelection::new(4, 10)),
+        (MacOs, Stylus, false, TextSelection::new(4, 10)),
+        (Windows, Stylus, false, TextSelection::new(4, 10)),
+    ] {
+        let controller = TextEditingController::with_text("I love flutter!");
+        let field = EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .size(Size::new(400., 32.))
+            .renderer_ignores_pointer(renderer_ignores_pointer)
+            .selection_handles_builder(|_, _| SizedBox::shrink().into())
+            .context_menu_builder(|_, _| IgnorePointer::new(SizedBox::shrink()).into());
+        let field = TextSelectionGestureDetectorBuilder::new().build_gesture_detector(field);
+        let mut runtime = Runtime::new(field.into()).unwrap();
+        runtime.set_text_target_platform(os);
+        runtime.run_frame(bounds()).unwrap();
+        let id = runtime.tree().text_field_at(Offset::new(12., 10.)).unwrap();
+        let [from, middle, to] = [4, 7, 10].map(|offset| {
+            controller.set_selection(TextSelection::collapsed(offset));
+            runtime.run_frame(bounds()).unwrap();
+            let rect = runtime
+                .tree()
+                .text_field_input_geometry(id)
+                .unwrap()
+                .caret_rect;
+            Offset::new(rect.origin.x, rect.origin.y + rect.size.height / 2.)
+        });
+        controller.clear_selection();
+        runtime.run_frame(bounds()).unwrap();
+        assert!(controller.selection_if_set().is_none(), "{os:?} {kind:?}");
+
+        let start = Instant::now();
+        let up = tap(&mut runtime, from, Touch, start);
+        assert_eq!(
+            controller.selection(),
+            TextSelection::collapsed(4),
+            "{os:?} {kind:?}"
+        );
+        let delay = if kind == Mouse { 301 } else { 1 };
+        let down = up + Duration::from_millis(delay);
+        for (phase, at, elapsed) in [
+            (PointerPhase::Down, from, 0),
+            (PointerPhase::Move, middle, 16),
+            (PointerPhase::Move, to, 32),
+            (PointerPhase::Up, to, 48),
+        ] {
+            let at_time = down + Duration::from_millis(elapsed);
+            pointer(&mut runtime, phase, at, kind, at_time);
+            runtime.run_frame_at(bounds(), at_time).unwrap();
+        }
+        assert_eq!(controller.selection(), expected, "{os:?} {kind:?}");
+        if kind == Mouse {
+            assert!(shown_handles(&runtime).is_none());
+            assert!(!toolbar_open(&runtime));
+        }
+    }
+}
+
+#[test]
+fn a_read_only_mouse_drag_leaves_mobile_handles_and_toolbar_hidden() {
+    let controller = TextEditingController::with_text("I love Flutter!");
+    let field = EditableText::new(controller.clone())
+        .text_direction(TextDirection::Ltr)
+        .size(Size::new(400., 32.))
+        .read_only(true)
+        .selection_handles_builder(|_, _| SizedBox::shrink().into())
+        .context_menu_builder(|_, _| IgnorePointer::new(SizedBox::shrink()).into());
+    let mut runtime = Runtime::new(Widget::from(field)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    runtime.run_frame(bounds()).unwrap();
+    let field = runtime.tree().text_field_at(Offset::new(1., 1.)).unwrap();
+    let handles = runtime.tree().text_field_selection_handles(field).unwrap();
+    let menu = runtime.tree().text_field_context_menu(field).unwrap();
+    drag(
+        &mut runtime,
+        Offset::new(1., 1.),
+        Offset::new(51., 1.),
+        PointerDeviceKind::Mouse,
+        Instant::now(),
+    );
+    assert!(!controller.selection().is_collapsed());
+    assert!(!handles.is_showing());
+    assert!(!menu.is_showing());
+}

@@ -791,6 +791,7 @@ impl PartialEq for TextFieldSpec {
             && self.read_only == other.read_only
             && self.renderer_ignores_pointer == other.renderer_ignores_pointer
             && self.platform_tap_selection == other.platform_tap_selection
+            && self.has_selection_gesture_builder == other.has_selection_gesture_builder
             && self.obscure_text == other.obscure_text
             && self.obscuring_character == other.obscuring_character
             && self.keyboard_selection_enabled == other.keyboard_selection_enabled

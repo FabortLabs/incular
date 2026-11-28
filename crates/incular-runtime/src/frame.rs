@@ -3165,7 +3165,7 @@ impl Runtime {
                         TextShortcutPlatform::Android | TextShortcutPlatform::Ios
                     );
                 let ignores_text_pointer = text_target.is_some_and(|field| {
-                    self.tree.text_field_renderer_ignores_pointer(field)
+                    self.text_field_leaves_pointer_to_caller(field)
                 });
                 // Android places the caret on a completed finger tap.
                 // A press that becomes a scroll or is canceled must not
@@ -3673,7 +3673,7 @@ impl Runtime {
         if self.pending_mobile_text_touch.is_some_and(|press| {
             !self.tree.is_text_field(press.field)
                 || !self.tree.can_request_focus(press.field)
-                || self.tree.text_field_renderer_ignores_pointer(press.field)
+                || self.text_field_leaves_pointer_to_caller(press.field)
                 || (press.was_focused && self.focused != Some(press.field))
         }) {
             self.cancel_pending_mobile_text_touch();
@@ -3681,11 +3681,11 @@ impl Runtime {
         if self.captured_text_field.is_some_and(|field| {
             !self.tree.is_text_field(field)
                 || !self.tree.can_request_focus(field)
-                || self.tree.text_field_renderer_ignores_pointer(field)
+                || self.text_field_leaves_pointer_to_caller(field)
         }) {
             self.captured_text_field = None;
         }
-        if self.text_taps.is_some_and(|tap| self.tree.text_field_renderer_ignores_pointer(tap.field)) {
+        if self.text_taps.is_some_and(|tap| self.text_field_leaves_pointer_to_caller(tap.field)) {
             self.text_taps = None;
         }
         if self.captured_selectable_text.is_some_and(|label| {

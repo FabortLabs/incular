@@ -12,7 +12,7 @@ use incular_gestures::{
     TapDragEndDetails, TapDragStartDetails, TapDragUpDetails, TapDragUpdateDetails,
 };
 
-use crate::{HitTestBehavior, RawGestureDetector, Widget};
+use crate::{EditableText, HitTestBehavior, RawGestureDetector, Widget};
 
 type EventHandler<T> = Option<Rc<dyn Fn(T)>>;
 type EventSignal = Option<Rc<dyn Fn()>>;
@@ -41,6 +41,28 @@ pub struct TextSelectionGestureCallbacks {
     pub on_force_press_end: EventHandler<ForcePressDetails>,
     pub on_user_tap: EventSignal,
     pub on_user_tap_always_called: bool,
+}
+
+/// Installs the standard text-selection policy around an editable renderer.
+/// The retained editor owns the policy, so adding it does not add an extra
+/// node or layout pass. Use [TextSelectionGestureDetector] to supply custom
+/// gesture handlers instead of the standard policy.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TextSelectionGestureDetectorBuilder;
+
+impl TextSelectionGestureDetectorBuilder {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
+    }
+
+    /// Uses the editor's renderer pointer policy to arbitrate between the
+    /// renderer tap and the builder's tap-and-drag detector. An editor with
+    /// `renderer_ignores_pointer(true)` gives the builder sole ownership.
+    #[must_use]
+    pub fn build_gesture_detector(self, editor: EditableText) -> EditableText {
+        editor.with_selection_gesture_builder()
+    }
 }
 
 /// Flutter's design-system-neutral text-selection gesture detector.
