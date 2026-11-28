@@ -137,3 +137,36 @@ fn the_nearest_typed_action_can_replace_the_default_arrow_edit() {
     assert_eq!(text.selection(), TextSelection::collapsed(0));
     assert_eq!(text.text(), DOCUMENT);
 }
+
+#[test]
+fn macos_host_selectors_use_the_same_mounted_action_override() {
+    use serde_json::json;
+
+    let mut actions = Actions::<ExtendSelectionByCharacterIntent>::typed();
+    let calls = Rc::new(Cell::new(0));
+    let recorded = calls.clone();
+    actions.register(FORWARD, move || recorded.set(recorded.get() + 1));
+    let text = TextEditingController::with_text(DOCUMENT);
+    let mut runtime = Runtime::new(
+        FocusableActionDetector::new(editor(&text))
+            .actions(Rc::new(actions))
+            .into(),
+    )
+    .unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::MacOs);
+    frame(&mut runtime);
+    let client = runtime.flutter_text_input_configuration().unwrap().0;
+    let data = serde_json::to_vec(&json!({
+        "method": "TextInputClient.performSelectors",
+        "args": [client.get(), ["moveRight:"]],
+    }))
+    .unwrap();
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_selectors_call(&data)
+            .unwrap(),
+        Some(true)
+    );
+    assert_eq!(calls.get(), 1);
+    assert_eq!(text.selection(), TextSelection::collapsed(0));
+}

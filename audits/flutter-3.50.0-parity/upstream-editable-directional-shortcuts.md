@@ -55,3 +55,10 @@ at offset zero. The kind of movement and whether it collapses the
 selection are carried by the intent; ordinary uncustomized controls
 keep the same platform editing logic. Twelve focused native tests
 passed, including default navigation and logical RTL movement.
+
+The authored pinned Mac host probe sends an AppKit `moveRight:`
+selector through the text-input channel. The mounted action can
+override that selector exactly like a keyboard shortcut: it runs once
+and leaves the original selection unchanged. Twelve focused native
+host, readonly, and keyboard cases passed; this authored check adds
+no registration.

@@ -379,6 +379,20 @@ impl Runtime {
         true
     }
 
+    pub(super) fn override_character_action(
+        &self,
+        field: ElementId,
+        intent: TextIntent,
+    ) -> incular_widgets::KeyEventResult {
+        let TextIntent::ExtendByCharacter { forward, collapse } = intent else {
+            return incular_widgets::KeyEventResult::Ignored;
+        };
+        self.tree.dispatch_default_keyboard_intent(
+            field,
+            incular_widgets::ExtendSelectionByCharacterIntent::new(forward, collapse),
+        )
+    }
+
     pub(super) fn run_focused_character_intent(
         &mut self,
         intent: incular_widgets::ExtendSelectionByCharacterIntent,
@@ -411,7 +425,7 @@ impl Runtime {
         field: ElementId,
         controller: &TextEditingController,
         event: &KeyboardEvent,
-        effective_modifiers: Modifiers,
+        intent: Option<TextIntent>,
     ) -> Option<ShortcutOverlays> {
         let editable = self.tree.text_field_is_editable(field);
         // Enter is not a text shortcut (Flutter maps it to
@@ -437,8 +451,7 @@ impl Runtime {
             }
             return Some(ShortcutOverlays::HideAll);
         }
-        let intent = resolve(self.text_shortcut_platform, event.code, effective_modifiers)?;
-        self.run_text_shortcut_intent(field, controller, intent, editable)
+        self.run_text_shortcut_intent(field, controller, intent?, editable)
     }
 
     /// Selection actions from keyboard shortcuts (including platform

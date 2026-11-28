@@ -4499,11 +4499,9 @@ impl Runtime {
         };
         // Flutter's default character-movement action is overridable from
         // the focused context, whether the key binding is custom or built-in.
-        if let Some(TextIntent::ExtendByCharacter { forward, collapse }) =
-            crate::text_shortcuts::resolve(self.text_shortcut_platform, event.code, lock_modes)
-        {
-            let intent = incular_widgets::ExtendSelectionByCharacterIntent::new(forward, collapse);
-            match self.tree.dispatch_default_keyboard_intent(field, intent) {
+        let intent = crate::text_shortcuts::resolve(self.text_shortcut_platform, event.code, lock_modes);
+        if let Some(intent) = intent {
+            match self.override_character_action(field, intent) {
                 KeyEventResult::Handled => {
                     self.frame_requested = true;
                     return true;
@@ -4517,7 +4515,7 @@ impl Runtime {
         let _notifications = previous
             .is_some()
             .then(|| controller.batch_user_edit_notifications());
-        let Some(overlays) = self.run_text_field_key(field, &controller, &event, lock_modes) else {
+        let Some(overlays) = self.run_text_field_key(field, &controller, &event, intent) else {
             return false;
         };
         self.report_editor_selection_delta(
@@ -4873,6 +4871,11 @@ impl Runtime {
                 self.dismiss_transients(incular_widgets::TransientDismissReason::Escape);
             }
             SelectorIntent::Edit(intent) => {
+                let overridden = self.override_character_action(field, intent);
+                if overridden != KeyEventResult::Ignored {
+                    self.frame_requested |= overridden == KeyEventResult::Handled;
+                    return;
+                }
                 self.advance_text_history_clock(self.input_now());
                 let Some(controller) = self.tree.text_controller(field) else {
                     return;
