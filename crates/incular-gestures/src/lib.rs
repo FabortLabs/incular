@@ -119,7 +119,7 @@ pub use pointer_router::{
     WeakPointerRouter,
 };
 pub use raw_key_data::{
-    AndroidRawKeyData, FuchsiaRawKeyData, LinuxKeyToolkit, LinuxRawKeyData, RawKeyPlatformData,
+    AndroidRawKeyData, AppleKeyPlatform, AppleRawKeyData, FuchsiaRawKeyData, LinuxKeyToolkit, LinuxRawKeyData, RawKeyPlatformData,
     RawKeyboardModifier, RawKeyboardSide, WebRawKeyData, WindowsRawKeyData,
 };
 pub use raw::{

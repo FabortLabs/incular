@@ -93,25 +93,27 @@ pub struct LegacyRawKeyboardState {
 
 #[derive(Debug, Default)]
 pub(crate) struct LegacyRawPacketFilter {
-    skipped_windows: BTreeSet<u64>,
+    skipped_by_physical: BTreeSet<u64>,
 }
 
 impl LegacyRawPacketFilter {
     pub(crate) fn admits(&mut self, raw: &RawKeyEvent) -> bool {
-        let Some(RawKeyPlatformData::Windows(data)) = raw.data() else {
-            return true;
-        };
-        let key = data.flutter_physical_key_id();
-        if raw.is_key_down() {
-            if !data.should_dispatch_key_down() {
-                self.skipped_windows.insert(key);
-                return false;
+        let (key, should_dispatch_down) = match raw.data() {
+            Some(RawKeyPlatformData::Windows(data)) => (
+                data.flutter_physical_key_id(),
+                data.should_dispatch_key_down(),
+            ),
+            Some(RawKeyPlatformData::Apple(data)) if data.platform.is_macos() => {
+                (data.flutter_physical_key_id(), data.should_dispatch())
             }
-            self.skipped_windows.remove(&key);
-            true
-        } else {
-            !self.skipped_windows.remove(&key)
+            _ => return true,
+        };
+        if raw.is_key_down() && !should_dispatch_down {
+            self.skipped_by_physical.insert(key);
+            return false;
         }
+        let was_skipped = self.skipped_by_physical.remove(&key);
+        raw.is_key_down() || !was_skipped
     }
 }
 
@@ -144,6 +146,7 @@ impl LegacyRawKeyboardState {
         let key = match raw.data() {
             Some(RawKeyPlatformData::Windows(data)) => data.flutter_physical_key_id(),
             Some(RawKeyPlatformData::Android(data)) => data.flutter_physical_key_id(),
+            Some(RawKeyPlatformData::Apple(data)) => data.flutter_physical_key_id(),
             Some(RawKeyPlatformData::Linux(data)) => data.flutter_physical_key_id(),
             _ => return true,
         };
@@ -159,6 +162,9 @@ impl LegacyRawKeyboardState {
         let Some(data) = event.data() else { return };
         let (physical, logical) = match data {
             RawKeyPlatformData::Android(data) => {
+                (data.flutter_physical_key_id(), data.flutter_logical_key())
+            }
+            RawKeyPlatformData::Apple(data) => {
                 (data.flutter_physical_key_id(), data.flutter_logical_key())
             }
             RawKeyPlatformData::Fuchsia(data) => {
@@ -215,6 +221,10 @@ impl LegacyRawKeyboardState {
                     self.set_modifier(right, matches!(side, Some(S::Right | S::All)));
                 }
 
+                RawKeyPlatformData::Apple(data) => {
+                    self.set_modifier(left, data.is_modifier_pressed(modifier, S::Left));
+                    self.set_modifier(right, data.is_modifier_pressed(modifier, S::Right));
+                }
                 RawKeyPlatformData::Fuchsia(data) => {
                     self.set_modifier(left, data.is_modifier_pressed(modifier, S::Left));
                     self.set_modifier(right, data.is_modifier_pressed(modifier, S::Right));
@@ -257,6 +267,9 @@ impl LegacyRawKeyboardState {
                     self.set_modifier((key, default), data.is_modifier_pressed(modifier, S::Any));
                 }
 
+                RawKeyPlatformData::Apple(data) => {
+                    self.set_modifier((key, default), data.is_modifier_pressed(modifier, S::Any));
+                }
                 RawKeyPlatformData::Fuchsia(data) => {
                     self.set_modifier((key, default), data.is_modifier_pressed(modifier, S::Any));
                 }
@@ -300,6 +313,16 @@ impl LegacyRawKeyboardState {
                     && let Some(default) = primary_modifier
                 {
                     self.pressed.entry(physical).or_insert(default);
+                }
+            }
+            RawKeyPlatformData::Apple(data) => {
+                if !data.platform.is_macos() {
+                    self.pressed.remove(&usb(P::FN));
+                    if event.is_key_down()
+                        && let Some(default) = primary_modifier
+                    {
+                        self.pressed.entry(physical).or_insert(default);
+                    }
                 }
             }
             RawKeyPlatformData::Fuchsia(_) => {}
@@ -365,6 +388,7 @@ impl LegacyRawKeyboardState {
                 raw.data(),
                 Some(
                     RawKeyPlatformData::Android(_)
+                        | RawKeyPlatformData::Apple(_)
                         | RawKeyPlatformData::Fuchsia(_)
                         | RawKeyPlatformData::Linux(_)
                         | RawKeyPlatformData::Web(_)

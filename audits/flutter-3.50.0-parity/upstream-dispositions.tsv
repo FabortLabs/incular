@@ -4599,3 +4599,25 @@ packages/flutter/test/services/raw_keyboard_test.dart	2843	Code points with two 
 packages/flutter/test/services/raw_keyboard_test.dart	2876	Control keyboard keys are correctly translated	paired-match	upstream-linux-raw-keyboard.md#toolkit-identities-and-modifier-masks
 packages/flutter/test/services/raw_keyboard_test.dart	2892	Modifier keyboard keys are correctly translated	paired-match	upstream-linux-raw-keyboard.md#toolkit-identities-and-modifier-masks
 packages/flutter/test/services/raw_keyboard_test.dart	2907	Prioritize logical key from specifiedLogicalKey	paired-match	upstream-linux-raw-keyboard.md#toolkit-identities-and-modifier-masks
+packages/flutter/test/services/raw_keyboard_test.dart	214	keysPressed modifiers are synchronized with key events on macOS	paired-match	upstream-apple-raw-keyboard.md#runtime-held-keys
+packages/flutter/test/services/raw_keyboard_test.dart	245	keysPressed modifiers are synchronized with key events on iOS	paired-match	upstream-apple-raw-keyboard.md#runtime-held-keys
+packages/flutter/test/services/raw_keyboard_test.dart	633	sided modifiers without a side set return all sides on macOS	paired-match	upstream-apple-raw-keyboard.md#runtime-held-keys
+packages/flutter/test/services/raw_keyboard_test.dart	671	sided modifiers without a side set return all sides on iOS	paired-match	upstream-apple-raw-keyboard.md#runtime-held-keys
+packages/flutter/test/services/raw_keyboard_test.dart	901	Allows inconsistent modifier for iOS	paired-match	upstream-apple-raw-keyboard.md#runtime-held-keys
+packages/flutter/test/services/raw_keyboard_test.dart	1737	modifier keys are recognized individually	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	1767	modifier keys are recognized when combined	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	1809	Lower letter keys are correctly translated	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	1824	Upper letter keys are correctly translated	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	1839	Control keyboard keys are correctly translated	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	1854	Modifier keyboard keys are correctly translated	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	1869	Unprintable keyboard keys are correctly translated	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	1883	Multi-char keyboard keys are correctly translated	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	1897	Prioritize logical key from specifiedLogicalKey	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	1928	data.equality	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2010	modifier keys are recognized individually	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2040	modifier keys are recognized when combined	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2082	Printable keyboard keys are correctly translated	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2098	Control keyboard keys are correctly translated	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2113	Modifier keyboard keys are correctly translated	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2128	Unprintable keyboard keys are correctly translated	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2158	data.equality	paired-match	upstream-apple-raw-keyboard.md#key-identity-label-and-modifiers

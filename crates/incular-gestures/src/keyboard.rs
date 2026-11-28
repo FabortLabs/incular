@@ -93,6 +93,7 @@ impl RawKeyEvent {
             Some(crate::RawKeyPlatformData::Android(_)) => {
                 self.android_character.as_deref().map(Cow::Borrowed)
             }
+            Some(crate::RawKeyPlatformData::Apple(data)) => data.character().map(Cow::Borrowed),
             Some(crate::RawKeyPlatformData::Fuchsia(data)) => {
                 data.key_label().map(|ch| Cow::Owned(ch.to_string()))
             }

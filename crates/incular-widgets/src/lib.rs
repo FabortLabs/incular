@@ -221,7 +221,7 @@ pub use explicit_animations::{
 pub use fade_in_image::FadeInImage;
 pub use flutter_logo::{FlutterLogo, FlutterLogoLayout, FlutterLogoStyle};
 pub use incular_gestures::{
-    AndroidRawKeyData, FocusExtent, FocusKeyEventHandler, FocusRawKeyEventHandler, FocusRect,
+    AndroidRawKeyData, AppleKeyPlatform, AppleRawKeyData, FocusExtent, FocusKeyEventHandler, FocusRawKeyEventHandler, FocusRect,
     FuchsiaRawKeyData, LinuxKeyToolkit, LinuxRawKeyData, RawKeyEvent, RawKeyPlatformData,
     RawKeyboardModifier, RawKeyboardSide, TapCallbackError, TapCallbackErrorHandler, TapCallbackKind,
     TapCancelReason, TraversalDirection, TraversalEdgeBehavior, WebRawKeyData, WindowsRawKeyData,

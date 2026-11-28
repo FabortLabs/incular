@@ -19,11 +19,15 @@ pub use android::AndroidRawKeyData;
 #[path = "raw_key_linux.rs"]
 mod linux;
 pub use linux::{LinuxKeyToolkit, LinuxRawKeyData};
+#[path = "raw_key_apple.rs"]
+mod apple;
+pub use apple::{AppleKeyPlatform, AppleRawKeyData};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RawKeyPlatformData {
     Android(AndroidRawKeyData),
+    Apple(AppleRawKeyData),
     Fuchsia(FuchsiaRawKeyData),
     Linux(LinuxRawKeyData),
     Web(WebRawKeyData),
