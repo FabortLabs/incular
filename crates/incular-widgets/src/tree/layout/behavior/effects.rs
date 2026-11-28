@@ -79,12 +79,23 @@ impl WidgetTree {
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
+            RenderKind::BackdropFilter { .. } => {
+                let (size, baseline, offsets) = if let Some(&child) = children.first() {
+                    self.layout_render(child, constraints)?;
+                    let child = self.render_live(child, "backdrop child must remain live");
+                    (child.size, child.baseline, ChildOffsets::One(Offset::ZERO))
+                } else {
+                    (constraints.smallest(), None, ChildOffsets::default())
+                };
+                self.render_live_mut(id, "backdrop render must remain live")
+                    .baseline = baseline;
+                (constraints.constrain(size), offsets)
+            }
             RenderKind::Blur { .. }
             | RenderKind::DropShadow { .. }
             | RenderKind::ColorFiltered { .. }
             | RenderKind::Blend { .. }
             | RenderKind::ShaderMask { .. }
-            | RenderKind::BackdropFilter { .. }
             | RenderKind::AnnotatedRegion { .. }
             | RenderKind::Leader { .. }
             | RenderKind::Follower { .. } => {

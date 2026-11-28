@@ -16,6 +16,10 @@ pub(super) fn forwards_intrinsic_child(kind: &RenderKind) -> bool {
         RenderKind::Colored { .. }
             | RenderKind::Decorated { desired: None, .. }
             | RenderKind::Opacity { .. }
+            | RenderKind::BackdropFilter { .. }
+            | RenderKind::ProxyLayout {
+                mode: ChildLayoutMode::SemanticAnnotation,
+            }
             | RenderKind::ClipRect { .. }
             | RenderKind::Gesture
             | RenderKind::RepaintBoundary
