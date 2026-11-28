@@ -164,6 +164,7 @@ pub enum FlutterTextInputControlsError {
 struct Attachment {
     id: TextInputClientId,
     client: Box<dyn Fn(FlutterTextInputClientEvent)>,
+    configuration: FlutterTextInputConfiguration,
     geometry: GeometryCache,
     editing: Option<AutofillEditingValue>,
     style: Option<FlutterTextInputStyle>,
@@ -277,6 +278,7 @@ impl FlutterTextInputControls {
         self.attached = Some(Attachment {
             id,
             client: Box::new(client),
+            configuration: configuration.clone(),
             geometry: GeometryCache::default(),
             editing: None,
             style: None,
@@ -334,6 +336,9 @@ impl FlutterTextInputControls {
         let attachment = self.attached.as_mut().expect("validated attachment");
         attachment.geometry.record(&update);
         match &update {
+            FlutterTextInputControlUpdate::Configuration(configuration) => {
+                attachment.configuration = configuration.clone();
+            }
             FlutterTextInputControlUpdate::EditingState(value) => {
                 attachment.editing = Some(value.clone())
             }
@@ -343,6 +348,22 @@ impl FlutterTextInputControls {
         }
         self.forward(update, (method, arguments));
         Ok(true)
+    }
+
+    /// Refreshes the current connection's configuration without reattaching
+    /// the client or showing the keyboard. Repeated configurations are silent.
+    pub fn publish_configuration(
+        &mut self,
+        id: TextInputClientId,
+        configuration: FlutterTextInputConfiguration,
+    ) -> Result<bool, FlutterTextInputControlsError> {
+        let Some(attachment) = self.attached.as_ref().filter(|attached| attached.id == id) else {
+            return Ok(false);
+        };
+        if attachment.configuration == configuration {
+            return Ok(false);
+        }
+        self.update(id, FlutterTextInputControlUpdate::Configuration(configuration))
     }
 
     /// Publishes changed character bounds without copying a settled snapshot.

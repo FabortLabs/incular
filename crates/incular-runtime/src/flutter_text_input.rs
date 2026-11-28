@@ -390,6 +390,24 @@ impl crate::Runtime {
         ))
     }
 
+    /// Publishes the mounted editor's configuration to a host that already
+    /// attached its client. Supply the same host overrides used on attachment,
+    /// such as the delta model or scoped autofill configuration.
+    pub fn publish_flutter_text_input_configuration(
+        &self,
+        controls: &mut incular_platform::FlutterTextInputControls,
+        apply_host_options: impl FnOnce(&mut FlutterTextInputConfiguration),
+    ) -> Result<bool, incular_platform::FlutterTextInputControlsError> {
+        let Some((client, mut configuration)) = self.flutter_text_input_configuration() else {
+            return Ok(false);
+        };
+        if !controls.is_attached(client) {
+            return Ok(false);
+        }
+        apply_host_options(&mut configuration);
+        controls.publish_configuration(client, configuration)
+    }
+
     /// Sends resolved style to an attached Flutter text input control after
     /// layout. A host can call this on each frame, including when only a
     /// MediaQuery preference changed; identical snapshots do not resend.
