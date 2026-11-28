@@ -169,3 +169,67 @@ fn layout_uses_configured_fixed_or_viewport_extent_for_offsets_and_content() {
         assert_eq!(layout.children[0].extent, item_extent);
     }
 }
+
+#[test]
+fn fixed_extent_child_query_keeps_flutter_double_precision_at_the_edges() {
+    use incular_scroll::FixedExtentSliverMetrics as Metrics;
+    const GENERIC: f64 = 600.;
+    const SCREEN: f64 = 411.42857142857144;
+    for (end, extent, last) in [
+        (1234., 0., 0),
+        (0., GENERIC, 0),
+        (600., GENERIC, 0),
+        (601., GENERIC, 1),
+        (GENERIC + 1e-10, GENERIC, 1),
+        (2700., GENERIC, 4),
+        (414. * 6., 414., 5),
+        (SCREEN * 6. + 1e-11, SCREEN, 5),
+        (GENERIC + 1e-11, GENERIC, 0),
+    ] {
+        assert_eq!(
+            Metrics::new(12, extent).max_child_index(end),
+            last,
+            "extent={extent}, end={end}"
+        );
+    }
+    let metrics = Metrics::new(3, GENERIC);
+    assert_eq!(metrics.min_child_index(1199.999999999998), 2);
+    assert_eq!(metrics.min_child_index(1199.9999999), 1);
+}
+
+#[test]
+fn descriptors_expose_configured_index_offset_and_total_without_a_caller_extent() {
+    let fill = SliverFillViewport::new((0..3).map(|_| SizedBox::shrink()));
+    let fixed = SliverFixedExtentList::new(3, 30., |_| SizedBox::shrink());
+    for (metrics, scroll, expected) in [
+        (fill.extent_metrics(600.), 1200., (600., 2, 1, 6000., 1800.)),
+        (fill.extent_metrics(600.), 0., (600., 0, 0, 6000., 1800.)),
+        (fixed.extent_metrics(), 45., (30., 1, 1, 300., 90.)),
+        (fixed.extent_metrics(), 0., (30., 0, 0, 300., 90.)),
+    ] {
+        assert_eq!(
+            (
+                metrics.item_extent(),
+                metrics.min_child_index(scroll),
+                metrics.max_child_index(scroll),
+                metrics.index_to_layout_offset(10),
+                metrics.max_scroll_extent()
+            ),
+            expected
+        );
+    }
+
+    let fractional = SliverFillViewport::builder(3, |_| SizedBox::shrink())
+        .viewport_fraction(0.5)
+        .fallback_extent(222.);
+    let regular = fractional.extent_metrics(600.);
+    assert_eq!(
+        (regular.item_extent(), regular.max_scroll_extent()),
+        (300., 900.)
+    );
+    let unbounded = fractional.extent_metrics(f32::INFINITY);
+    assert_eq!(
+        (unbounded.item_extent(), unbounded.max_scroll_extent()),
+        (111., 333.)
+    );
+}

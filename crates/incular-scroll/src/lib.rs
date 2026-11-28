@@ -7,6 +7,7 @@ mod ballistic;
 mod controller;
 mod coordinator;
 mod extent_index;
+mod fixed_extent;
 mod metrics;
 mod notifications;
 mod physics;
@@ -29,6 +30,7 @@ pub use ballistic::{
 pub use controller::{ScrollAnimation, ScrollController, page_for_pixels, pixels_for_page};
 pub use coordinator::{NestedScrollCoordinator, NestedScrollViewCoordinator, ScrollDriveDelegate};
 pub use extent_index::{ExtentIndexMetrics, MeasuredExtentIndex};
+pub use fixed_extent::FixedExtentSliverMetrics;
 pub use metrics::{PageMetrics, PageMetricsUpdate, ScrollMetrics};
 pub use notifications::{
     ScrollNotification, ScrollNotificationSubscription, ScrollNotificationType,

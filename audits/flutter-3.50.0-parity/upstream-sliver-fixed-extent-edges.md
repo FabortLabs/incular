@@ -14,15 +14,20 @@ compares materialization, retained paint, and the real layout protocol.
   The exact 600 px end selects index 0, 601 selects 1, 2700 selects 4, and
   six exact 414 px items select index 5. The mounted layout verifies
   offsets and sizes from the configured extent.
-- Lines 55, 73, 98, 107: the Dart calculator returns index zero even at
-  zero-length input, or uses sub-ULP double deltas not representable by
-  the native f32 coordinates. Incular compares the retained half-open
-  interval directly, including one and two representable steps above
-  an edge; these are not the same direct method or f64 inputs.
-- Lines 150, 194, 238, 283: the retained slivers use their own 600 px or
-  30 px extent at both initial offsets, with exact layout positions
-  and 1800 px or 90 px total extent. The deprecated redundant extent
-  arguments do not exist in Incular.
+- Lines 55, 73, 98, 107: the direct double-precision maximum
+  child query returns zero for the zero endpoint and distinguishes
+  `600 + 1e-10` (index 1) from `600 + 1e-11` (index 0). An extent of
+  `411.42857142857144` with the original six-item offset plus `1e-11`
+  still returns 5. Both earliest and latest indices use the pinned
+  strict pixel threshold. The active f32 cache layout continues to
+  treat one representable pixel step as the rounding tolerance.
+- Lines 150, 194, 238, 283: public metrics from both real sliver
+  descriptors agree with the retained layout. The query uses the
+  configured item extent, including min/max index at 0, 45 and 1200
+  pixels, index-10 offset and total extent. There is no deprecated
+  redundant extent argument in the Rust API. The mounted renderer
+  also uses these metrics for total extent, child offsets, and
+  the cache interval, without changing the compositor coordinate type.
 - Lines 328, 349, 381: the direct garbage-count query and a custom
   adaptor overriding the total extent (invalid nonmultiple and valid
   near-multiple) remain reference-only.

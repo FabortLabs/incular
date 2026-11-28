@@ -2,6 +2,7 @@ use super::sliver_descriptors::CrossAxisGroupRenderSliver;
 use super::sliver_fade::AnimatedOpacityRenderSliver;
 use super::*;
 use incular_core::finite_non_negative;
+use incular_scroll::FixedExtentSliverMetrics;
 use std::any::Any;
 
 pub(super) struct BoxRenderSliver {
@@ -133,41 +134,8 @@ impl RenderSliver for BoxRenderSliver {
     }
 }
 
-/// Flutter snaps boundary indices when the reconstructed coordinate only
-/// differs by float rounding. Layout coordinates here are f32, so use
-/// one representable coordinate step rather than Dart's double epsilon.
-fn fixed_extent_boundary(offset: f32, item_extent: f32) -> f64 {
-    let extent = f64::from(item_extent);
-    let coordinate = f64::from(offset);
-    let ratio = coordinate / extent;
-    let nearest = ratio.round();
-    let tolerance = f64::from(offset.next_up()) - coordinate;
-    if (coordinate - nearest * extent).abs() <= tolerance {
-        nearest
-    } else {
-        ratio
-    }
-}
-
-/// Exclusive materialization interval for a fixed-size child sequence.
-fn fixed_extent_cache_range(
-    cache_start: f32,
-    cache_end: f32,
-    item_extent: f32,
-    count: usize,
-) -> std::ops::Range<usize> {
-    let (start, end) = if item_extent > 0. {
-        (
-            fixed_extent_boundary(cache_start, item_extent).floor() as usize,
-            fixed_extent_boundary(cache_end, item_extent).ceil() as usize,
-        )
-    } else {
-        // Layout the first zero-sized child without scanning the other
-        // children that all share that same offset.
-        (0, 1)
-    };
-    let start = start.min(count);
-    start..end.min(count).max(start)
+pub(super) fn fill_viewport_extent(available: f32, fallback: f32) -> f32 {
+    if available.is_finite() { available.max(0.) } else { fallback }
 }
 
 fn set_cached_keep_alive(
@@ -288,11 +256,11 @@ impl RenderSliver for FixedExtentRenderSliver {
     }
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
-        let total = self.item_count as f32 * self.item_extent;
+        let metrics = FixedExtentSliverMetrics::new(self.item_count, f64::from(self.item_extent));
+        let total = metrics.max_scroll_extent() as f32;
         let cache_start = (constraints.scroll_offset + constraints.cache_origin).max(0.);
         let cache_end = (cache_start + constraints.remaining_cache_extent).max(cache_start);
-        let range =
-            fixed_extent_cache_range(cache_start, cache_end, self.item_extent, self.item_count);
+        let range = metrics.cache_range_f32(cache_start, cache_end);
         let parked = retain_fixed_cache(&mut self.widgets, &range, self.item_count);
         let children = fixed_cache_slots(range, &parked)
             .map(|(index, placement)| {
@@ -301,7 +269,7 @@ impl RenderSliver for FixedExtentRenderSliver {
                     id: SliverChildId::list_item(index),
                     widget,
                     semantic_index: Some(index),
-                    offset: index as f32 * self.item_extent,
+                    offset: metrics.index_to_layout_offset(index) as f32,
                     cross_offset: 0.,
                     constraints: sliver_child_constraints(
                         constraints.axis,
@@ -1978,12 +1946,10 @@ impl RenderSliver for ViewportExtentRenderSliver {
     }
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
-        let viewport_extent = if constraints.viewport_main_axis_extent.is_finite() {
-            constraints.viewport_main_axis_extent.max(0.)
-        } else {
-            self.fallback_extent
-        };
+        let viewport_extent =
+            fill_viewport_extent(constraints.viewport_main_axis_extent, self.fallback_extent);
         let extent = (viewport_extent * self.viewport_fraction).max(0.);
+        let metrics = FixedExtentSliverMetrics::new(self.item_count, f64::from(extent));
         // Flutter `_SliverFractionalPadding`: with `padEnds`, the first and
         // last pages are inset by half the space a page leaves unused, so
         // they can be centered.
@@ -1992,7 +1958,7 @@ impl RenderSliver for ViewportExtentRenderSliver {
         } else {
             0.
         };
-        let total = self.item_count as f32 * extent + 2. * pad;
+        let total = metrics.max_scroll_extent() as f32 + 2. * pad;
         let visible_start = (constraints.scroll_offset - pad).max(0.);
         let visible_end = visible_start + viewport_extent;
         let cache_start = (constraints.scroll_offset + constraints.cache_origin - pad).max(0.);
@@ -2001,11 +1967,11 @@ impl RenderSliver for ViewportExtentRenderSliver {
             + constraints.remaining_cache_extent
             - pad)
             .max(cache_start);
-        let range = fixed_extent_cache_range(cache_start, cache_end, extent, self.item_count);
+        let range = metrics.cache_range_f32(cache_start, cache_end);
         let parked = retain_fixed_cache(&mut self.widgets, &range, self.item_count);
         let children = fixed_cache_slots(range, &parked)
             .map(|(index, placement)| {
-                let start = index as f32 * extent;
+                let start = metrics.index_to_layout_offset(index) as f32;
                 let mut widget = self.child_widget(index);
                 if !self.allow_implicit_scrolling
                     && (start >= visible_end || start + extent <= visible_start)

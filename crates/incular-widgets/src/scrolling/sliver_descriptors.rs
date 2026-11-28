@@ -1,5 +1,7 @@
+use super::layout::fill_viewport_extent;
 use super::*;
 use incular_core::finite_non_negative;
+use incular_scroll::FixedExtentSliverMetrics;
 
 /// Unified sliver protocol. A sliver creates a retained render-sliver node.
 pub trait Sliver {
@@ -1180,6 +1182,12 @@ impl SliverFixedExtentList {
             builder: Rc::new(move |i| builder(i).into()),
         }
     }
+    /// Returns index and extent queries using this list's own item extent.
+    #[must_use]
+    pub fn extent_metrics(&self) -> FixedExtentSliverMetrics {
+        FixedExtentSliverMetrics::new(self.item_count, f64::from(self.item_extent))
+    }
+
 }
 
 impl Sliver for SliverFixedExtentList {
@@ -1488,6 +1496,17 @@ impl SliverFillViewport {
     #[must_use]
     pub fn viewport_fraction_value(&self) -> f32 {
         self.viewport_fraction
+    }
+
+    /// Returns page index and extent queries for the supplied viewport,
+    /// excluding the optional fractional padding around the page sequence.
+    #[must_use]
+    pub fn extent_metrics(&self, viewport_main_axis_extent: f32) -> FixedExtentSliverMetrics {
+        let viewport_extent = fill_viewport_extent(viewport_main_axis_extent, self.fallback_extent);
+        FixedExtentSliverMetrics::new(
+            self.item_count.unwrap_or(self.children.len()),
+            f64::from(viewport_extent * self.viewport_fraction),
+        )
     }
 
     /// Expose cached offscreen pages to accessibility when true (default).

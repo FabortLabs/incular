@@ -36,7 +36,8 @@ pub mod scroll {
         ShowOnScreen,
     };
     pub use incular_scroll::{
-        BoundaryPhysics, ClampingScrollPhysics, DragStartBehavior, PageMetrics, PageMetricsUpdate,
+        BoundaryPhysics, ClampingScrollPhysics, DragStartBehavior, FixedExtentSliverMetrics,
+        PageMetrics, PageMetricsUpdate,
         ScrollAnimation, ScrollAnimationCompletion,
         ScrollController, ScrollMetrics, ScrollNotification, ScrollNotificationSubscription,
         ScrollNotificationType, ScrollPhysics, ScrollViewKeyboardDismissBehavior, Scrollability,
