@@ -254,3 +254,14 @@ the exact same retained overlay across subsequent frames. The same
 test fixture still verifies this during a handwriting interaction.
 All seven focused binding and five font-pinned keyboard geometry tests
 passed.
+
+## Editor activation keys do not activate ancestor controls
+
+Pinned `widgets/editable_text_test.dart:15021` passed. The native
+mounted check initially fired the enclosing ActivateIntent action
+when the focused target was an editor. EditableText now shadows both
+generic and button activation while leaving Space on the native text
+input path and preserving desktop newline input from Enter and
+keypad Enter. An outer activation is never invoked for those editor
+inputs, and ordinary focused controls still receive activation.
+All four application activation and 19 editing shortcut tests passed.

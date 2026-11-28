@@ -394,7 +394,7 @@ impl Runtime {
         // `DoNothingAndStopPropagationTextIntent` and relies on the IME's
         // newline/submit action); desktop key events have no IME action, so
         // the key itself performs the field's input action.
-        if event.code == Code::Enter {
+        if matches!(event.code, Code::Enter | Code::NumpadEnter) {
             if !editable {
                 return None;
             }

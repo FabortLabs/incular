@@ -766,6 +766,10 @@ impl From<FocusScope> for Widget {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ActivateIntent;
 
+/// Activates a button rather than a general focused control.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ButtonActivateIntent;
+
 type RequestFocusCallback = Rc<dyn Fn(&FocusNode)>;
 
 /// Requests focus for a specific node. The node identifies the command for

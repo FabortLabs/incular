@@ -4197,3 +4197,4 @@ packages/flutter/test/widgets/editable_text_test.dart	15679	contextMenuBuilder c
 packages/flutter/test/widgets/editable_text_test.dart	15746	contextMenuBuilder can be updated with inline lambda without crash	paired-match	upstream-editable-scroll-toolbar.md#custom-builders-and-retained-menu-content
 packages/flutter/test/widgets/editable_text_test.dart	15069	can paste and remove field	paired-match	upstream-editable-scroll-toolbar.md#cut-and-paste-may-remove-their-editor
 packages/flutter/test/widgets/editable_text_test.dart	15120	can cut and remove field	paired-match	upstream-editable-scroll-toolbar.md#cut-and-paste-may-remove-their-editor
+packages/flutter/test/widgets/editable_text_test.dart	15021	EditableText consumes ActivateIntent and ButtonActivateIntent	paired-match	upstream-editable-defaults.md#editor-activation-keys-do-not-activate-ancestor-controls

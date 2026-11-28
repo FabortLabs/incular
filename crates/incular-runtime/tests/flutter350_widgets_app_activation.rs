@@ -108,3 +108,75 @@ fn logical_native_activation_distinguishes_modifier_chords_and_supports_select()
         assert!(checked.get());
     }
 }
+
+#[test]
+fn editable_text_blocks_both_ancestor_activations_but_keeps_its_own_input() {
+    use incular_config::TextDirection;
+    use incular_core::InputEvent;
+    use incular_text::TextEditingController;
+    use incular_widgets::{
+        ActionScope, ButtonActivateIntent, EditableText, FocusNode, ShortcutScope,
+    };
+
+    let text = TextEditingController::new();
+    let field_focus = FocusNode::new();
+    let regular = Rc::new(Cell::new(0));
+    let button = Rc::new(Cell::new(0));
+    let mut regular_actions = Actions::<ActivateIntent>::typed();
+    regular_actions.register(ActivateIntent, {
+        let regular = regular.clone();
+        move || regular.set(regular.get() + 1)
+    });
+    let mut button_action = Actions::<ButtonActivateIntent>::typed();
+    button_action.register(ButtonActivateIntent, {
+        let button = button.clone();
+        move || button.set(button.get() + 1)
+    });
+    let mut button_shortcuts = Shortcuts::<ButtonActivateIntent>::typed();
+    button_shortcuts.bind_activator(
+        SingleActivator::new(KeyboardKey::Named(NamedKey::Enter), Modifiers::empty()),
+        ButtonActivateIntent,
+    );
+    let editor = Widget::from(
+        EditableText::new(text.clone())
+            .focus_node(field_focus.clone())
+            .autofocus(true)
+            .text_direction(TextDirection::Ltr)
+            .max_lines(None),
+    );
+    let editor = Widget::from(ShortcutScope::new(
+        Rc::new(button_shortcuts),
+        ActionScope::new(
+            Rc::new(regular_actions),
+            ActionScope::new(Rc::new(button_action), editor),
+        ),
+    ));
+    let mut runtime = mount(WidgetsApp::empty().builder(move |_| editor.clone()));
+    runtime.set_text_shortcut_platform(incular_runtime::TextShortcutPlatform::Linux);
+    assert!(field_focus.has_primary_focus());
+    let _ = press(&mut runtime, space(), Code::Space, Modifiers::empty());
+    assert_eq!(regular.get(), 0);
+    assert_eq!(button.get(), 0);
+    let _ = runtime.handle_input(InputEvent::Text(" ".into()));
+    assert_eq!(text.text(), " ");
+
+    assert!(press(
+        &mut runtime,
+        KeyboardKey::Named(NamedKey::Enter),
+        Code::Enter,
+        Modifiers::empty()
+    ));
+    assert_eq!(regular.get(), 0);
+    assert_eq!(button.get(), 0);
+    assert_eq!(text.text(), " \n");
+    assert!(press(
+        &mut runtime,
+        KeyboardKey::Named(NamedKey::Enter),
+        Code::NumpadEnter,
+        Modifiers::empty()
+    ));
+    assert_eq!(regular.get(), 0);
+    assert_eq!(button.get(), 0);
+    assert_eq!(text.text(), " \n\n");
+    assert!(field_focus.has_primary_focus());
+}

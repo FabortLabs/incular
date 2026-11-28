@@ -1397,9 +1397,21 @@ impl WidgetTree {
                             callback();
                             KeyEventResult::Handled
                         }
-                        ShortcutMatch::Intent(intent) => focused.map_or(KeyEventResult::Ignored, |focused| {
+                        ShortcutMatch::Intent(intent) => {
+                            let Some(focused) = focused else {
+                                return KeyEventResult::Ignored;
+                            };
+                            if self.is_text_field(focused)
+                                && (intent.downcast_command::<crate::ActivateIntent>().is_some()
+                                    || intent.downcast_command::<crate::ButtonActivateIntent>().is_some())
+                            {
+                                // EditableText shadows these two intents.
+                                // Stop the ancestor walk, but let the key
+                                // continue to the native editing/IME path.
+                                return KeyEventResult::Ignored;
+                            }
                             self.dispatch_shortcut_action(focused, intent)
-                        }),
+                        }
                     };
                     if result != KeyEventResult::Ignored {
                         return result;

@@ -229,7 +229,7 @@ pub use incular_gestures::{
 #[doc(hidden)]
 pub use incular_gestures::RawKeyDelivery;
 pub use focus_keyboard::{
-    ActivateIntent,
+    ActivateIntent, ButtonActivateIntent,
     Action, ActionContext, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase, ActionListener,
     ActionLookupError, ActionOutput, ActionResult, ActionScope, Actions, CallbackAction, CallbackShortcuts,
     Command, CommandId, CustomFocusTraversalPolicy, DirectionalFocusIntent, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
