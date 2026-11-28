@@ -478,7 +478,7 @@ fn scale_transition_filter_quality_applies_only_while_the_scale_animates() {
         .expect("compositor update");
     assert_eq!(
         matrix_filter_samplings(&tree.paint()),
-        [ImageSampling::Linear]
+        [ImageSampling::LinearMipmap]
     );
     for step in 1..=4 {
         let _ = tree

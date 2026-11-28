@@ -1024,9 +1024,10 @@ impl WgpuRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(match params.sampling_mode {
-                        2 => &self.tiled_blur_samplers[0],
-                        3 => &self.tiled_blur_samplers[1],
+                    resource: wgpu::BindingResource::Sampler(match (params.mode, params.sampling_mode) {
+                        (6, _) => &self.matrix_mip_sampler,
+                        (_, 2) => &self.tiled_blur_samplers[0],
+                        (_, 3) => &self.tiled_blur_samplers[1],
                         _ => &self.blur_sampler,
                     }),
                 },

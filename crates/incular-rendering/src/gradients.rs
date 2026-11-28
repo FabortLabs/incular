@@ -579,6 +579,16 @@ impl FilterQuality {
             Self::Low | Self::Medium | Self::High => ImageSampling::Linear,
         }
     }
+
+    /// Sampling for a transformed, retained raster source. Medium differs
+    /// from Low when an output texel covers several source texels.
+    #[must_use]
+    pub const fn matrix_sampling(self) -> ImageSampling {
+        match self {
+            Self::Medium => ImageSampling::LinearMipmap,
+            quality => quality.sampling(),
+        }
+    }
 }
 
 impl From<FilterQuality> for ImageSampling {

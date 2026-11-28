@@ -84,6 +84,7 @@ pub struct WgpuRenderer {
     pub(super) composite_sampler: wgpu::Sampler,
     pub(super) blur_bind_group_layout: wgpu::BindGroupLayout,
     pub(super) blur_sampler: wgpu::Sampler,
+    pub(super) matrix_mip_sampler: wgpu::Sampler,
     pub(super) tiled_blur_samplers: [wgpu::Sampler; 2],
     /// [`EFFECT_PARAM_SLOTS`] effect-pass parameter blocks,
     /// `effect_param_stride` bytes apart, bound with a dynamic offset.
@@ -368,6 +369,7 @@ impl WgpuRenderer {
             composite_sampler: pipelines.composite_sampler.clone(),
             blur_bind_group_layout: pipelines.blur_bind_group_layout.clone(),
             blur_sampler: pipelines.blur_sampler.clone(),
+            matrix_mip_sampler: pipelines.matrix_mip_sampler.clone(),
             tiled_blur_samplers: pipelines.tiled_blur_samplers.clone(),
             blur_params,
             effect_param_stride,

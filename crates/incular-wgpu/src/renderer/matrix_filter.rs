@@ -77,6 +77,13 @@ impl WgpuRenderer {
         let mode = match filter.sampling {
             incular_painting::ImageSampling::Linear => 2,
             incular_painting::ImageSampling::Nearest => 4,
+            incular_painting::ImageSampling::LinearMipmap => {
+                if cfg!(incular_d3d11) {
+                    2
+                } else {
+                    6
+                }
+            }
         };
         self.render_matrix_filter(
             MatrixResample {
@@ -154,6 +161,18 @@ impl WgpuRenderer {
             .clone();
         let mut weights = [0.; BLUR_WEIGHT_SLOTS];
         weights[..6].copy_from_slice(&coefficients);
+        #[cfg(not(incular_d3d11))]
+        let source_view = if mode == 6 {
+            let lod = matrix_mip_level(coefficients, source.width, source.height);
+            weights[6] = lod;
+            if lod > 0. {
+                self.matrix_mip_source(layer, source, lod.ceil() as u32)?
+            } else {
+                source_view
+            }
+        } else {
+            source_view
+        };
         let params = GpuBlurParams {
             source_origin: [0., 0.],
             source_size: [source.width as f32, source.height as f32],
@@ -196,6 +215,84 @@ impl WgpuRenderer {
         self.counters.matrix_filter_passes += 1;
         Ok(())
     }
+
+    #[cfg(not(incular_d3d11))]
+    fn matrix_mip_source(
+        &mut self,
+        layer: incular_painting::LayerId,
+        source: CachedSource,
+        levels_above_base: u32,
+    ) -> Result<wgpu::TextureView, RendererError> {
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("incular matrix filter mip source"),
+            size: wgpu::Extent3d {
+                width: source.width,
+                height: source.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: levels_above_base + 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: self.window_gpu.config.format,
+            usage: wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let source_texture = self.offscreen_cache[&layer].target._color.clone();
+        let mut passes = self.begin_effect_passes("incular matrix mip chain");
+        passes.encoder.copy_texture_to_texture(
+            source_texture.as_image_copy(),
+            texture.as_image_copy(),
+            wgpu::Extent3d {
+                width: source.width,
+                height: source.height,
+                depth_or_array_layers: 1,
+            },
+        );
+        let level_view = |level| {
+            texture.create_view(&wgpu::TextureViewDescriptor {
+                base_mip_level: level,
+                mip_level_count: Some(1),
+                ..Default::default()
+            })
+        };
+        let mut previous = level_view(0);
+        for level in 1..=levels_above_base {
+            let next = level_view(level);
+            let width = |shift: u32| (source.width >> shift).max(1);
+            let height = |shift: u32| (source.height >> shift).max(1);
+            let params = GpuBlurParams {
+                source_origin: [0.; 2],
+                source_size: [width(level - 1) as f32, height(level - 1) as f32],
+                output_size: [width(level) as f32, height(level) as f32],
+                direction: [1.; 2],
+                radius: 0,
+                mode: 7,
+                sampling_mode: 0,
+                _padding: 0,
+                weights: [0.; BLUR_WEIGHT_SLOTS],
+            };
+            self.record_effect_pass(&mut passes, &previous, &next, &params, false)?;
+            previous = next;
+        }
+        self.submit_effect_passes(passes);
+        Ok(texture.create_view(&wgpu::TextureViewDescriptor::default()))
+    }
+}
+
+#[cfg(not(incular_d3d11))]
+fn matrix_mip_level([a, b, c, d, ..]: [f32; 6], width: u32, height: u32) -> f32 {
+    // Largest singular value of the output-to-source linear map estimates
+    // the major axis of one output pixel's footprint in source pixels.
+    let ab = a.hypot(b);
+    let cd = c.hypot(d);
+    let dot = a * c + b * d;
+    let major = (0.5 * (ab * ab + cd * cd + (ab * ab - cd * cd).hypot(2. * dot))).sqrt();
+    if !major.is_finite() {
+        return 0.;
+    }
+    major.max(1.).log2().min(width.max(height).ilog2() as f32)
 }
 
 /// One matrix-filter resample: the layer whose retained source it reads,

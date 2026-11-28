@@ -90,10 +90,28 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
     }
     return sum / (f32(taps.x) * f32(taps.y) * 4.);
   }
+  if (params.mode == 7u) {
+    // Resize into the next mip level by pixel area. On odd dimensions the
+    // last source row/column still contributes; no texels are discarded.
+    let span = params.source_size / params.output_size;
+    let start = floor(input.uv * params.output_size) * span;
+    let end = min(start + span, params.source_size);
+    let first = vec2<i32>(floor(start));
+    let after = vec2<i32>(ceil(end));
+    var sum = vec4<f32>(0.);
+    for (var y = first.y; y < after.y; y += 1) {
+      let h = min(end.y, f32(y + 1)) - max(start.y, f32(y));
+      for (var x = first.x; x < after.x; x += 1) {
+        let w = min(end.x, f32(x + 1)) - max(start.x, f32(x));
+        sum += textureLoad(source, vec2<i32>(x, y), 0) * w * h;
+      }
+    }
+    return sum / ((end.x - start.x) * (end.y - start.y));
+  }
   // UV already addresses output pixel centers. Keep source coordinates in
   // that convention so upsampling retains coverage at the first texel.
   var px = input.uv * params.output_size * params.direction - params.source_origin;
-  if (params.mode == 2u || params.mode == 4u) {
+  if (params.mode == 2u || params.mode == 4u || params.mode == 6u) {
     // An affine resample (ImageFilter.matrix): the output pixel position
     // maps through [a c e; b d f], packed in the first weights. Mode 4
     // samples the nearest texel (FilterQuality.none).
@@ -112,5 +130,6 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
       (px.x < 0. || px.y < 0. || px.x >= params.source_size.x || px.y >= params.source_size.y)) {
     return vec4<f32>(0.);
   }
-  return textureSampleLevel(source, source_sampler, px / params.source_size, 0.);
+  let level = select(0., params.weights[1].z, params.mode == 6u);
+  return textureSampleLevel(source, source_sampler, px / params.source_size, level);
 }

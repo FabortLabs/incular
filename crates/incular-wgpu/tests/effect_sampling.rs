@@ -77,17 +77,122 @@ fn effect_pass_with_address(
         },
         size,
     );
+    read_effect(
+        device,
+        queue,
+        shader,
+        params,
+        &source.create_view(&Default::default()),
+        address,
+        false,
+    )
+}
+
+fn read_effect(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    shader: &[u8],
+    params: &[u8],
+    source_view: &wgpu::TextureView,
+    address: wgpu::AddressMode,
+    trilinear: bool,
+) -> Vec<u8> {
+    let size = wgpu::Extent3d {
+        width: 8,
+        height: 8,
+        depth_or_array_layers: 1,
+    };
     let destination = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("effect sampling output"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-        ..descriptor
+        view_formats: &[],
     });
-    let source_view = source.create_view(&Default::default());
     let destination_view = destination.create_view(&Default::default());
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("effect pixel readback"),
+        size: 256 * 8,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device.create_command_encoder(&Default::default());
+    record_effect(
+        device,
+        &mut encoder,
+        shader,
+        params,
+        source_view,
+        &destination_view,
+        address,
+        trilinear,
+    );
+    encoder.copy_texture_to_buffer(
+        destination.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(256),
+                rows_per_image: Some(8),
+            },
+        },
+        size,
+    );
+    let submission = queue.submit(Some(encoder.finish()));
+    let (send, receive) = std::sync::mpsc::channel();
+    readback
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, move |result| {
+            send.send(result).unwrap();
+        });
+    device
+        .poll(wgpu::PollType::Wait {
+            submission_index: Some(submission),
+            timeout: Some(Duration::from_secs(10)),
+        })
+        .unwrap();
+    receive
+        .recv_timeout(Duration::from_secs(10))
+        .unwrap()
+        .unwrap();
+    let mapped = readback.slice(..).get_mapped_range().unwrap();
+    let output = mapped
+        .as_chunks::<256>()
+        .0
+        .iter()
+        .flat_map(|row| &row[..32])
+        .copied()
+        .collect();
+    drop(mapped);
+    readback.unmap();
+    output
+}
+
+#[allow(clippy::too_many_arguments)]
+fn record_effect(
+    device: &wgpu::Device,
+    encoder: &mut wgpu::CommandEncoder,
+    shader: &[u8],
+    params: &[u8],
+    source_view: &wgpu::TextureView,
+    destination_view: &wgpu::TextureView,
+    address: wgpu::AddressMode,
+    trilinear: bool,
+) {
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: address,
         address_mode_v: address,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: if trilinear {
+            wgpu::MipmapFilterMode::Linear
+        } else {
+            wgpu::MipmapFilterMode::Nearest
+        },
         ..Default::default()
     });
     let uniform = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -136,7 +241,7 @@ fn effect_pass_with_address(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(&source_view),
+                resource: wgpu::BindingResource::TextureView(source_view),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -154,17 +259,10 @@ fn effect_pass_with_address(
         contents: bytemuck::cast_slice(&quad),
         usage: wgpu::BufferUsages::VERTEX,
     });
-    let readback = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("effect pixel readback"),
-        size: 256 * 8,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-    let mut encoder = device.create_command_encoder(&Default::default());
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &destination_view,
+                view: destination_view,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -179,48 +277,7 @@ fn effect_pass_with_address(
         pass.set_vertex_buffer(0, vertices.slice(..));
         pass.draw(0..6, 0..1);
     }
-    encoder.copy_texture_to_buffer(
-        destination.as_image_copy(),
-        wgpu::TexelCopyBufferInfo {
-            buffer: &readback,
-            layout: wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(256),
-                rows_per_image: Some(8),
-            },
-        },
-        size,
-    );
-    let submission = queue.submit(Some(encoder.finish()));
-    let (send, receive) = std::sync::mpsc::channel();
-    readback
-        .slice(..)
-        .map_async(wgpu::MapMode::Read, move |result| {
-            send.send(result).unwrap();
-        });
-    device
-        .poll(wgpu::PollType::Wait {
-            submission_index: Some(submission),
-            timeout: Some(Duration::from_secs(10)),
-        })
-        .unwrap();
-    receive
-        .recv_timeout(Duration::from_secs(10))
-        .unwrap()
-        .unwrap();
-    let mapped = readback.slice(..).get_mapped_range().unwrap();
-    let output = mapped
-        .as_chunks::<256>()
-        .0
-        .iter()
-        .flat_map(|row| &row[..32])
-        .copied()
-        .collect();
-    drop(mapped);
-    readback.unmap();
-    output
 }
-
 #[test]
 fn identity_effects_preserve_orientation_and_pixel_centers() {
     let Some((device, queue)) = device() else {
@@ -817,4 +874,161 @@ fn translated_magnifier_matrix_samples_its_focal_backdrop_on_the_gpu() {
         assert_eq!(&pixels[index..index + 4], &blue);
         assert_eq!(&raster[index..index + 4], &black);
     }
+}
+
+#[test]
+fn matrix_minification_reads_mip_levels_and_blends_between_them() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("matrix mip source"),
+        size: wgpu::Extent3d {
+            width: 8,
+            height: 8,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 3,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let striped = (0..64)
+        .flat_map(|x| {
+            if x % 4 == 3 {
+                [0, 0, 255, 255]
+            } else {
+                [255, 0, 0, 255]
+            }
+        })
+        .collect::<Vec<u8>>();
+    queue.write_texture(
+        texture.as_image_copy(),
+        &striped,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(32),
+            rows_per_image: Some(8),
+        },
+        wgpu::Extent3d {
+            width: 8,
+            height: 8,
+            depth_or_array_layers: 1,
+        },
+    );
+    let step_view = |level| {
+        texture.create_view(&wgpu::TextureViewDescriptor {
+            base_mip_level: level,
+            mip_level_count: Some(1),
+            ..Default::default()
+        })
+    };
+    let mut encoder = device.create_command_encoder(&Default::default());
+    for level in 1..=2 {
+        let output = (8u32 >> level) as f32;
+        let input = 2. * output;
+        let mut params = [0u32; PARAM_WORDS];
+        params[2..8].copy_from_slice(&[input, input, output, output, 1., 1.].map(f32::to_bits));
+        params[9] = 7;
+        record_effect(
+            &device,
+            &mut encoder,
+            built_in_shaders::RESAMPLE_SHADER,
+            bytemuck::cast_slice(&params),
+            &step_view(level - 1),
+            &step_view(level),
+            wgpu::AddressMode::ClampToEdge,
+            false,
+        );
+    }
+    queue.submit(Some(encoder.finish()));
+    let view = texture.create_view(&Default::default());
+    let shader = built_in_shaders::RESAMPLE_SHADER;
+    let run = |mode, lod: f32| {
+        let mut params = [0u32; PARAM_WORDS];
+        params[2..8].copy_from_slice(&[8f32, 8., 8., 8., 1., 1.].map(f32::to_bits));
+        params[9] = mode;
+        params[12] = 4f32.to_bits();
+        params[15] = 1f32.to_bits();
+        params[16] = (-1f32).to_bits();
+        params[18] = lod.to_bits();
+        read_effect(
+            &device,
+            &queue,
+            shader,
+            bytemuck::cast_slice(&params),
+            &view,
+            wgpu::AddressMode::ClampToEdge,
+            true,
+        )
+    };
+    let low = run(2, 0.);
+    assert_eq!(&low[..4], &[255, 0, 0, 255]);
+    let medium = run(6, 2.);
+    for (&actual, expected) in medium[..4].iter().zip([191u8, 0, 63, 255]) {
+        assert!(
+            actual.abs_diff(expected) <= 1,
+            "medium = {:?}",
+            &medium[..4]
+        );
+    }
+    assert_eq!(
+        &medium[8..12],
+        &[0; 4],
+        "mips cannot clamp finite filter coverage to infinity"
+    );
+    let fractional = run(6, 1.5);
+    for (&actual, expected) in fractional[..4].iter().zip([223u8, 0, 32, 255]) {
+        assert!(
+            actual.abs_diff(expected) <= 1,
+            "fractional = {:?}",
+            &fractional[..4]
+        );
+    }
+}
+
+#[test]
+fn matrix_mip_reduction_preserves_even_and_odd_source_area() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let shader = built_in_shaders::RESAMPLE_SHADER;
+    let mut params = [0u32; PARAM_WORDS];
+    params[9] = 7;
+    let striped = (0..64)
+        .flat_map(|x| {
+            if x % 8 == 2 {
+                [0, 0, 255, 255]
+            } else {
+                [255, 0, 0, 255]
+            }
+        })
+        .collect::<Vec<u8>>();
+    // Only the first three columns and rows comprise the downsample source.
+    // Its last column must contribute a third, not disappear on an odd edge.
+    params[2..8].copy_from_slice(&[3f32, 3., 1., 1., 1., 1.].map(f32::to_bits));
+    let frame = identity_pass(
+        &device,
+        &queue,
+        shader,
+        bytemuck::cast_slice(&params),
+        &striped,
+    );
+    assert_eq!(&frame[..4], &[170, 0, 85, 255]);
+    // For an even source, each pair contributes equally.
+    params[2..8].copy_from_slice(&[4f32, 4., 2., 2., 1., 1.].map(f32::to_bits));
+    let frame = identity_pass(
+        &device,
+        &queue,
+        shader,
+        bytemuck::cast_slice(&params),
+        &striped,
+    );
+    assert_eq!(&frame[..4], &[255, 0, 0, 255]);
+    assert!((127..=128).contains(&frame[16]));
+    assert!((127..=128).contains(&frame[18]));
 }

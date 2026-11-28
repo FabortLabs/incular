@@ -261,6 +261,8 @@ pub enum ImageSampling {
     #[default]
     Linear,
     Nearest,
+    /// Linear filtering within and between mip levels when minifying.
+    LinearMipmap,
 }
 /// Recorded paint commands. Cloning is a reference-count bump; the command
 /// buffer is copied only when a shared list is mutated.

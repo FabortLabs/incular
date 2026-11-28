@@ -362,7 +362,7 @@ fn image_filtered_executes_composed_filters_and_refuses_morphology() {
         })
         .expect("matrix resamples the child raster");
     assert_eq!(matrix, Transform::scale(2.));
-    assert_eq!(sampling, ImageSampling::Linear);
+    assert_eq!(sampling, ImageSampling::LinearMipmap);
     assert_rect(source, rect(0., 0., 10., 10.));
     assert_rect(output, rect(0., 0., 20., 20.));
 

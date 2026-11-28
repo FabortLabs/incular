@@ -278,6 +278,7 @@ pub(crate) struct SharedPipelineResources {
     pub(crate) composite_sampler: wgpu::Sampler,
     pub(crate) blur_bind_group_layout: wgpu::BindGroupLayout,
     pub(crate) blur_sampler: wgpu::Sampler,
+    pub(crate) matrix_mip_sampler: wgpu::Sampler,
     pub(crate) tiled_blur_samplers: [wgpu::Sampler; 2],
     pub(crate) color_matrix_bind_group_layout: wgpu::BindGroupLayout,
     pub(crate) color_matrix_sampler: wgpu::Sampler,
@@ -1039,6 +1040,13 @@ pub(crate) async fn create_shared_pipeline_resources(
         mipmap_filter: wgpu::MipmapFilterMode::Nearest,
         ..Default::default()
     });
+    let matrix_mip_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("incular matrix trilinear sampler"),
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
+        ..Default::default()
+    });
     let tiled_blur_samplers =
         [wgpu::AddressMode::Repeat, wgpu::AddressMode::MirrorRepeat].map(|address_mode| {
             device.create_sampler(&wgpu::SamplerDescriptor {
@@ -1087,6 +1095,7 @@ pub(crate) async fn create_shared_pipeline_resources(
     let mut image_samplers = HashMap::new();
     for (sampling, filter) in [
         (ImageSampling::Linear, wgpu::FilterMode::Linear),
+        (ImageSampling::LinearMipmap, wgpu::FilterMode::Linear),
         (ImageSampling::Nearest, wgpu::FilterMode::Nearest),
     ] {
         image_samplers.insert(
@@ -1190,6 +1199,7 @@ pub(crate) async fn create_shared_pipeline_resources(
         composite_sampler,
         blur_bind_group_layout,
         blur_sampler,
+        matrix_mip_sampler,
         tiled_blur_samplers,
         color_matrix_bind_group_layout,
         color_matrix_sampler,

@@ -3936,7 +3936,7 @@ impl WidgetTree {
                         }
                         changed |= self.compositor.update_transform_sampling(
                             content,
-                            filter_quality.map(incular_rendering::FilterQuality::sampling),
+                            filter_quality.map(incular_rendering::FilterQuality::matrix_sampling),
                         );
                     }
                 }
@@ -3984,7 +3984,7 @@ impl WidgetTree {
                             content,
                             filter_quality
                                 .filter(|_| controller.is_active())
-                                .map(incular_rendering::FilterQuality::sampling),
+                                .map(incular_rendering::FilterQuality::matrix_sampling),
                         );
                     }
                 }
@@ -4020,7 +4020,7 @@ impl WidgetTree {
                             content,
                             filter_quality
                                 .filter(|_| controller.is_active())
-                                .map(incular_rendering::FilterQuality::sampling),
+                                .map(incular_rendering::FilterQuality::matrix_sampling),
                         );
                     }
                 }

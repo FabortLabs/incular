@@ -60,6 +60,28 @@ bounds, linear sampling, and removal of the filter when disabled. This
 does not establish mipmap behavior for minification or high-quality
 sampling, and it does not upgrade the original golden coverage.
 
+### Matrix image filter minification
+
+The authored pinned `image_filter_matrix_minification_test.dart`
+reads actual Flutter RGBA. At a 4:1 horizontal reduction, nearest and
+Low leave a three-red/one-blue stripe solid red. Medium (also the
+default) returns `[191, 0, 63, 255]` instead of aliasing away the blue.
+
+Incular preserves the Medium matrix policy instead of collapsing it to
+Low. On wgpu, a minifying transform builds only the needed mip levels
+from the isolated source and linearly samples between levels. Odd-sized
+source texels contribute by area; nearest and Low do not allocate mip
+levels, and neither does magnification. The retained final filter cache
+keeps the result when source, matrix, and geometry are unchanged.
+The optional D3D11 renderer's single-level fallback is unchanged.
+
+The focused GL/llvmpipe test builds and reads the production shader's
+mip chain, verifies the Flutter sample to one byte per channel, tests
+fractional levels, and checks pixels outside the filtered shape remain
+transparent. The widget tests also check the retained default mode.
+This is not full original golden equality, a different GPU backend
+comparison, or verification of cubic High quality.
+
 ### Focus traversal from a directly focused skipped node
 
 Hosted focus now adopts the explicit focus request in the earlier

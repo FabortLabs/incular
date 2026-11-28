@@ -459,7 +459,7 @@ impl RenderLayers {
                 if let WidgetKind::Transform { filter_quality, .. } = widget {
                     compositor.update_transform_sampling(
                         layer,
-                        filter_quality.map(incular_rendering::FilterQuality::sampling),
+                        filter_quality.map(incular_rendering::FilterQuality::matrix_sampling),
                     );
                 }
                 compositor.set_children(root, vec![layer]);
@@ -1037,7 +1037,7 @@ impl RenderLayers {
                 if let RenderKind::Transform { filter_quality, .. } = kind {
                     compositor.update_transform_sampling(
                         *layer,
-                        filter_quality.map(incular_rendering::FilterQuality::sampling),
+                        filter_quality.map(incular_rendering::FilterQuality::matrix_sampling),
                     );
                 }
             }
