@@ -4354,3 +4354,5 @@ packages/flutter/test/widgets/interactive_viewer_test.dart	1926	point already in
 packages/flutter/test/widgets/interactive_viewer_test.dart	1940	axis aligned quad	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
 packages/flutter/test/widgets/interactive_viewer_test.dart	1954	not axis aligned quad	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
 packages/flutter/test/widgets/interactive_viewer_test.dart	1970	InteractiveViewer does not crash at zero area	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1408	scaleFactor	paired-match	upstream-interactive-viewer-signals.md#alignment-pivot-and-wheel-sensitivity
+packages/flutter/test/widgets/interactive_viewer_test.dart	1483	alignment argument is used properly	paired-match	upstream-interactive-viewer-signals.md#alignment-pivot-and-wheel-sensitivity

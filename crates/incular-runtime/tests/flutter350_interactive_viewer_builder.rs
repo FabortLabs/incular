@@ -149,3 +149,34 @@ fn builder_repaints_the_same_keyed_rows_when_the_visible_scene_moves() {
         );
     }
 }
+
+#[test]
+fn viewer_alignment_applies_to_the_first_frame_and_follows_current_layout() {
+    use incular_config::Alignment;
+    use incular_core::Transform as CoreTransform;
+
+    let controller = TransformationController::with_value(CoreTransform::scale(2.));
+    let child = Widget::from(incular_widgets::Container::new()).with_key(1483_u64);
+    let viewer = InteractiveViewer::new(child)
+        .transformation_controller(controller)
+        .alignment(Alignment::CENTER);
+    let mut runtime = Runtime::new(viewer.into()).unwrap();
+    for size in [Size::new(200., 120.), Size::new(100., 60.)] {
+        runtime.run_frame(Constraints::tight(size)).unwrap();
+        let tree = runtime.tree();
+        let matching = render_kinds(tree).into_iter().any(|(_, kind)| {
+            matches!(kind, RenderKind::Transform { alignment: Some(a), .. } if *a == Alignment::CENTER)
+        });
+        assert!(
+            matching,
+            "retain the alignment policy rather than its former measured origin"
+        );
+        let child = tree.element_with_key(&1483_u64.into()).unwrap();
+        let geometry = tree.element_bounds(child).unwrap();
+        assert_eq!(
+            geometry.origin,
+            Offset::new(-size.width / 2., -size.height / 2.)
+        );
+        assert_eq!(geometry.size, Size::new(size.width * 2., size.height * 2.));
+    }
+}

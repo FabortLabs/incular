@@ -955,17 +955,12 @@ impl ViewerState {
             let state = self.clone();
             Widget::size_observer(move |size| state.child_size.set(size), child)
         };
+        let transform = Transform::new(matrix, observed);
+        // Keep the policy until layout resolves it against the current
+        // child size, including the very first frame and later resizes.
         let transformed: Widget = match self.config.alignment {
-            None => Transform::new(matrix, observed).into(),
-            Some(alignment) => {
-                let size = self.child_size.get();
-                Transform::new(matrix, observed)
-                    .origin(Offset::new(
-                        size.width * (alignment.x + 1.0) / 2.0,
-                        size.height * (alignment.y + 1.0) / 2.0,
-                    ))
-                    .into()
-            }
+            None => transform.into(),
+            Some(alignment) => transform.alignment(alignment).into(),
         };
         let content: Widget = if self.config.constrained {
             transformed

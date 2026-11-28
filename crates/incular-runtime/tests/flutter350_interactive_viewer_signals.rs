@@ -434,3 +434,38 @@ fn finite_margin_constrains_drag_and_zoom_at_the_child_edges() {
         }
     }
 }
+
+#[test]
+fn wheel_scale_factor_is_updated_for_a_reused_viewer_controller() {
+    use incular_core::Transform;
+    let controller = TransformationController::new();
+    let configure = |factor| {
+        viewer(&controller)
+            .boundary_margin(EdgeInsets::all(f32::INFINITY))
+            .scale_factor(factor)
+    };
+    let mut scene = Scene::new(controller.clone(), configure(200.));
+    let mut observations = Vec::new();
+    for factor in [200., 100., 400.] {
+        controller.set_value(Transform::IDENTITY);
+        let id = scene.runtime.tree().root().unwrap();
+        scene
+            .runtime
+            .schedule_update(id, Center::new(configure(factor)).into())
+            .unwrap();
+        scene.frame();
+        assert_eq!(scene.state().0, 1.);
+        scene.scroll(Device::Mouse, Offset::new(0., 30.));
+        let out = scene.state().0;
+        scene.scroll(Device::Mouse, Offset::new(0., -30.));
+        let back = scene.state().0;
+        assert!(out < 1. && back > out);
+        observations.push((out, back - out));
+    }
+    let [(normal, normal_delta), (low, low_delta), (high, high_delta)] = observations.as_slice()
+    else {
+        unreachable!()
+    };
+    assert!(low < normal && normal < high);
+    assert!(low_delta > normal_delta && normal_delta > high_delta);
+}

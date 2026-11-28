@@ -92,3 +92,13 @@ The rotated and skewed test coordinates use the original
 Flutter expectations. Added controls cover a zero-length
 segment and a collapsed quad. The mounted zero-area viewer
 keeps a zero layout size without crashing.
+
+## Alignment pivot and wheel sensitivity
+
+Pinned :1408 and :1483 pass. The center pivot is retained as
+an alignment policy instead of prematurely converting it to an
+origin from the old child size. A 2× initial transform pivots
+correctly on the first frame and again after the viewport shrinks.
+The native wheel check reuses the controller across scale factors
+200, 100 and 400. The same ±30px wheel input changes zoom
+most at 100 and least at 400, preserving Flutter's scale cap.
