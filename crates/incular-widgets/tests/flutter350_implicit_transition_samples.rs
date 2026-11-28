@@ -78,6 +78,39 @@ fn alpha(tree: &WidgetTree) -> f32 {
     }
     panic!("animation must retain an opacity node");
 }
+fn sliver_alpha(tree: &mut WidgetTree) -> f32 {
+    let list = tree.paint();
+    let mut group_alpha = None;
+    let mut marker_visible = false;
+    for command in list.commands() {
+        match *command {
+            PaintCommand::PushOpacity { alpha, .. } => {
+                assert!(
+                    group_alpha.replace(alpha).is_none(),
+                    "only one sliver group"
+                );
+            }
+            PaintCommand::Rect { color: MARKER, .. } => {
+                marker_visible = true;
+            }
+            _ => {}
+        }
+    }
+    if let Some(alpha) = group_alpha {
+        assert_eq!(
+            marker_visible,
+            alpha > 0.,
+            "marker visibility for alpha {alpha}"
+        );
+        alpha
+    } else if marker_visible {
+        1.
+    } else {
+        // The zero-alpha endpoint contributes no draw to the command stream.
+        0.
+    }
+}
+
 fn painted(tree: &mut WidgetTree) -> (Offset, Offset) {
     let mut stack = vec![Affine::IDENTITY];
     for command in tree.paint().commands() {
@@ -146,7 +179,11 @@ fn test(case: Case) {
                     Offset::new(40. * a.cos(), 40. * a.sin()),
                 )
             }
-            Case::Alpha | Case::SliverAlpha => (Offset::new(alpha(&tree), 0.), Offset::new(t, 0.)),
+            Case::Alpha => (Offset::new(alpha(&tree), 0.), Offset::new(t, 0.)),
+            Case::SliverAlpha => (
+                Offset::new(sliver_alpha(&mut tree), 0.),
+                Offset::new((t * 255.).round() / 255., 0.),
+            ),
         };
         assert!(
             (actual.x - expected.x).abs() < 0.001 && (actual.y - expected.y).abs() < 0.001,
