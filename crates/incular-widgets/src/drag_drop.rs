@@ -17,7 +17,7 @@ use incular_config::Axis;
 use incular_core::Offset;
 
 use crate::gestures::{HitTestBehavior, Velocity};
-use crate::{IgnorePointer, OverlayPortal, Positioned, Stack, Widget};
+use crate::{ExcludeSemantics, IgnorePointer, OverlayPortal, Positioned, Stack, Widget};
 
 #[derive(Clone)]
 pub struct DragFeedback {
@@ -86,7 +86,12 @@ impl<T> DragDropContext<T> {
         Rc::as_ptr(&self.state) as usize
     }
 
-    fn feedback_layers_for_source(&self, source: &Rc<Cell<u64>>) -> Vec<Widget> {
+    fn feedback_layers_for_source(
+        &self,
+        source: &Rc<Cell<u64>>,
+        ignoring_pointer: bool,
+        ignoring_semantics: bool,
+    ) -> Vec<Widget> {
         self.state
             .borrow()
             .iter()
@@ -94,13 +99,12 @@ impl<T> DragDropContext<T> {
             .filter_map(|drag| {
                 let feedback = drag.feedback.clone()?;
                 let origin = drag.position - drag.anchor;
+                let feedback =
+                    ExcludeSemantics::new(IgnorePointer::new(feedback).ignoring(ignoring_pointer))
+                        .excluding(ignoring_semantics);
                 Some(
-                    Widget::from(
-                        Positioned::new(IgnorePointer::new(feedback))
-                            .left(origin.x)
-                            .top(origin.y),
-                    )
-                    .with_key(drag.id.0),
+                    Widget::from(Positioned::new(feedback).left(origin.x).top(origin.y))
+                        .with_key(drag.id.0),
                 )
             })
             .collect()
@@ -187,6 +191,8 @@ pub struct Draggable<T: Clone + 'static> {
     child: Widget,
     child_when_dragging: Option<Widget>,
     feedback: Option<Rc<dyn Fn(T) -> Widget>>,
+    ignoring_feedback_pointer: bool,
+    ignoring_feedback_semantics: bool,
     axis: Option<Axis>,
     affinity: Option<Axis>,
     feedback_offset: Offset,
@@ -210,6 +216,8 @@ impl<T: Clone + 'static> Draggable<T> {
             child: child.into(),
             child_when_dragging: None,
             feedback: None,
+            ignoring_feedback_pointer: true,
+            ignoring_feedback_semantics: true,
             axis: None,
             affinity: None,
             feedback_offset: Offset::ZERO,
@@ -228,6 +236,18 @@ impl<T: Clone + 'static> Draggable<T> {
     #[must_use]
     pub fn feedback(mut self, builder: impl Fn(T) -> Widget + 'static) -> Self {
         self.feedback = Some(Rc::new(builder));
+        self
+    }
+    /// Whether the drag avatar ignores pointer hits. Defaults to true.
+    #[must_use]
+    pub fn ignoring_feedback_pointer(mut self, ignoring: bool) -> Self {
+        self.ignoring_feedback_pointer = ignoring;
+        self
+    }
+    /// Whether the drag avatar is excluded from accessibility. Defaults to true.
+    #[must_use]
+    pub fn ignoring_feedback_semantics(mut self, ignoring: bool) -> Self {
+        self.ignoring_feedback_semantics = ignoring;
         self
     }
     /// Shown in place of the child while a drag is active.
@@ -485,13 +505,17 @@ impl<T: Clone + 'static> From<Draggable<T>> for Widget {
         // Flutter `Draggable` inserts the feedback into the `Overlay` at the
         // pointer while a drag is active. The framework presents it through an
         // overlay portal over the child, positioned at the feedback's top-left
-        // and ignoring pointer hits (`ignoringFeedbackPointer`).
+        // with separately configurable pointer and semantics exclusions.
         let child = if value.feedback.is_some() {
             let context = value.context.clone();
             let source = revision.clone();
             Widget::stateful_builder(revision.clone(), move |_| {
                 let portal = OverlayPortal::new(child.clone()).root_overlay(true);
-                let avatars = context.feedback_layers_for_source(&source);
+                let avatars = context.feedback_layers_for_source(
+                    &source,
+                    value.ignoring_feedback_pointer,
+                    value.ignoring_feedback_semantics,
+                );
                 if avatars.is_empty() {
                     portal.into()
                 } else {
@@ -802,6 +826,18 @@ impl<T: Clone + 'static> LongPressDraggable<T> {
     #[must_use]
     pub fn feedback(mut self, builder: impl Fn(T) -> Widget + 'static) -> Self {
         self.draggable = self.draggable.feedback(builder);
+        self
+    }
+    /// See [`Draggable::ignoring_feedback_pointer`].
+    #[must_use]
+    pub fn ignoring_feedback_pointer(mut self, ignoring: bool) -> Self {
+        self.draggable = self.draggable.ignoring_feedback_pointer(ignoring);
+        self
+    }
+    /// See [`Draggable::ignoring_feedback_semantics`].
+    #[must_use]
+    pub fn ignoring_feedback_semantics(mut self, ignoring: bool) -> Self {
+        self.draggable = self.draggable.ignoring_feedback_semantics(ignoring);
         self
     }
     /// See [`Draggable::child_when_dragging`].

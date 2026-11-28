@@ -4132,3 +4132,6 @@ packages/flutter/test/widgets/draggable_test.dart	256	Drag and drop - onLeave ca
 packages/flutter/test/widgets/draggable_test.dart	328	Drag and drop - onLeave callback fires correctly	paired-match	upstream-draggable-target-path.md#typed-payload-movement-and-leave-callbacks
 packages/flutter/test/widgets/draggable_test.dart	399	Drag and drop - onMove callback fires correctly with generic parameter	paired-match	upstream-draggable-target-path.md#typed-payload-movement-and-leave-callbacks
 packages/flutter/test/widgets/draggable_test.dart	467	Drag and drop - onMove callback fires correctly	paired-match	upstream-draggable-target-path.md#typed-payload-movement-and-leave-callbacks
+packages/flutter/test/widgets/draggable_test.dart	3906	feedback respect the MouseRegion cursor configure	paired-match	upstream-draggable-target-path.md#feedback-hit-testing-and-accessibility
+packages/flutter/test/widgets/draggable_test.dart	3938	configurable feedback ignore pointer behavior	paired-match	upstream-draggable-target-path.md#feedback-hit-testing-and-accessibility
+packages/flutter/test/widgets/draggable_test.dart	3970	configurable feedback ignore pointer behavior - LongPressDraggable	paired-match	upstream-draggable-target-path.md#feedback-hit-testing-and-accessibility

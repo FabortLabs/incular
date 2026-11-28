@@ -117,3 +117,18 @@ Pinned Flutter passed; native previously started both. Incular now
 checks capacity at activation as well as press and remembers refusal
 for the rest of that contact. The authored fixture and 32 focused
 native tests passed without adding an upstream registration.
+
+## Feedback hit testing and accessibility
+
+Pinned :3906, :3938 and :3970 passed. The native fixtures use the
+active pointer route: mouse feedback under a stationary pointer
+selects Grabbing only when its pointer exclusion is disabled. A
+second touch can tap that opted-in feedback during either an immediate
+or a long-press drag, without ending the first contact. The default
+remains pointer-transparent.
+
+Feedback accessibility now defaults to excluded and can be enabled
+independently of pointer hits. The two authored Flutter cases and the
+native semantics tree agree on label presence before feedback teardown.
+All seven focused native cases passed. The comparison checks
+framework cursor selection and semantics, not OS presentation.
