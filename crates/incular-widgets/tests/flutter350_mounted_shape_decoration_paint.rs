@@ -209,3 +209,47 @@ fn directional_radial_gradient_resolves_the_radius_and_focal_point_inside_the_sh
     assert_eq!(shader.focal_radius, 3000.);
     assert_eq!(shader.stops, stops);
 }
+
+#[test]
+fn shape_padding_remains_directional_until_the_caller_supplies_direction() {
+    use incular_config::{EdgeInsets, EdgeInsetsDirectional, EdgeInsetsGeometry};
+    use incular_widgets::{BorderDirectional, CompoundBorder};
+
+    let directional = BorderDirectional::only(
+        BorderSide::NONE,
+        BorderSide::solid(RED, 3.),
+        BorderSide::NONE,
+        BorderSide::NONE,
+    );
+    let padding = ShapeDecoration::new(directional).padding();
+    assert!(matches!(padding, EdgeInsetsGeometry::Directional(insets) if
+        insets == EdgeInsetsDirectional::only(3., 0., 0., 0.)));
+    assert!(padding.try_resolve(None).is_err());
+    assert_eq!(
+        padding.resolve(TextDirection::Ltr),
+        EdgeInsets::only(3., 0., 0., 0.)
+    );
+    assert_eq!(
+        padding.resolve(TextDirection::Rtl),
+        EdgeInsets::only(0., 0., 3., 0.)
+    );
+
+    let compound = ShapeDecoration::new(CompoundBorder::new(
+        Border::new(1., Color::BLACK),
+        directional,
+    ))
+    .padding();
+    assert!(matches!(compound, EdgeInsetsGeometry::Mixed { .. }));
+    assert_eq!(
+        compound.resolve(TextDirection::Ltr),
+        EdgeInsets::only(4., 1., 1., 1.)
+    );
+    assert_eq!(
+        compound.resolve(TextDirection::Rtl),
+        EdgeInsets::only(1., 1., 4., 1.)
+    );
+    assert_eq!(
+        ShapeDecoration::new(Border::default()).padding(),
+        EdgeInsetsGeometry::ZERO
+    );
+}

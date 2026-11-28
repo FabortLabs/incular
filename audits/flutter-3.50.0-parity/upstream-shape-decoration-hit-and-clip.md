@@ -194,3 +194,12 @@ and shape hit contour still use the outer path. The directional radial
 gradient case also verifies the emitted focal point, radii, and stops.
 All nine focused native paint, image, and crossfade tests passed; these
 inspect the retained display list, not framebuffer goldens.
+
+## Unresolved directional padding
+
+The original `widgets/shape_decoration_test.dart:64` passed. An inner
+three-pixel start stroke exposes directional padding before resolution,
+not physical padding silently resolved to LTR. It resolves to the left in
+LTR and to the right in RTL. The native test also verifies mixed physical
+and directional compound insets and zero padding for an unpainted border.
+All eight focused tests passed.

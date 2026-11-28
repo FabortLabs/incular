@@ -2,7 +2,7 @@
 
 use std::{any::Any, fmt::Debug, rc::Rc, sync::Arc};
 
-use incular_config::{EdgeInsets, TextDirection};
+use incular_config::{EdgeInsets, EdgeInsetsGeometry, TextDirection};
 use incular_core::{Offset, Rect, Size};
 use incular_rendering::{Canvas, Path};
 
@@ -39,6 +39,12 @@ pub trait CustomBoxBorder: Any + Debug + Send + Sync {
     fn is_uniform(&self) -> bool;
 
     fn dimensions(&self, direction: Option<TextDirection>) -> EdgeInsets;
+
+    /// Preserves start/end insets for decorations that do not yet know
+    /// their reading direction.
+    fn dimensions_geometry(&self) -> EdgeInsetsGeometry {
+        self.dimensions(None).into()
+    }
 
     fn needs_text_direction(&self) -> bool {
         false
@@ -154,6 +160,13 @@ impl CustomBoxBorderHandle {
 // A square ShapeDecoration takes the BoxBorder itself, not a synthesized
 // uniform border. Rounded and circular conversions use its top side.
 impl ShapeBorder for CustomBoxBorderHandle {
+    fn dimensions_geometry(&self) -> EdgeInsetsGeometry {
+        match self.direction {
+            Some(direction) => self.border.dimensions(Some(direction)).into(),
+            None => self.border.dimensions_geometry(),
+        }
+    }
+
     fn dimensions(&self, direction: Option<TextDirection>) -> EdgeInsets {
         Self::dimensions(self, direction)
     }

@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 
-use incular_config::{EdgeInsets, TextDirection};
+use incular_config::{EdgeInsets, EdgeInsetsGeometry, TextDirection};
 use incular_core::{Offset, Rect, Size};
 use incular_rendering::{Brush, Canvas, CornerRadii, FillRule, Paint, PaintStyle, Path, Stroke};
 use smart_default::SmartDefault;
@@ -25,6 +25,12 @@ pub trait ShapeBorder {
     /// The space consumed along each edge before a nested border is painted.
     fn dimensions(&self, _direction: Option<TextDirection>) -> EdgeInsets {
         EdgeInsets::ZERO
+    }
+
+    /// An unresolved equivalent of the border insets. Directional
+    /// implementations override this to preserve start/end until layout.
+    fn dimensions_geometry(&self) -> EdgeInsetsGeometry {
+        self.dimensions(None).into()
     }
 
     /// Flutter `getOuterPath`: the shape's outline in `rect`.
@@ -175,6 +181,14 @@ impl CompoundBorder {
 }
 
 impl ShapeBorder for CompoundBorder {
+    fn dimensions_geometry(&self) -> EdgeInsetsGeometry {
+        self.borders
+            .iter()
+            .map(|border| border.dimensions_geometry())
+            .reduce(|a, b| a + b)
+            .unwrap_or(EdgeInsetsGeometry::ZERO)
+    }
+
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
         Some(Rc::new(Self {
             borders: self.borders.iter()
@@ -333,6 +347,10 @@ impl ShapeBorder for Border {
 }
 
 impl ShapeBorder for BorderDirectional {
+    fn dimensions_geometry(&self) -> EdgeInsetsGeometry {
+        BorderDirectional::dimensions(*self).into()
+    }
+
     fn scaled(&self, factor: f32) -> Option<Rc<dyn ShapeBorder>> {
         Some(Rc::new(self.scale(factor)))
     }

@@ -252,6 +252,10 @@ impl Lerp for BoxBorderStack {
 }
 
 impl ShapeBorder for BoxBorderStack {
+    fn dimensions_geometry(&self) -> EdgeInsetsGeometry {
+        BoxBorderStack::dimensions_geometry(self)
+    }
+
     fn dimensions(&self, direction: Option<TextDirection>) -> EdgeInsets {
         self.dimensions_geometry()
             .resolve(direction.unwrap_or(TextDirection::Ltr))

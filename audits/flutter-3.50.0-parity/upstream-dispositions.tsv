@@ -3913,3 +3913,4 @@ packages/flutter/test/widgets/shape_decoration_test.dart	46	ShapeDecoration.colo
 packages/flutter/test/widgets/shape_decoration_test.dart	72	TestBorder and Directionality - 1	paired-match	upstream-shape-decoration-hit-and-clip.md#mounted-shape-paint-order-and-image-clip
 packages/flutter/test/widgets/shape_decoration_test.dart	88	TestBorder and Directionality - 2	paired-match	upstream-shape-decoration-hit-and-clip.md#mounted-shape-paint-order-and-image-clip
 packages/flutter/test/widgets/shape_decoration_test.dart	108	Does not crash with directional gradient	paired-match	upstream-shape-decoration-hit-and-clip.md#mounted-shape-paint-order-and-image-clip
+packages/flutter/test/widgets/shape_decoration_test.dart	64	ShapeDecoration with BorderDirectional	paired-match	upstream-shape-decoration-hit-and-clip.md#unresolved-directional-padding

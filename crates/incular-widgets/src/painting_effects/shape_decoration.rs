@@ -5,7 +5,7 @@
 use std::{borrow::Cow, rc::Rc, sync::Arc};
 
 use incular_animation::OptionalColorTween;
-use incular_config::{Clip, TextDirection};
+use incular_config::{Clip, EdgeInsetsGeometry, TextDirection};
 use incular_core::{Color, Lerp, Offset, Rect, Size};
 use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, GradientStops};
 
@@ -275,6 +275,13 @@ impl ShapeDecoration {
                 .scaled(factor)
                 .unwrap_or_else(|| self.shape.clone()),
         }
+    }
+
+    /// Border insets to add to the child's layout padding. Logical sides
+    /// remain unresolved until the caller supplies a text direction.
+    #[must_use]
+    pub fn padding(&self) -> EdgeInsetsGeometry {
+        self.shape.dimensions_geometry()
     }
 
     /// Tests the shape in local coordinates rather than its bounding box.
