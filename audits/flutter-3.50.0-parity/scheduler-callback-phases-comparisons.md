@@ -267,7 +267,8 @@ claimed from either behavioral fixture.
 ### Native redraw arriving between warm-up phases
 
 The original `scheduler_test.dart:281` remains skipped by the pinned
-SDK and is not counted. The isolated authored Dart probe uses the real
+SDK and is recorded as `reference-skipped`, not a paired match.
+The isolated authored Dart probe uses the real
 SchedulerBinding and records its two timers deterministically. A
 native begin/draw pair fired between those timers does not enter the
 framework, does not advance the warm-up phase and is not immediately

@@ -33,7 +33,14 @@ library_outcomes = defaultdict(Counter)
 for r in tsv("upstream-dispositions.tsv"):
     key = r["file"], int(r["line"]), r["scenario"]
     assert key in ukeys and key not in known, key
-    assert r["disposition"] in {"paired-match", "paired-mismatch", "reference-ran-incular-open", "partial-match", "partial-mismatch"}, r
+    assert r["disposition"] in {
+        "paired-match",
+        "paired-mismatch",
+        "reference-ran-incular-open",
+        "reference-skipped",
+        "partial-match",
+        "partial-mismatch",
+    }, r
     evidence_exists(r)
     known.add(key)
     u[r["disposition"]] += 1
