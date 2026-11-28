@@ -223,3 +223,54 @@ fn canceling_one_source_keeps_the_other_sources_feedback_and_candidate_payload()
     assert_eq!(host.origin("feedback 9"), None);
     assert!(!host.context.is_dragging());
 }
+
+#[test]
+fn a_pending_contact_cannot_exceed_capacity_or_restart_after_refusal() {
+    use incular_widgets::{GestureDetector, HitTestBehavior, Row};
+
+    let context = DragDropContext::new();
+    let starts = Rc::new(Cell::new(0));
+    let tappable = || {
+        Widget::from(
+            GestureDetector::new(SizedBox::new().width(80.).height(50.))
+                .behavior(HitTestBehavior::Opaque)
+                .on_tap(|| {}),
+        )
+    };
+    let children = Row::new([tappable(), tappable()])
+        .main_axis_size(incular_widgets::MainAxisSize::Min)
+        .text_direction(TextDirection::Ltr);
+    let source = Draggable::new(context.clone(), 1, children)
+        .max_simultaneous_drags(1)
+        .feedback(|_| Widget::box_(Size::new(20., 20.), Color::BLACK))
+        .on_start({
+            let starts = starts.clone();
+            move |_| starts.set(starts.get() + 1)
+        });
+    let mut host = Host {
+        runtime: Runtime::new(Stack::new([Positioned::new(source).left(0.).top(0.)]).into())
+            .unwrap(),
+        next: Instant::now(),
+        context,
+        data: Rc::default(),
+        drops: Rc::default(),
+    };
+    host.frame();
+    host.pointer(1, PointerPhase::Down, Offset::new(20., 20.));
+    host.pointer(2, PointerPhase::Down, Offset::new(100., 20.));
+    assert_eq!(starts.get(), 0);
+    assert!(!host.context.is_dragging());
+    host.pointer(1, PointerPhase::Move, Offset::new(20., 55.));
+    assert_eq!(starts.get(), 1);
+    assert!(host.context.is_dragging());
+    host.pointer(2, PointerPhase::Move, Offset::new(100., 55.));
+    assert_eq!(starts.get(), 1);
+    assert!(host.context.is_dragging());
+
+    host.pointer(1, PointerPhase::Up, Offset::new(20., 55.));
+    assert!(!host.context.is_dragging());
+    host.pointer(2, PointerPhase::Move, Offset::new(100., 90.));
+    assert_eq!(starts.get(), 1);
+    assert!(!host.context.is_dragging());
+    host.pointer(2, PointerPhase::Up, Offset::new(100., 90.));
+}

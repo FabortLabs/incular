@@ -948,6 +948,7 @@ impl WidgetTree {
                 members: Vec::new(),
                 cancelled_elements: FastHashSet::default(),
                 start: event.position,
+                drag_refused: false,
                 quiet_taps: Vec::new(),
                 yields_taps: inner_button.is_some(),
             };
@@ -2882,6 +2883,9 @@ impl WidgetTree {
         member: GestureArenaMember,
         position: Offset,
     ) {
+        if self.input.active_gestures.get(&key).is_some_and(|gesture| gesture.drag_refused) {
+            return;
+        }
         let Some((source, start, element)) =
             self.input.active_gestures.get(&key).and_then(|active| {
                 active
@@ -2896,6 +2900,14 @@ impl WidgetTree {
         else {
             return;
         };
+        // Down-time eligibility only decides whether the recognizer can
+        // compete. Another pending contact may win first and fill the limit.
+        if !self.input.active_drags.contains_key(&key) && !source.can_start() {
+            if let Some(gesture) = self.input.active_gestures.get_mut(&key) {
+                gesture.drag_refused = true;
+            }
+            return;
+        }
         let origin = self
             .element_bounds(element)
             .map_or(start, |bounds| bounds.origin);

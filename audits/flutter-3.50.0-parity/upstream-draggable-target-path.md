@@ -106,3 +106,14 @@ as a live candidate and does not remove 9's feedback or drop. This
 does not change the context's single-snapshot convenience API; its
 automatic overlay presents every active contact. The 44-case focused
 regression run and both multi-contact checks passed.
+
+### Rechecking capacity when a pending gesture wins
+
+Two touch contacts first compete with separate child tap recognizers
+under one source with a limit of one. Both can be enrolled before
+either starts, but only the first accepted drag may create feedback.
+The other contact remains refused even after the first releases.
+Pinned Flutter passed; native previously started both. Incular now
+checks capacity at activation as well as press and remembers refusal
+for the rest of that contact. The authored fixture and 32 focused
+native tests passed without adding an upstream registration.

@@ -1226,6 +1226,9 @@ struct ActiveGesture {
     members: Vec<ActiveGestureMember>,
     cancelled_elements: FastHashSet<ElementId>,
     start: Offset,
+    /// An accepted Draggable attempt that found its source at capacity.
+    /// Later motion from the same press may not start a replacement drag.
+    drag_refused: bool,
     /// Mounted tap recognizers still tracking this non-primary contact
     /// without dispatching tap callbacks for it.
     quiet_taps: Vec<ElementId>,
