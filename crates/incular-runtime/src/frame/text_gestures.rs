@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::text_shortcuts::{TextIntent, TextShortcutPlatform};
-use incular_core::SECONDARY_POINTER_BUTTON;
+use incular_core::{DragStartBehavior, SECONDARY_POINTER_BUTTON};
 use incular_platform::{TextSelectionAction, TextSelectionActionRequest};
 use incular_text::{SelectionChangedCause, TextAffinity, is_layout_whitespace, word_boundary_at};
 use incular_widgets::internal::{
@@ -1842,6 +1842,10 @@ impl Runtime {
                 return false;
             }
             drag.started = true;
+            if self.tree.editable_drag_start_behavior(drag.field) == Some(DragStartBehavior::Start) {
+                drag.last = position;
+            }
+            self.frame_requested = true;
             self.cancel_pending_mobile_text_touch();
             self.captured_text_field = None;
             self.text_taps = None;
@@ -2009,6 +2013,11 @@ impl Runtime {
                 return;
             }
             drag.started = true;
+            if self.tree.editable_drag_start_behavior(drag.field) == Some(DragStartBehavior::Start) {
+                let center = drag.drag_y + drag.target;
+                drag.drag_y = position.y;
+                drag.target = center - position.y;
+            }
             // `_handleSelectionStartHandleDragStart` hides the toolbar while
             // the handle moves; `_handleAnyDragEnd` shows it again.
             self.start_text_handle_magnifier(drag.field, position, drag.drag_y + drag.target);

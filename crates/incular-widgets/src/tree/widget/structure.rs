@@ -772,6 +772,7 @@ impl PartialEq for TextFieldSpec {
             && self.focused_border_outset == other.focused_border_outset
             && self.content_padding == other.content_padding
             && self.clip_behavior == other.clip_behavior
+            && self.drag_start_behavior == other.drag_start_behavior
             && self.fixed_scroll_offset == other.fixed_scroll_offset
             && self.allow_implicit_caret_scrolling == other.allow_implicit_caret_scrolling
             && self.multiline == other.multiline

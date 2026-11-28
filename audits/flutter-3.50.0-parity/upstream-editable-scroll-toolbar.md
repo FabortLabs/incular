@@ -4,8 +4,8 @@
 
 Both pinned mobile variants of `widgets/editable_text_test.dart:19006`
 passed. The mounted native comparison starts with a word selection and
-a built toolbar, disables platform semantics, then performs a 20 px
-finger scroll. Before the fix the native editor did not scroll. A
+a built toolbar, disables platform semantics, then moves a finger 20 px to win
+the drag and a further 10 px to scroll. Before the fix the native editor did not scroll. A
 vertical drag now scrolls its own multiline viewport without moving
 the text selection. The toolbar is hidden while scrolling and, with
 the same editing value and the selection still in view, a separate
@@ -21,7 +21,7 @@ arbitration, and other scroll cases remain separate.
 
 Pinned Android :18773 and :18846 passed. The native tests select the
 first word in the same 50,000-character document, drive a real 200 px
-touch scroll, and replace the editing value before the release's
+touch drag, and replace the editing value before the release's
 scheduled frame. The old toolbar does not reappear, including after a
 second touch sequence immediately following the replacement. Both
 cases keep the editor mounted and focused.
@@ -30,3 +30,15 @@ A native control keeps the original value instead: the toolbar stays
 hidden when the selection is out of view, then reappears when the
 next scroll brings the same selection back. All four focused native
 scroll tests passed; the extra control adds no registration.
+
+## Live drag origin
+
+Pinned `widgets/editable_text_test.dart:15932` passed. The mounted
+native editor updates `DragStartBehavior` without losing its element,
+focus, or handles. For the first accepted handle move, Down includes
+travel from the press and reaches a later line; Start uses the
+winning position as the vertical origin and stays on the first line.
+The same property controls the editor's direct viewport drag. In the
+default Start mode the first 20 px hides the toolbar without moving
+content; the next 10 px actually scrolls. All 34 focused native
+scroll, handwriting, magnifier, and handle tests passed.

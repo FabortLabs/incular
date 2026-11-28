@@ -1199,6 +1199,7 @@ pub struct EditableText {
     focused_border_outset: incular_config::EdgeInsets,
     content_padding: incular_config::EdgeInsets,
     clip_behavior: incular_config::Clip,
+    drag_start_behavior: incular_core::DragStartBehavior,
     fixed_scroll_offset: Option<f32>,
     allow_implicit_caret_scrolling: bool,
     on_editing_complete: Option<Rc<dyn Fn()>>,
@@ -1289,6 +1290,7 @@ impl EditableText {
             focused_border_outset: incular_config::EdgeInsets::ZERO,
             content_padding: incular_config::EdgeInsets::ZERO,
             clip_behavior: incular_config::Clip::HardEdge,
+            drag_start_behavior: incular_core::DragStartBehavior::Start,
             fixed_scroll_offset: None,
             allow_implicit_caret_scrolling: true,
             on_editing_complete: None,
@@ -1396,6 +1398,14 @@ impl EditableText {
     #[must_use]
     pub fn clip_behavior(mut self, behavior: incular_config::Clip) -> Self {
         self.clip_behavior = behavior;
+        self
+    }
+
+    /// Chooses whether editor scrolling and handle drags measure from
+    /// the press or from the point where the gesture wins. Defaults to Start.
+    #[must_use]
+    pub fn drag_start_behavior(mut self, behavior: incular_core::DragStartBehavior) -> Self {
+        self.drag_start_behavior = behavior;
         self
     }
 
@@ -2275,6 +2285,7 @@ impl From<EditableText> for Widget {
             focused_border_outset: value.focused_border_outset,
             content_padding: value.content_padding,
             clip_behavior: value.clip_behavior,
+            drag_start_behavior: value.drag_start_behavior,
             fixed_scroll_offset: value.fixed_scroll_offset,
             allow_implicit_caret_scrolling: value.allow_implicit_caret_scrolling,
             on_editing_complete: value.on_editing_complete,

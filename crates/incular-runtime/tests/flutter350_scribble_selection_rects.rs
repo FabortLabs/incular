@@ -367,6 +367,12 @@ fn scribble_waits_for_the_editors_touch_scroll_to_end_before_publishing_bounds()
         );
     };
     send(&mut runtime, PointerPhase::Down, center, 0);
+    send(
+        &mut runtime,
+        PointerPhase::Move,
+        center - incular_core::Offset::new(0., 20.),
+        15,
+    );
     send(&mut runtime, PointerPhase::Move, moved, 25);
     frame(&mut runtime);
     assert!(runtime.tree().text_field_scroll_offset(field).unwrap().y > 0.);

@@ -75,9 +75,17 @@ fn a_short_touch_scroll_hides_then_restores_the_toolbar_without_semantics() {
         let previous_offset = runtime.tree().text_field_scroll_offset(field).unwrap();
 
         pointer(&mut runtime, PointerPhase::Down, middle, time(1000));
-        let moved = middle - Offset::new(0., 20.);
-        pointer(&mut runtime, PointerPhase::Move, moved, time(1020));
+        let accepted = middle - Offset::new(0., 20.);
+        pointer(&mut runtime, PointerPhase::Move, accepted, time(1020));
         frame(&mut runtime, time(1020));
+        assert_eq!(
+            runtime.tree().text_field_scroll_offset(field),
+            Some(previous_offset)
+        );
+        assert!(!toolbar_visible(&runtime, field));
+        let moved = middle - Offset::new(0., 30.);
+        pointer(&mut runtime, PointerPhase::Move, moved, time(1030));
+        frame(&mut runtime, time(1030));
         assert!(
             runtime.tree().text_field_scroll_offset(field).unwrap().y > previous_offset.y,
             "the editor's viewport must consume the short drag ({platform:?})"
@@ -146,6 +154,12 @@ fn drag_away_from_selection(runtime: &mut Runtime, field: ElementId, clock: Inst
         PointerPhase::Down,
         center,
         clock + Duration::from_millis(1000),
+    );
+    pointer(
+        runtime,
+        PointerPhase::Move,
+        center - Offset::new(0., 20.),
+        clock + Duration::from_millis(1010),
     );
     pointer(
         runtime,
@@ -227,6 +241,12 @@ fn an_unchanged_toolbar_waits_until_its_selection_is_back_inside_the_editor() {
     pointer(
         &mut runtime,
         PointerPhase::Move,
+        center + Offset::new(0., 20.),
+        clock + Duration::from_millis(1110),
+    );
+    pointer(
+        &mut runtime,
+        PointerPhase::Move,
         moved,
         clock + Duration::from_millis(1120),
     );
@@ -245,4 +265,89 @@ fn an_unchanged_toolbar_waits_until_its_selection_is_back_inside_the_editor() {
         controller.selection(),
         incular_text::TextSelection::new(0, 4)
     );
+}
+
+#[test]
+fn updating_drag_start_behavior_changes_live_handle_origin_without_remounting() {
+    use incular_config::Alignment;
+    use incular_core::DragStartBehavior;
+    use incular_text::{TextSelection, TextStyle};
+    use incular_widgets::{Align, FocusNode};
+
+    let controller =
+        TextEditingController::with_text("first line\nsecond line\nthird line\nfourth line");
+    let focus = FocusNode::new();
+    let build = |behavior| {
+        Widget::from(Align::new(
+            Alignment::TOP_LEFT,
+            EditableText::new(controller.clone())
+                .focus_node(focus.clone())
+                .text_direction(TextDirection::Ltr)
+                .max_lines(Some(10))
+                .style(TextStyle::new().font_size(14.).height(Some(1.)))
+                .selection_handles_builder(|_, _| SizedBox::shrink().into())
+                .drag_start_behavior(behavior),
+        ))
+    };
+    let mut runtime = Runtime::new(build(DragStartBehavior::Down)).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let start = Instant::now();
+    focus.request_focus();
+    frame(&mut runtime, start);
+    let field = runtime.focused_element().unwrap();
+    let root = runtime.tree().root().unwrap();
+
+    for (iteration, (behavior, later_line)) in [
+        (DragStartBehavior::Down, true),
+        (DragStartBehavior::Start, false),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let at = start + Duration::from_millis(iteration as u64 * 600);
+        runtime.schedule_update(root, build(behavior)).unwrap();
+        controller.set_selection(TextSelection::new(0, 4));
+        frame(&mut runtime, at);
+        assert_eq!(runtime.focused_element(), Some(field));
+        assert_eq!(
+            runtime.tree().editable_drag_start_behavior(field),
+            Some(behavior)
+        );
+        let geometry = runtime
+            .tree()
+            .text_field_selection_handle_geometry(field)
+            .unwrap();
+        let state = runtime.tree().text_field_selection_handles(field).unwrap();
+        state.show(geometry);
+        frame(&mut runtime, at);
+        let end = geometry.end.unwrap();
+        let area = end.rect();
+        let knob = area.origin + Offset::new(area.size.width * 0.5, area.size.height * 0.5);
+        let moved = knob + Offset::new(0., end.line_height * 2.2);
+        pointer(
+            &mut runtime,
+            PointerPhase::Down,
+            knob,
+            at + Duration::from_millis(10),
+        );
+        pointer(
+            &mut runtime,
+            PointerPhase::Move,
+            moved,
+            at + Duration::from_millis(30),
+        );
+        assert_eq!(controller.selection().base, 0);
+        assert_eq!(
+            controller.selection().extent > "first line".len(),
+            later_line
+        );
+        pointer(
+            &mut runtime,
+            PointerPhase::Up,
+            moved,
+            at + Duration::from_millis(50),
+        );
+        frame(&mut runtime, at + Duration::from_millis(50));
+        assert_eq!(runtime.focused_element(), Some(field));
+    }
 }

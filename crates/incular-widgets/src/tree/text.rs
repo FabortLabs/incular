@@ -987,6 +987,15 @@ impl WidgetTree {
         })
     }
 
+    /// The retained editor's configured scroll and handle drag origin.
+    #[doc(hidden)]
+    pub fn editable_drag_start_behavior(&self, id: ElementId) -> Option<incular_core::DragStartBehavior> {
+        match self.elements.get(id.0)?.widget.kind() {
+            WidgetKind::TextField(spec) => Some(spec.drag_start_behavior),
+            _ => None,
+        }
+    }
+
     /// Whether a laid-out multiline editor can consume an internal drag.
     #[doc(hidden)]
     pub fn editable_can_drag_scroll(&self, id: ElementId) -> bool {
