@@ -237,3 +237,41 @@ fn an_explicit_registrar_wins_over_the_inherited_registrar_and_can_be_replaced()
     assert_eq!(explicit.registered_child_count(), 0);
     assert_eq!(inherited.registered_child_count(), 1);
 }
+
+#[test]
+fn select_all_bridges_nested_containers_and_projects_their_local_selection() {
+    let region = SelectionAreaController::new();
+    let nested = SelectionAreaController::new();
+    let label = |value| Widget::from(Text::new(value).text_direction(TextDirection::Ltr));
+    let content = Column::new([
+        label("first").with_key(11_u64),
+        SelectionContainer::with_controller(nested.clone(), label("second").with_key(22_u64))
+            .into(),
+        SelectionContainer::disabled(label("ignored")).into(),
+        label("third").with_key(33_u64),
+    ]);
+    let mut tree = WidgetTree::new();
+    tree.mount(Widget::selection_area(region.clone(), content.into()))
+        .unwrap();
+    frame(&mut tree);
+    assert_eq!(region.registered_child_count(), 3);
+    let first = tree.element_with_key(&11_u64.into()).unwrap();
+    assert!(tree.selectable_text_select_all(first));
+    assert_eq!(region.selected_text(), "firstsecondthird");
+    assert_eq!(nested.selected_text(), "second");
+
+    let second = tree.element_with_key(&22_u64.into()).unwrap();
+    let third = tree.element_with_key(&33_u64.into()).unwrap();
+    assert!(tree.selectable_text_select(third, incular_text::TextSelection::collapsed(5)));
+    assert!(tree.selectable_text_set_extent(second, 0));
+    assert_eq!(region.selected_text(), "secondthird");
+    assert_eq!(nested.selected_text(), "second");
+    assert_eq!(
+        nested.selection().range,
+        Some(incular_widgets::SelectedContentRange::new(6, 0)),
+    );
+    assert!(tree.selectable_text_clear_selection(second));
+    assert!(nested.selected_text().is_empty());
+    assert!(region.selected_text().is_empty());
+    assert!(nested.selection_geometry().has_content);
+}

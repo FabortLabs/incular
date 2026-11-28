@@ -26,4 +26,20 @@ registrar, and releases its registration when the tree is dropped.
 
 Nine native registration tests and seven adjacent selection lifetime
 tests passed. This covers container registry membership, not arbitrary
-delegate hooks or forwarding selection events through nested proxies.
+delegate hooks; enabled proxy forwarding is tested below.
+
+## Nested selection commands
+
+The authored Flutter control `selection_container_select_all_test.dart`
+verifies that Select All returns the first, nested second, and third
+paragraphs in document order, but not text inside a disabled container.
+The inner delegate independently reports only the second paragraph.
+The mounted Incular probe first reproduced the dropped nested text
+(`firstthird`) and now passes with the same selected text. A reverse
+selection across the proxy preserves the local backward range (6
+to 0), and clearing it empties both snapshots without losing the
+child's registered content. Independent SelectionArea behavior
+continues to pass the native lifetime suite.
+
+The authored Flutter probe and all 17 targeted native tests passed.
+No additional original registrations are counted by this slice.

@@ -8,6 +8,8 @@ use crate::selection::{
 use incular_rendering::{SelectionResult, SelectionUtils};
 use incular_text::{LineBoundary, TextGeometry};
 
+type SelectionProxyRange = (ElementId, std::ops::Range<usize>);
+
 #[derive(Clone, Copy)]
 enum EditableCaret {
     Visual,
@@ -2128,7 +2130,7 @@ impl WidgetTree {
         }
         loop {
             if let Some(policy) = self.selection_boundary_policy(id) {
-                return policy.accepts_children().then_some(id);
+                return policy.accepts_children().then(|| self.selection_command_owner(id));
             }
             let Some(parent) = self.parent(id) else {
                 // A standalone SelectableText is its own one-label region.
@@ -2137,6 +2139,33 @@ impl WidgetTree {
             id = parent;
         }
     }
+    /// An enabled proxy shares the command owner of its registrar. An
+    /// explicit external registrar, SelectionArea or listener with its own
+    /// interaction state remains a separate command boundary.
+    fn selection_command_owner(&self, mut area: ElementId) -> ElementId {
+        while self.elements.get(area.0).is_some_and(|element| {
+            matches!(element.widget.kind(), WidgetKind::SelectionContainer { delegate, .. }
+                if delegate.is_enabled())
+        }) && self.external_selection_registrar(area).is_none()
+        {
+            let mut next = self.parent(area);
+            while let Some(parent) = next {
+                if self.selection_boundary_policy(parent).is_some() {
+                    break;
+                }
+                next = self.parent(parent);
+            }
+            let Some(parent) = next.filter(|&parent| {
+                self.selection_boundary_policy(parent)
+                    .is_some_and(SelectableChildPolicy::accepts_children)
+            }) else {
+                break;
+            };
+            area = parent;
+        }
+        area
+    }
+
     fn selection_boundary_policy(&self, id: ElementId) -> Option<SelectableChildPolicy> {
         match self.elements.get(id.0)?.widget.kind() {
             WidgetKind::SelectionArea { .. } => Some(SelectableChildPolicy::All),
@@ -2165,17 +2194,21 @@ impl WidgetTree {
         }
     }
     pub(super) fn selectable_texts_in_area(&self, area: ElementId) -> Vec<ElementId> {
-        self.selection_registry_members(area, false).0
+        self.selection_command_members(area, false).0
     }
 
-    /// Direct label entries and, optionally, child proxy containers. An owned
-    /// SelectionArea remains an independent region, and a disabled container
-    /// blocks both its own registration and its descendants.
-    fn selection_registry_members(
+    /// Layout order of the actual leaf targets of a selection command. A
+    /// connected child proxy is one registrar entry but forwards to its leaves.
+    /// Each proxy owns one contiguous slice, recorded at traversal exit.
+    fn selection_command_members(
         &self,
         area: ElementId,
-        include_proxies: bool,
-    ) -> (Vec<ElementId>, Vec<ElementId>) {
+        project_to_proxies: bool,
+    ) -> (Vec<ElementId>, Vec<SelectionProxyRange>) {
+        enum Work {
+            Enter(ElementId),
+            Finish(ElementId, usize),
+        }
         let Some(element) = self.elements.get(area.0) else {
             return (Vec::new(), Vec::new());
         };
@@ -2184,6 +2217,56 @@ impl WidgetTree {
             return (if standalone { vec![area] } else { Vec::new() }, Vec::new());
         };
         if !policy.accepts_children() {
+            return (Vec::new(), Vec::new());
+        }
+
+        let mut entries = Vec::new();
+        let mut proxies = Vec::new();
+        let mut work: Vec<_> = element.children.iter().rev().copied().map(Work::Enter).collect();
+        while let Some(next) = work.pop() {
+            let id = match next {
+                Work::Enter(id) => id,
+                Work::Finish(id, start) => {
+                    proxies.push((id, start..entries.len()));
+                    continue;
+                }
+            };
+            let Some(element) = self.elements.get(id.0) else {
+                continue;
+            };
+            match element.widget.kind() {
+                WidgetKind::SelectableText { .. } | WidgetKind::Text { .. } => {
+                    entries.push(id);
+                }
+                WidgetKind::SelectionContainer { delegate, .. } => {
+                    if delegate.is_enabled() && self.external_selection_registrar(id).is_none() {
+                        if project_to_proxies {
+                            work.push(Work::Finish(id, entries.len()));
+                        }
+                        work.extend(element.children.iter().rev().copied().map(Work::Enter));
+                    }
+                }
+                WidgetKind::SelectionArea { .. } | WidgetKind::SelectionListener { .. } => {}
+                _ => work.extend(element.children.iter().rev().copied().map(Work::Enter)),
+            }
+        }
+        (entries, proxies)
+    }
+
+    /// Direct label entries and, optionally, child proxy containers. An owned
+    /// SelectionArea remains an independent region, and a disabled container
+    /// blocks both its own registration and its descendants.
+    fn selection_registry_members(
+        &self,
+        area: ElementId,
+    ) -> (Vec<ElementId>, Vec<ElementId>) {
+        let Some(element) = self.elements.get(area.0) else {
+            return (Vec::new(), Vec::new());
+        };
+        if !self
+            .selection_boundary_policy(area)
+            .is_some_and(SelectableChildPolicy::accepts_children)
+        {
             return (Vec::new(), Vec::new());
         }
 
@@ -2200,7 +2283,7 @@ impl WidgetTree {
                 }
                 WidgetKind::SelectionContainer { delegate, .. }
                 | WidgetKind::SelectionListener { delegate, .. } => {
-                    if include_proxies && delegate.is_enabled() {
+                    if delegate.is_enabled() {
                         proxies.push(current);
                     }
                 }
@@ -2212,26 +2295,85 @@ impl WidgetTree {
     }
 
     pub(super) fn sync_static_selection(&mut self, area: ElementId) {
-        let entries = self.selectable_texts_in_area(area);
-        self.sync_static_selection_entries(area, entries);
-    }
-
-    fn sync_static_selection_entries(&mut self, area: ElementId, entries: Vec<ElementId>) {
-        if let Some(controller) = self.selection_area_controller(area) {
-            if let Some(selection) = self.static_selections.get(&area).copied() {
-                let selected = static_selection_text(self, &entries, selection);
-                let geometry = self.selection_geometry(area, &entries, selection);
-                let range = selection_content_range(self, &entries, selection);
-                controller.set_selection_snapshot(selected, range, geometry);
-            } else {
-                controller.clear_selection();
-            }
+        let (entries, proxies) = self.selection_command_members(area, true);
+        let selection = self.static_selections.get(&area).copied();
+        let indexes = if proxies.is_empty() {
+            None
+        } else {
+            selection.and_then(|selection| {
+                let locate = |point: StaticSelectionPoint| {
+                    entries.iter().position(|&candidate| candidate == point.element)
+                };
+                Some((selection, locate(selection.anchor)?, locate(selection.extent)?))
+            })
+        };
+        // Child delegates receive their local range, not all the parent's
+        // text, before the outer selection callback fires.
+        for (proxy, range) in proxies {
+            let children = &entries[range.clone()];
+            let local = indexes.and_then(|(selection, anchor, extent)| {
+                self.project_selection(proxy, children, range.start, anchor, extent, selection)
+            });
+            self.update_selection_snapshot(proxy, children, local);
         }
+        self.update_selection_snapshot(area, &entries, selection);
         for element in entries {
             if let Some(render) = self.render_id(element) {
                 self.mark_render_paint(render);
             }
         }
+    }
+
+    fn update_selection_snapshot(
+        &self,
+        area: ElementId,
+        entries: &[ElementId],
+        selection: Option<StaticSelection>,
+    ) {
+        let Some(controller) = self.selection_area_controller(area) else { return; };
+        if let Some(selection) = selection.filter(|_| !entries.is_empty()) {
+            let content = static_selection_text(self, entries, selection);
+            let geometry = self.selection_geometry(area, entries, selection);
+            let range = selection_content_range(self, entries, selection);
+            controller.set_selection_snapshot(content, range, geometry);
+        } else {
+            controller.clear_selection();
+        }
+    }
+
+    fn project_selection(
+        &self,
+        area: ElementId,
+        children: &[ElementId],
+        first_index: usize,
+        anchor: usize,
+        extent: usize,
+        selection: StaticSelection,
+    ) -> Option<StaticSelection> {
+        let first = *children.first()?;
+        let last = *children.last()?;
+        let last_index = first_index + children.len() - 1;
+        if anchor.max(extent) < first_index || anchor.min(extent) > last_index {
+            return None;
+        }
+        let clip = |point: StaticSelectionPoint, index: usize| {
+            if index < first_index {
+                StaticSelectionPoint { element: first, byte: 0, affinity: TextAffinity::Downstream }
+            } else if index > last_index {
+                StaticSelectionPoint {
+                    element: last,
+                    byte: self.selectable_text_value(last).map_or(0, str::len),
+                    affinity: TextAffinity::Upstream,
+                }
+            } else {
+                point
+            }
+        };
+        Some(StaticSelection {
+            area,
+            anchor: clip(selection.anchor, anchor),
+            extent: clip(selection.extent, extent),
+        })
     }
     pub(super) fn static_selection_range(&self, element: ElementId) -> Option<TextRange> {
         let area = self.selection_area_ancestor(element)?;
@@ -2401,18 +2543,13 @@ impl WidgetTree {
         // registrar, but only while the proxy's own registry has content.
         // Resolve children before parents in this layout pass instead of
         // relying on the tracked bucket's iteration order or another frame.
-        let mut work: Vec<_> = self
-            .tracked
-            .selection_boundaries
-            .iter()
-            .copied()
-            .map(Work::Enter)
-            .collect();
+        let areas: Vec<_> = self.tracked.selection_boundaries.iter().copied().collect();
+        let mut work: Vec<_> = areas.iter().copied().map(Work::Enter).collect();
         let mut visited = FastHashSet::default();
         while let Some(next) = work.pop() {
             match next {
                 Work::Enter(area) if visited.insert(area) => {
-                    let (entries, proxies) = self.selection_registry_members(area, true);
+                    let (entries, proxies) = self.selection_registry_members(area);
                     let children = proxies.iter().copied().map(Work::Enter);
                     let start = work.len();
                     work.extend(children);
@@ -2432,9 +2569,15 @@ impl WidgetTree {
                         let total = entries.len() + nested;
                         controller.set_registered_child_count(total);
                         self.sync_external_selection_registration(area, total != 0);
-                        self.sync_static_selection_entries(area, entries);
                     }
                 }
+            }
+        }
+        for area in areas {
+            if self.selection_command_owner(area) == area {
+                self.sync_static_selection(area);
+            } else {
+                self.static_selections.remove(&area);
             }
         }
     }
