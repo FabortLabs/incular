@@ -10,7 +10,7 @@ use incular_config::TextDirection;
 use incular_core::{Color, Offset, Rect, Size};
 
 use crate::{
-    StrutStyle, TextAffinity, TextAlign, TextEngine, TextHeightBehavior, TextLayout,
+    StrutStyle, TextAffinity, TextAlign, TextEngine, TextGeometry, TextHeightBehavior, TextLayout,
     TextLayoutOptions, TextOverflow, TextRange, TextScaler, TextSpan, TextStrut, TextStyle,
     TextWidthBasis, WidgetSpanAlignment, word_boundary_at,
 };
@@ -419,24 +419,7 @@ impl TextLayout {
         let index = lines
             .partition_point(|line| line.top <= point.y)
             .saturating_sub(1);
-        let x = point.x;
-        let stops = self.line_caret_positions(index);
-        let index_at_x = stops.partition_point(|stop| stop.x < x);
-        let left = index_at_x.checked_sub(1).and_then(|index| stops.get(index));
-        let right = stops.get(index_at_x);
-        let closest = match (left, right) {
-            (_, Some(right)) if right.x == x => {
-                let same_x = &stops[index_at_x..];
-                let last = &same_x[same_x.partition_point(|stop| stop.x == x) - 1];
-                // At an ordinary shared edge, choose the leading edge of
-                // the next visual glyph. Coincident bidi stops with different
-                // logical positions are not interchangeable.
-                Some(if last.offset == right.offset { last } else { right })
-            }
-            (Some(left), Some(right)) if x - left.x <= right.x - x => Some(left),
-            (_, Some(right)) => Some(right),
-            (left, None) => left,
-        };
+        let closest = self.closest_caret_for_line(index, point.x);
         closest.map_or(
             TextPainterPosition {
                 offset: lines.get(index).map_or(0, |line| line.start),

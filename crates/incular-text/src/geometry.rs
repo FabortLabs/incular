@@ -32,6 +32,24 @@ pub trait TextGeometry {
     /// The visual insertion points of one line in left-to-right screen order.
     fn line_caret_positions(&self, line: usize) -> &[TextCaretPosition];
 
+    /// Finds the nearest stop on a visual line without changing logical
+    /// offsets at a bidi join. A pointer on a shared edge belongs to the
+    /// glyph on its right, as does a tie at a glyph midpoint.
+    fn closest_caret_for_line(&self, line: usize, x: f32) -> Option<TextCaretPosition> {
+        let stops = self.line_caret_positions(line);
+        // The last of coincident stops on the left belongs to the visual
+        // glyph to their right. Conversely the first stop ahead belongs
+        // to the glyph immediately to its left.
+        let next = stops.partition_point(|stop| stop.x <= x);
+        let left = next.checked_sub(1).and_then(|index| stops.get(index));
+        let right = stops.get(next);
+        match (left, right) {
+            (Some(left), Some(right)) if x - left.x < right.x - x => Some(*left),
+            (_, Some(right)) => Some(*right),
+            (left, None) => left.copied(),
+        }
+    }
+
     /// The line at `index`.
     ///
     /// # Panics

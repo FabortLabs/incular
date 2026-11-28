@@ -637,11 +637,10 @@ impl TextLayout {
                 line.offset + line.width,
             ));
         }
-        positions[first..].sort_by(|left, right| {
-            left.x
-                .total_cmp(&right.x)
-                .then_with(|| left.offset.cmp(&right.offset))
-        });
+        // Keep coincident stops in visual cluster order: the left glyph's
+        // trailing stop precedes the right glyph's leading stop, regardless
+        // of which has the smaller logical byte offset.
+        positions[first..].sort_by(|left, right| left.x.total_cmp(&right.x));
     }
 }
 
