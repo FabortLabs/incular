@@ -11,10 +11,9 @@ pure layout widgets changed baseline alignment higher in the tree.
 | Padding | Insets (7,13,15,11) yield a 122×124 wrapper, place the child at (7,13), and expose the 53px baseline. Removing the metric keeps the geometry and reports no baseline. |
 | FractionallySizedBox | Factors of 0.5 under a 200×200 maximum and a 160px minimum height constrain the child to 100×100, place it at (0,30), and expose the 70px baseline. |
 
-The selected `rendering/shifted_box_test.dart` registrations
-:57, :71, :84, :183 and :200 remain partial because they invoke the
-direct dry-baseline API. Incular verifies the laid-out metrics and
-their child offsets, including the retained removal case.
+The first comparison of `rendering/shifted_box_test.dart`
+:57, :71, :84, :183 and :200 covered only the laid-out metrics
+and their child offsets. The direct query is covered below.
 
 The separate `rendering/positioned_box_test.dart` cases :13 and :25
 assert only the actual box sizes. Their Flutter originals and retained
@@ -69,3 +68,24 @@ proxies so a wrapper that only paints or handles input cannot
 substitute real layout for the child's intrinsic result. All 22
 selected native cases passed. These authored comparisons do not
 increase the pinned upstream registration count.
+
+## Direct dry alphabetic baselines
+
+Twelve exact pinned registrations now pair: :45, :57, :71, :84,
+:120, :138, :152, :167, :183, :200, :212 and :228.
+The native queries use new constraints without running a live
+layout. The equivalent leaf is 50 × 50 with an explicit 40 px
+alphabetic baseline. Top-left, center, and bottom-right alignment
+report 40, 115, and 190 px in 200 × 200 bounds. A baselineless
+child returns no result. Finite factors, unbounded, 1 px and zero
+bounds match. Overflow and fractional wrappers use the child
+constraints, Padding adds 10 px, and Baseline changes the result
+to 30 px. A native control verifies negative offsets and absence
+of a baseline when the child has none.
+
+The query preserves both the previous measured baseline and the
+previous laid-out bounds, and it does not increment live layout
+counts. It shares the text-shaping helper with the dry size query.
+This is the alphabetic path; the ideographic query and Flutter's
+literally childless positioned box remain separate. All 23 focused
+native baseline and intrinsic tests passed.

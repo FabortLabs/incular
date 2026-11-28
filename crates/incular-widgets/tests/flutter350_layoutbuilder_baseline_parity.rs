@@ -98,3 +98,140 @@ fn regenerated_child_replaces_or_clears_the_cached_actual_baseline() {
         assert_eq!(y(LEAF) - y(HOST), expected);
     }
 }
+
+fn measurable_mock() -> Widget {
+    SizedBox::new()
+        .width(50.)
+        .height(50.)
+        .child(text_with_baseline(40.))
+        .into()
+}
+
+fn dry_at(widget: impl Into<Widget>, constraints: Constraints) -> Option<f32> {
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(widget.into()).unwrap();
+    tree.dry_alphabetic_baseline(tree.render_id(root).unwrap(), constraints)
+}
+
+#[test]
+fn shifted_dry_align_baselines_match_the_mock_size_and_alignment() {
+    use incular_config::Alignment;
+    use incular_widgets::Align;
+
+    let maximum = Constraints::loose(Size::new(200., 200.));
+    for (alignment, expected) in [
+        (Alignment::CENTER, 115.),
+        (Alignment::TOP_LEFT, 40.),
+        (Alignment::BOTTOM_RIGHT, 190.),
+    ] {
+        assert_eq!(
+            dry_at(Align::new(alignment, measurable_mock()), maximum),
+            Some(expected)
+        );
+    }
+    assert_eq!(
+        dry_at(Align::new(Alignment::CENTER, SizedBox::shrink()), maximum),
+        None
+    );
+    assert_eq!(
+        dry_at(
+            Align::new(Alignment::TOP_LEFT, measurable_mock())
+                .width_factor(2.)
+                .height_factor(1.5),
+            maximum,
+        ),
+        Some(40.)
+    );
+}
+
+#[test]
+fn shifted_dry_align_baselines_survive_infinite_small_and_zero_bounds() {
+    use incular_config::Alignment;
+    use incular_widgets::Align;
+
+    assert_eq!(
+        dry_at(
+            Align::new(Alignment::TOP_LEFT, measurable_mock()),
+            Constraints::unbounded(),
+        ),
+        Some(40.)
+    );
+    for constraints in [
+        Constraints::loose(Size::new(1., 1.)),
+        Constraints::tight(Size::ZERO),
+    ] {
+        assert_eq!(
+            dry_at(
+                Align::new(Alignment::CENTER, measurable_mock()),
+                constraints
+            ),
+            Some(40.)
+        );
+    }
+}
+
+#[test]
+fn shifted_dry_baselines_use_the_current_child_constraints_not_the_wet_offset() {
+    use incular_config::Alignment;
+    use incular_widgets::{FractionallySizedBox, OverflowBox, Padding, SizedOverflowBox};
+
+    let small = Constraints::loose(Size::new(100., 100.));
+    let large = Constraints::loose(Size::new(200., 200.));
+    let left = Alignment::TOP_LEFT;
+    assert_eq!(
+        dry_at(OverflowBox::new(measurable_mock()).alignment(left), small),
+        Some(40.)
+    );
+    assert_eq!(
+        dry_at(
+            SizedOverflowBox::new(Size::new(100., 100.), measurable_mock()).alignment(left),
+            large
+        ),
+        Some(40.)
+    );
+    assert_eq!(
+        dry_at(
+            FractionallySizedBox::new(measurable_mock())
+                .width_factor(0.5)
+                .height_factor(0.5)
+                .alignment(left),
+            large,
+        ),
+        Some(40.)
+    );
+    assert_eq!(
+        dry_at(Padding::all(10., measurable_mock()), small),
+        Some(50.)
+    );
+    assert_eq!(
+        dry_at(Baseline::new(30., measurable_mock()), small),
+        Some(30.)
+    );
+    assert_eq!(
+        dry_at(Baseline::new(-10., measurable_mock()), small),
+        Some(-10.)
+    );
+    assert_eq!(dry_at(Baseline::new(30., SizedBox::shrink()), small), None);
+}
+
+#[test]
+fn querying_a_baseline_at_different_bounds_keeps_the_previous_laid_out_geometry() {
+    use incular_config::Alignment;
+    use incular_widgets::Align;
+
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(Align::new(Alignment::BOTTOM_RIGHT, measurable_mock()).into())
+        .unwrap();
+    let render = tree.render_id(root).unwrap();
+    let first = Constraints::tight(Size::new(100., 100.));
+    tree.layout(first).unwrap();
+    let original = tree.element_bounds(root).unwrap();
+    let wet_baseline = tree.baseline(render);
+    let layouts = tree.diagnostics().layouts;
+    let second = Constraints::tight(Size::new(200., 200.));
+    assert_eq!(tree.dry_alphabetic_baseline(render, second), Some(190.));
+    assert_eq!(tree.element_bounds(root).unwrap(), original);
+    assert_eq!(tree.baseline(render), wet_baseline);
+    assert_eq!(tree.diagnostics().layouts, layouts);
+}

@@ -226,24 +226,9 @@ impl WidgetTree {
                 *additional,
             )),
             RenderKind::Wrap { wrap, .. } => self.dry_wrap_size(&node.children, wrap, constraints),
-            RenderKind::Text { inline, .. } if node.children.is_empty() => {
-                let placeholders = inline
-                    .as_ref()
-                    .map_or(&[][..], |inline| &inline.placeholders);
-                let mut engine = self.text_engine.borrow_mut();
-                if engine.has_pending_application_fonts() {
-                    // Shaping syncs the collection. The next frame must
-                    // still invalidate previously measured text geometry.
-                    self.dry_shape_refreshed_fonts.set(true);
-                }
-                let layout = super::behavior::shape_render_paragraph(
-                    &mut engine,
-                    node.object.kind(),
-                    placeholders,
-                    constraints,
-                )?;
-                Some(constraints.constrain(layout.metrics.size))
-            }
+            RenderKind::Text { .. } if node.children.is_empty() => self
+                .dry_leaf_paragraph_metrics(id, constraints)
+                .map(|(size, _)| size),
             RenderKind::ProxyLayout {
                 mode: ChildLayoutMode::QuarterTurns(turns),
             } => {
@@ -263,6 +248,36 @@ impl WidgetTree {
             kind if forwards_intrinsic_child(kind) => child(constraints),
             _ => None,
         }
+    }
+
+    pub(super) fn dry_leaf_paragraph_metrics(
+        &self,
+        id: RenderObjectId,
+        constraints: Constraints,
+    ) -> Option<(Size, Option<f32>)> {
+        let node = self.renders.get(id.0)?;
+        let RenderKind::Text { inline, .. } = node.object.kind() else {
+            return None;
+        };
+        let placeholders = inline
+            .as_ref()
+            .map_or(&[][..], |inline| &inline.placeholders);
+        let mut engine = self.text_engine.borrow_mut();
+        if engine.has_pending_application_fonts() {
+            // Shaping syncs the collection. The next frame must still
+            // invalidate previously measured text geometry.
+            self.dry_shape_refreshed_fonts.set(true);
+        }
+        let layout = super::behavior::shape_render_paragraph(
+            &mut engine,
+            node.object.kind(),
+            placeholders,
+            constraints,
+        )?;
+        Some((
+            constraints.constrain(layout.metrics.size),
+            Some(layout.metrics.baseline),
+        ))
     }
 
     fn dry_wrap_size(

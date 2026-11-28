@@ -1008,11 +1008,11 @@ packages/flutter/test/widgets/overflow_box_test.dart	37	'contentSuperLong=$conte
 packages/flutter/test/widgets/overflow_box_test.dart	68	no child	paired-match	upstream-overflow-box-fit.md
 packages/flutter/test/widgets/overflow_box_test.dart	93	OverflowBox implements debugFillProperties	partial-match	upstream-overflow-box-fit.md
 packages/flutter/test/rendering/positioned_box_test.dart	50	RenderPositionedBox width and height factors	paired-match	upstream-shifted-box-baselines.md#align-intrinsic-factors
-packages/flutter/test/rendering/shifted_box_test.dart	57	computeDryBaseline works with center alignment	partial-match	upstream-shifted-box-baselines.md
-packages/flutter/test/rendering/shifted_box_test.dart	71	computeDryBaseline works with top-left alignment	partial-match	upstream-shifted-box-baselines.md
-packages/flutter/test/rendering/shifted_box_test.dart	84	computeDryBaseline works with bottom-right alignment	partial-match	upstream-shifted-box-baselines.md
-packages/flutter/test/rendering/shifted_box_test.dart	183	RenderFractionallySizedOverflowBox computeDryBaseline	partial-match	upstream-shifted-box-baselines.md
-packages/flutter/test/rendering/shifted_box_test.dart	200	RenderPadding computeDryBaseline	partial-match	upstream-shifted-box-baselines.md
+packages/flutter/test/rendering/shifted_box_test.dart	57	computeDryBaseline works with center alignment	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
+packages/flutter/test/rendering/shifted_box_test.dart	71	computeDryBaseline works with top-left alignment	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
+packages/flutter/test/rendering/shifted_box_test.dart	84	computeDryBaseline works with bottom-right alignment	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
+packages/flutter/test/rendering/shifted_box_test.dart	183	RenderFractionallySizedOverflowBox computeDryBaseline	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
+packages/flutter/test/rendering/shifted_box_test.dart	200	RenderPadding computeDryBaseline	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
 packages/flutter/test/scheduler/scheduler_test.dart	317	Can schedule futures to completion	paired-match	scheduler-callback-phases-comparisons.md#future-returning-ui-tasks
 packages/flutter/test/scheduler/scheduler_test.dart	148	scheduleWarmUpFrame should flush microtasks between callbacks	paired-match	scheduler-callback-phases-comparisons.md#warm-up-begin-and-draw
 packages/flutter/test/scheduler/scheduler_test.dart	167	2 calls to scheduleWarmUpFrame just schedules it once	partial-match	scheduler-callback-phases-comparisons.md#warm-up-begin-and-draw
@@ -3852,3 +3852,10 @@ packages/flutter/test/widgets/form_test.dart	1903	FormFieldState.build delegates
 packages/flutter/test/widgets/form_test.dart	1927	FormFieldState.build delegates onUnfocus wrapping to wrapWithFocus	paired-match	upstream-form-state.md#validation-semantics-and-zero-area-layouts
 packages/flutter/test/widgets/form_test.dart	1949	Form does not crash at zero area	paired-match	upstream-form-state.md#validation-semantics-and-zero-area-layouts
 packages/flutter/test/widgets/form_test.dart	1961	FormField does not crash at zero area	paired-match	upstream-form-state.md#validation-semantics-and-zero-area-layouts
+packages/flutter/test/rendering/shifted_box_test.dart	45	computeDryBaseline returns null when child has no baseline	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
+packages/flutter/test/rendering/shifted_box_test.dart	120	computeDryBaseline works with width and height factors	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
+packages/flutter/test/rendering/shifted_box_test.dart	138	computeDryBaseline works with infinite constraints	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
+packages/flutter/test/rendering/shifted_box_test.dart	152	RenderConstrainedOverflowBox computeDryBaseline	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
+packages/flutter/test/rendering/shifted_box_test.dart	167	RenderSizedOverflowBox computeDryBaseline	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
+packages/flutter/test/rendering/shifted_box_test.dart	212	RenderBaseline computeDryBaseline	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines
+packages/flutter/test/rendering/shifted_box_test.dart	228	computeDryBaseline handles edge cases consistently	paired-match	upstream-shifted-box-baselines.md#direct-dry-alphabetic-baselines

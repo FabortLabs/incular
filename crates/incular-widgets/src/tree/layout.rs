@@ -3,6 +3,7 @@
 use super::*;
 
 mod behavior;
+mod dry_baseline;
 mod intrinsics;
 
 use super::rendering::{
