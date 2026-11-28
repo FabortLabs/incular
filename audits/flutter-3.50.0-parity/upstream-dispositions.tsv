@@ -4171,3 +4171,4 @@ packages/flutter/test/widgets/editable_text_scribble_test.dart	186	Requests focu
 packages/flutter/test/widgets/editable_text_scribble_test.dart	225	Declares itself for Scribble interaction if the bounds overlap the scribble rect and the widget is touchable	paired-match	upstream-scribble-selection-geometry.md#discovering-and-focusing-mounted-editors
 packages/flutter/test/widgets/editable_text_test.dart	17235	does not crash when didChangeMetrics is called after unmounting	paired-match	upstream-text-input-reattach.md#composition-only-frames-and-late-metrics
 packages/flutter/test/widgets/editable_text_test.dart	17259	_CompositionCallback widget does not skip frames	paired-match	upstream-text-input-reattach.md#composition-only-frames-and-late-metrics
+packages/flutter/test/widgets/editable_text_test.dart	17194	can handle the partial selection of a multi-code-unit glyph	partial-match	upstream-text-input-reattach.md#partial-grapheme-selections

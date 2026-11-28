@@ -359,3 +359,15 @@ was cleared, and then delivers both window metrics and a larger keyboard
 inset. The next frame has no focus, no reopened input connection, and no
 wire update for the old client. All five focused native geometry tests
 passed.
+
+## Partial grapheme selections
+
+Pinned `widgets/editable_text_test.dart:17194` accepts a selection from
+UTF-16 offsets 0 to 1 inside the first surrogate pair of the family emoji
+and paints without an exception. Incular's whole-editing-state transport
+rejects that broken scalar boundary with a typed error and does not mutate
+the mounted editor. Moving the endpoint to 2, still strictly inside the
+same extended grapheme but at a scalar boundary, does accept the edit,
+retains the noncollapsed selection, and paints the emoji without crashing.
+This is a partial comparison, not full UTF-16 editing-state equivalence.
+All 17 focused native whole-editing-state tests passed.

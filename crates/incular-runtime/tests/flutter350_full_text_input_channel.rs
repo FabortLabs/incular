@@ -932,3 +932,57 @@ fn persian_keyboard_updates_move_the_rtl_caret_left_even_after_trailing_space() 
         "{positions:?}"
     );
 }
+
+#[test]
+fn a_partial_grapheme_selection_renders_and_a_split_surrogate_is_rejected_safely() {
+    use incular_rendering::PaintCommand;
+
+    const FAMILY: &str = "👨‍👩‍👦";
+    let text = TextEditingController::with_text("12345");
+    let node = FocusNode::new();
+    let mut runtime = Runtime::new(
+        field(&text, &node, true)
+            .min_lines(Some(2))
+            .max_lines(Some(2))
+            .text_align(incular_text::TextAlign::Right)
+            .into(),
+    )
+    .unwrap();
+    frame(&mut runtime);
+    let client = attached(&mut runtime);
+    let packet = |extent| {
+        update(
+            json!(client.get()),
+            json!({"text": FAMILY, "selectionBase": 0, "selectionExtent": extent}),
+        )
+    };
+
+    // The exact Flutter fixture uses a UTF-16 index inside the leading
+    // surrogate pair; the Rust transport refuses that unrepresentable edge.
+    assert!(matches!(
+        runtime.handle_flutter_text_input_editing_call(&packet(1)),
+        Err(FlutterTextInputEditingError::SplitScalar {
+            range: "selection",
+            offset: 1
+        })
+    ));
+    assert_eq!(text.text(), "12345");
+
+    // Ending after the first scalar is still strictly inside the family
+    // grapheme, but is representable. Exercise the real shaping/paint path.
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_editing_call(&packet(2))
+            .unwrap(),
+        Some(true)
+    );
+    let (display, _) = runtime
+        .run_frame(Constraints::tight(Size::new(180., 80.)))
+        .unwrap();
+    assert_eq!(text.text(), FAMILY);
+    assert_eq!(text.selection(), TextSelection::new(0, '👨'.len_utf8()));
+    assert!(node.has_primary_focus());
+    assert!(display.commands().iter().any(|command| {
+        matches!(command, PaintCommand::GlyphRun { run, .. } if !run.glyphs.is_empty())
+    }));
+}
