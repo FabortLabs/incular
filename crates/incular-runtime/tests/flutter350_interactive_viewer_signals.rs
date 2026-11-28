@@ -301,3 +301,136 @@ fn callbacks_and_scene_mapping_agree_for_off_center_mouse_zoom() {
     near(under_pointer.x, 80.);
     near(under_pointer.y, 80.);
 }
+
+impl Scene {
+    fn contact(&mut self, pointer: u64, at: Offset, change: Change) {
+        self.runtime.handle_pointer_data_packet(
+            VIEW,
+            DPR,
+            [PointerData {
+                view_id: VIEW,
+                device: 15,
+                pointer,
+                physical_position: physical(at),
+                ..PointerData::new(change, self.time)
+            }],
+        );
+        self.frame();
+    }
+}
+
+#[test]
+fn infinite_boundary_preserves_all_pan_axis_rules() {
+    use incular_widgets::PanAxis;
+    let top_left = CENTER - Offset::new(100., 100.);
+    for (axis, offset, expected) in [
+        (
+            PanAxis::Free,
+            Offset::new(20., 20.),
+            Offset::new(-20., -20.),
+        ),
+        (
+            PanAxis::Aligned,
+            Offset::new(20., 20.),
+            Offset::new(0., -20.),
+        ),
+        (
+            PanAxis::Aligned,
+            Offset::new(20., 10.),
+            Offset::new(-20., 0.),
+        ),
+        (
+            PanAxis::Horizontal,
+            Offset::new(20., 20.),
+            Offset::new(-20., 0.),
+        ),
+        (
+            PanAxis::Horizontal,
+            Offset::new(20., 10.),
+            Offset::new(-20., 0.),
+        ),
+        (PanAxis::Horizontal, Offset::new(0., 10.), Offset::ZERO),
+        (
+            PanAxis::Vertical,
+            Offset::new(20., 20.),
+            Offset::new(0., -20.),
+        ),
+        (
+            PanAxis::Vertical,
+            Offset::new(20., 10.),
+            Offset::new(0., -10.),
+        ),
+        (PanAxis::Vertical, Offset::new(10., 0.), Offset::ZERO),
+    ] {
+        let controller = TransformationController::new();
+        let widget = viewer(&controller)
+            .boundary_margin(EdgeInsets::all(f32::INFINITY))
+            .pan_axis(axis);
+        let mut scene = Scene::new(controller, widget);
+        assert_eq!(scene.state(), (1., Offset::ZERO));
+        scene.contact(1, top_left + offset, Change::Down);
+        scene.contact(1, top_left, Change::Move);
+        scene.time += Duration::from_millis(300);
+        scene.contact(1, top_left, Change::Up);
+        assert_eq!(scene.state(), (1., expected), "{axis:?} at {offset:?}");
+    }
+}
+
+#[test]
+fn infinite_boundary_allows_panning_and_zooming_out_past_the_child() {
+    let controller = TransformationController::new();
+    let widget = viewer(&controller).boundary_margin(EdgeInsets::all(f32::INFINITY));
+    let mut scene = Scene::new(controller, widget);
+    let edge = CENTER - Offset::new(100., 100.);
+    let interior = edge + Offset::new(20., 20.);
+    scene.contact(1, interior, Change::Down);
+    scene.contact(1, edge, Change::Move);
+    scene.time += Duration::from_millis(300);
+    scene.contact(1, edge, Change::Up);
+    assert_eq!(scene.state(), (1., Offset::new(-20., -20.)));
+
+    scene.contact(1, interior, Change::Down);
+    scene.contact(2, interior + Offset::new(20., 0.), Change::Down);
+    scene.contact(1, interior + Offset::new(5., 0.), Change::Move);
+    scene.contact(2, interior - Offset::new(5., 0.), Change::Move);
+    scene.time += Duration::from_millis(300);
+    scene.contact(1, interior + Offset::new(5., 0.), Change::Up);
+    scene.contact(2, interior - Offset::new(5., 0.), Change::Up);
+    near(scene.state().0, 0.8);
+}
+
+#[test]
+fn finite_margin_constrains_drag_and_zoom_at_the_child_edges() {
+    let edge = CENTER - Offset::new(100., 100.);
+    let interior = edge + Offset::new(20., 20.);
+    for margin in [0., 10.] {
+        let controller = TransformationController::new();
+        let widget = viewer(&controller).boundary_margin(EdgeInsets::all(margin));
+        let mut scene = Scene::new(controller, widget);
+        assert_eq!(scene.state(), (1., Offset::ZERO));
+
+        scene.contact(1, interior, Change::Down);
+        scene.contact(1, edge, Change::Move);
+        scene.time += Duration::from_millis(300);
+        scene.contact(1, edge, Change::Up);
+        assert_eq!(scene.state(), (1., Offset::new(-margin, -margin)));
+
+        let (start_second, end_first, end_second) = if margin == 0. {
+            (10., -10., 20.)
+        } else {
+            (20., 5., 15.)
+        };
+        scene.contact(1, interior, Change::Down);
+        scene.contact(2, interior + Offset::new(start_second, 0.), Change::Down);
+        scene.contact(1, interior + Offset::new(end_first, 0.), Change::Move);
+        scene.contact(2, interior + Offset::new(end_second, 0.), Change::Move);
+        scene.time += Duration::from_millis(300);
+        scene.contact(1, interior + Offset::new(end_first, 0.), Change::Up);
+        scene.contact(2, interior + Offset::new(end_second, 0.), Change::Up);
+        if margin == 0. {
+            assert!(scene.state().0 > 1.);
+        } else {
+            near(scene.state().0, 200. / 220.);
+        }
+    }
+}

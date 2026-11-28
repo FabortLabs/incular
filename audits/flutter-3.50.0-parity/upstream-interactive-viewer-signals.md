@@ -43,3 +43,20 @@ Equal positive and negative wheel deltas restore the starting
 scale in the wide-range scene. An off-center wheel callback at
 local (80,80) gives the matching global location and the
 transform keeps scene point (80,80) under that same pointer.
+
+## Finite and unbounded touch boundaries
+
+Twelve pinned originals in :29–532 pair with mounted touch
+packet traces: the exact-fit boundary, a 10px margin, no boundary
+and the nine free/aligned/horizontal/vertical pan scenarios.
+An all-infinite margin now means no rectangle is used; a pan
+does not try to construct an impossible infinite Size. Both
+unbounded native probes previously panicked at that boundary.
+
+The no-boundary viewer pans in both directions and pinches down
+to 0.8. A flush child cannot pan until enlarged. A 10px margin
+stops a 20px drag at (-10,-10) and limits the pinch-out scene
+size to the 200/220 scale. The aligned 45-degree drag selects
+vertical, and explicit horizontal/vertical axes reject the
+opposite motion. The prior scroll and zoom anchor cases remain
+green in the same native target.

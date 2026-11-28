@@ -317,6 +317,12 @@ impl InteractiveViewer {
     /// Extends the boundary beyond the child; infinite margins remove it.
     #[must_use]
     pub fn boundary_margin(mut self, margin: EdgeInsets) -> Self {
+        let sides = [margin.left, margin.top, margin.right, margin.bottom];
+        debug_assert!(
+            sides.iter().all(|side| side.is_finite())
+                || sides.iter().all(|&side| side == f32::INFINITY),
+            "InteractiveViewer boundary margins must be finite or fully unbounded",
+        );
         self.boundary_margin = margin;
         self
     }
@@ -425,16 +431,19 @@ struct ViewerState {
 }
 
 impl ViewerState {
-    fn boundary_rect(&self) -> Rect {
+    fn boundary_rect(&self) -> Option<Rect> {
         let size = self.child_size.get();
         let margin = self.config.boundary_margin;
-        Rect::from_origin_size(
+        // Infinity means no boundary, not a real Size with infinite
+        // dimensions. The unbounded path must skip geometry entirely.
+        let extent = Size::maybe_new(
+            size.width + margin.left + margin.right,
+            size.height + margin.top + margin.bottom,
+        )?;
+        Some(Rect::from_origin_size(
             Offset::new(-margin.left, -margin.top),
-            Size::new(
-                size.width + margin.left + margin.right,
-                size.height + margin.top + margin.bottom,
-            ),
-        )
+            extent,
+        ))
     }
 
     fn viewport_rect(&self) -> Rect {
@@ -468,14 +477,9 @@ impl ViewerState {
             }
         };
         let next = matrix.translated(aligned);
-        let boundary = self.boundary_rect();
-        let infinite = !(boundary.origin.x.is_finite()
-            && boundary.origin.y.is_finite()
-            && boundary.size.width.is_finite()
-            && boundary.size.height.is_finite());
-        if infinite {
+        let Some(boundary) = self.boundary_rect() else {
             return next;
-        }
+        };
         let viewport = self.viewport_rect();
         let offending = exceeds_by(boundary, next.scene_viewport(viewport));
         if offending == Offset::ZERO {
@@ -519,10 +523,10 @@ impl ViewerState {
         }
         let current = self.matrix().scale;
         let viewport = self.viewport.get();
-        let boundary = self.boundary_rect();
-        let total = (current * scale).max(
-            (viewport.width / boundary.size.width).max(viewport.height / boundary.size.height),
-        );
+        let boundary_minimum = self.boundary_rect().map_or(0., |boundary| {
+            (viewport.width / boundary.size.width).max(viewport.height / boundary.size.height)
+        });
+        let total = (current * scale).max(boundary_minimum);
         let clamped_total = total.clamp(self.config.min_scale, self.config.max_scale);
         Matrix {
             scale: matrix.scale * (clamped_total / current),
