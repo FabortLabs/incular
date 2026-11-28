@@ -4219,3 +4219,7 @@ packages/flutter/test/widgets/editable_text_test.dart	3679	Read-only fields can 
 packages/flutter/test/widgets/editable_text_test.dart	3735	Sends "updateConfig" when read-only flag is flipped	partial-match	upstream-editable-read-only-connection.md#native-input-connection-closes-independently-of-focus
 packages/flutter/test/widgets/editable_text_test.dart	3777	Sends "updateConfig" when obscureText is flipped	paired-match	upstream-editable-host-configuration.md#obscuring-and-view-changes-update-an-existing-client
 packages/flutter/test/widgets/editable_text_test.dart	3859	Sends viewId and updates config when it changes	paired-match	upstream-editable-host-configuration.md#obscuring-and-view-changes-update-an-existing-client
+packages/flutter/test/widgets/editable_text_test.dart	10423	input imm channel calls are ordered correctly	partial-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
+packages/flutter/test/widgets/editable_text_test.dart	10584	setEditingState is not called when text changes	partial-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
+packages/flutter/test/widgets/editable_text_test.dart	10625	setEditingState is called when text changes on controller	partial-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
+packages/flutter/test/widgets/editable_text_test.dart	10672	Synchronous test of local and remote editing values	paired-match	upstream-editable-host-configuration.md#host-acknowledgements-and-local-edits
