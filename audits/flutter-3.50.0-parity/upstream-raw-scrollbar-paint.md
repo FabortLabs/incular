@@ -24,3 +24,28 @@ no pixels. This is not GPU readback. Default orientation, hover,
 and routing pointer input into the explicit overlay are separate.
 
 All 24 focused native scrollbar and retained scrolling tests passed.
+
+## Retained thumb drag, hover, and track tap
+
+Three exact registrations in the pinned `widgets/scrollbar_test.dart`
+passed. The native `flutter350_raw_scrollbar_input` target drives
+real pointer events through Runtime with the automatic overlay disabled:
+
+- :622: tapping below and above the thumb moves the controller
+  between 0 and 400; the 360 px thumb lands at y=240 and y=0.
+- :823: hovering at (794, 5) reveals the 90 px thumb without a
+  prior scroll, using the initial layout's viewport metrics.
+- :855: dragging the 90 px thumb 10 px with touch moves the
+  controller over 20 px, paints the thumb at y=10, and closes
+  the activity on release.
+
+The track tap clamps its target, drives a 100 ms ease-in-out
+animation, and pages by 80% of the viewport (480 px for a 600 px
+view with enough content). A move past touch slop or a cancel
+before a quick tap commits does not page. Flutter can also fire
+its TapDown callback after a held press's deadline; that path
+and overscroll during thumb drag are not covered by these tests.
+Incular uses an explicit shared controller for these comparisons;
+Flutter's automatic primary-controller wiring is a separate API.
+
+All 13 focused native pointer, paint, and editor-focus tests passed.

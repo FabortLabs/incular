@@ -3832,3 +3832,6 @@ packages/flutter/test/widgets/scrollbar_test.dart	89	Scrollbar is not smaller th
 packages/flutter/test/widgets/scrollbar_test.dart	122	When scrolling normally (no overscrolling), the size of the scrollbar stays the same, and it scrolls evenly	paired-match	upstream-raw-scrollbar-paint.md
 packages/flutter/test/widgets/scrollbar_test.dart	247	scrollbarOrientation are respected	paired-match	upstream-raw-scrollbar-paint.md
 packages/flutter/test/widgets/scrollbar_test.dart	1682	RawScrollbar mainAxisMargin property works properly	paired-match	upstream-raw-scrollbar-paint.md
+packages/flutter/test/widgets/scrollbar_test.dart	622	Tapping the track area pages the Scroll View	paired-match	upstream-raw-scrollbar-paint.md#retained-thumb-drag-hover-and-track-tap
+packages/flutter/test/widgets/scrollbar_test.dart	823	Scrollbar will show on hover without needing to scroll first for metrics	paired-match	upstream-raw-scrollbar-paint.md#retained-thumb-drag-hover-and-track-tap
+packages/flutter/test/widgets/scrollbar_test.dart	855	Scrollbar thumb can be dragged	paired-match	upstream-raw-scrollbar-paint.md#retained-thumb-drag-hover-and-track-tap

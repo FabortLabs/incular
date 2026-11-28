@@ -3084,6 +3084,7 @@ impl WidgetTree {
         self.input.scroll_brackets.clear();
         self.input.scroll_flings.clear();
         self.input.scrollbar_drag = None;
+        self.clear_explicit_scrollbar_input();
         self.input.active_external_drop = None;
         self.remove_scale_recognizers_when_idle();
     }
@@ -4498,6 +4499,34 @@ impl WidgetTree {
     /// only a hovering mouse reveals a faded scrollbar (Flutter's
     /// `hitTestInteractive` and `hitTestOnlyThumbInteractive`).
     pub fn scrollbar_pointer_with_kind(
+        &mut self,
+        phase: incular_core::PointerPhase,
+        point: Offset,
+        kind: crate::raw_input::PointerDeviceKind,
+    ) -> bool {
+        use incular_core::PointerPhase;
+        let explicit = if self.tracked.raw_scrollbars.is_empty()
+            && self.input.explicit_scrollbar_press.is_none()
+            && self.input.explicit_scrollbar_hover.is_none()
+        {
+            false
+        } else {
+            let hit = if matches!(phase, PointerPhase::Down | PointerPhase::Move) {
+                self.pointer_hit_test(point)
+            } else {
+                PointerHitTest::default()
+            };
+            self.explicit_scrollbar_pointer_with_hit(phase, point, kind, &hit, true)
+        };
+        if explicit && phase != PointerPhase::Exit {
+            return true;
+        }
+        self.automatic_scrollbar_pointer_with_kind(phase, point, kind) || explicit
+    }
+
+    /// Handles automatic scroll-view scrollbars after ordinary gesture routing.
+    #[doc(hidden)]
+    pub fn automatic_scrollbar_pointer_with_kind(
         &mut self,
         phase: incular_core::PointerPhase,
         point: Offset,

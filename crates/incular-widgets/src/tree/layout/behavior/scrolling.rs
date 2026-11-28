@@ -67,6 +67,9 @@ impl WidgetTree {
                     None => true,
                 };
                 if replace {
+                    if let Some(mut previous) = state.scrollbar.take() {
+                        previous.pointer_cancel();
+                    }
                     let mut scrollbar = RawScrollbar::new(controller.clone());
                     scrollbar.set_style(style);
                     state.scrollbar = Some(scrollbar);

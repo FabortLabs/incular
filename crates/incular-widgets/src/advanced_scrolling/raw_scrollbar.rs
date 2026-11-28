@@ -332,6 +332,12 @@ impl RawScrollbarGeometry {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RawScrollbarPart {
+    Thumb,
+    Track,
+}
+
 #[derive(Debug, PartialEq)]
 struct ThumbDrag {
     grab_offset: f32,
@@ -456,7 +462,7 @@ impl RawScrollbar {
     /// `ScrollbarPainter.hitTestInteractive`: the track, padded to the minimum
     /// interactive size around the thumb for touch and hover. A transparent
     /// scrollbar can only be hit by a mouse hovering it, which brings it in.
-    fn over_scrollbar(
+    pub(crate) fn over_scrollbar(
         &self,
         viewport_size: Size,
         point: Offset,
@@ -614,53 +620,101 @@ impl RawScrollbar {
         }
     }
 
-    /// Starts a thumb drag or performs a page step on the track. A thumb
-    /// press takes activity ownership — starting the bracket from idle
-    /// or taking over an open one without a duplicate `Start` — while
-    /// moves only publish offsets. A track click pages programmatically
-    /// with no bracket.
+    /// Starts a mouse thumb drag or performs a one-shot page step.
+    /// Mounted taps instead defer their page step until pointer release.
     pub fn pointer_down(&mut self, viewport_size: Size, point: Offset) -> bool {
-        if !self.style.normalized().interactive {
-            return false;
-        }
-        let geometry = self.geometry(viewport_size);
-        if geometry.thumb_contains(point) {
-            let main = self.style.orientation.axis().main_extent_of(point);
-            let thumb_main = self
-                .style
-                .orientation
-                .axis()
-                .main_extent_of(geometry.thumb.origin);
-            self.drag = Some(ThumbDrag {
-                grab_offset: main - thumb_main,
-                activity: self
-                    .controller
-                    .start_owned_activity(ActivityOrigin::Scrollbar),
-            });
-            // handleThumbPress / handleThumbPressStart: hold the scrollbar in
-            // view for the duration of the drag.
-            self.fade.queue(ScrollbarFadeCommand::CancelTimer);
-            self.fade.queue(ScrollbarFadeCommand::Forward);
-            return true;
-        }
-        if geometry.track_contains(point) {
-            let axis = self.style.orientation.axis();
-            let point_main = axis.main_extent_of(point);
-            let thumb_start = axis.main_extent_of(geometry.thumb.origin);
-            let thumb_extent = axis.main_extent_of(geometry.thumb.size);
-            let delta = if point_main < thumb_start {
-                -geometry.viewport_extent
-            } else if point_main > thumb_start + thumb_extent {
-                geometry.viewport_extent
-            } else {
-                0.0
-            };
-            if delta != 0.0 {
-                let _ = self.controller.scroll_by(delta);
+        match self.press_part(viewport_size, point, PointerDeviceKind::Mouse) {
+            Some(RawScrollbarPart::Thumb) => {
+                self.begin_thumb_drag(viewport_size, point);
+                true
             }
-            return true;
+            Some(RawScrollbarPart::Track) => {
+                self.page_track(viewport_size, point);
+                true
+            }
+            None => false,
         }
-        false
+    }
+
+    pub(crate) fn press_part(
+        &self,
+        viewport_size: Size,
+        point: Offset,
+        kind: PointerDeviceKind,
+    ) -> Option<RawScrollbarPart> {
+        let geometry = self.geometry(viewport_size);
+        if !self.style.interactive || !geometry.visible {
+            return None;
+        }
+        let (thumb, track) = match kind {
+            PointerDeviceKind::Touch | PointerDeviceKind::Trackpad => (
+                padded_interactive_rect(geometry.thumb, geometry.thumb),
+                padded_interactive_rect(geometry.track, geometry.thumb),
+            ),
+            _ => (geometry.thumb, geometry.track),
+        };
+        if thumb.contains(point) {
+            Some(RawScrollbarPart::Thumb)
+        } else if track.contains(point) {
+            Some(RawScrollbarPart::Track)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn begin_thumb_drag(&mut self, viewport_size: Size, point: Offset) {
+        let thumb = self.geometry(viewport_size).thumb;
+        let axis = self.style.orientation.axis();
+        let grab = axis.main_extent_of(point) - axis.main_extent_of(thumb.origin);
+        self.drag = Some(ThumbDrag {
+            grab_offset: grab.clamp(0., axis.main_extent(thumb.size)),
+            activity: self.controller.start_owned_activity(ActivityOrigin::Scrollbar),
+        });
+        // An owned thumb press holds the scrollbar in view until it ends.
+        self.fade.queue(ScrollbarFadeCommand::CancelTimer);
+        self.fade.queue(ScrollbarFadeCommand::Forward);
+    }
+
+    fn track_page_direction(&self, viewport_size: Size, point: Offset) -> Option<f32> {
+        let geometry = self.geometry(viewport_size);
+        let axis = self.style.orientation.axis();
+        let along = axis.main_extent_of(point);
+        let start = axis.main_extent_of(geometry.thumb.origin);
+        let direction = if along < start {
+            -1.0
+        } else if along > start + axis.main_extent(geometry.thumb.size) {
+            1.0
+        } else {
+            return None;
+        };
+        let reversed = self
+            .style
+            .orientation
+            .is_reversed(self.controller.metrics().axis_direction);
+        Some(if reversed { -direction } else { direction })
+    }
+
+    fn page_track(&self, viewport_size: Size, point: Offset) {
+        if let Some(direction) = self.track_page_direction(viewport_size, point) {
+            self.controller
+                .scroll_by(direction * self.geometry(viewport_size).viewport_extent);
+        }
+    }
+
+    pub(crate) fn animate_track_page(&self, viewport_size: Size, point: Offset) -> bool {
+        let Some(direction) = self.track_page_direction(viewport_size, point) else {
+            return false;
+        };
+        let metrics = self.controller.metrics();
+        // Flutter ScrollAction pages by 80% of the viewport. RawScrollbar
+        // uses ScrollPosition.moveTo, which clamps the target before driving
+        // the 100ms ease-in-out motion instead of overshooting and bouncing.
+        let target = (metrics.pixels + direction * 0.8 * metrics.viewport_dimension)
+            .clamp(metrics.min_scroll_extent, metrics.max_scroll_extent);
+        target != metrics.pixels
+            && self
+                .controller
+                .animate_to(target, Duration::from_millis(100), Curve::EaseInOut)
     }
 
     /// Updates a thumb drag and returns whether it moved the controller.
@@ -669,7 +723,10 @@ impl RawScrollbar {
             return false;
         };
         let geometry = self.geometry(viewport_size);
-        if geometry.thumb_travel <= 0.0 || geometry.scroll_range() <= 0.0 {
+        if !drag.activity.is_current()
+            || geometry.thumb_travel <= 0.0
+            || geometry.scroll_range() <= 0.0
+        {
             return false;
         }
         let axis = self.style.orientation.axis();

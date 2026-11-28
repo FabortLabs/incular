@@ -2454,6 +2454,11 @@ impl Runtime {
                 self.tree.add_positioned_hover_device(window, raw, &hit);
                 self.update_mouse_cursor(raw, &hit);
                 if self.legacy_pointer.is_none() {
+                    self.frame_requested |= self.tree.explicit_scrollbar_hover_with_hit(
+                        event.position,
+                        event.kind,
+                        &hit,
+                    );
                     let target = self.button_target(&hit);
                     self.set_hover(target.map(|(element, _)| element));
                 }
@@ -2674,6 +2679,21 @@ impl Runtime {
             PointerPhase::Enter | PointerPhase::Exit => false,
         };
 
+        if legacy_pointer
+            && self.tree.explicit_scrollbar_pointer_with_hit(
+                phase,
+                position,
+                kind,
+                &hit,
+                !active_primary,
+            )
+        {
+            self.cancel_pending_mobile_text_touch();
+            self.frame_requested = true;
+            self.release_legacy_pointer(device, pointer, phase, primary_changed);
+            return None;
+        }
+
         if let Some(element) = raw_target
             && self.tree.tap_region_owns_pointer(gesture_window, raw_event)
         {
@@ -2746,7 +2766,7 @@ impl Runtime {
         if !legacy_pointer {
             return None;
         }
-        if self.tree.scrollbar_pointer_with_kind(phase, position, kind) {
+        if self.tree.automatic_scrollbar_pointer_with_kind(phase, position, kind) {
             self.cancel_pending_mobile_text_touch();
             self.frame_requested = true;
             self.release_legacy_pointer(device, pointer, phase, primary_changed);
@@ -5057,9 +5077,6 @@ impl Runtime {
         // lives and idles otherwise. No timer loop, just frame demand.
         let reduced_motion = self.environment.borrow().reduced_motion;
         let fling_live = self.tree.pump_scroll_flings(now, reduced_motion);
-        // The overlay scrollbar's reveal/fade-out follows scrolling and hover,
-        // so it steps after flings and before paint.
-        let scrollbar_live = self.tree.pump_scrollbar_fades(now);
         let text_long_press_live = self.pump_text_long_press(now);
         let _layout_guard = tracing::info_span!("incular.layout").entered();
         let layout_span = profiling::PhaseSpan::start();
@@ -5067,6 +5084,9 @@ impl Runtime {
         self.tree.layout(constraints)?;
         let layout = layout_span.elapsed_us();
         drop(_layout_guard);
+        // Use this frame's viewport metrics, including on the first attached
+        // frame. Paint-only fade invalidation still precedes painting.
+        let scrollbar_live = self.tree.pump_scrollbar_fades(now);
         for (action, handler) in self.tree.take_pending_handlers() {
             self.handlers_stale = true;
             self.handlers.insert(action, handler);

@@ -96,6 +96,7 @@ use crate::selection::{
 mod autofill;
 mod context;
 mod departing;
+mod explicit_scrollbar;
 mod descriptors;
 mod external_drop;
 mod flex_overflow;
@@ -1527,6 +1528,8 @@ struct InputState {
     /// drag's activity token aborts silently when still current, matching
     /// the silent teardown policy for torn-down context.
     scrollbar_drag: Option<ScrollbarDrag>,
+    explicit_scrollbar_press: Option<explicit_scrollbar::ExplicitScrollbarPress>,
+    explicit_scrollbar_hover: Option<RenderObjectId>,
     /// Touch-drag scroll brackets by gesture stream. At most one scroll
     /// member exists per stream (innermost scrollable, only when no app
     /// recognizer competes), so at most one entry per key. Entries leave

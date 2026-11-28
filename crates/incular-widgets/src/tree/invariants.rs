@@ -833,6 +833,19 @@ impl WidgetTree {
                 Some(drag.render),
             ));
         }
+        for render in [
+            self.input.explicit_scrollbar_press.map(|press| press.render()),
+            self.input.explicit_scrollbar_hover,
+        ].into_iter().flatten() {
+            if !self.renders.contains(render.0) {
+                return Err(Self::invariant_error(
+                    InvariantCategory::Interaction,
+                    "explicit scrollbar input references a dead render object",
+                    None,
+                    Some(render),
+                ));
+            }
+        }
         for selection in self.static_selections.values() {
             for element in [
                 selection.area,
