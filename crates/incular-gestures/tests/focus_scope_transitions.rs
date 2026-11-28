@@ -131,3 +131,54 @@ fn nested_parent_observer_can_make_newer_focus_decision() {
     assert_eq!(parent.focused(), Some(parent_second));
     assert_eq!(child.focused(), Some(child_node));
 }
+
+#[test]
+fn first_focus_without_a_manager_keeps_history_but_never_grants_primary_focus() {
+    let scope = FocusScopeNode::new();
+    let parent = FocusScopeNode::new();
+    let first = FocusScopeNode::new();
+    let second = FocusScopeNode::new();
+
+    assert!(scope.set_first_focus(&parent));
+    assert!(parent.set_first_focus(&first));
+    assert!(parent.set_first_focus(&second));
+    assert_eq!(
+        parent.focused_child().as_ref(),
+        Some(&second.scope_focus_node())
+    );
+    assert!(first.request_focus_in_scope());
+
+    assert!(!scope.has_focus());
+    assert!(!first.has_focus());
+    assert!(!first.has_primary_focus());
+    assert!(!first.scope_focus_node().has_pending_focus_request());
+    assert_eq!(
+        scope.focused_child().as_ref(),
+        Some(&parent.scope_focus_node())
+    );
+    assert_eq!(
+        parent.focused_child().as_ref(),
+        Some(&first.scope_focus_node())
+    );
+    assert_eq!(
+        first.scope_focus_node().parent().as_ref(),
+        Some(&parent.scope_focus_node())
+    );
+    assert!(
+        !first.set_first_focus(&scope),
+        "the root cannot be adopted beneath its descendant"
+    );
+
+    assert!(first.detach_unmounted());
+    assert!(!first.detach_unmounted());
+    assert!(first.scope_focus_node().parent().is_none());
+    assert!(!scope.has_focus());
+    assert_eq!(
+        scope.focused_child().as_ref(),
+        Some(&parent.scope_focus_node())
+    );
+    assert_eq!(
+        parent.focused_child().as_ref(),
+        Some(&second.scope_focus_node())
+    );
+}

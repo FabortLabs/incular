@@ -403,6 +403,11 @@ impl FocusNode {
     /// Requests focus without granting it to a node that has not been attached.
     pub fn request_focus(&self) {
         if self.can_request_focus() {
+            if self.state.host_attachment_count.get() == 0 && self.remember_unmounted_scope_path() {
+                self.clear_pending_focus_request();
+                self.state.notify();
+                return;
+            }
             let request = FOCUS_EPOCH.get().wrapping_add(1);
             self.state.requested.set(Some(request));
             FOCUS_EPOCH.set(request);
@@ -462,6 +467,25 @@ impl FocusNode {
         if request_was_pending || focus_was_held {
             self.state.schedule_host_frame();
         }
+    }
+
+    fn remember_unmounted_scope_path(&self) -> bool {
+        let mut child = self.clone();
+        let mut remembered = false;
+        while let Some(scope) = child.host_enclosing_scope() {
+            let anchor = scope.scope_focus_node();
+            // Only follow links in the detached focus tree. A mounted
+            // runtime owns its history and settles its requests itself.
+            if child.parent().as_ref() != Some(&anchor)
+                || anchor.state.host_attachment_count.get() != 0
+            {
+                break;
+            }
+            scope.record_host_focused_child(&child);
+            child = anchor;
+            remembered = true;
+        }
+        remembered
     }
 
     /// Whether application code asked this node for focus through
@@ -2225,14 +2249,27 @@ impl FocusScopeNode {
             == Some(&node)
     }
 
-    /// Selects a mounted descendant scope as the active branch. If this
-    /// scope already holds focus, the selected scope restores its remembered
-    /// child or focuses its own anchor. If inactive, only history changes.
-    /// Returns false for unrelated, detached, or non-focusable active targets.
+    /// Selects a descendant scope as the active branch. A detached scope
+    /// without a parent is adopted when neither scope is mounted. If this
+    /// scope already holds focus, the selected scope restores its last child
+    /// or requests focus on its own anchor. Otherwise only history changes.
+    /// Never adopts a node away from a different retained focus host.
     #[must_use]
     pub fn set_first_focus(&self, scope: &Self) -> bool {
-        if self == scope || self.mounted_anchor().is_none() || scope.mounted_anchor().is_none() {
+        let mounted = self.mounted_anchor().is_some();
+        if self == scope || mounted != scope.mounted_anchor().is_some() {
             return false;
+        }
+        if !mounted {
+            let parent = self.scope_focus_node();
+            let child = scope.scope_focus_node();
+            if child.parent().is_none() {
+                if parent.ancestor_iter().any(|ancestor| ancestor == child) {
+                    return false;
+                }
+                child.set_host_parent(Some(&parent));
+                child.set_host_enclosing_scope(Some(self));
+            }
         }
 
         let mut path = Vec::<(Self, FocusNode)>::new();
@@ -2247,12 +2284,29 @@ impl FocusScopeNode {
             path.push((parent, child));
             child = anchor;
         }
-        if !contains_self || (self.has_focus() && !scope.request_focus_in_scope()) {
+        if !contains_self || (mounted && self.has_focus() && !scope.request_focus_in_scope()) {
             return false;
         }
         for (parent, child) in path {
             parent.record_host_focused_child(&child);
         }
+        true
+    }
+
+    /// Removes this scope from an unmounted focus tree without changing a
+    /// host's retained widget hierarchy. Returns false for a mounted scope
+    /// or one without an attached parent.
+    pub fn detach_unmounted(&self) -> bool {
+        if self.mounted_anchor().is_some() {
+            return false;
+        }
+        let node = self.scope_focus_node();
+        if node.parent().is_none() {
+            return false;
+        }
+        node.set_host_enclosing_scope(None);
+        node.set_host_parent(None);
+        node.clear_pending_focus_request();
         true
     }
 
@@ -2574,8 +2628,10 @@ impl FocusScopeNode {
     /// primary focus. Children that move to another scope no longer count.
     #[must_use]
     pub fn focused_child(&self) -> Option<FocusNode> {
-        if self.mounted_anchor().is_none() {
-            return self.state.manager.borrow_mut().focused();
+        if self.mounted_anchor().is_none()
+            && let Some(current) = self.state.manager.borrow_mut().focused()
+        {
+            return Some(current);
         }
         self.last_hosted_child(false)
     }

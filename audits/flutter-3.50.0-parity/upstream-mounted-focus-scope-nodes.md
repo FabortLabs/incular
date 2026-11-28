@@ -245,3 +245,15 @@ label intact. Child B remains unfocused. The new scope is the one
 reported by mounted lookup and now holds focus-within. The precise
 reference and 40 focused Rust focus regressions passed; no production
 focus behavior needed changing for this case.
+
+## First focus before a manager attaches
+
+The exact Flutter original `widgets/focus_manager_test.dart:489` passed.
+A detached scope can adopt a detached child scope and remember the selected
+branch without granting primary focus. Selecting the first nested child
+after choosing the second updates both enclosing scopes' histories. Detach
+removes that child from the immediate scope's history but leaves the outer
+scope's selected parent intact. The native focused test also checks fallback
+to the previous sibling, no accidental pending primary request on a linked
+but unmanaged node, and rejection of an ancestry cycle. The eight targeted
+scope transitions and diagnostics tests passed.
