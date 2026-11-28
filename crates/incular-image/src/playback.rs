@@ -9,7 +9,10 @@ use std::{
     time::Duration,
 };
 
-use crate::{ImageChunkEvent, ImageChunkListener, ImageError, ImageErrorListener, ImageInfo};
+use crate::{
+    ImageChunkEvent, ImageChunkListener, ImageChunkSubscription, ImageError, ImageErrorListener,
+    ImageInfo, ImageStream,
+};
 
 mod scheduled;
 
@@ -75,6 +78,7 @@ struct State {
     error: Option<ImageError>,
     unhandled_error_reporter: Option<ImageErrorListener>,
     suppress_unhandled_errors: bool,
+    progress: Option<ImageChunkSubscription>,
     decode_failed: bool,
     visible: Option<(Instant, Duration)>,
     frame_in_cycle: usize,
@@ -289,6 +293,24 @@ impl ImagePlayback {
         }
         self.decode();
         Some(subscription)
+    }
+
+    /// Forwards live progress from a provider stream. The playback
+    /// owns the subscription and releases it when disposed or replaced.
+    /// Progress never drives the frame clock.
+    pub fn follow_progress(&self, source: &ImageStream) -> bool {
+        if self.state.borrow().disposed {
+            return false;
+        }
+        let weak = self.downgrade();
+        let subscription = source.listen_chunks(move |event| {
+            if let Some(playback) = weak.upgrade() {
+                playback.report_chunk(event);
+            }
+        });
+        let previous = self.state.borrow_mut().progress.replace(subscription);
+        drop(previous);
+        true
     }
 
     /// Delivers this live progress event to the active listener groups.
@@ -543,6 +565,7 @@ impl ImagePlayback {
                 state.current.take(),
                 state.error.take(),
                 state.unhandled_error_reporter.take(),
+                state.progress.take(),
                 std::mem::take(&mut state.last_listener_callbacks),
             )
         };

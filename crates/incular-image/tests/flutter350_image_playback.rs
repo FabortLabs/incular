@@ -950,3 +950,32 @@ fn disabling_unhandled_playback_reports_outlives_the_listener() {
     drop(listener);
     assert!(source.attach_error(ImageError::Decode("still silent".into())));
 }
+
+#[test]
+fn playback_releases_its_provider_progress_subscription_on_disposal() {
+    use incular_image::{ImageChunkEvent, ImageStream, ImageStreamListener};
+
+    let (provider, transport) = ImageStream::loading();
+    let playback = ImagePlayback::scheduled();
+    assert!(playback.follow_progress(&provider));
+    assert!(provider.has_chunk_listeners());
+    assert!(transport.report_chunk(ImageChunkEvent::new(1, Some(3))));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let observer = playback
+        .listen_group(
+            ImageStreamListener::new(Rc::new(|_, _| panic!("no frame is ready"))).on_chunk({
+                let events = events.clone();
+                Rc::new(move |event| events.borrow_mut().push(event))
+            }),
+        )
+        .unwrap();
+    assert!(events.borrow().is_empty(), "prior chunk is not replayed");
+    let live = ImageChunkEvent::new(2, Some(3));
+    assert!(transport.report_chunk(live));
+    assert_eq!(*events.borrow(), [live]);
+    drop(observer);
+    assert!(!provider.has_chunk_listeners());
+    assert!(!playback.follow_progress(&provider));
+    assert!(transport.report_chunk(ImageChunkEvent::new(3, Some(3))));
+    assert_eq!(*events.borrow(), [live]);
+}

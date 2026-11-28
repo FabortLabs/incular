@@ -3873,3 +3873,4 @@ packages/flutter/test/painting/image_provider_resize_image_test.dart	619	takes o
 packages/flutter/test/painting/image_provider_resize_image_test.dart	633	forms closure	paired-match	upstream-resize-image.md#requested-bounds-and-source-key-callback-timing
 packages/flutter/test/painting/image_provider_resize_image_test.dart	657	handles sync obtainKey	paired-match	upstream-resize-image.md#requested-bounds-and-source-key-callback-timing
 packages/flutter/test/painting/image_provider_resize_image_test.dart	673	handles async obtainKey	paired-match	upstream-resize-image.md#requested-bounds-and-source-key-callback-timing
+packages/flutter/test/painting/image_stream_test.dart	1011	Multi-frame complete unsubscribes to chunk events when disposed	paired-match	upstream-image-playback.md#progress-subscription-disposal

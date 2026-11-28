@@ -336,6 +336,15 @@ impl ImageStream {
         }
     }
 
+    /// Whether any active listener receives new progress from this stream.
+    #[must_use]
+    pub fn has_chunk_listeners(&self) -> bool {
+        self.cell
+            .chunks
+            .get()
+            .is_some_and(|listeners| !listeners.active.borrow().is_empty())
+    }
+
     fn bind_chunk_source(&self) {
         let Some(listeners) = self.cell.chunks.get() else {
             return;

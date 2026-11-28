@@ -166,3 +166,13 @@ false permanently suppresses the unhandled route even if the
 listener is removed. These controls use the normal codec and
 listener lifecycle, not a replacement for the error dispatcher.
 All 43 focused native playback and stream tests passed.
+
+## Progress subscription disposal
+
+The exact pinned :1011 registration passed. A scheduled native
+playback follows a real provider stream, observes its subscription,
+and forwards later chunks only while an observer is active. When
+the last playback observer leaves and the playback disposes, it
+unregisters from the provider. The provider can still emit later
+chunks without invoking the disposed playback. The focused native
+progress, playback, and listener targets passed 44 tests.
