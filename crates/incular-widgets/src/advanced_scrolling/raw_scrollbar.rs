@@ -9,7 +9,7 @@ use incular_core::time::Instant;
 use std::time::Duration;
 
 use incular_animation::Curve;
-use incular_config::{Axis, AxisDirection};
+use incular_config::{Axis, TextDirection};
 use incular_core::finite_non_negative;
 use incular_core::{Color, Offset, Rect, Size};
 use incular_scroll::{ActivityOrigin, OwnedActivity, ScrollController};
@@ -202,8 +202,10 @@ impl ScrollbarFade {
 /// Which edge receives the scrollbar overlay.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum RawScrollbarOrientation {
-    /// Place a vertical scrollbar on the right edge.
+    /// Infer the edge from the scroll axis and ambient text direction.
     #[default]
+    Auto,
+    /// Place a vertical scrollbar on the right edge.
     Right,
     /// Place a vertical scrollbar on the left edge.
     Left,
@@ -214,15 +216,16 @@ pub enum RawScrollbarOrientation {
 }
 
 impl RawScrollbarOrientation {
-    fn axis(self) -> Axis {
+    fn resolve(self, axis: Axis, text_direction: TextDirection) -> (Self, Axis) {
         match self {
-            Self::Left | Self::Right => Axis::Vertical,
-            Self::Top | Self::Bottom => Axis::Horizontal,
+            Self::Auto => match (axis, text_direction) {
+                (Axis::Horizontal, _) => (Self::Bottom, axis),
+                (Axis::Vertical, TextDirection::Ltr) => (Self::Right, axis),
+                (Axis::Vertical, TextDirection::Rtl) => (Self::Left, axis),
+            },
+            Self::Left | Self::Right => (self, Axis::Vertical),
+            Self::Top | Self::Bottom => (self, Axis::Horizontal),
         }
-    }
-
-    fn is_reversed(self, direction: AxisDirection) -> bool {
-        direction.is_reversed()
     }
 }
 
@@ -364,6 +367,7 @@ struct ThumbDrag {
 pub struct RawScrollbar {
     controller: ScrollController,
     style: RawScrollbarStyle,
+    text_direction: TextDirection,
     drag: Option<ThumbDrag>,
     fade: ScrollbarFade,
     /// `_hoverIsActive`.
@@ -381,6 +385,7 @@ impl Clone for RawScrollbar {
         Self {
             controller: self.controller.clone(),
             style: self.style,
+            text_direction: self.text_direction,
             drag: None,
             fade,
             hover_active: false,
@@ -397,6 +402,7 @@ impl RawScrollbar {
         Self {
             controller,
             style: RawScrollbarStyle::default(),
+            text_direction: TextDirection::Ltr,
             drag: None,
             fade: ScrollbarFade::default(),
             hover_active: false,
@@ -518,6 +524,17 @@ impl RawScrollbar {
             .set_durations(self.style.fade_duration, self.style.time_to_fade);
     }
 
+    pub(crate) fn set_text_direction(&mut self, direction: TextDirection) {
+        self.text_direction = direction;
+    }
+
+    fn resolved_axis(&self) -> Axis {
+        self.style
+            .orientation
+            .resolve(self.controller.metrics().axis_direction.axis(), self.text_direction)
+            .1
+    }
+
     /// Computes track and thumb rectangles for `viewport_size`. The
     /// geometry is `visible` while the content scrolls and the fade has not
     /// hidden the scrollbar.
@@ -540,8 +557,10 @@ impl RawScrollbar {
     /// says the content is scrollable.
     fn layout_geometry(&self, viewport_size: Size) -> RawScrollbarGeometry {
         let style = self.style.normalized();
-        let axis = style.orientation.axis();
         let metrics = self.controller.metrics();
+        let (orientation, axis) = style
+            .orientation
+            .resolve(metrics.axis_direction.axis(), self.text_direction);
         let content_extent = self.controller.content_extent().max(0.0);
         let viewport_extent = self.controller.viewport_extent().max(0.0);
         let min_scroll_extent = self.controller.min_offset().min(0.0);
@@ -550,9 +569,11 @@ impl RawScrollbar {
         let cross_extent = axis.cross_extent(viewport_size);
         let travel_extent = (viewport_extent - style.main_axis_margin * 2.0).max(0.0);
         let track_cross = style.thickness + style.cross_axis_margin * 2.0;
-        let cross_start = match style.orientation {
+        let cross_start = match orientation {
             RawScrollbarOrientation::Left | RawScrollbarOrientation::Top => style.cross_axis_margin,
-            RawScrollbarOrientation::Right | RawScrollbarOrientation::Bottom => {
+            RawScrollbarOrientation::Auto
+            | RawScrollbarOrientation::Right
+            | RawScrollbarOrientation::Bottom => {
                 cross_extent - style.cross_axis_margin - style.thickness
             }
         };
@@ -598,7 +619,7 @@ impl RawScrollbar {
         } else {
             0.0
         };
-        let offset_fraction = if style.orientation.is_reversed(metrics.axis_direction) {
+        let offset_fraction = if metrics.axis_direction.is_reversed() {
             1.0 - offset_fraction
         } else {
             offset_fraction
@@ -664,7 +685,7 @@ impl RawScrollbar {
 
     pub(crate) fn begin_thumb_drag(&mut self, viewport_size: Size, point: Offset) {
         let thumb = self.geometry(viewport_size).thumb;
-        let axis = self.style.orientation.axis();
+        let axis = self.resolved_axis();
         let grab = axis.main_extent_of(point) - axis.main_extent_of(thumb.origin);
         self.drag = Some(ThumbDrag {
             grab_offset: grab.clamp(0., axis.main_extent(thumb.size)),
@@ -677,7 +698,7 @@ impl RawScrollbar {
 
     fn track_page_direction(&self, viewport_size: Size, point: Offset) -> Option<f32> {
         let geometry = self.geometry(viewport_size);
-        let axis = self.style.orientation.axis();
+        let axis = self.resolved_axis();
         let along = axis.main_extent_of(point);
         let start = axis.main_extent_of(geometry.thumb.origin);
         let direction = if along < start {
@@ -687,10 +708,7 @@ impl RawScrollbar {
         } else {
             return None;
         };
-        let reversed = self
-            .style
-            .orientation
-            .is_reversed(self.controller.metrics().axis_direction);
+        let reversed = self.controller.metrics().axis_direction.is_reversed();
         Some(if reversed { -direction } else { direction })
     }
 
@@ -729,16 +747,13 @@ impl RawScrollbar {
         {
             return false;
         }
-        let axis = self.style.orientation.axis();
+        let axis = self.resolved_axis();
         let track_start = self.style.main_axis_margin;
         let point_main = axis.main_extent_of(point);
         let desired_thumb =
             (point_main - drag.grab_offset - track_start).clamp(0.0, geometry.thumb_travel);
         let mut fraction = desired_thumb / geometry.thumb_travel;
-        if self
-            .style
-            .orientation
-            .is_reversed(self.controller.metrics().axis_direction)
+        if self.controller.metrics().axis_direction.is_reversed()
         {
             fraction = 1.0 - fraction;
         }
@@ -773,16 +788,13 @@ impl RawScrollbar {
         if !geometry.visible || geometry.thumb_travel <= 0.0 {
             return false;
         }
-        let axis = self.style.orientation.axis();
+        let axis = self.resolved_axis();
         let track_start = self.style.main_axis_margin;
         let mut fraction =
             (main_position - track_start - axis.main_extent_of(geometry.thumb.size) / 2.0)
                 .clamp(0.0, geometry.thumb_travel)
                 / geometry.thumb_travel;
-        if self
-            .style
-            .orientation
-            .is_reversed(self.controller.metrics().axis_direction)
+        if self.controller.metrics().axis_direction.is_reversed()
         {
             fraction = 1.0 - fraction;
         }

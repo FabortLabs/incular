@@ -3835,3 +3835,7 @@ packages/flutter/test/widgets/scrollbar_test.dart	1682	RawScrollbar mainAxisMarg
 packages/flutter/test/widgets/scrollbar_test.dart	622	Tapping the track area pages the Scroll View	paired-match	upstream-raw-scrollbar-paint.md#retained-thumb-drag-hover-and-track-tap
 packages/flutter/test/widgets/scrollbar_test.dart	823	Scrollbar will show on hover without needing to scroll first for metrics	paired-match	upstream-raw-scrollbar-paint.md#retained-thumb-drag-hover-and-track-tap
 packages/flutter/test/widgets/scrollbar_test.dart	855	Scrollbar thumb can be dragged	paired-match	upstream-raw-scrollbar-paint.md#retained-thumb-drag-hover-and-track-tap
+packages/flutter/test/widgets/scrollbar_test.dart	300	scrollbarOrientation default values are correct	paired-match	upstream-raw-scrollbar-paint.md#omitted-orientation-rectangular-thumb-and-resizing
+packages/flutter/test/widgets/scrollbar_test.dart	1922	not passing any shape or radius to RawScrollbar will draw the usual rectangular thumb	paired-match	upstream-raw-scrollbar-paint.md#omitted-orientation-rectangular-thumb-and-resizing
+packages/flutter/test/widgets/scrollbar_test.dart	1954	The bar can show or hide when the viewport size change	paired-match	upstream-raw-scrollbar-paint.md#omitted-orientation-rectangular-thumb-and-resizing
+packages/flutter/test/widgets/scrollbar_test.dart	1989	The bar can show or hide when the view size change	paired-match	upstream-raw-scrollbar-paint.md#omitted-orientation-rectangular-thumb-and-resizing

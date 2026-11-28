@@ -33,6 +33,11 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
         } => RenderKind::RawScrollbar {
             controller: controller.clone(),
             style: *style,
+            text_direction: if style.orientation == crate::RawScrollbarOrientation::Auto {
+                context.depend::<TextDirection>().unwrap_or(TextDirection::Ltr)
+            } else {
+                TextDirection::Ltr
+            },
         },
         WidgetKind::ListWheelScrollView { config } => RenderKind::ListWheelScrollView {
             config: config.clone(),

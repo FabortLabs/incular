@@ -30,7 +30,7 @@ fn raw_scrollbar_style_default_preserves_public_values() {
             cross_axis_margin: 0.0,
             track_color: Color::TRANSPARENT,
             thumb_color: Color::rgba(188, 188, 188, 102),
-            orientation: RawScrollbarOrientation::Right,
+            orientation: RawScrollbarOrientation::Auto,
             interactive: true,
             thumb_visibility: None,
             fade_duration: Duration::from_millis(300),

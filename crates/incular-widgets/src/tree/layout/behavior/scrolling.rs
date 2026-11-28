@@ -50,6 +50,7 @@ impl WidgetTree {
             RenderKind::RawScrollbar {
                 ref controller,
                 style,
+                text_direction,
             } => {
                 let (size, offsets) = if let Some(&child) = children.first() {
                     self.layout_render(child, constraints)?;
@@ -70,13 +71,13 @@ impl WidgetTree {
                     if let Some(mut previous) = state.scrollbar.take() {
                         previous.pointer_cancel();
                     }
-                    let mut scrollbar = RawScrollbar::new(controller.clone());
-                    scrollbar.set_style(style);
-                    state.scrollbar = Some(scrollbar);
-                } else if let Some(scrollbar) = state.scrollbar.as_mut()
-                    && scrollbar.style() != style
-                {
-                    scrollbar.set_style(style);
+                    state.scrollbar = Some(RawScrollbar::new(controller.clone()));
+                }
+                if let Some(scrollbar) = state.scrollbar.as_mut() {
+                    if scrollbar.style() != style {
+                        scrollbar.set_style(style);
+                    }
+                    scrollbar.set_text_direction(text_direction);
                 }
                 (size, offsets)
             }

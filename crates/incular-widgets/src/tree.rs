@@ -919,6 +919,7 @@ pub enum RenderKind {
     RawScrollbar {
         controller: ScrollController,
         style: RawScrollbarStyle,
+        text_direction: TextDirection,
     },
     ListWheelScrollView {
         config: Rc<WheelViewportConfig<Widget>>,

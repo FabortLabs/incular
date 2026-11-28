@@ -49,3 +49,20 @@ Incular uses an explicit shared controller for these comparisons;
 Flutter's automatic primary-controller wiring is a separate API.
 
 All 13 focused native pointer, paint, and editor-focus tests passed.
+
+## Omitted orientation, rectangular thumb, and resizing
+
+The pinned `widgets/scrollbar_test.dart` registrations at :300,
+:1922, :1954, and :1989 passed. Native retained paint now chooses
+right for vertical LTR, left for vertical RTL, and bottom for
+horizontal scrolling when the edge is omitted. The former right
+default failed even on a retained vertical overlay updated to RTL.
+Explicit edge choices remain unchanged. The :300 comparison uses
+the upstream painter test's 2.5 px thickness and 18 px minimum;
+an actual default RawScrollbar uses a 6 px rectangle as in :1922.
+
+The same overlay starts hidden for content exactly 600 px high
+in a 600 px view. It paints if content grows to 600.1 px or if the
+view shrinks to 599 px, and hides again when they fit. The resize
+tests passed without a production change. All 23 focused native
+geometry, input, and adjacent defaults tests passed.
