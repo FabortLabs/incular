@@ -536,6 +536,15 @@ impl ListView {
         }
     }
 
+    /// Creates a ListView whose lazy children and wrapping policies are
+    /// supplied by a sliver child delegate (Flutter's `ListView.custom`).
+    #[must_use]
+    pub fn custom(delegate: impl SliverChildDelegate + 'static) -> Self {
+        let (count, builder) = delegate_builder(Rc::new(delegate));
+        // The delegate already owns repaint, semantics and keep-alive wrappers.
+        Self::builder(count, builder).add_automatic_keep_alives(false)
+    }
+
     /// Creates a lazily virtualized ListView with alternating separator items.
     #[must_use]
     pub fn separated<W, S>(
@@ -1034,6 +1043,17 @@ impl GridView {
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
         }
+    }
+
+    /// Creates a GridView with an independent child delegate and cell layout
+    /// (Flutter's `GridView.custom`).
+    #[must_use]
+    pub fn custom(
+        grid_delegate: SliverGridDelegate,
+        children_delegate: impl SliverChildDelegate + 'static,
+    ) -> Self {
+        let (count, builder) = delegate_builder(Rc::new(children_delegate));
+        Self::builder(count, grid_delegate, builder).add_automatic_keep_alives(false)
     }
 
     /// Creates a grid whose column count is derived from the available

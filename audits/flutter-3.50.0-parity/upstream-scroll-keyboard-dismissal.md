@@ -31,3 +31,15 @@ A raw Viewport remains a renderer, rather than installing a scroll
 view's dismissal listener. The named ListView.custom and
 GridView.custom child-delegate constructors are not credited here.
 All 14 focused native keyboard and zero-area tests passed.
+
+### Custom child delegates
+
+Pinned :258, :499, :616, and :851 also passed. Incular now exposes
+the corresponding ListView.custom and GridView.custom constructors.
+Each uses the child delegate's own repaint, semantics and retention
+wrappers rather than adding a second set of wrappers. Mounted
+manual and onDrag cases match with the default child builder delegate.
+A 10,000-child finite delegate is not built eagerly: before layout
+there are no builder calls, and after layout fewer than 40 children
+have been built in either case. This does not claim an open-ended
+delegate with no known count. All twelve focused native tests passed.

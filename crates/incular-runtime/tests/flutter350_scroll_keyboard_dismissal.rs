@@ -12,7 +12,7 @@ use incular_widgets::{
     Column, CustomScrollView, Directionality, EditableText, Expanded, FocusNode, FocusScope,
     GridView, ListView, ScrollBehavior, ScrollConfiguration, ScrollController,
     ScrollViewKeyboardDismissBehavior as Dismiss, SingleChildScrollView, SizedBox, Sliver,
-    SliverGridDelegate, SliverList, Widget,
+    SliverChildBuilderDelegate, SliverGridDelegate, SliverList, Widget,
 };
 
 fn editor(node: &FocusNode) -> Widget {
@@ -247,6 +247,8 @@ enum SliverView {
     GridBuilder,
     GridCount,
     GridExtent,
+    ListCustom,
+    GridCustom,
     Custom,
 }
 
@@ -298,6 +300,13 @@ fn sliver_scene(
         SliverView::GridBuilder => grid(GridView::builder(50, layout(), nth)),
         SliverView::GridCount => grid(GridView::count(2, rows())),
         SliverView::GridExtent => grid(GridView::extent(300., rows())),
+        SliverView::ListCustom => list(ListView::custom(
+            SliverChildBuilderDelegate::new(move |index| Some(nth(index))).child_count(50),
+        )),
+        SliverView::GridCustom => grid(GridView::custom(
+            layout(),
+            SliverChildBuilderDelegate::new(move |index| Some(nth(index))).child_count(50),
+        )),
         SliverView::Custom => {
             let sliver: Box<dyn Sliver> = Box::new(SliverList::builder(50, nth));
             let view = CustomScrollView::new([sliver])
@@ -365,5 +374,44 @@ fn sliver_scroll_widgets_inherit_policy_unless_explicitly_overridden() {
     for view in [SliverView::List, SliverView::Grid, SliverView::Custom] {
         assert_sliver_policy(view, None, Dismiss::OnDrag);
         assert_sliver_policy(view, Some(Dismiss::Manual), Dismiss::OnDrag);
+    }
+}
+
+#[test]
+fn custom_child_delegates_preserve_the_scroll_views_keyboard_policy() {
+    for kind in [SliverView::ListCustom, SliverView::GridCustom] {
+        for policy in [None, Some(Dismiss::OnDrag)] {
+            assert_sliver_policy(kind, policy, Dismiss::Manual);
+        }
+    }
+}
+
+#[test]
+fn finite_custom_child_delegates_build_only_the_mounted_window() {
+    use std::{cell::Cell, rc::Rc};
+    for grid in [false, true] {
+        let builds = Rc::new(Cell::new(0));
+        let delegate = SliverChildBuilderDelegate::new({
+            let builds = builds.clone();
+            move |index| {
+                builds.set(builds.get() + 1);
+                Some(Widget::from(SizedBox::from_size(Size::new(300., 50.))).with_key(index as u64))
+            }
+        })
+        .child_count(10_000);
+        let widget: Widget = if grid {
+            GridView::custom(SliverGridDelegate::fixed_cross_axis_count(2), delegate).into()
+        } else {
+            ListView::custom(delegate).into()
+        };
+        assert_eq!(builds.get(), 0);
+        let mut runtime =
+            Runtime::new(Directionality::new(TextDirection::Ltr, widget).into()).unwrap();
+        runtime
+            .run_frame(Constraints::tight(Size::new(300., 220.)))
+            .unwrap();
+        assert!((1..40).contains(&builds.get()), "builds={}", builds.get());
+        assert!(runtime.tree().element_with_key(&0u64.into()).is_some());
+        assert!(runtime.tree().element_with_key(&1000u64.into()).is_none());
     }
 }

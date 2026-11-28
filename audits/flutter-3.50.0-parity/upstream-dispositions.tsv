@@ -3952,3 +3952,7 @@ packages/flutter/test/widgets/scroll_view_test.dart	733	GridView.builder dismiss
 packages/flutter/test/widgets/scroll_view_test.dart	773	GridView.count dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
 packages/flutter/test/widgets/scroll_view_test.dart	812	GridView.extent dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
 packages/flutter/test/widgets/scroll_view_test.dart	962	CustomScrollView dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#list-grid-and-custom-scroll-views
+packages/flutter/test/widgets/scroll_view_test.dart	258	ListView.custom dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#custom-child-delegates
+packages/flutter/test/widgets/scroll_view_test.dart	499	GridView.custom dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#custom-child-delegates
+packages/flutter/test/widgets/scroll_view_test.dart	616	ListView.custom dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#custom-child-delegates
+packages/flutter/test/widgets/scroll_view_test.dart	851	GridView.custom dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#custom-child-delegates
