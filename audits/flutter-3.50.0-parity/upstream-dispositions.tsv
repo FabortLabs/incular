@@ -3925,3 +3925,4 @@ packages/flutter/test/painting/border_radius_test.dart	159	BorderRadius.lerp ide
 packages/flutter/test/painting/border_radius_test.dart	417	BorderRadiusDirectional.lerp identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity
 packages/flutter/test/painting/border_radius_test.dart	475	BorderRadiusGeometry.lerp identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity
 packages/flutter/test/painting/gradient_test.dart	276	LinearGradient toString	paired-match	upstream-gradient-diagnostics.md
+packages/flutter/test/painting/image_cache_clearing_test.dart	17	Clearing images while they're pending does not crash	paired-match	upstream-decoded-bundle-image-cache.md#clearing-live-tracking-while-a-decode-is-pending

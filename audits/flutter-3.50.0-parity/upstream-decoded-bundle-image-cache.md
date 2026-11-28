@@ -144,3 +144,13 @@ ImageInfo drops, the actual pixel resource is released. Flutter's
 originals also count engine image-handle stack traces; Rust Arc
 handles do not expose that instrumentation, so those rows remain
 partial. All 58 focused native cache and image-info tests passed.
+
+## Clearing live tracking while a decode is pending
+
+The exact `painting/image_cache_clearing_test.dart:17` original passed.
+Incular exercises the same timing through its asynchronous bundle decoder
+(the native memory provider decodes directly). Removing only live tracking
+leaves the original pending decode and external listener intact. After
+the held asset bytes are released, that listener receives exactly one
+asynchronous frame, and the resulting decoded image remains retained.
+All 33 focused native cache tests passed.

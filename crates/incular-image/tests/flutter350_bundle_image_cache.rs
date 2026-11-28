@@ -969,3 +969,31 @@ fn a_failed_decode_is_already_removed_when_the_observer_receives_the_error() {
     finish_pending_streams();
     assert!(matches!(retry.state(), ImageLoadState::Ready(_)));
 }
+
+#[test]
+fn clearing_live_tracking_during_decode_keeps_the_original_listener_and_pending_work() {
+    use incular_image::ImageStreamListener;
+    use std::{cell::Cell, rc::Rc};
+
+    let (cache, source, asset) = live_bundle_fixture();
+    let stream = cache.resolve_stream(asset.clone());
+    let frames = Rc::new(Cell::new(0));
+    let record = frames.clone();
+    let _listener = stream.listen(ImageStreamListener::new(Rc::new(move |_, synchronous| {
+        assert!(!synchronous);
+        record.set(record.get() + 1);
+    })));
+    let before = cache.status_for_key(&asset);
+    assert!(before.pending && before.live && !before.keep_alive);
+
+    cache.clear_live_images();
+    let after = cache.status_for_key(&asset);
+    assert!(after.pending && !after.live && !after.keep_alive);
+    assert_eq!(source.pending(), 1);
+    assert_eq!(frames.get(), 0);
+    source.take("1")(Ok(Arc::from(IMAGE)));
+    finish_pending_streams();
+    assert_eq!(frames.get(), 1);
+    assert!(matches!(stream.state(), ImageLoadState::Ready(_)));
+    assert!(cache.status_for_key(&asset).keep_alive);
+}
