@@ -4098,3 +4098,5 @@ packages/flutter/test/rendering/layers_test.dart	562	PictureLayer does not let y
 packages/flutter/test/rendering/layers_test.dart	578	Layer append/remove increases/decreases handle count	partial-match	upstream-layer-topology.md
 packages/flutter/test/rendering/layers_test.dart	612	PictureLayer.picture (set) disposes the picture	paired-match	upstream-layer-topology.md
 packages/flutter/test/rendering/layers_test.dart	621	PictureLayer disposes the picture	paired-match	upstream-layer-topology.md
+packages/flutter/test/semantics/semantics_test.dart	322	mutate existing semantic node list errors	partial-match	upstream-semantic-boundary-updates.md
+packages/flutter/test/semantics/semantics_test.dart	408	after markNeedsSemanticsUpdate() all render objects between two semantic boundaries are asked for annotations	paired-match	upstream-semantic-boundary-updates.md

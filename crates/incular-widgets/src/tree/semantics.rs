@@ -92,6 +92,15 @@ const MERGEABLE_SEMANTIC_ACTIONS: [SemanticActionKind; 11] = [
     SemanticActionKind::ScrollDown,
 ];
 
+fn mergeable_callback_mask(callbacks: &SemanticCallbacks) -> u16 {
+    MERGEABLE_SEMANTIC_ACTIONS
+        .into_iter()
+        .enumerate()
+        .fold(0, |mask, (bit, action)| {
+            mask | if callbacks.supports(action) { 1 << bit } else { 0 }
+        })
+}
+
 impl MergedSemanticSummary {
     fn add_label(
         &mut self,
@@ -2464,7 +2473,11 @@ impl WidgetTree {
             || !explicit.state.container
             || explicit.state.explicit_child_nodes
             || properties.merge_descendants
-            || properties.callbacks != SemanticCallbacks::default()
+            || !properties.callbacks.custom.is_empty()
+            || !properties.callbacks.bound.is_empty()
+            || explicit.actions.iter().any(|action| {
+                !MERGEABLE_SEMANTIC_ACTIONS.contains(action) || !properties.callbacks.supports(*action)
+            })
         {
             return None;
         }
@@ -2483,14 +2496,19 @@ impl WidgetTree {
             return None;
         }
 
+        let own_actions = mergeable_callback_mask(&properties.callbacks);
         let mut work = self.visible_semantic_children(element, entry).into_owned();
         work.reverse();
         let mut fragments = Vec::new();
-        let mut actions = 0;
-        let mut labels = 0;
+        let mut actions = own_actions;
         while let Some(child) = work.pop() {
             let source = self.elements.get(child.0)?;
             if !self.can_contribute_merged_semantics(source) {
+                continue;
+            }
+            if source.widget.semantic_properties().explicit.as_ref().is_some_and(|node| node.state.container) {
+                // This boundary still publishes its own node. It does not
+                // veto merging compatible annotations alongside it.
                 continue;
             }
             let mask = self.compatible_action_fragment_mask(child, source)?;
@@ -2498,8 +2516,7 @@ impl WidgetTree {
                 return None;
             }
             actions |= mask;
-            if element_own_label(source).is_some() {
-                labels += 1;
+            if mask != 0 || element_own_label(source).is_some() {
                 fragments.push((child, mask));
             }
             work.extend(
@@ -2509,7 +2526,7 @@ impl WidgetTree {
                     .copied(),
             );
         }
-        (labels >= 2 && actions != 0).then_some(fragments)
+        (actions != own_actions).then_some(fragments)
     }
 
     fn compatible_action_fragment_mask(&self, element: ElementId, entry: &Element) -> Option<u16> {
@@ -2530,7 +2547,7 @@ impl WidgetTree {
             return (!self.focus_semantics_boundary(element, entry)).then_some(0);
         };
         if explicit.role != SemanticRole::GenericContainer
-            || explicit.label.is_none()
+            || (explicit.label.is_none() && explicit.actions.is_empty())
             || explicit.value.is_some()
             || explicit.description.is_some()
             || explicit.actions.iter().any(|action| {
@@ -2558,18 +2575,7 @@ impl WidgetTree {
         {
             return None;
         }
-        Some(
-            MERGEABLE_SEMANTIC_ACTIONS
-                .into_iter()
-                .enumerate()
-                .fold(0, |mask, (bit, action)| {
-                    mask | if properties.callbacks.supports(action) {
-                        1 << bit
-                    } else {
-                        0
-                    }
-                }),
-        )
+        Some(mergeable_callback_mask(&properties.callbacks))
     }
 
     fn merged_compatible_action_source(

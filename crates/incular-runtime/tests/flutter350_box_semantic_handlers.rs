@@ -5,7 +5,7 @@ use incular_config::{Constraints, TextDirection};
 use incular_core::Size;
 use incular_runtime::Runtime;
 use incular_semantics::{SemanticAction, SemanticActionKind, SemanticNode};
-use incular_widgets::Semantics;
+use incular_widgets::{Semantics, SizedBox, Widget};
 
 fn frame(runtime: &mut Runtime) {
     runtime
@@ -165,4 +165,92 @@ fn every_original_annotation_handler_can_be_added_then_removed_in_place() {
         }
     }
     assert_eq!(*events.borrow(), actions.map(|action| action.kind()));
+}
+
+#[test]
+fn changing_one_annotation_rebuilds_the_actions_between_semantic_boundaries() {
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let callback = |action| {
+        let events = events.clone();
+        move || events.borrow_mut().push(action)
+    };
+    let scene = |replace: bool| {
+        let inner = Semantics::new(SizedBox::square(20.))
+            .container(true)
+            .on_scroll_up(callback(SemanticActionKind::ScrollUp));
+        let right =
+            Semantics::new(inner).on_scroll_right(callback(SemanticActionKind::ScrollRight));
+        let middle = Semantics::new(right);
+        let middle = if replace {
+            middle.on_scroll_down(callback(SemanticActionKind::ScrollDown))
+        } else {
+            middle.on_scroll_left(callback(SemanticActionKind::ScrollLeft))
+        };
+        let long = Semantics::new(middle).on_long_press(callback(SemanticActionKind::LongPress));
+        Widget::from(
+            Semantics::new(long)
+                .container(true)
+                .on_tap(callback(SemanticActionKind::Activate)),
+        )
+    };
+
+    let mut runtime = Runtime::new(scene(false)).unwrap();
+    let root_element = runtime.tree().root().unwrap();
+    let mut prior_ids = None;
+    for replaced in [false, true, false] {
+        runtime
+            .schedule_update(root_element, scene(replaced))
+            .unwrap();
+        frame(&mut runtime);
+        let (root, boundary) = {
+            let tree = runtime.tree().semantics();
+            let (root_id, root) = tree
+                .iter()
+                .find(|(_, node)| node.actions.contains(&SemanticActionKind::Activate))
+                .unwrap();
+            let (child_id, child) = tree
+                .iter()
+                .find(|(_, node)| node.actions.contains(&SemanticActionKind::ScrollUp))
+                .unwrap();
+            assert_eq!(root.children, [child_id]);
+            assert_eq!(child.actions, [SemanticActionKind::ScrollUp]);
+            assert_eq!(root.actions.len(), 4, "{:?}", root.actions);
+            assert_eq!(
+                (root_id, child_id),
+                *prior_ids.get_or_insert((root_id, child_id))
+            );
+            (root_id, child_id)
+        };
+        let side = if replaced {
+            SemanticAction::ScrollDown
+        } else {
+            SemanticAction::ScrollLeft
+        };
+        let stale = if replaced {
+            SemanticAction::ScrollLeft
+        } else {
+            SemanticAction::ScrollDown
+        };
+        let current = [
+            SemanticAction::Activate,
+            SemanticAction::LongPress,
+            side,
+            SemanticAction::ScrollRight,
+        ];
+        for action in &current {
+            assert!(
+                runtime.dispatch_semantic_action(root, action.clone()),
+                "{action:?}"
+            );
+        }
+        assert!(!runtime.dispatch_semantic_action(root, stale));
+        assert!(!runtime.dispatch_semantic_action(root, SemanticAction::ScrollUp));
+        assert!(runtime.dispatch_semantic_action(boundary, SemanticAction::ScrollUp));
+        let expected = current
+            .iter()
+            .map(SemanticAction::kind)
+            .chain([SemanticActionKind::ScrollUp])
+            .collect::<Vec<_>>();
+        assert_eq!(events.take(), expected);
+    }
 }

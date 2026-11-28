@@ -466,3 +466,40 @@ fn exhausting_the_flutter_id_range_never_aliases_a_recycled_semantic_node() {
         [replacement]
     );
 }
+
+#[test]
+fn a_semantic_parent_owns_its_child_snapshot_until_an_explicit_replacement() {
+    let mut tree = SemanticsTree::new();
+    let [first, second, third] = std::array::from_fn(|_| tree.insert(node(placeholder())));
+    let mut proposed = vec![first];
+    let parent = tree.insert(SemanticNode {
+        role: Role::GenericContainer,
+        children: proposed.clone(),
+        ..node(placeholder())
+    });
+    tree.set_root(Some(parent));
+
+    let before = tree.revision();
+    proposed.push(second);
+    assert_eq!(tree.node(parent).unwrap().children, [first]);
+    assert_eq!(tree.revision(), before);
+    assert_eq!(tree.changed_since(before).count(), 0);
+
+    let mut update = tree.node(parent).unwrap().clone();
+    update.children = proposed.clone();
+    assert!(tree.update(parent, update));
+    assert_eq!(tree.node(parent).unwrap().children, [first, second]);
+    let before = tree.revision();
+    proposed.copy_from_slice(&[third, first]);
+    assert_eq!(tree.node(parent).unwrap().children, [first, second]);
+    assert_eq!(tree.changed_since(before).count(), 0);
+    let mut update = tree.node(parent).unwrap().clone();
+    update.children = proposed;
+    assert!(tree.update(parent, update));
+    let revisions = tree.changed_since(before).collect::<Vec<_>>();
+    let [(id, changed)] = revisions.as_slice() else {
+        panic!("only the parent changed");
+    };
+    assert_eq!(*id, parent);
+    assert_eq!(changed.children, [third, first]);
+}
