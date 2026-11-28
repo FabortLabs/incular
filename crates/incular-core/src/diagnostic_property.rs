@@ -50,15 +50,21 @@ pub enum DiagnosticsTreeStyle {
     /// Use the normal sparse tree presentation.
     #[default]
     Sparse,
+    /// Render a tree with indentation but no connecting lines.
+    Whitespace,
+    /// Render a block without adding indentation.
+    Flat,
     /// Keep the named diagnostic and its value on one line.
     SingleLine,
 }
 
 impl DiagnosticsTreeStyle {
-    const fn name(self) -> &'static str {
+    pub(crate) const fn name(self) -> &'static str {
         match self {
             Self::None => "none",
             Self::Sparse => "sparse",
+            Self::Whitespace => "whitespace",
+            Self::Flat => "flat",
             Self::SingleLine => "singleLine",
         }
     }
@@ -83,6 +89,27 @@ pub trait DiagnosticValue: PartialEq {
     /// A boolean value, when this type is a boolean.
     fn as_diagnostic_bool(&self) -> Option<bool> {
         None
+    }
+}
+
+impl<T: DiagnosticValue> DiagnosticValue for Vec<T> {
+    const TYPE_NAME: &'static str = "Iterable";
+
+    fn to_diagnostic_json(&self) -> Value {
+        Value::Array(
+            self.iter()
+                .map(DiagnosticValue::to_diagnostic_json)
+                .collect(),
+        )
+    }
+
+    fn has_json_value(&self) -> bool {
+        false
+    }
+
+    fn diagnostic_text(&self) -> String {
+        let elements: Vec<_> = self.iter().map(DiagnosticValue::diagnostic_text).collect();
+        format!("[{}]", elements.join(", "))
     }
 }
 
@@ -366,6 +393,12 @@ enum Presentation<T> {
     Color {
         channels: fn(&T) -> [u8; 4],
     },
+    Iterable {
+        member_type: &'static str,
+        is_empty: fn(&T) -> bool,
+        values_for_display: fn(&T) -> Vec<String>,
+        values_for_json: fn(&T) -> Vec<String>,
+    },
     FlagsSummary {
         member_type: &'static str,
         has_names: fn(&T) -> bool,
@@ -608,6 +641,10 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             DiagnosticLevel::Error
         } else if self.value().is_none() && self.missing_if_null {
             DiagnosticLevel::Warning
+        } else if matches!(self.presentation, Presentation::Iterable { is_empty, .. }
+            if self.if_empty.is_none() && self.value().is_some_and(is_empty))
+        {
+            DiagnosticLevel::Fine
         } else if self
             .default
             .as_ref()
@@ -625,6 +662,20 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
         !cfg!(debug_assertions) || self.effective_level() < minimum
     }
 
+    pub(crate) fn compact_iterable_description(&self) -> Option<String> {
+        if let Presentation::Iterable {
+            values_for_display, ..
+        } = self.presentation
+            && let Some(values) = self.value()
+        {
+            let members = values_for_display(values);
+            if !members.is_empty() {
+                return Some(format!("[{}]", members.join(", ")));
+            }
+        }
+        None
+    }
+
     /// A display description without the property-name prefix.
     #[must_use]
     pub fn to_description(&self) -> String {
@@ -636,6 +687,21 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                 Presentation::Flag => self.flag_label().map_or(text, str::to_owned),
                 Presentation::ObjectFlag => self.if_present.as_deref().map_or(text, str::to_owned),
                 Presentation::Enum { short_name } => short_name(value).to_owned(),
+                Presentation::Iterable {
+                    is_empty,
+                    values_for_display,
+                    ..
+                } => {
+                    if is_empty(value) {
+                        self.if_empty.as_deref().unwrap_or("[]").to_owned()
+                    } else {
+                        let separator = match self.style {
+                            DiagnosticsTreeStyle::None | DiagnosticsTreeStyle::SingleLine => ", ",
+                            _ => "\n",
+                        };
+                        values_for_display(value).join(separator)
+                    }
+                }
                 Presentation::Number {
                     format,
                     unit_separator,
@@ -671,7 +737,7 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
     #[must_use]
     pub fn to_json(&self) -> Value {
         let generated_type;
-        let flags_property_type;
+        let specialized_property_type;
         let mut property_type = T::TYPE_NAME;
         let type_name = match self.presentation {
             Presentation::Plain => {
@@ -682,10 +748,16 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             Presentation::Flag => "FlagProperty",
             Presentation::Message => "MessageProperty",
             Presentation::Color { .. } => "ColorProperty",
+            Presentation::Iterable { member_type, .. } => {
+                generated_type = format!("IterableProperty<{member_type}>");
+                specialized_property_type = format!("Iterable<{member_type}>");
+                property_type = &specialized_property_type;
+                generated_type.as_str()
+            }
             Presentation::FlagsSummary { member_type, .. } => {
                 generated_type = format!("FlagsSummary<{member_type}>");
-                flags_property_type = format!("Map<String, {member_type}?>");
-                property_type = &flags_property_type;
+                specialized_property_type = format!("Map<String, {member_type}?>");
+                property_type = &specialized_property_type;
                 generated_type.as_str()
             }
             Presentation::ObjectFlag => {
@@ -766,6 +838,13 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
                     });
                 }
             }
+            Presentation::Iterable {
+                values_for_json, ..
+            } => {
+                if let Some(values) = self.value().map(values_for_json) {
+                    output["values"] = json!(values);
+                }
+            }
             Presentation::FlagsSummary { names_for_json, .. } => {
                 if let Some(names) = self.value().and_then(names_for_json) {
                     output["values"] = json!(names);
@@ -777,6 +856,42 @@ impl<T: DiagnosticValue> DiagnosticsProperty<T> {
             | Presentation::Enum { .. } => {}
         }
         output
+    }
+}
+
+impl<T: DiagnosticValue> DiagnosticsProperty<Vec<T>> {
+    /// Builds an IterableProperty, with separate member strings in the
+    /// inspector representation and typed values available to the caller.
+    #[must_use]
+    pub fn iterable(name: impl Into<String>, value: Option<Vec<T>>) -> Self {
+        let mut row = Self::new(name, value)
+            .if_empty("[]")
+            .style(DiagnosticsTreeStyle::SingleLine);
+        row.presentation = Presentation::Iterable {
+            member_type: T::TYPE_NAME,
+            is_empty: Vec::is_empty,
+            values_for_display: |values| {
+                values
+                    .iter()
+                    .map(|value| {
+                        if T::TYPE_NAME == "double"
+                            && let Some(number) = value.to_diagnostic_json().as_f64()
+                        {
+                            crate::debug_format_double(Some(number))
+                        } else {
+                            value.diagnostic_text()
+                        }
+                    })
+                    .collect()
+            },
+            values_for_json: |values| {
+                values
+                    .iter()
+                    .map(DiagnosticValue::diagnostic_text)
+                    .collect()
+            },
+        };
+        row
     }
 }
 
@@ -942,10 +1057,18 @@ impl DiagnosticsProperty<f64> {
 
 impl<T: DiagnosticValue> fmt::Display for DiagnosticsProperty<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let description = self.to_description();
         if self.shows_name() {
-            let separator = if self.show_separator { ": " } else { " " };
+            let multiline = matches!(self.presentation, Presentation::Iterable { .. })
+                && description.contains('\n');
+            let separator = match (self.show_separator, multiline) {
+                (true, true) => ":\n",
+                (true, false) => ": ",
+                (false, true) => "\n",
+                (false, false) => " ",
+            };
             write!(formatter, "{}{separator}", self.name)?;
         }
-        formatter.write_str(&self.to_description())
+        formatter.write_str(&description)
     }
 }

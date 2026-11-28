@@ -398,3 +398,144 @@ fn shallow_tree_summary_keeps_visible_properties_and_never_includes_children() {
         "TestTree#00000(stringProperty1: value1, doubleProperty1: 42.5, roundedProperty: 0.3, DEBUG_ONLY: DEBUG_ONLY)",
     );
 }
+
+#[derive(Debug, Clone, PartialEq)]
+enum Object {
+    Rectangle(incular_core::Rect),
+    Color(incular_core::Color),
+}
+
+impl incular_core::DiagnosticValue for Object {
+    const TYPE_NAME: &'static str = "Object";
+
+    fn diagnostic_text(&self) -> String {
+        match self {
+            Self::Rectangle(rect) => rect.diagnostic_text(),
+            Self::Color(color) => color.diagnostic_text(),
+        }
+    }
+
+    fn to_diagnostic_json(&self) -> Value {
+        Value::Null
+    }
+}
+
+#[test]
+fn iterable_properties_keep_typed_members_distinct_from_display_and_wire_text() {
+    let ints = Property::iterable("ints", Some(vec![1_i64, 2, 3]));
+    assert_eq!(ints.value(), Some(&vec![1, 2, 3]));
+    assert!(!ints.is_filtered(DiagnosticLevel::Info));
+    assert_eq!(ints.to_string(), "ints: 1, 2, 3");
+
+    let doubles = Property::iterable("doubles", Some(vec![1.0_f64, 2.0, 3.0]));
+    assert_eq!(doubles.value(), Some(&vec![1.0, 2.0, 3.0]));
+    assert!(!doubles.is_filtered(DiagnosticLevel::Info));
+    assert_eq!(doubles.to_string(), "doubles: 1.0, 2.0, 3.0");
+
+    let rounded = Property::iterable("fraction", Some(vec![1.0 / 3.0_f64]));
+    assert_eq!(rounded.to_string(), "fraction: 0.3");
+    assert_eq!(rounded.to_json()["values"], json!(["0.3333333333333333"]));
+
+    let empty = Property::<Vec<Object>>::iterable("name", Some(vec![]));
+    assert_eq!(empty.value(), Some(&vec![]));
+    assert!(!empty.is_filtered(DiagnosticLevel::Info));
+    assert_eq!(empty.to_string(), "name: []");
+    assert_eq!(
+        empty.to_json(),
+        json!({
+            "name": "name", "description": "[]", "type": "IterableProperty<Object>",
+            "propertyType": "Iterable<Object>", "style": "singleLine", "defaultLevel": "info",
+            "missingIfNull": false, "ifEmpty": "[]", "values": [],
+        })
+    );
+
+    let missing = Property::<Vec<Object>>::iterable("list", None);
+    assert!(missing.value().is_none());
+    assert!(!missing.is_filtered(DiagnosticLevel::Info));
+    assert_eq!(missing.to_string(), "list: null");
+    let mut expected = empty.to_json().as_object().unwrap().clone();
+    expected.remove("values");
+    expected.insert("name".into(), json!("list"));
+    expected.insert("description".into(), json!("null"));
+    expected.insert("value".into(), Value::Null);
+    assert_eq!(missing.to_json(), Value::Object(expected.clone()));
+
+    let hidden = missing.default_value(None);
+    assert!(hidden.value().is_none());
+    assert_eq!(hidden.effective_level(), DiagnosticLevel::Fine);
+    assert!(hidden.is_filtered(DiagnosticLevel::Info));
+    assert_eq!(hidden.to_string(), "list: null");
+    expected.insert("defaultValue".into(), json!("null"));
+    expected.insert("level".into(), json!("fine"));
+    assert_eq!(hidden.to_json(), Value::Object(expected));
+}
+
+#[test]
+fn iterable_deep_format_respects_its_own_style_and_compact_parent_style() {
+    use incular_core::{Color, DiagnosticsTreeStyle as Style, Offset, Rect, Size};
+
+    let rect = Object::Rectangle(Rect::from_origin_size(Offset::ZERO, Size::new(20.0, 20.0)));
+    let white = Object::Color(Color::WHITE);
+    let rect_text = "Rect.fromLTRB(0.0, 0.0, 20.0, 20.0)";
+    let white_text = "Color(alpha: 1.0000, red: 1.0000, green: 1.0000, blue: 1.0000, colorSpace: ColorSpace.sRGB)";
+    let minimum = DiagnosticLevel::Debug;
+    let tree = || Node::new("TestTree#00000", "DiagnosticableTreeNode");
+
+    let objects = vec![rect, white.clone()];
+    let property = Property::iterable("objects", Some(objects.clone()));
+    assert_eq!(property.value(), Some(&objects));
+    assert!(!property.is_filtered(DiagnosticLevel::Info));
+    assert_eq!(
+        property.to_string(),
+        format!("objects: {rect_text}, {white_text}")
+    );
+    assert_eq!(property.to_json()["values"], json!([rect_text, white_text]));
+
+    let multi = property.clone().style(Style::Whitespace);
+    assert_eq!(multi.value(), Some(&objects));
+    assert!(!multi.is_filtered(DiagnosticLevel::Info));
+    assert_eq!(
+        multi.to_string(),
+        format!("objects:\n{rect_text}\n{white_text}")
+    );
+    assert_eq!(multi.to_json()["values"], json!([rect_text, white_text]));
+    assert_eq!(multi.to_json()["style"], "whitespace");
+    assert_eq!(
+        Node::property(&multi).to_string_deep(minimum),
+        format!("objects:\n  {rect_text}\n  {white_text}\n")
+    );
+    assert_eq!(
+        tree()
+            .with_properties(vec![Node::property(&multi)])
+            .to_string_deep(minimum),
+        format!("TestTree#00000\n   objects:\n     {rect_text}\n     {white_text}\n")
+    );
+    for property in [property, multi] {
+        assert_eq!(
+            tree()
+                .style(Style::SingleLine)
+                .with_properties(vec![
+                    Node::property(&property),
+                    Node::property(&Property::integer("foo", Some(42))),
+                ])
+                .to_string_deep(minimum),
+            format!("TestTree#00000(objects: [{rect_text}, {white_text}], foo: 42)")
+        );
+    }
+
+    let solo = Property::iterable("object", Some(vec![white.clone()])).style(Style::Whitespace);
+    assert_eq!(solo.value(), Some(&vec![white]));
+    assert!(!solo.is_filtered(DiagnosticLevel::Info));
+    assert_eq!(solo.to_string(), format!("object: {white_text}"));
+    assert_eq!(solo.to_json()["values"], json!([white_text]));
+    assert_eq!(
+        Node::property(&solo).to_string_deep(minimum),
+        format!("object: {white_text}\n")
+    );
+    assert_eq!(
+        tree()
+            .with_properties(vec![Node::property(&solo)])
+            .to_string_deep(minimum),
+        format!("TestTree#00000\n   object: {white_text}\n")
+    );
+}

@@ -4,13 +4,16 @@ use std::collections::VecDeque;
 
 use serde_json::{Map, Value, json};
 
-use crate::{DiagnosticLevel, DiagnosticValue, DiagnosticsProperty};
+use crate::{DiagnosticLevel, DiagnosticValue, DiagnosticsProperty, DiagnosticsTreeStyle};
+
+mod render;
 
 /// A heterogeneous snapshot of a diagnostics node and its ordered relationships.
 #[derive(Debug, Clone)]
 pub struct DiagnosticsNode {
     details: Map<String, Value>,
     specialized: Map<String, Value>,
+    compact_description: Option<String>,
     properties: Vec<Self>,
     children: Vec<Self>,
 }
@@ -26,6 +29,7 @@ impl DiagnosticsNode {
                 ("allowWrap".into(), json!(false)),
             ]),
             specialized: Map::new(),
+            compact_description: None,
             properties: Vec::new(),
             children: Vec::new(),
         }
@@ -59,6 +63,7 @@ impl DiagnosticsNode {
         Self {
             details,
             specialized,
+            compact_description: property.compact_iterable_description(),
             properties: Vec::new(),
             children: Vec::new(),
         }
@@ -68,6 +73,13 @@ impl DiagnosticsNode {
     #[must_use]
     pub fn named(mut self, name: impl Into<String>) -> Self {
         self.details.insert("name".into(), json!(name.into()));
+        self
+    }
+
+    /// Selects the style used when displaying this node as a text tree.
+    #[must_use]
+    pub fn style(mut self, style: DiagnosticsTreeStyle) -> Self {
+        self.details.insert("style".into(), json!(style.name()));
         self
     }
 
