@@ -212,9 +212,16 @@ impl WidgetTree {
             return;
         }
         let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
-        let Some(raw) = self.input.raw_gesture_streams.get(&key) else {
+        let Some(raw) = self.input.raw_gesture_streams.get_mut(&key) else {
             return;
         };
+        if let Some(eager) = raw.eager_down.take() {
+            // Flutter remembers the first early acceptance while the arena
+            // is open, then resolves it after all Down contenders join.
+            let (member, action) = *eager;
+            self.accept_raw_gesture_action(key, member, action);
+            return;
+        }
         let Some(winner) = self.input.gesture_arena.sole_pending_member(key) else {
             return;
         };
@@ -1275,6 +1282,7 @@ impl WidgetTree {
             let mut active = ActiveRawGesture {
                 element,
                 members: Vec::new(),
+                eager_down: None,
             };
             let mut rejected = Vec::new();
             for element in elements {
@@ -1304,11 +1312,14 @@ impl WidgetTree {
                         type_id,
                         cancelled: false,
                     });
-                    if matches!(
-                        decision,
-                        GestureDecision::Reject | GestureDecision::Cancelled
-                    ) {
-                        rejected.push(member);
+                    match decision {
+                        GestureDecision::Accept(action) if active.eager_down.is_none() => {
+                            active.eager_down = Some(Box::new((member, action)));
+                        }
+                        GestureDecision::Reject | GestureDecision::Cancelled => {
+                            rejected.push(member);
+                        }
+                        _ => {}
                     }
                 }
             }

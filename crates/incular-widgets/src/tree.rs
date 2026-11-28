@@ -1261,6 +1261,9 @@ struct ActiveRawGestureMember {
 struct ActiveRawGesture {
     element: ElementId,
     members: Vec<ActiveRawGestureMember>,
+    // Most contacts do not resolve on Down. Allocate the action only for
+    // the rare eager winner and keep the common capture compact.
+    eager_down: Option<Box<(GestureArenaMember, GestureAction)>>,
 }
 
 struct ActiveDrag {

@@ -24,3 +24,12 @@ each later sample. Previously a supported press that switched to a valid
 0–1 movement range could not start a force press; the native tests now
 use the original event ranges. No hardware pressure or pointer timing
 is inferred from the Linux host.
+
+An authored reference probe also checks pressure on the initial Down.
+With a force-capable range, a sample already over the threshold wins
+before Up, then reports force end without firing the competing tap.
+An unsupported pressure range does not eagerly enter force recognition
+and still allows the normal tap. The mounted native regression covers
+both branches. The raw arena remembers the first eager acceptance while
+other Down contenders join, then settles it before later samples. This
+probe adds behavior coverage without incrementing the upstream case count.

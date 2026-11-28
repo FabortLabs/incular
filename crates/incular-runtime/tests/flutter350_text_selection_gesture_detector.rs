@@ -410,3 +410,28 @@ fn updated_handlers_keep_the_live_tap_series_and_report_reset_before_a_new_one()
         ]
     );
 }
+
+#[test]
+fn force_can_claim_the_arena_on_a_supported_initial_pressure_sample() {
+    for (supported, raw, max) in [(true, 3., 6.), (false, 0.8, 1.)] {
+        let mut driver = Driver::new(TargetPlatform::Android);
+        driver.send_with_pressure(1, Touch, Down, PRESS, raw, max);
+        driver.advance(0);
+        let seen = driver.read();
+        assert_eq!(
+            (seen.force_start, seen.singles),
+            (usize::from(supported), 0)
+        );
+        driver.send_with_pressure(1, Touch, Up, PRESS, 0., 1.);
+        driver.advance(0);
+        let seen = driver.read();
+        assert_eq!(
+            (seen.force_start, seen.force_end, seen.singles),
+            (
+                usize::from(supported),
+                usize::from(supported),
+                usize::from(!supported)
+            )
+        );
+    }
+}
