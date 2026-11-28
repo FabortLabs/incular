@@ -901,9 +901,16 @@ impl Widget {
     }
     #[must_use]
     pub fn selection_container(delegate: SelectionContainerDelegate, child: Self) -> Self {
+        Self::selection_container_in(delegate, None, child)
+    }
+    pub(crate) fn selection_container_in(
+        delegate: SelectionContainerDelegate,
+        registrar: Option<crate::SelectionRegistrar>,
+        child: Self,
+    ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
-            kind: WidgetKind::SelectionContainer { delegate, child },
+            kind: WidgetKind::SelectionContainer { delegate, registrar, child },
             semantics: None,
         })
     }

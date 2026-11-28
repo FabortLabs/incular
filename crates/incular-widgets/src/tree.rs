@@ -1661,6 +1661,7 @@ pub struct WidgetTree {
     /// them lifted above everything else. Empty while no popup is open.
     lifted_scene: Option<(DisplayList, DisplayList)>,
     static_selections: FastHashMap<ElementId, StaticSelection>,
+    selection_registrations: FastHashMap<ElementId, crate::selection_container::SelectionRegistration>,
     dependency_root: DependencyContext,
     automatic_keep_alives: crate::advanced_slivers::AutomaticKeepAliveQueue,
     inherited_consumers: FastHashMap<ConsumerId, (ElementId, InheritedDependencyKind)>,

@@ -16,11 +16,14 @@ actual retained tree in `flutter350_selection_container_registration.rs`.
   independent, as tested by the adjacent selection lifetime suite.
 - A mounted zero-area SelectionContainer lays out without crashing.
 
-All seven pinned originals passed. All five native cases and seven
-adjacent selection lifetime tests passed. Line 202 is paired. Lines
-14, 40, 65, 117, and 147 are partial: the widget registration and
-delegate state match, but the originals also exercise a separately
-injected registrar. Line 179 is partial: the retained tree infers the
-parent boundary but has no public SelectionRegistrarScope injection
-surface yet. This slice does not forward selection events through
-nested proxy containers.
+All seven pinned originals are now paired. The additional native run
+drives both explicit registrars and inherited `SelectionRegistrarScope`
+instances: three selectable children publish one container; an empty or
+disabled container publishes none; and swapping a delegate keeps the
+parent and external registrations current in the same layout pass. An
+explicit registrar takes precedence, can return to the inherited
+registrar, and releases its registration when the tree is dropped.
+
+Nine native registration tests and seven adjacent selection lifetime
+tests passed. This covers container registry membership, not arbitrary
+delegate hooks or forwarding selection events through nested proxies.

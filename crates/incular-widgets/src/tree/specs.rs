@@ -808,6 +808,7 @@ pub(crate) enum WidgetKind {
     },
     SelectionContainer {
         delegate: SelectionContainerDelegate,
+        registrar: Option<crate::SelectionRegistrar>,
         child: Widget,
     },
     SelectionListener {

@@ -128,3 +128,112 @@ fn a_zero_area_container_can_mount_and_lay_out() {
     assert_eq!(tree.root_layout_size(), Some(Size::ZERO));
     assert_eq!(controller.registered_child_count(), 0);
 }
+
+#[test]
+fn an_explicit_registrar_sees_one_container_not_three_paragraphs() {
+    use incular_widgets::SelectionRegistrar;
+    let registrar = SelectionRegistrar::new();
+    let delegate = SelectionAreaController::new();
+    let container =
+        SelectionContainer::with_controller(delegate.clone(), paragraphs(&["a", "b", "c"]))
+            .registrar(registrar.clone());
+    let mut tree = WidgetTree::new();
+    tree.mount(container.into()).unwrap();
+    frame(&mut tree);
+    assert_eq!(registrar.registered_child_count(), 1);
+    assert_eq!(delegate.registered_child_count(), 3);
+    assert!(delegate.selection_geometry().has_content);
+    drop(tree);
+    assert_eq!(registrar.registered_child_count(), 0);
+}
+
+#[test]
+fn explicit_and_context_registrars_track_empty_nonempty_and_disabled_descendants() {
+    use incular_widgets::{SelectionRegistrar, SelectionRegistrarScope};
+    for explicit in [false, true] {
+        let registrar = SelectionRegistrar::new();
+        let delegate = SelectionAreaController::new();
+        let build = |state| -> Widget {
+            let child = match state {
+                0 => paragraphs(&[]),
+                1 => paragraphs(&["first"]),
+                _ => SelectionContainer::disabled(paragraphs(&["first"])).into(),
+            };
+            let container = SelectionContainer::with_controller(delegate.clone(), child);
+            if explicit {
+                container.registrar(registrar.clone()).into()
+            } else {
+                SelectionRegistrarScope::new(registrar.clone(), container).into()
+            }
+        };
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(build(0)).unwrap();
+        frame(&mut tree);
+        assert_eq!(registrar.registered_child_count(), 0);
+        for (state, count) in [(1, 1), (2, 0), (1, 1), (0, 0)] {
+            tree.update(root, build(state)).unwrap();
+            frame(&mut tree);
+            assert_eq!(registrar.registered_child_count(), count);
+            assert_eq!(delegate.registered_child_count(), count);
+        }
+    }
+}
+
+#[test]
+fn swapping_nested_delegates_keeps_the_external_registration() {
+    use incular_widgets::SelectionRegistrar;
+    let registrar = SelectionRegistrar::new();
+    let delegate = SelectionAreaController::new();
+    let first = SelectionAreaController::new();
+    let second = SelectionAreaController::new();
+    let make = |inner: SelectionAreaController| {
+        SelectionContainer::with_controller(
+            delegate.clone(),
+            Widget::from(SelectionContainer::with_controller(
+                inner,
+                paragraphs(&["dummy"]),
+            ))
+            .with_key(3_u64),
+        )
+        .registrar(registrar.clone())
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(make(first.clone())).unwrap();
+    frame(&mut tree);
+    assert_eq!(registrar.registered_child_count(), 1);
+    assert!(delegate.selection_geometry().has_content);
+    assert_eq!(first.registered_child_count(), 1);
+    tree.update(root, make(second.clone())).unwrap();
+    frame(&mut tree);
+    assert_eq!(registrar.registered_child_count(), 1);
+    assert!(delegate.selection_geometry().has_content);
+    assert_eq!(first.registered_child_count(), 0);
+    assert_eq!(second.registered_child_count(), 1);
+}
+
+#[test]
+fn an_explicit_registrar_wins_over_the_inherited_registrar_and_can_be_replaced() {
+    use incular_widgets::{SelectionRegistrar, SelectionRegistrarScope};
+    let inherited = SelectionRegistrar::new();
+    let explicit = SelectionRegistrar::new();
+    let delegate = SelectionAreaController::new();
+    let build = |use_explicit| {
+        let child = SelectionContainer::with_controller(delegate.clone(), paragraphs(&["label"]));
+        let child = if use_explicit {
+            child.registrar(explicit.clone())
+        } else {
+            child
+        };
+        SelectionRegistrarScope::new(inherited.clone(), child).into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(true)).unwrap();
+    frame(&mut tree);
+    assert_eq!(explicit.registered_child_count(), 1);
+    assert_eq!(inherited.registered_child_count(), 0);
+    tree.update(root, build(false)).unwrap();
+    frame(&mut tree);
+    assert_eq!(explicit.registered_child_count(), 0);
+    assert_eq!(inherited.registered_child_count(), 1);
+}

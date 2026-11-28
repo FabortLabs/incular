@@ -2350,6 +2350,47 @@ impl WidgetTree {
         })
     }
 
+    fn external_selection_registrar(&self, id: ElementId) -> Option<crate::SelectionRegistrar> {
+        let element = self.elements.get(id.0)?;
+        let WidgetKind::SelectionContainer { delegate, registrar, .. } = element.widget.kind()
+        else {
+            return None;
+        };
+        if !delegate.is_enabled() {
+            return None;
+        }
+        if let Some(registrar) = registrar {
+            return Some(registrar.clone());
+        }
+        let mut current = element.parent;
+        while let Some(parent) = current {
+            let element = self.elements.get(parent.0)?;
+            if self.selection_boundary_policy(parent).is_some() {
+                return None;
+            }
+            if let Some(registrar) = element.environment_override.as_ref().and_then(|scope| {
+                scope.value.downcast_ref::<crate::SelectionRegistrar>()
+            }) {
+                return Some(registrar.clone());
+            }
+            current = element.parent;
+        }
+        None
+    }
+
+    fn sync_external_selection_registration(&mut self, id: ElementId, has_content: bool) {
+        let registrar = has_content.then(|| self.external_selection_registrar(id)).flatten();
+        if self.selection_registrations.get(&id).map(|lease| &lease.registrar)
+            == registrar.as_ref()
+        {
+            return;
+        }
+        self.selection_registrations.remove(&id);
+        if let Some(registrar) = registrar {
+            self.selection_registrations.insert(id, registrar.register(self.tree_id, id));
+        }
+    }
+
     pub(super) fn refresh_selection_states(&mut self) {
         enum Work {
             Enter(ElementId),
@@ -2383,11 +2424,14 @@ impl WidgetTree {
                         let nested = proxies
                             .iter()
                             .filter(|&&proxy| {
-                                self.selection_area_controller(proxy)
-                                    .is_some_and(|child| child.registered_child_count() != 0)
+                                !self.selection_registrations.contains_key(&proxy)
+                                    && self.selection_area_controller(proxy)
+                                        .is_some_and(|child| child.registered_child_count() != 0)
                             })
                             .count();
-                        controller.set_registered_child_count(entries.len() + nested);
+                        let total = entries.len() + nested;
+                        controller.set_registered_child_count(total);
+                        self.sync_external_selection_registration(area, total != 0);
                         self.sync_static_selection_entries(area, entries);
                     }
                 }

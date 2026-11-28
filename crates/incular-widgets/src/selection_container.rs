@@ -1,6 +1,76 @@
 //! Flutter-shaped selection container widget descriptors.
 
-use crate::{SelectionAreaController, SelectionContainerDelegate, Widget};
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
+
+use crate::{SelectionAreaController, SelectionContainerDelegate, Widget, tree::ElementId};
+
+/// A shared registry for selectable containers hosted outside a selection area.
+/// Clone the handle to observe registration without owning the widget tree.
+#[derive(Clone, Debug, Default)]
+pub struct SelectionRegistrar(Rc<RefCell<HashSet<(u64, ElementId)>>>);
+
+impl PartialEq for SelectionRegistrar {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl SelectionRegistrar {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn registered_child_count(&self) -> usize {
+        self.0.borrow().len()
+    }
+
+    pub(crate) fn register(self, tree: u64, id: ElementId) -> SelectionRegistration {
+        let member = (tree, id);
+        let fresh = self.0.borrow_mut().insert(member);
+        debug_assert!(fresh);
+        SelectionRegistration {
+            registrar: self,
+            member,
+        }
+    }
+}
+
+pub(crate) struct SelectionRegistration {
+    pub(crate) registrar: SelectionRegistrar,
+    member: (u64, ElementId),
+}
+
+impl Drop for SelectionRegistration {
+    fn drop(&mut self) {
+        self.registrar.0.borrow_mut().remove(&self.member);
+    }
+}
+
+/// Provides a registrar to descendant selection containers without an
+/// explicit registrar, up to the closest nested selection boundary.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SelectionRegistrarScope {
+    registrar: SelectionRegistrar,
+    child: Widget,
+}
+
+impl SelectionRegistrarScope {
+    #[must_use]
+    pub fn new(registrar: SelectionRegistrar, child: impl Into<Widget>) -> Self {
+        Self {
+            registrar,
+            child: child.into(),
+        }
+    }
+}
+
+impl From<SelectionRegistrarScope> for Widget {
+    fn from(value: SelectionRegistrarScope) -> Self {
+        Widget::environment_scope(value.registrar, value.child)
+    }
+}
 
 /// A retained selection boundary around a widget subtree.
 ///
@@ -11,6 +81,7 @@ use crate::{SelectionAreaController, SelectionContainerDelegate, Widget};
 pub struct SelectionContainer {
     child: Widget,
     delegate: SelectionContainerDelegate,
+    registrar: Option<SelectionRegistrar>,
 }
 
 impl SelectionContainer {
@@ -26,6 +97,7 @@ impl SelectionContainer {
         Self {
             child: child.into(),
             delegate,
+            registrar: None,
         }
     }
 
@@ -43,6 +115,13 @@ impl SelectionContainer {
     #[must_use]
     pub fn disabled(child: impl Into<Widget>) -> Self {
         Self::with_delegate(SelectionContainerDelegate::disabled(), child)
+    }
+
+    /// Uses a supplied registrar rather than the enclosing registrar.
+    #[must_use]
+    pub fn registrar(mut self, registrar: SelectionRegistrar) -> Self {
+        self.registrar = Some(registrar);
+        self
     }
 
     #[must_use]
@@ -63,6 +142,6 @@ impl SelectionContainer {
 
 impl From<SelectionContainer> for Widget {
     fn from(value: SelectionContainer) -> Self {
-        Widget::selection_container(value.delegate, value.child)
+        Widget::selection_container_in(value.delegate, value.registrar, value.child)
     }
 }

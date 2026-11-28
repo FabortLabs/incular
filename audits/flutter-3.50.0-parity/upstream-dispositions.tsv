@@ -4447,10 +4447,10 @@ packages/flutter/test/widgets/sensitive_content_host_test.dart	1871	when one not
 packages/flutter/test/widgets/sensitive_content_host_test.dart	1914	when one notSensitive SensitiveContent widget changes to autoSensitive with an autoSensitive SensitiveContent widget	partial-match	upstream-sensitive-content-host.md#multiple-retained-registrations
 packages/flutter/test/widgets/sensitive_content_host_test.dart	1956	when one notSensitive SensitiveContent widget changes to sensitive with another notSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
 packages/flutter/test/widgets/sensitive_content_host_test.dart	1995	when one notSensitive SensitiveContent widget changes to autoSensitive with another notSensitive SensitiveContent widget	paired-match	upstream-sensitive-content-host.md#multiple-retained-registrations
-packages/flutter/test/widgets/selection_container_test.dart	14	updates its registrar and delegate based on the number of selectables	partial-match	upstream-selection-container-registration.md
-packages/flutter/test/widgets/selection_container_test.dart	40	disabled container	partial-match	upstream-selection-container-registration.md
-packages/flutter/test/widgets/selection_container_test.dart	65	Swapping out container delegate does not crash	partial-match	upstream-selection-container-registration.md
-packages/flutter/test/widgets/selection_container_test.dart	117	Can update within one frame	partial-match	upstream-selection-container-registration.md
-packages/flutter/test/widgets/selection_container_test.dart	147	selection container registers itself if there is a selectable child	partial-match	upstream-selection-container-registration.md
-packages/flutter/test/widgets/selection_container_test.dart	179	selection container gets registrar from context if not provided	partial-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	14	updates its registrar and delegate based on the number of selectables	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	40	disabled container	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	65	Swapping out container delegate does not crash	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	117	Can update within one frame	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	147	selection container registers itself if there is a selectable child	paired-match	upstream-selection-container-registration.md
+packages/flutter/test/widgets/selection_container_test.dart	179	selection container gets registrar from context if not provided	paired-match	upstream-selection-container-registration.md
 packages/flutter/test/widgets/selection_container_test.dart	202	SelectionContainer does not crash at zero area	paired-match	upstream-selection-container-registration.md

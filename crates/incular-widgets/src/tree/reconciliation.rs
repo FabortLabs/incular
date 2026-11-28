@@ -3056,6 +3056,7 @@ impl WidgetTree {
                             controller.clear_selection();
                         }
                         WidgetKind::SelectionContainer { delegate, .. } => {
+                            self.selection_registrations.remove(&id);
                             self.static_selections.remove(&id);
                             let controller = delegate.controller();
                             controller.set_registered_child_count(0);

@@ -81,6 +81,7 @@ impl WidgetTree {
             compositor_scratch: Vec::new(),
             lifted_scene: None,
             static_selections: FastHashMap::default(),
+            selection_registrations: FastHashMap::default(),
             dependency_root,
             automatic_keep_alives,
             inherited_consumers: FastHashMap::default(),

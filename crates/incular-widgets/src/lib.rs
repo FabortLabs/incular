@@ -437,7 +437,7 @@ pub use selection::{
     SelectionContainerDelegate, SelectionDetails, SelectionGeometry, SelectionHandleType,
     SelectionListenerNotifier, SelectionPoint, SelectionStatus, TextSelectionPoint,
 };
-pub use selection_container::SelectionContainer;
+pub use selection_container::{SelectionContainer, SelectionRegistrar, SelectionRegistrarScope};
 pub use selection_listener::SelectionListener;
 pub use semantics::{BlockSemantics, ExcludeSemantics, MergeSemantics, Semantics};
 pub use semantics_debugger::{DEFAULT_SEMANTICS_DEBUGGER_NODE_LIMIT, SemanticsDebugger};

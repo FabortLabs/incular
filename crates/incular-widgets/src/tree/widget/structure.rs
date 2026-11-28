@@ -915,12 +915,14 @@ impl PartialEq for WidgetKind {
                 Self::SelectionContainer {
                     delegate: a,
                     child: b,
+                    registrar: e,
                 },
                 Self::SelectionContainer {
                     delegate: c,
                     child: d,
+                    registrar: f,
                 },
-            ) => a == c && b == d,
+            ) => a == c && b == d && e == f,
             (
                 Self::SelectionListener {
                     notifier: a,
