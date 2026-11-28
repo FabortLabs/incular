@@ -452,6 +452,8 @@ pub enum SelectionChangedCause {
     Drag,
     /// Selection made by an IME's floating-cursor gesture.
     ForcePress,
+    /// Selection reported by a platform handwriting interaction.
+    StylusHandwriting,
     /// A command invoked through the editor selection toolbar.
     Toolbar,
     Accessibility,

@@ -38,3 +38,13 @@ one joined glyph 17.43164 px wide on this test host, while Flutter's
 test-font environment produces a 42 px box. The host sends its own
 laid-out bounds rather than imposing Flutter's test-font width.
 All four focused native tests passed.
+
+## Selection-change cause during a handwriting interaction
+
+Pinned iOS case :134 passed. The installed native text-input binding
+now reports `StylusHandwriting` for a selection-only update between the
+host's interaction-began and interaction-finished messages. The mounted
+callback reports ordinary keyboard selection before and after that
+interval. An identical packet emits no selection callback, and updating
+the actual text during the interaction still reports a keyboard edit.
+The four binding and 16 whole-editing-state tests passed.

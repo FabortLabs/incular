@@ -438,7 +438,10 @@ impl crate::Runtime {
                 Success(Value::Null)
             }
             "TextInputClient.updateEditingState" => {
-                method_result(self.handle_flutter_text_input_editing_method(call), unit)
+                method_result(
+                    self.handle_flutter_text_input_editing_method(call, scribble.in_progress()),
+                    unit,
+                )
             }
             "TextInputClient.performPrivateCommand" => {
                 method_result(self.handle_flutter_text_input_private_command_method(call), unit)
@@ -476,12 +479,13 @@ impl crate::Runtime {
         &mut self,
         data: &[u8],
     ) -> Result<Option<bool>, FlutterTextInputEditingError> {
-        self.handle_flutter_text_input_editing_method(&JsonMethodCodec::decode_method_call(data)?)
+        self.handle_flutter_text_input_editing_method(&JsonMethodCodec::decode_method_call(data)?, false)
     }
 
     fn handle_flutter_text_input_editing_method(
         &mut self,
         call: &MethodCall<Value>,
+        scribble_in_progress: bool,
     ) -> Result<Option<bool>, FlutterTextInputEditingError> {
         use FlutterTextInputEditingError::InvalidArguments;
         if call.method != "TextInputClient.updateEditingState" {
@@ -497,7 +501,11 @@ impl crate::Runtime {
         }
         let (state, affinity, directional) =
             decode_full_editing_state(args.get(1).ok_or(InvalidArguments)?)?;
-        self.handle_text_editing_state_with_metadata(state, Some((affinity, directional)));
+        self.handle_text_editing_state_with_metadata(
+            state,
+            Some((affinity, directional)),
+            scribble_in_progress,
+        );
         Ok(Some(true))
     }
 

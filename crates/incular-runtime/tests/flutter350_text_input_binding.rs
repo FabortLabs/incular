@@ -274,3 +274,98 @@ fn the_mounted_flutter_keyboard_configuration_tracks_its_view_without_leaking_to
     frame(&runtime);
     assert!(runtime.borrow_mut().take_text_input_commands().is_empty());
 }
+
+#[test]
+fn only_selection_changes_during_a_live_scribble_interaction_report_handwriting() {
+    use incular_runtime::TextShortcutPlatform;
+    use incular_text::{SelectionChangedCause, TextSelection};
+
+    let text = TextEditingController::with_text("Lorem ipsum dolor sit amet");
+    let focus = FocusNode::new();
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let runtime = Rc::new(RefCell::new(
+        Runtime::new(
+            EditableText::new(text.clone())
+                .text_direction(TextDirection::Ltr)
+                .focus_node(focus.clone())
+                .on_selection_changed({
+                    let changes = changes.clone();
+                    move |selection, cause| changes.borrow_mut().push((selection, cause))
+                })
+                .into(),
+        )
+        .unwrap(),
+    ));
+    runtime
+        .borrow_mut()
+        .set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    let host = Host::new();
+    let _binding = FlutterTextInputBinding::install(&host.inbound, &runtime);
+    let layout = || {
+        runtime
+            .borrow_mut()
+            .run_frame(Constraints::tight(Size::new(300., 100.)))
+            .unwrap();
+    };
+    focus.request_focus();
+    layout();
+    let client = runtime
+        .borrow()
+        .flutter_text_input_configuration()
+        .unwrap()
+        .0
+        .get();
+    changes.borrow_mut().clear();
+    let set = |value, base, extent| {
+        assert_eq!(
+            host.send(
+                "TextInputClient.updateEditingState",
+                json!([client, {"text": value, "selectionBase": base, "selectionExtent": extent}])
+            )
+            .unwrap(),
+            b"[null]"
+        );
+        layout();
+    };
+
+    set("Lorem ipsum dolor sit amet", 2, 3);
+    assert_eq!(
+        changes.take(),
+        [(TextSelection::new(2, 3), SelectionChangedCause::Keyboard)]
+    );
+    assert_eq!(
+        host.send("TextInputClient.scribbleInteractionBegan", Value::Null)
+            .unwrap(),
+        b"[null]"
+    );
+    set("Lorem ipsum dolor sit amet", 3, 4);
+    assert_eq!(
+        changes.take(),
+        [(
+            TextSelection::new(3, 4),
+            SelectionChangedCause::StylusHandwriting
+        )]
+    );
+    set("Lorem ipsum dolor sit amet", 3, 4);
+    assert!(
+        changes.borrow().is_empty(),
+        "repeating the value has no selection event"
+    );
+
+    // Replacing actual text stays a keyboard edit even inside Scribble.
+    set("Lorem ipsum dolor sit amet!", 5, 5);
+    assert_eq!(
+        changes.take(),
+        [(TextSelection::collapsed(5), SelectionChangedCause::Keyboard)]
+    );
+    assert_eq!(
+        host.send("TextInputClient.scribbleInteractionFinished", Value::Null)
+            .unwrap(),
+        b"[null]"
+    );
+    set("Lorem ipsum dolor sit amet!", 6, 7);
+    assert_eq!(
+        changes.take(),
+        [(TextSelection::new(6, 7), SelectionChangedCause::Keyboard)]
+    );
+}

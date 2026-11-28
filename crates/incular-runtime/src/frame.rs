@@ -4947,13 +4947,14 @@ impl Runtime {
     /// [`TextInputCommand::Update`] goes out only when an input formatter
     /// changed it.
     pub fn handle_text_editing_state(&mut self, state: TextInputState) {
-        self.handle_text_editing_state_with_metadata(state, None);
+        self.handle_text_editing_state_with_metadata(state, None, false);
     }
 
     pub(crate) fn handle_text_editing_state_with_metadata(
         &mut self,
         state: TextInputState,
         metadata: Option<(incular_text::TextAffinity, bool)>,
+        scribble_in_progress: bool,
     ) {
         self.editing_diagnostics.ime_events += 1;
         let had_preedit = self.ime_composition.is_some();
@@ -5013,8 +5014,16 @@ impl Runtime {
                 text: value.text,
             });
         }
+        let handwriting_selection = scribble_in_progress && !text_changed && refresh_caret;
+        if handwriting_selection {
+            // Flutter treats this like a selection gesture, not a key, so
+            // it can ask the already attached control to show again.
+            self.text_input_show_requested = true;
+        }
         if previous_selection.is_some() {
-            let cause = if self.has_floating_caret_for(owner.field) {
+            let cause = if handwriting_selection {
+                incular_text::SelectionChangedCause::StylusHandwriting
+            } else if self.has_floating_caret_for(owner.field) {
                 incular_text::SelectionChangedCause::ForcePress
             } else {
                 incular_text::SelectionChangedCause::Keyboard
