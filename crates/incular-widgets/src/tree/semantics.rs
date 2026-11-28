@@ -34,6 +34,7 @@ enum SemanticTextMerge {
     #[default]
     None,
     CompatibleLabels,
+    NestedLabelAndHint,
     CompatibleControls,
     CompatibleActions,
     HintAndValue {
@@ -47,6 +48,13 @@ struct MergedSemanticFields {
     hint_attributes: Vec<StringAttribute>,
     value: Option<String>,
     value_attributes: Vec<StringAttribute>,
+    direction: Option<TextDirection>,
+}
+
+#[derive(Default)]
+struct MergedNestedHints {
+    text: String,
+    attributes: Vec<StringAttribute>,
     direction: Option<TextDirection>,
 }
 
@@ -505,10 +513,12 @@ impl WidgetTree {
                 self.element_live(visit.element, "semantic traversal element must remain live");
             let block = effective_focus_block(entry, visit.subtree_focus_blocked);
             let can_own_hints = can_own_hint_value(entry, block);
+            let merges_nested_text = !entry.children.is_empty() && is_simple_semantic_text(entry);
             let can_own_controls = can_own_control_relations(entry);
             let can_own_sliver_labels = self.sliver_label_annotation_candidate(visit.element, entry);
             let can_own_validation = can_own_validation_labels(entry);
-            let merges_child_fragments = can_own_hints
+            let merges_child_fragments = merges_nested_text
+                || can_own_hints
                 || can_own_controls
                 || can_own_sliver_labels
                 || can_own_validation
@@ -534,7 +544,8 @@ impl WidgetTree {
                 subtree_content: visit.force_content
                     || dirty.subtree_content()
                     // A value becoming conflicting affects clean siblings as well.
-                    || (can_own_hints
+                    || (merges_nested_text
+                        || can_own_hints
                         || can_own_sliver_labels
                         || can_own_controls
                         || can_own_validation)
@@ -1244,6 +1255,8 @@ impl WidgetTree {
                     self.count_compatible_values(element, entry) < 2
                 };
             SemanticTextMerge::HintAndValue { take_value }
+        } else if !entry.children.is_empty() && is_simple_semantic_text(entry) {
+            SemanticTextMerge::NestedLabelAndHint
         } else {
             SemanticTextMerge::None
         };
@@ -1582,7 +1595,12 @@ impl WidgetTree {
             role = None;
         }
         let explicitly_merges = absorbs_descendant_semantics(entry);
-        if (explicitly_merges || own_text_merge == SemanticTextMerge::CompatibleLabels)
+        let mut merged_hints = MergedNestedHints::default();
+        if (explicitly_merges
+            || matches!(
+                own_text_merge,
+                SemanticTextMerge::CompatibleLabels | SemanticTextMerge::NestedLabelAndHint
+            ))
             && focus_annotation.is_none()
         {
             if let Some(own) = element_own_label(entry) {
@@ -1599,9 +1617,22 @@ impl WidgetTree {
                     .as_ref()
                     .and_then(|node| node.state.text_direction);
             }
+            if own_text_merge == SemanticTextMerge::NestedLabelAndHint {
+                merged_hints.direction = self.semantic_label_direction(element, entry);
+                merged.direction = merged.direction.or(merged_hints.direction);
+                let own = properties.explicit.as_ref().unwrap();
+                if let Some(hint) = &own.description {
+                    merged_hints.text.push_str(hint);
+                    if let Some(attributes) = &own.state.text_attributes {
+                        merged_hints.attributes.clone_from(&attributes.hint);
+                    }
+                }
+            }
             for &child in self.visible_semantic_children(element, entry).iter() {
                 if explicitly_merges {
                     self.push_merged_semantics(child, &mut merged);
+                } else if own_text_merge == SemanticTextMerge::NestedLabelAndHint {
+                    self.push_nested_semantic_text(child, &mut merged, &mut merged_hints);
                 } else {
                     self.push_compatible_labels(child, &mut merged);
                 }
@@ -1696,6 +1727,15 @@ impl WidgetTree {
                 .then(|| self.semantic_label_direction(element, entry))
                 .flatten()
         });
+        if own_text_merge == SemanticTextMerge::NestedLabelAndHint && !merged_hints.text.is_empty()
+        {
+            description = Some(merged_hints.text);
+            if !merged_hints.attributes.is_empty() || state.text_attributes.is_some() {
+                Arc::make_mut(state.text_attributes.get_or_insert_with(Arc::default)).hint =
+                    merged_hints.attributes;
+            }
+            state.text_direction = state.text_direction.or(merged_hints.direction);
+        }
         if let SemanticTextMerge::HintAndValue { .. } = own_text_merge {
             let mut fields = MergedSemanticFields {
                 direction: state.text_direction,
@@ -2591,6 +2631,9 @@ impl WidgetTree {
         let kind = entry.widget.kind();
         match properties.explicit.as_deref() {
             Some(explicit) => {
+                if policy == SemanticTextMerge::NestedLabelAndHint {
+                    return is_simple_semantic_text(entry);
+                }
                 // Incompatible annotations keep their independent node.
                 let state = &explicit.state;
                 if policy == SemanticTextMerge::CompatibleControls {
@@ -2613,6 +2656,7 @@ impl WidgetTree {
                 let validation = state.effective_validation_result();
                 let text_is_compatible = match policy {
                     SemanticTextMerge::None
+                    | SemanticTextMerge::NestedLabelAndHint
                     | SemanticTextMerge::CompatibleActions
                     | SemanticTextMerge::CompatibleControls => false,
                     SemanticTextMerge::CompatibleLabels => {
@@ -2669,10 +2713,52 @@ impl WidgetTree {
             }
             None => {
                 !self.focus_semantics_boundary(element, entry)
-                    && (!matches!(policy, SemanticTextMerge::HintAndValue { .. })
-                        || element_own_label(entry).is_none())
+                    && (!matches!(
+                        policy,
+                        SemanticTextMerge::HintAndValue { .. }
+                            | SemanticTextMerge::NestedLabelAndHint
+                    ) || element_own_label(entry).is_none())
             }
         }
+    }
+
+    fn push_nested_semantic_text(
+        &self,
+        element: ElementId,
+        labels: &mut MergedSemanticSummary,
+        hints: &mut MergedNestedHints,
+    ) {
+        let Some(entry) = self.elements.get(element.0) else {
+            return;
+        };
+        if !self.can_merge_text_fragment(element, entry, SemanticTextMerge::NestedLabelAndHint) {
+            return;
+        }
+        if let Some(explicit) = &entry.widget.semantic_properties().explicit {
+            let direction = self.semantic_label_direction(element, entry);
+            if let Some(label) = &explicit.label {
+                labels.add_label(label, direction, element_label_attributes(entry));
+            }
+            if let Some(hint) = &explicit.description {
+                append_semantic_text(
+                    &mut hints.text,
+                    &mut hints.attributes,
+                    &mut hints.direction,
+                    hint,
+                    direction,
+                    explicit
+                        .state
+                        .text_attributes
+                        .as_ref()
+                        .map_or(&[], |attrs| attrs.hint.as_slice()),
+                );
+            }
+        }
+        with_recursive_tree_stack(|| {
+            for &child in self.visible_semantic_children(element, entry).iter() {
+                self.push_nested_semantic_text(child, labels, hints);
+            }
+        });
     }
 
     fn push_compatible_labels(&self, element: ElementId, merged: &mut MergedSemanticSummary) {
@@ -3719,6 +3805,46 @@ fn can_own_control_relations(entry: &Element) -> bool {
         .explicit
         .as_ref()
         .is_some_and(|data| data.state.controls_nodes.is_some() && !data.state.explicit_child_nodes)
+}
+
+/// Ordinary unbounded semantics annotations with only a label and/or hint
+/// contribute text without introducing a structural or interactive boundary.
+fn is_simple_semantic_text(entry: &Element) -> bool {
+    let properties = entry.widget.semantic_properties();
+    !properties.merge_descendants
+        && !properties.block_user_actions
+        && !properties.block_previous_siblings
+        && properties.paragraph_parts.is_none()
+        && !matches!(
+            entry.widget.kind(),
+            WidgetKind::Button(_)
+                | WidgetKind::Image { .. }
+                | WidgetKind::Gesture { .. }
+                | WidgetKind::RawInput { .. }
+                | WidgetKind::TextField(_)
+                | WidgetKind::SelectableText { .. }
+                | WidgetKind::Scroll { .. }
+                | WidgetKind::SliverViewport { .. }
+                | WidgetKind::Table { .. }
+                | WidgetKind::IndexedSemantics { .. }
+        )
+        && properties.tag_for_children.is_none()
+        && properties.locale_for_subtree.is_none()
+        && properties.description.is_none()
+        && properties.label.is_none()
+        && properties.callbacks == SemanticCallbacks::default()
+        && properties.explicit.as_ref().is_some_and(|explicit| {
+            explicit.role == SemanticRole::GenericContainer
+                && (explicit.label.is_some() || explicit.description.is_some())
+                && explicit.value.is_none()
+                && explicit.actions.is_empty()
+                && explicit.state
+                    == SemanticState {
+                        text_direction: explicit.state.text_direction,
+                        text_attributes: explicit.state.text_attributes.clone(),
+                        ..SemanticState::default()
+                    }
+        })
 }
 
 fn can_own_hint_value(entry: &Element, block: AccessibilityFocusBlockType) -> bool {

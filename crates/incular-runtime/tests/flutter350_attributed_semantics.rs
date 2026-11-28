@@ -226,3 +226,123 @@ fn attributed_alternate_values_keep_their_own_utf16_spans_and_clear_on_plain_upd
         }
     }
 }
+
+#[test]
+fn nested_semantics_merges_label_and_hint_with_independent_offsets() {
+    fn annot(child: impl Into<Widget>) -> Semantics {
+        Semantics::new(child)
+            .attributed_label(annotated("label", StringAttribute::spell_out(0..5)))
+            .attributed_hint(annotated("hint", StringAttribute::spell_out(1..2)))
+    }
+    let mut runtime = Runtime::new(
+        Directionality::new(TextDirection::Ltr, annot(annot(Placeholder::new()))).into(),
+    )
+    .unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let mut mobile = MobileAccessibilityProjection::new();
+    let update = mobile.sync(runtime.tree().semantics()).unwrap();
+    assert_eq!(update.nodes.len(), 1);
+    let semantic = &update.nodes[0].semantic;
+    assert_eq!(semantic.label.as_deref(), Some("label\nlabel"));
+    assert_eq!(semantic.description.as_deref(), Some("hint\nhint"));
+    let attributes = semantic.state.text_attributes.as_ref().unwrap();
+    assert_eq!(
+        attributes.label,
+        [
+            StringAttribute::spell_out(0..5),
+            StringAttribute::spell_out(6..11)
+        ]
+    );
+    assert_eq!(
+        attributes.hint,
+        [
+            StringAttribute::spell_out(1..2),
+            StringAttribute::spell_out(6..7)
+        ]
+    );
+}
+
+#[test]
+fn nested_semantics_counts_unattributed_labels_in_later_speech_offsets() {
+    let inner = Semantics::new(Placeholder::new())
+        .attributed_label(annotated("label3", StringAttribute::spell_out(1..3)));
+    let parent = Semantics::new(Semantics::new(inner).label("label2"))
+        .attributed_label(annotated("label1", StringAttribute::spell_out(0..5)));
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, parent).into()).unwrap();
+    runtime
+        .run_frame(Constraints::tight(Size::new(800., 600.)))
+        .unwrap();
+    let mut mobile = MobileAccessibilityProjection::new();
+    let update = mobile.sync(runtime.tree().semantics()).unwrap();
+    assert_eq!(update.nodes.len(), 1);
+    let semantic = &update.nodes[0].semantic;
+    assert_eq!(semantic.label.as_deref(), Some("label1\nlabel2\nlabel3"));
+    let attributes = semantic.state.text_attributes.as_ref().unwrap();
+    assert_eq!(
+        attributes.label,
+        [
+            StringAttribute::spell_out(0..5),
+            StringAttribute::spell_out(15..17)
+        ]
+    );
+}
+
+#[test]
+fn nested_semantics_recomputes_spans_without_absorbing_an_explicit_boundary() {
+    let scene = |plain, boundary| {
+        let mut inner = Semantics::new(Placeholder::new())
+            .attributed_label(annotated("last", StringAttribute::spell_out(0..4)));
+        if boundary {
+            inner = inner.container(true);
+        }
+        Directionality::new(
+            TextDirection::Ltr,
+            Semantics::new(Semantics::new(inner).label(plain)).label("first"),
+        )
+        .into()
+    };
+    let constraints = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(scene("x", false)).unwrap();
+    let mut mobile = MobileAccessibilityProjection::new();
+    for (plain, expected, start) in [
+        ("x", "first\nx\nlast", 8),
+        ("😀 wide", "first\n😀 wide\nlast", 14),
+    ] {
+        let root = runtime.tree().root().unwrap();
+        runtime
+            .tree_mut()
+            .update(root, scene(plain, false))
+            .unwrap();
+        runtime.run_frame(constraints).unwrap();
+        let update = mobile.sync(runtime.tree().semantics()).unwrap();
+        assert_eq!(update.nodes.len(), 1);
+        let data = &update.nodes[0].semantic;
+        assert_eq!(data.label.as_deref(), Some(expected));
+        assert_eq!(
+            data.state.text_attributes.as_ref().unwrap().label,
+            [StringAttribute::spell_out(start..start + 4)]
+        );
+    }
+    let root = runtime.tree().root().unwrap();
+    runtime.tree_mut().update(root, scene("x", true)).unwrap();
+    runtime.run_frame(constraints).unwrap();
+    let update = mobile.sync(runtime.tree().semantics()).unwrap();
+    assert_eq!(update.nodes.len(), 2);
+    let parent = update
+        .nodes
+        .iter()
+        .find(|node| node.semantic.label.as_deref() == Some("first\nx"))
+        .unwrap();
+    assert!(parent.semantic.state.text_attributes.is_none());
+    let child = update
+        .nodes
+        .iter()
+        .find(|node| node.semantic.label.as_deref() == Some("last"))
+        .unwrap();
+    assert_eq!(
+        child.semantic.state.text_attributes.as_ref().unwrap().label,
+        [StringAttribute::spell_out(0..4)]
+    );
+}

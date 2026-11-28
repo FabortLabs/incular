@@ -4032,3 +4032,5 @@ packages/flutter/test/widgets/basic_test.dart	801	Semantics with increasedValue 
 packages/flutter/test/widgets/basic_test.dart	814	Semantics with attributedHint should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
 packages/flutter/test/widgets/basic_test.dart	756	Semantics with attributedDecreasedValue should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
 packages/flutter/test/widgets/basic_test.dart	772	Semantics with attributedIncreasedValue should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
+packages/flutter/test/widgets/basic_test.dart	616	Semantics can merge attributed strings	paired-match	upstream-attributed-semantics.md
+packages/flutter/test/widgets/basic_test.dart	701	Semantics can merge attributed strings with non attributed string	paired-match	upstream-attributed-semantics.md

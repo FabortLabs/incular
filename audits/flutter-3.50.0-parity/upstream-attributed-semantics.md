@@ -35,3 +35,21 @@ same merged node. These cases do not increment upstream coverage.
 mobile update data match, but Flutter's exact Dart widget diagnostics and
 OS-level pronunciation are not equivalent. Desktop keeps the resulting
 plain label and base direction; pronunciation spans are not natively mapped.
+
+## Ordinary nested annotations
+
+Pinned widget originals `widgets/basic_test.dart:616,701` passed.
+Incular initially emitted multiple nodes for these lookalike nested
+annotations. The runtime now merges compatible labels and hints
+without an explicit MergeSemantics widget, matching the originals:
+`label\nlabel` has spell-out ranges 0..5 and 6..11;
+`hint\nhint` has ranges 1..2 and 6..7. A plain middle label
+contributes to the UTF-16 offset without creating a pronunciation
+span; the final span in `label1\nlabel2\nlabel3` is 15..17.
+
+A retained-update check changes the plain label to include a
+supplementary character and verifies the next range immediately moves.
+Adding an explicit container keeps the final label on its own node
+with its original local range. All 17 tests in the attributable
+text and semantics strings/locale targets passed. This verifies
+portable nodes and metadata, not spoken output.
