@@ -215,6 +215,7 @@ impl WidgetTree {
     /// fires only for user edits that change the text (Flutter's contract);
     /// programmatic controller updates are stored as given.
     fn sync_edit_callbacks(&mut self, id: ElementId) {
+        let errors = self.text_editing_callback_errors.clone();
         let element = self.element_live_mut(id, "editing owner must remain live");
         if let Some(auxiliary) = element.auxiliary_state.as_mut() {
             auxiliary.edit_transform_subscription = None;
@@ -227,18 +228,33 @@ impl WidgetTree {
         let transform = spec.edit_transform.clone();
         let changed = spec.edit_changed.clone();
         if let Some(transform) = transform {
+            let errors = Rc::clone(&errors);
             element
                 .auxiliary_state
                 .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
                 .edit_transform_subscription =
-                Some(controller.register_edit_transform(move |old, next| transform(old, next)));
+                Some(controller.register_edit_transform(move |old, next| {
+                    super::text::call_editing_callback(
+                        TextEditingCallback::InputFormatter,
+                        || transform(old, next),
+                        &mut |error| errors.borrow_mut().push(error),
+                    )
+                    .unwrap_or_else(|| next.clone())
+                }));
         }
         if let Some(changed) = changed {
+            let errors = Rc::clone(&errors);
             element
                 .auxiliary_state
                 .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
                 .edit_changed_subscription =
-                Some(controller.observe_user_edits(move |value| changed(&value.text)));
+                Some(controller.observe_user_edits(move |value| {
+                    super::text::call_editing_callback(
+                        TextEditingCallback::Changed,
+                        || changed(&value.text),
+                        &mut |error| errors.borrow_mut().push(error),
+                    );
+                }));
         }
         self.sync_spell_check(id);
     }

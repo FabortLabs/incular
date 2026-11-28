@@ -4783,6 +4783,12 @@ impl Runtime {
         }
     }
 
+    fn flush_text_editing_callback_errors(&self) {
+        for error in self.tree.take_text_editing_callback_errors() {
+            self.report_editing_callback_error(error);
+        }
+    }
+
     pub(crate) fn dispatch_flutter_keyboard_content(
         &self,
         content: incular_platform::KeyboardInsertedContent,
@@ -5055,6 +5061,8 @@ impl Runtime {
             controller.reset_caret(self.input_now());
             self.frame_requested = true;
         }
+        drop(_notifications);
+        self.flush_text_editing_callback_errors();
     }
     pub fn run_frame(
         &mut self,
@@ -5183,6 +5191,7 @@ impl Runtime {
         // rebuilding so a stationary press shows a tooltip on the due frame.
         let gesture_timers_live = self.tree.pump_gesture_timers(now);
         let tooltip_timers_live = self.tree.pump_tooltip_timers(now);
+        self.flush_text_editing_callback_errors();
         let runtime_messages = message_span.elapsed_us();
         drop(message_guard);
         let before = self.tree.diagnostics();

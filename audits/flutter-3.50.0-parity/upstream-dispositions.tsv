@@ -4204,3 +4204,8 @@ packages/flutter/test/widgets/editable_text_test.dart	15316	ctrl-N/P	paired-matc
 packages/flutter/test/widgets/editable_text_test.dart	15395	with normal characters	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
 packages/flutter/test/widgets/editable_text_test.dart	15494	with extended grapheme clusters	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
 packages/flutter/test/widgets/editable_text_test.dart	15582	macOS selectors work	paired-match	upstream-editable-directional-shortcuts.md#apple-document-keys-and-ordered-host-selectors
+packages/flutter/test/widgets/editable_text_test.dart	6056	onChanged callback only invoked on text changes	paired-match	upstream-editable-callback-contracts.md#accepted-changes-and-formatter-boundaries
+packages/flutter/test/widgets/editable_text_test.dart	6100	Formatters are skipped if text has not changed	paired-match	upstream-editable-callback-contracts.md#accepted-changes-and-formatter-boundaries
+packages/flutter/test/widgets/editable_text_test.dart	12117	onSelectionChanged can throw errors	paired-match	upstream-editable-callback-contracts.md#callback-error-recovery
+packages/flutter/test/widgets/editable_text_test.dart	12146	onChanged can throw errors	paired-match	upstream-editable-callback-contracts.md#callback-error-recovery
+packages/flutter/test/widgets/editable_text_test.dart	12240	input formatters can throw errors	paired-match	upstream-editable-callback-contracts.md#callback-error-recovery

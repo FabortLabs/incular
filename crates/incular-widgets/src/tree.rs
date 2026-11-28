@@ -1606,6 +1606,7 @@ pub struct WidgetTree {
     #[cfg(debug_assertions)]
     debug_focus_boxes: Option<Box<debug_focus_boxes::DebugFocusBoxes>>,
     unmounted: Vec<ElementId>,
+    text_editing_callback_errors: Rc<RefCell<Vec<TextEditingCallbackError>>>,
     autofill_registry: Option<Box<autofill::AutofillRegistry>>,
     autofill_context_completions: Vec<incular_platform::autofill::AutofillContextAction>,
     /// Live elements keyed by a [`GlobalKey`], those parked for a move,

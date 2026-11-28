@@ -42,6 +42,7 @@ impl WidgetTree {
             #[cfg(debug_assertions)]
             debug_focus_boxes: None,
             unmounted: Vec::new(),
+            text_editing_callback_errors: Rc::new(RefCell::new(Vec::new())),
             autofill_registry: None,
             autofill_context_completions: Vec::new(),
             global_keys: super::global_keys::GlobalKeyRegistry::default(),

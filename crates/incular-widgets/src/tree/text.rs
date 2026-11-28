@@ -23,6 +23,8 @@ pub enum TextEditingCallback {
     ContentInserted,
     SelectionChanged,
     SelectionHandleTapped,
+    Changed,
+    InputFormatter,
 }
 
 /// A caught Rust panic from an editor callback, preserving its message.
@@ -37,15 +39,35 @@ fn run_editing_callback(
     callback: impl FnOnce(),
     report: &mut impl FnMut(TextEditingCallbackError),
 ) {
+    call_editing_callback(kind, callback, report);
+}
+
+pub(super) fn call_editing_callback<T>(
+    kind: TextEditingCallback,
+    callback: impl FnOnce() -> T,
+    report: &mut impl FnMut(TextEditingCallbackError),
+) -> Option<T> {
     use std::panic::{AssertUnwindSafe, catch_unwind};
-    if let Err(payload) = catch_unwind(AssertUnwindSafe(callback)) {
+    match catch_unwind(AssertUnwindSafe(callback)) {
+        Ok(value) => Some(value),
+        Err(payload) => {
         let message = payload
             .downcast_ref::<&str>()
             .copied()
             .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
             .unwrap_or("non-string panic payload")
             .to_owned();
-        report(TextEditingCallbackError { callback: kind, message });
+            report(TextEditingCallbackError { callback: kind, message });
+            None
+        }
+    }
+}
+
+impl WidgetTree {
+    /// Drains errors from editor callbacks that execute within a controller edit.
+    #[doc(hidden)]
+    pub fn take_text_editing_callback_errors(&self) -> Vec<TextEditingCallbackError> {
+        std::mem::take(&mut *self.text_editing_callback_errors.borrow_mut())
     }
 }
 
