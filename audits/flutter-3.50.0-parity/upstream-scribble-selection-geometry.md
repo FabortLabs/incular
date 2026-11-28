@@ -48,3 +48,11 @@ callback reports ordinary keyboard selection before and after that
 interval. An identical packet emits no selection callback, and updating
 the actual text during the interaction still reports a keyboard edit.
 The four binding and 16 whole-editing-state tests passed.
+
+## Toolbar stays mounted across duplicate show requests
+
+Pinned iOS case :795 passed. The native test starts handwriting
+and changes the selection through the installed host channel.
+No toolbar appears until requested. Its first show succeeds; a
+duplicate returns false, leaving the same keyed overlay mounted
+across two further frames. All five focused binding tests passed.
