@@ -147,6 +147,10 @@ impl ImageStream {
         self.cell.live_listeners.get() != 0
     }
 
+    pub(crate) fn has_live_image_observers(&self) -> bool {
+        self.has_live_listeners() && !matches!(&*self.cell.state.borrow(), ImageLoadState::Failed(_))
+    }
+
     fn adjust_live_listeners(&self, amount: usize, add: bool) {
         let mut cell = self.cell.clone();
         loop {

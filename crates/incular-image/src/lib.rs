@@ -6,6 +6,7 @@
 
 mod asset_image;
 mod bundled_cache;
+mod file_worker;
 mod info;
 mod listener;
 mod playback;
@@ -22,6 +23,8 @@ pub use bundled_cache::{
     clear_shared_bundle_live_images, shared_bundle_image_cache,
 };
 
+#[doc(hidden)]
+pub use file_worker::{FileImageWorker, FileImageWorkerScope};
 pub use info::ImageInfo;
 pub use webp_animation::AnimatedWebpDecoder;
 pub use listener::{
@@ -393,6 +396,31 @@ impl FileImage {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    /// Reports the pending, retained and active-listener state of this
+    /// path and scale in the current host's image cache.
+    #[must_use]
+    pub fn cache_status(&self) -> BundleImageCacheStatus {
+        shared_bundle_image_cache().file_status(self)
+    }
+
+    /// Evicts the cached path and scale so the next resolve can reread it.
+    pub fn evict(&self) -> bool {
+        shared_bundle_image_cache().evict_file(self)
+    }
+
+    fn resolve_with_size(&self, resize: Option<ImageResizeOptions>) -> ImageStream {
+        let stream = if FileImageWorker::available() {
+            shared_bundle_image_cache().resolve_file(self, resize)
+        } else {
+            // Preserve the immediacy of the explicit headless provider.
+            ImageStream::from_result(self.load().and_then(|image| match resize {
+                Some(options) => options.resize(image, &ImageConfiguration::empty()),
+                None => Ok(image),
+            }))
+        };
+        stream.with_debug_label(self.path.to_string_lossy().into_owned())
+    }
 }
 
 impl ImageProvider for FileImage {
@@ -401,12 +429,34 @@ impl ImageProvider for FileImage {
     }
 
     fn load(&self) -> Result<ImageHandle, ImageError> {
-        ImageHandle::from_file(&self.path).map(|image| image.with_scale(self.image_scale()))
+        ImageHandle::from_file(&self.path)
+            .map(|image| image.with_scale(self.image_scale()))
+            .map_err(|error| match error {
+                ImageError::Decode(reason) => ImageError::Decode(format!("Invalid image data: {reason}")),
+                other => other,
+            })
     }
 
-    fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
-        ImageStream::from_result(self.load_with(configuration))
-            .with_debug_label(self.path.to_string_lossy().into_owned())
+    fn resolve(&self, _configuration: &ImageConfiguration) -> ImageStream {
+        self.resolve_with_size(None)
+    }
+
+    fn resolve_cached(
+        &self,
+        configuration: &ImageConfiguration,
+        resize: Option<ImageResizeOptions>,
+    ) -> Option<ImageStream> {
+        shared_bundle_image_cache()
+            .resolve_cached_file(self, resize.map(|options| options.physical(configuration)))
+            .map(|stream| stream.with_debug_label(self.path.to_string_lossy().into_owned()))
+    }
+
+    fn resolve_resized(
+        &self,
+        configuration: &ImageConfiguration,
+        options: ImageResizeOptions,
+    ) -> ImageStream {
+        self.resolve_with_size(Some(options.physical(configuration)))
     }
 }
 

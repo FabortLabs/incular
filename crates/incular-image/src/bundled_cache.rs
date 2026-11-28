@@ -12,8 +12,8 @@ use std::{
 use lru::LruCache;
 
 use crate::{
-    AssetBundleImageKey, ImageCacheLimits, ImageConfiguration, ImageError, ImageHandle,
-    ImageLoadCallback, ImageResizeOptions, ImageStream,
+    AssetBundleImageKey, FileImage, FileImageWorker, ImageCacheLimits, ImageConfiguration,
+    ImageError, ImageHandle, ImageLoadCallback, ImageProvider, ImageResizeOptions, ImageStream,
 };
 
 mod live_streams;
@@ -107,21 +107,35 @@ pub(crate) struct PreparedBundleStream {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum DecodeSource {
+    Bundle(AssetBundleImageKey),
+    File(FileImage),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct BundleDecodeKey {
-    asset: AssetBundleImageKey,
+    source: DecodeSource,
     resize: Option<ImageResizeOptions>,
 }
 
 impl BundleDecodeKey {
+    fn bundle(asset: AssetBundleImageKey, resize: Option<ImageResizeOptions>) -> Self {
+        Self { source: DecodeSource::Bundle(asset), resize }
+    }
+
+    fn file(file: FileImage, resize: Option<ImageResizeOptions>) -> Self {
+        Self { source: DecodeSource::File(file), resize }
+    }
+
     fn plain(asset: AssetBundleImageKey) -> Self {
-        Self {
-            asset,
-            resize: None,
-        }
+        Self::bundle(asset, None)
     }
 
     fn read_uncached(&self) -> Result<ImageHandle, ImageError> {
-        let image = self.asset.read_uncached()?;
+        let image = match &self.source {
+            DecodeSource::Bundle(asset) => asset.read_uncached()?,
+            DecodeSource::File(file) => file.load()?,
+        };
         match self.resize {
             Some(size) => size.resize(image, &ImageConfiguration::empty()),
             None => Ok(image),
@@ -129,12 +143,15 @@ impl BundleDecodeKey {
     }
 
     fn read_uncached_async(self, done: ImageLoadCallback) {
-        let Self { asset, resize } = self;
-        match resize {
-            None => asset.read_uncached_async(done),
-            Some(size) => asset.read_uncached_async(Box::new(move |outcome| {
-                done(outcome.and_then(|image| size.resize(image, &ImageConfiguration::empty())));
-            })),
+        let Self { source, resize } = self;
+        match (source, resize) {
+            (DecodeSource::Bundle(asset), None) => asset.read_uncached_async(done),
+            (DecodeSource::Bundle(asset), Some(size)) => {
+                asset.read_uncached_async(Box::new(move |outcome| {
+                    done(outcome.and_then(|image| size.resize(image, &ImageConfiguration::empty())));
+                }));
+            }
+            (DecodeSource::File(file), resize) => FileImageWorker::load(file, resize, done),
         }
     }
 }
@@ -353,19 +370,26 @@ impl BundleImageCache {
     /// from the owning UI thread, without changing its LRU order.
     #[must_use]
     pub fn status_for_key(&self, key: &AssetBundleImageKey) -> BundleImageCacheStatus {
-        let key = BundleDecodeKey::plain(key.clone());
+        self.status_for_decode_key(&BundleDecodeKey::plain(key.clone()))
+    }
+
+    pub(crate) fn file_status(&self, file: &FileImage) -> BundleImageCacheStatus {
+        self.status_for_decode_key(&BundleDecodeKey::file(file.clone(), None))
+    }
+
+    fn status_for_decode_key(&self, key: &BundleDecodeKey) -> BundleImageCacheStatus {
         let (pending, blocking, keep_alive) = {
             let state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             (
-                state.pending.get(&key).cloned(),
-                state.blocking.contains_key(&key),
-                state.ready.contains(&key),
+                state.pending.get(key).cloned(),
+                state.blocking.contains_key(key),
+                state.ready.contains(key),
             )
         };
         BundleImageCacheStatus {
             pending: pending.is_some() || blocking,
             keep_alive,
-            live: live_streams::is_live(self, &key, pending.as_ref()),
+            live: live_streams::is_live(self, key, pending.as_ref()),
         }
     }
 
@@ -398,7 +422,14 @@ impl BundleImageCache {
     /// Evicts the pending or retained decode. If `include_live` is false,
     /// an externally observed stream can still satisfy a later resolve.
     pub fn evict_with_live(&self, key: &AssetBundleImageKey, include_live: bool) -> bool {
-        let key = BundleDecodeKey::plain(key.clone());
+        self.evict_decode_key(BundleDecodeKey::plain(key.clone()), include_live)
+    }
+
+    pub(crate) fn evict_file(&self, file: &FileImage) -> bool {
+        self.evict_decode_key(BundleDecodeKey::file(file.clone(), None), true)
+    }
+
+    fn evict_decode_key(&self, key: BundleDecodeKey, include_live: bool) -> bool {
         if include_live {
             live_streams::remove(self, &key);
         }
@@ -439,7 +470,7 @@ impl BundleImageCache {
         asset: AssetBundleImageKey,
         resize: Option<ImageResizeOptions>,
     ) -> Result<ImageHandle, ImageError> {
-        let key = BundleDecodeKey { asset, resize };
+        let key = BundleDecodeKey::bundle(asset, resize);
         let ticket = {
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             if let Some(image) = state.ready.get(&key) {
@@ -488,7 +519,7 @@ impl BundleImageCache {
         asset: AssetBundleImageKey,
         resize: Option<ImageResizeOptions>,
     ) -> Option<ImageStream> {
-        self.resolve_cached_key(&BundleDecodeKey { asset, resize })
+        self.resolve_cached_key(&BundleDecodeKey::bundle(asset, resize))
     }
 
     fn resolve_cached_key(&self, key: &BundleDecodeKey) -> Option<ImageStream> {
@@ -571,9 +602,26 @@ impl BundleImageCache {
         asset: AssetBundleImageKey,
         resize: Option<ImageResizeOptions>,
     ) -> ImageStream {
-        let key = BundleDecodeKey { asset, resize };
+        let key = BundleDecodeKey::bundle(asset, resize);
         self.resolve_cached_key(&key)
             .unwrap_or_else(|| self.start_stream(key))
+    }
+
+    pub(crate) fn resolve_file(
+        &self,
+        file: &FileImage,
+        resize: Option<ImageResizeOptions>,
+    ) -> ImageStream {
+        let key = BundleDecodeKey::file(file.clone(), resize);
+        self.resolve_cached_key(&key).unwrap_or_else(|| self.start_stream(key))
+    }
+
+    pub(crate) fn resolve_cached_file(
+        &self,
+        file: &FileImage,
+        resize: Option<ImageResizeOptions>,
+    ) -> Option<ImageStream> {
+        self.resolve_cached_key(&BundleDecodeKey::file(file.clone(), resize))
     }
 
     fn start_stream(&self, key: BundleDecodeKey) -> ImageStream {
@@ -601,7 +649,7 @@ impl BundleImageCache {
         asset: AssetBundleImageKey,
         resize: Option<ImageResizeOptions>,
     ) -> PreparedBundleStream {
-        let key = BundleDecodeKey { asset, resize };
+        let key = BundleDecodeKey::bundle(asset, resize);
         let (send, result) = futures_channel::oneshot::channel();
         let pending = self.start_async_with_key(
             key.clone(),
@@ -657,7 +705,7 @@ impl BundleImageCache {
         resize: Option<ImageResizeOptions>,
         done: ImageLoadCallback,
     ) {
-        let _ = self.start_async_with_key(BundleDecodeKey { asset, resize }, false, done);
+        let _ = self.start_async_with_key(BundleDecodeKey::bundle(asset, resize), false, done);
     }
 
     fn start_async_with_key(

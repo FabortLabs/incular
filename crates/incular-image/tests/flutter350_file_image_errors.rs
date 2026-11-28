@@ -107,3 +107,186 @@ fn unreadable_and_nonempty_nonimage_files_are_not_classified_as_empty() {
     fs::write(&path, b"not a raster image").unwrap();
     assert!(matches!(provider.load(), Err(ImageError::Decode(_))));
 }
+
+type WorkerJob = Box<dyn FnOnce() + Send>;
+
+fn flush_image_tasks() {
+    use incular_animation::scheduler::{has_ready_scheduled_task, run_one_scheduled_task};
+
+    for _ in 0..12 {
+        if !has_ready_scheduled_task() {
+            return;
+        }
+        let _ = run_one_scheduled_task();
+    }
+    panic!("image UI scheduler did not settle");
+}
+
+fn held_worker() -> (
+    incular_image::FileImageWorker,
+    Rc<RefCell<std::collections::VecDeque<WorkerJob>>>,
+) {
+    let jobs = Rc::new(RefCell::new(std::collections::VecDeque::new()));
+    let worker = incular_image::FileImageWorker::new({
+        let jobs = jobs.clone();
+        move |job| jobs.borrow_mut().push_back(job)
+    });
+    (worker, jobs)
+}
+
+fn complete_next_file_job(queue: &RefCell<std::collections::VecDeque<WorkerJob>>) {
+    flush_image_tasks();
+    let job = queue
+        .borrow_mut()
+        .pop_front()
+        .expect("one waiting file load");
+    std::thread::spawn(job).join().unwrap();
+    flush_image_tasks();
+}
+
+#[test]
+fn a_hosted_empty_file_is_pending_then_untracked_before_an_error_observer_retries() {
+    use incular_image::BundleImageCacheStatus;
+
+    let fixture = Fixture::new();
+    let path = fixture.path();
+    fs::write(&path, []).unwrap();
+    let provider = FileImage::new(&path).scale(2.);
+    let cfg = ImageConfiguration::empty();
+    let (worker, queue) = held_worker();
+    let _scope = worker.enter();
+
+    assert_eq!(provider.cache_status(), BundleImageCacheStatus::default());
+    let pending = provider.resolve(&cfg);
+    assert!(matches!(pending.state(), ImageLoadState::Loading(_)));
+    assert_eq!(provider.resolve(&cfg), pending);
+    assert!(provider.cache_status().pending);
+    assert!(
+        queue.borrow().is_empty(),
+        "worker starts on a later UI turn"
+    );
+
+    let seen = Rc::new(RefCell::new(None));
+    let _observer = pending.listen(
+        ImageStreamListener::new(Rc::new(|_, _| panic!("empty image has no frame"))).on_error({
+            let seen = seen.clone();
+            let provider = provider.clone();
+            Rc::new(move |error| {
+                *seen.borrow_mut() = Some((error.clone(), provider.cache_status()))
+            })
+        }),
+    );
+    complete_next_file_job(&queue);
+    assert_eq!(
+        *seen.borrow(),
+        Some((
+            ImageError::EmptyFile { path: path.clone() },
+            BundleImageCacheStatus::default(),
+        ))
+    );
+    assert_eq!(provider.cache_status(), BundleImageCacheStatus::default());
+
+    fs::write(&path, PNG).unwrap();
+    let retry = provider.resolve(&cfg);
+    assert_ne!(retry, pending);
+    assert!(provider.cache_status().pending);
+    complete_next_file_job(&queue);
+    assert!(queue.borrow().is_empty());
+    let ImageLoadState::Ready(decoded) = retry.state() else {
+        panic!("{retry:?}")
+    };
+    assert_eq!(
+        (
+            decoded.decoded().width(),
+            decoded.decoded().height(),
+            decoded.scale()
+        ),
+        (8, 8, 2.)
+    );
+    assert_eq!(decoded.source(), &ImageSource::FileSystem(path));
+    assert!(provider.cache_status().keep_alive);
+}
+
+#[test]
+fn an_invalid_nonempty_file_keeps_the_failed_pending_key_until_eviction() {
+    let fixture = Fixture::new();
+    let path = fixture.path();
+    fs::write(&path, b"garbage image bytes").unwrap();
+    let provider = FileImage::new(&path);
+    let cfg = ImageConfiguration::empty();
+    let (worker, queue) = held_worker();
+    let _scope = worker.enter();
+
+    let stream = provider.resolve(&cfg);
+    assert!(provider.cache_status().pending);
+    complete_next_file_job(&queue);
+    assert!(matches!(
+        stream.state(),
+        ImageLoadState::Failed(ImageError::Decode(reason)) if reason.starts_with("Invalid image data:")
+    ));
+    assert!(provider.cache_status().pending);
+    assert!(!provider.cache_status().keep_alive);
+
+    fs::write(&path, PNG).unwrap();
+    assert_eq!(provider.resolve(&cfg), stream);
+    flush_image_tasks();
+    assert!(
+        queue.borrow().is_empty(),
+        "failed decode prevents another read"
+    );
+    assert!(provider.evict());
+    assert!(!provider.cache_status().pending);
+    let retry = provider.resolve(&cfg);
+    assert_ne!(retry, stream);
+    complete_next_file_job(&queue);
+    assert!(matches!(retry.state(), ImageLoadState::Ready(_)));
+}
+
+#[test]
+fn discarding_a_file_worker_job_does_not_leak_a_pending_key() {
+    let fixture = Fixture::new();
+    let path = fixture.path();
+    fs::write(&path, PNG).unwrap();
+    let provider = FileImage::new(&path);
+    let worker = incular_image::FileImageWorker::new(drop);
+    let _scope = worker.enter();
+    let stream = provider.resolve(&ImageConfiguration::empty());
+    assert!(provider.cache_status().pending);
+    flush_image_tasks();
+    assert!(matches!(
+        stream.state(),
+        ImageLoadState::Failed(ImageError::Io(_))
+    ));
+    assert!(!provider.cache_status().pending);
+}
+
+#[test]
+fn a_hosted_resize_preserves_the_empty_file_failure_without_storing_pixels() {
+    let fixture = Fixture::new();
+    let path = fixture.path();
+    fs::write(&path, []).unwrap();
+    let file = FileImage::new(&path);
+    let provider = ResizeImage::new(file.clone(), Some(4), Some(4));
+    let cfg = ImageConfiguration::empty();
+    let (worker, queue) = held_worker();
+    let _scope = worker.enter();
+    let first = provider.resolve(&cfg);
+    assert!(matches!(first.state(), ImageLoadState::Loading(_)));
+    assert_eq!(provider.resolve(&cfg), first);
+    complete_next_file_job(&queue);
+    assert_eq!(
+        first.state(),
+        ImageLoadState::Failed(ImageError::EmptyFile { path: path.clone() })
+    );
+    assert_eq!(file.cache_status(), Default::default());
+    assert!(queue.borrow().is_empty());
+
+    fs::write(&path, PNG).unwrap();
+    let retry = provider.resolve(&cfg);
+    assert_ne!(retry, first);
+    complete_next_file_job(&queue);
+    let ImageLoadState::Ready(image) = retry.state() else {
+        panic!("{retry:?}")
+    };
+    assert_eq!((image.decoded().width(), image.decoded().height()), (4, 4));
+}

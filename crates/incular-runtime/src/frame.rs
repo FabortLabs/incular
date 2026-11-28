@@ -401,6 +401,8 @@ pub struct Runtime {
     pub(crate) frame_requested: bool,
     warm_up_frame: Option<incular_animation::scheduler::WarmUpFrame>,
     pub(crate) scheduler: Rc<RefCell<tasks::TaskScheduler>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    file_image_worker: incular_image::FileImageWorker,
     semantics_activation: Option<Rc<crate::semantics_activation::SemanticsActivation>>,
     pub(crate) environment: Rc<RefCell<RuntimeEnvironment>>,
     lifecycle: ApplicationLifecycle,
@@ -572,6 +574,19 @@ impl Runtime {
         tree.install_image_playback_loader(incular_widgets::internal::ImagePlaybackLoader::new(
             move |bytes, resize| image_spawner.load_animated_webp_in(&image_scope, bytes, resize),
         ));
+        #[cfg(not(target_arch = "wasm32"))]
+        let file_image_worker = {
+            let scheduler = Rc::downgrade(&scheduler);
+            incular_image::FileImageWorker::new(move |read| {
+                if let Some(scheduler) = scheduler.upgrade() {
+                    // Starting the executor is lazy; runtimes that load
+                    // no file images need not create worker threads.
+                    drop(scheduler.borrow().tokio_handle().spawn_blocking(read));
+                }
+            })
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let _file_image_scope = file_image_worker.enter();
         tree.enable_hosted_focus();
         let mut handlers = HashMap::new();
         root.bind_callbacks(&mut |callback| {
@@ -676,6 +691,8 @@ impl Runtime {
             semantics_activation: None,
             warm_up_frame: None,
             scheduler,
+            #[cfg(not(target_arch = "wasm32"))]
+            file_image_worker,
             environment: Rc::new(RefCell::new(RuntimeEnvironment::default())),
             lifecycle,
             frame_availability,
@@ -5375,6 +5392,8 @@ impl Runtime {
         now: Instant,
         warm_up: bool,
     ) -> Result<(DisplayList, FrameStats), TreeError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _file_image_scope = self.file_image_worker.enter();
         self.hover_press_hit = None;
         let message_guard = tracing::info_span!("incular.messages").entered();
         let message_span = profiling::PhaseSpan::start();
@@ -5667,6 +5686,8 @@ impl Runtime {
     /// outlets use this to refresh mounted content deterministically
     /// before framing, rather than only when reactive dependencies fire.
     pub(crate) fn rebuild_from_builder(&mut self, id: ElementId) -> Result<(), TreeError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _file_image_scope = self.file_image_worker.enter();
         self.reactive.borrow_mut().refresh(id);
         let widget = {
             let _build_scope = BuildScopeGuard::enter(BuildScope {

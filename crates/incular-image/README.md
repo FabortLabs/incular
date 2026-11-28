@@ -25,7 +25,13 @@ The resolved bundle key names the physical file and carries the density
 used to map source pixels into logical image size. Unbundled native file
 paths also support sibling density directories.
 
+A mounted native `FileImage` resolves asynchronously using the host's
+existing blocking executor. The path and scale identify its shared cache
+entry. Empty files can be retried immediately after the writer fills them;
+a nonempty decode failure is replayed until the key is evicted. Explicit
+`FileImage::load` and headless resolution remain synchronous.
+
 The UI's `BundleImageCache` deduplicates pending loads and keeps recently
-decoded bundle images within independent count and decoded-byte limits.
+decoded bundle and hosted file images within independent count and byte limits.
 A runtime memory-pressure message drops those retained entries. It does not
 invalidate image handles already in use.
