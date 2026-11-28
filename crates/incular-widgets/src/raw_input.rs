@@ -1159,3 +1159,60 @@ impl PointerSignalResolver {
     }
 
 }
+
+// A registry key selects the phase by its Rust type. The focus and pointer
+// are invocation data; they must not change which registered action runs.
+macro_rules! editable_outside_intent {
+    ($(#[$doc:meta])* $name:ident) => {
+        $(#[$doc])*
+        #[derive(Clone, Default)]
+        pub struct $name {
+            focus_node: Option<crate::FocusNode>,
+            pointer_event: Option<RawPointerEvent>,
+        }
+
+        impl $name {
+            /// The originating editor's node, for an invocation carrying one.
+            #[must_use]
+            pub fn focus_node(&self) -> Option<&crate::FocusNode> {
+                self.focus_node.as_ref()
+            }
+
+            /// The pointer sample that triggered the action.
+            #[must_use]
+            pub const fn pointer_event(&self) -> Option<RawPointerEvent> {
+                self.pointer_event
+            }
+
+            pub(crate) fn for_event(focus_node: Option<crate::FocusNode>, event: RawPointerEvent) -> Self {
+                Self { focus_node, pointer_event: Some(event) }
+            }
+        }
+
+        impl PartialEq for $name {
+            fn eq(&self, _: &Self) -> bool {
+                true
+            }
+        }
+
+        impl Eq for $name {}
+
+        impl std::hash::Hash for $name {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                // This type has one action key, independent of its payload.
+                state.write_u8(0);
+            }
+        }
+    };
+}
+
+editable_outside_intent!(
+    /// Handles a press outside a focused editor's tap region.
+    /// Register with `Default`; invocation carries its focus node and event.
+    EditableTextTapOutsideIntent
+);
+editable_outside_intent!(
+    /// Handles the release of a press outside an editor's tap region.
+    /// Register with `Default`; invocation carries the original editor and event.
+    EditableTextTapUpOutsideIntent
+);

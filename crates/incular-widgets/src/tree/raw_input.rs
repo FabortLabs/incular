@@ -545,7 +545,23 @@ impl WidgetTree {
             callback(event);
             return true;
         }
-        false
+        let focus = self.focus_node_at(editor);
+        let result = match event.phase {
+            PointerPhase::Down => self.invoke_action_at(
+                editor,
+                &incular_gestures::Intent::<crate::EditableTextTapOutsideIntent>::new(
+                    crate::EditableTextTapOutsideIntent::for_event(focus, event),
+                ),
+            ),
+            PointerPhase::Up => self.invoke_action_at(
+                editor,
+                &incular_gestures::Intent::<crate::EditableTextTapUpOutsideIntent>::new(
+                    crate::EditableTextTapUpOutsideIntent::for_event(focus, event),
+                ),
+            ),
+            _ => return false,
+        };
+        result == Some(incular_gestures::ActionResult::Handled)
     }
 
     /// Returns the deepest/frontmost custom-chrome interaction annotation at

@@ -383,7 +383,7 @@ pub use provider_image::{
 };
 pub use radio_selection::{RadioGroup, RawRadio, SelectableRegion};
 pub use raw_input::{
-    ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
+    EditableTextTapOutsideIntent, EditableTextTapUpOutsideIntent, ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers, Listener,
     ListenerCallbacks, MetaData, MouseCursor, MouseRegion, MouseRegionCallbacks, PointerDeviceKind,
     PointerPanZoomDetails, PointerSignalResolver, RawGestureDetector, RawPointerEvent, TapRegion, TapRegionCallbacks,

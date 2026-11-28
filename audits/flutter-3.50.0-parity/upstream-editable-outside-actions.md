@@ -16,3 +16,14 @@ removed editor cannot receive a late callback. This replaces the
 previous release-time lookup of the currently focused field. Existing
 same-group, explicit callback, captured-release, and native focus tests
 pass. The authored comparison adds no original registration.
+
+## Scoped press and release overrides
+
+Pinned `editable_text_test.dart:13106,13142` passed. The native
+`EditableTextTapOutsideIntent` override receives the original editor
+and actual desktop mouse-down payload and prevents the default blur.
+The separate `EditableTextTapUpOutsideIntent` override receives its
+mouse-up once even though the standard down behavior blurred the field.
+An authored widget callback still takes precedence over the scoped
+default action. Cancel and a subsequent stale release do not invoke
+the up action. All 22 focused native runtime tests passed.
