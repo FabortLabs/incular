@@ -351,3 +351,94 @@ fn updating_drag_start_behavior_changes_live_handle_origin_without_remounting() 
         assert_eq!(runtime.focused_element(), Some(field));
     }
 }
+
+#[test]
+fn a_toolbar_is_not_restored_while_device_padding_hides_its_selection() {
+    use incular_config::EdgeInsets;
+    use incular_text::{TextRange, TextSelection, TextStyle};
+    use incular_widgets::FocusNode;
+    use serde_json::json;
+
+    let controller = TextEditingController::with_text(vec!["abcd"; 20].join("\n"));
+    controller.set_selection(TextSelection::new(50, 54));
+    let focus = FocusNode::new();
+    const TOOLBAR: &str = "device-clipped toolbar";
+    let editor = EditableText::new(controller.clone())
+        .focus_node(focus.clone())
+        .text_direction(TextDirection::Ltr)
+        .style(TextStyle::new().font_size(14.).height(Some(1.)))
+        .max_lines(None)
+        .allow_implicit_caret_scrolling(false)
+        .context_menu_builder(|_, _| Widget::from(SizedBox::shrink()).with_key(TOOLBAR));
+    let mut runtime = Runtime::new(editor.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let mut environment = runtime.environment();
+    environment.viewport = Size::new(400., 200.);
+    environment.safe_insets = EdgeInsets::only(0., 0., 0., 120.);
+    assert!(runtime.set_environment(environment.clone()));
+    let now = Instant::now();
+    let time = |ms| now + Duration::from_millis(ms);
+    focus.request_focus();
+    frame(&mut runtime, time(0));
+    let field = runtime.focused_element().unwrap();
+    let geometry = runtime.tree().editable_selection_menu_rect(field).unwrap();
+    assert!(geometry.origin.y > 120. && geometry.origin.y < 200.);
+    let client = runtime.flutter_text_input_configuration().unwrap().0.get();
+    let request =
+        serde_json::to_vec(&json!({"method":"TextInputClient.showToolbar","args":[client]}))
+            .unwrap();
+    assert_eq!(
+        runtime.handle_flutter_text_toolbar_call(&request).unwrap(),
+        Some(true)
+    );
+    frame(&mut runtime, time(10));
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from(TOOLBAR))
+            .is_some()
+    );
+
+    let drag = |runtime: &mut Runtime, signed: f32, start| {
+        let point = Offset::new(180., 60.);
+        pointer(runtime, PointerPhase::Down, point, time(start));
+        pointer(
+            runtime,
+            PointerPhase::Move,
+            point + Offset::new(0., signed * 22.),
+            time(start + 50),
+        );
+        frame(runtime, time(start + 50));
+        let moved = point + Offset::new(0., signed * 32.);
+        pointer(runtime, PointerPhase::Move, moved, time(start + 100));
+        frame(runtime, time(start + 100));
+        assert!(!toolbar_visible(runtime, field));
+        pointer(runtime, PointerPhase::Up, moved, time(start + 130));
+        frame(runtime, time(start + 130));
+        frame(runtime, time(start + 150));
+    };
+    drag(&mut runtime, -1., 300);
+    assert_eq!(
+        runtime.tree().text_field_scroll_offset(field).unwrap().y,
+        10.
+    );
+    assert_eq!(controller.selection().range(), TextRange::new(50, 54));
+    assert!(!toolbar_visible(&runtime, field));
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from(TOOLBAR))
+            .is_none()
+    );
+
+    environment.safe_insets = EdgeInsets::ZERO;
+    assert!(runtime.set_environment(environment));
+    drag(&mut runtime, 1., 700);
+    assert!(toolbar_visible(&runtime, field));
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from(TOOLBAR))
+            .is_some()
+    );
+}

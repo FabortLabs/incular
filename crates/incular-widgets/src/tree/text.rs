@@ -2771,6 +2771,68 @@ impl WidgetTree {
         ))
     }
 
+    /// Checks the selection against the editable viewport, any ancestor
+    /// viewports, and the part of the view not covered by system insets.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn editable_toolbar_selection_is_visible(&self, id: ElementId) -> bool {
+        let visible = (|| {
+            let render = self.render_id(id)?;
+            let field = self.element_bounds(id)?;
+            let mut selection = self.editable_selection_menu_rect(id)?;
+            if selection.size.width == 0. {
+                // A collapsed caret is a line in the menu geometry, but
+                // it still has one pixel of visible coverage.
+                selection.size.width = 1.;
+            }
+            let handles = self.text_field_selection_handle_geometry(id)?;
+            let local_endpoint_visible = |handle: crate::TextSelectionHandle| {
+                field.contains(handle.anchor)
+                    || field.contains(handle.anchor - Offset::new(0., handle.line_height * 0.5))
+            };
+            if !local_endpoint_visible(handles.start)
+                && !handles.end.is_some_and(local_endpoint_visible)
+            {
+                return Some(false);
+            }
+
+            let environment = &self.environment;
+            let size = if environment.viewport.width > 0. && environment.viewport.height > 0. {
+                environment.viewport
+            } else {
+                self.root_layout_size()?
+            };
+            let safe = environment.safe_insets;
+            let drawable = Rect::from_origin_size(
+                Offset::new(safe.left, safe.top),
+                Size::maybe_new(
+                    size.width - safe.horizontal(),
+                    size.height - safe.vertical() - environment.view_insets.bottom,
+                )?,
+            );
+            let mut clip = field.intersection(drawable)?;
+            let mut ancestor = self.renders.get(render.0)?.parent;
+            while let Some(id) = ancestor {
+                let parent = self.renders.get(id.0)?;
+                if matches!(parent.object.kind(),
+                    RenderKind::Scroll { .. }
+                    | RenderKind::SliverViewport { .. }
+                    | RenderKind::ListWheelScrollView { .. }
+                    | RenderKind::ListWheelViewport { .. }
+                    | RenderKind::TwoDimensionalScrollView { .. }
+                    | RenderKind::TwoDimensionalViewport { .. }
+                ) {
+                    let local = Rect::from_origin_size(Offset::ZERO, parent.size);
+                    let bounds = self.render_world_transform(id).try_transform_rect_bbox(local)?;
+                    clip = clip.intersection(bounds)?;
+                }
+                ancestor = parent.parent;
+            }
+            Some(clip.size.width > 0. && clip.size.height > 0. && clip.intersects(selection))
+        })();
+        visible.unwrap_or(false)
+    }
+
     /// The one-pixel caret position marker in global coordinates, used for
     /// selection handles and position-to-point interaction. To obtain the
     /// full painted caret, use [Self::editable_local_caret_rect].

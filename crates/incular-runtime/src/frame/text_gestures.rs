@@ -1894,14 +1894,7 @@ impl Runtime {
         if !restore.after_drag || self.editable_scroll_drag.is_some_and(|drag| drag.started) {
             return false;
         }
-        let field = restore.field;
-        let in_field = self.tree.element_bounds(field).is_some_and(|bounds| {
-            self.tree.editable_selection_menu_rect(field).is_some_and(|selection| {
-                bounds.intersects(selection)
-                    || (selection.size.width == 0. && bounds.contains(selection.origin))
-            })
-        });
-        if in_field {
+        if self.tree.editable_toolbar_selection_is_visible(restore.field) {
             self.editable_toolbar_restore = None;
             return self.show_flutter_editor_toolbar();
         }

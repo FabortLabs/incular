@@ -42,3 +42,18 @@ The same property controls the editor's direct viewport drag. In the
 default Start mode the first 20 px hides the toolbar without moving
 content; the next 10 px actually scrolls. All 34 focused native
 scroll, handwriting, magnifier, and handle tests passed.
+
+## Device geometry gate
+
+An authored pinned Android probe uses a real multiline editor, live
+touch scroll, and 120 px of bottom device padding. The selection stays
+inside the editor but outside the drawable view. Flutter keeps the
+toolbar closed after the scroll, then restores it when padding is
+removed and the next scroll brings the selection into view.
+
+The same native scenario initially failed because it only checked the
+editor's own bounds. Its restore decision now also checks the visible
+device rectangle, selection endpoints, and ancestor viewport geometry.
+The older out-of-view and edited-value controls still pass. All six
+native scroll tests passed; this authored comparison adds no upstream
+registration and does not claim nested gesture arbitration.
