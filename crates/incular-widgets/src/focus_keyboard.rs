@@ -16,6 +16,38 @@ pub use incular_gestures::{
 
 use crate::{Widget, WidgetKind};
 
+/// Suppresses an enclosing shortcut and consumes the key in WidgetsApp.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct DoNothingIntent;
+
+/// Suppresses an enclosing shortcut but hands the key to the native host.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct DoNothingAndStopPropagationIntent;
+
+/// A no-op that can shadow any command without changing focus or editing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DoNothingAction {
+    consumes_key: bool,
+}
+
+impl Default for DoNothingAction {
+    fn default() -> Self {
+        Self::new(true)
+    }
+}
+
+impl DoNothingAction {
+    #[must_use]
+    pub const fn new(consumes_key: bool) -> Self {
+        Self { consumes_key }
+    }
+
+    #[must_use]
+    pub fn bind<C: CommandId>(self, command: C) -> Action<C> {
+        Action::new(command, || {}).with_key_consumption(self.consumes_key)
+    }
+}
+
 /// A required action lookup found no mapping in any enclosing scope.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("no enclosing action maps command type {command_type}")]

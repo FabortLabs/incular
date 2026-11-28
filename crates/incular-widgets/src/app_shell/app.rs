@@ -792,6 +792,26 @@ fn default_activation_shortcuts() -> Rc<incular_gestures::ErasedShortcutScope> {
     Rc::new(bindings).erased_scope()
 }
 
+fn default_noop_action_scopes(child: Widget) -> Widget {
+    use crate::{ActionScope, Actions, DoNothingAction, DoNothingAndStopPropagationIntent, DoNothingIntent};
+
+    thread_local! {
+        static CONSUME: Rc<Actions<DoNothingIntent>> = {
+            let mut actions = Actions::typed();
+            actions.register_action(DoNothingAction::default().bind(DoNothingIntent));
+            Rc::new(actions)
+        };
+        static PASS_TO_HOST: Rc<Actions<DoNothingAndStopPropagationIntent>> = {
+            let mut actions = Actions::typed();
+            actions.register_action(DoNothingAction::new(false).bind(DoNothingAndStopPropagationIntent));
+            Rc::new(actions)
+        };
+    }
+
+    let child = PASS_TO_HOST.with(|actions| ActionScope::new(actions.clone(), child));
+    CONSUME.with(|actions| ActionScope::new(actions.clone(), child)).into()
+}
+
 /// Application-level localization selection and root-widget policy.
 #[derive(Clone)]
 pub struct WidgetsApp {
@@ -1066,6 +1086,7 @@ impl WidgetsApp {
         if let Some(actions) = &self.actions {
             child = crate::ActionScope::from_erased(actions.clone(), child).into();
         } else {
+            child = default_noop_action_scopes(child);
             child = Widget::environment_scope(crate::RequestFocusAction, child);
         }
         child = crate::ShortcutScope::from_erased(self.shortcuts.clone(), child)

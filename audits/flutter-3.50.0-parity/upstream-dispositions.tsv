@@ -4563,3 +4563,9 @@ packages/flutter/test/painting/image_provider_test.dart	54	obtainKey errors will
 packages/flutter/test/gestures/debug_test.dart	207	TapGestureRecognizer _sentTapDown toString	paired-match	upstream-gesture-diagnostic-traces.md#pointer-descriptions-and-tap-down-state
 packages/flutter/test/gestures/events_test.dart	14	toString control tests	paired-match	upstream-gesture-diagnostic-traces.md#pointer-descriptions-and-tap-down-state
 packages/flutter/test/gestures/debug_test.dart	223	Gesture details debugFillProperties	partial-match	upstream-gesture-diagnostic-traces.md#callback-detail-properties
+packages/flutter/test/widgets/shortcuts_test.dart	865	Shortcuts passes to the next Shortcuts widget if it doesn't map the key	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/shortcuts_test.dart	908	Shortcuts can disable a shortcut with Intent.doNothing	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/shortcuts_test.dart	953	Shortcuts that aren't bound to an action don't absorb keys meant for text fields	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/shortcuts_test.dart	980	Shortcuts that are bound to an action do override text fields	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/shortcuts_test.dart	1018	Shortcuts can override intents that apply to text fields	paired-match	upstream-shortcuts-text-routing.md
+packages/flutter/test/widgets/shortcuts_test.dart	1058	Shortcuts can override intents that apply to text fields with DoNothingAndStopPropagationIntent	paired-match	upstream-shortcuts-text-routing.md
