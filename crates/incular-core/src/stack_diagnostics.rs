@@ -203,6 +203,30 @@ impl DiagnosticStack<'_> {
         result
     }
 
+    /// Formats the flat stack-trace block used inside a diagnostic error.
+    /// The heading's separator is independent of the trace, and frame
+    /// text is filtered but never reflowed or indented.
+    #[must_use]
+    pub fn format_diagnostic_block(
+        &self,
+        name: &str,
+        stack: Option<&str>,
+        show_separator: bool,
+    ) -> String {
+        let mut output = name.to_owned();
+        if show_separator {
+            output.push(':');
+        }
+        output.push('\n');
+        if let Some(stack) = stack {
+            for frame in self.default_stack_filter(stack.trim_end()) {
+                output.push_str(&frame);
+                output.push('\n');
+            }
+        }
+        output
+    }
+
     /// Emits the label before the trace. The raw line limit is applied after
     /// removing web capture boilerplate but before dropping internal frames.
     /// Supply raw stack text from the diagnostic producer; native Rust

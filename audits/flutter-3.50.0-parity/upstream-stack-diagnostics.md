@@ -23,3 +23,12 @@ supplied text, not implicit live VM capture. Similarly, generating a real
 Dart `ParallelWaitError` remains unpaired; the equivalent text and rendering
 path were checked, not the Dart error object's construction. The focused
 native suite passed six tests, and the parser regression suite passed eight.
+
+## Named stack diagnostics
+
+The pinned `foundation/diagnostics_test.dart:1630` original
+passed. Formatting a trace as a flat block keeps all three
+frame lines, including the file positions and whitespace.
+The heading gets a colon by default; disabling its separator
+removes only the colon. All 23 focused native stack and
+diagnostic-tree tests passed.

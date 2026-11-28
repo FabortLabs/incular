@@ -181,3 +181,21 @@ fn web_private_methods_use_brackets_without_a_known_class() {
         StackFrameOrigin::Native
     ));
 }
+
+#[test]
+fn stack_trace_as_a_diagnostic_block_respects_the_heading_separator() {
+    let stack = concat!(
+        "#0      someMethod  (file:///diagnostics_test.dart:42:19)\n",
+        "#1      someMethod2  (file:///diagnostics_test.dart:12:3)\n",
+        "#2      someMethod3  (file:///foo.dart:4:1)\n",
+    );
+    let printer = DiagnosticStack::default();
+    assert_eq!(
+        printer.format_diagnostic_block("Stack trace", Some(stack), true),
+        format!("Stack trace:\n{stack}"),
+    );
+    assert_eq!(
+        printer.format_diagnostic_block("-- callback 2 --", Some(stack), false),
+        format!("-- callback 2 --\n{stack}"),
+    );
+}
