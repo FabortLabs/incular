@@ -363,15 +363,46 @@ impl Semantics {
 
     /// Flutter's `increasedValue`: the value an increment would produce.
     #[must_use]
-    pub fn increased_value(mut self, value: impl Into<String>) -> Self {
-        self.state.increased_value = Some(value.into());
-        self
+    pub fn increased_value(self, value: impl Into<String>) -> Self {
+        self.attributed_increased_value(AttributedString::new(value))
+    }
+
+    /// Flutter's `attributedIncreasedValue`.
+    #[must_use]
+    pub fn attributed_increased_value(self, value: AttributedString) -> Self {
+        self.set_alternate_value(value, true)
     }
 
     /// Flutter's `decreasedValue`: the value a decrement would produce.
     #[must_use]
-    pub fn decreased_value(mut self, value: impl Into<String>) -> Self {
-        self.state.decreased_value = Some(value.into());
+    pub fn decreased_value(self, value: impl Into<String>) -> Self {
+        self.attributed_decreased_value(AttributedString::new(value))
+    }
+
+    /// Flutter's `attributedDecreasedValue`.
+    #[must_use]
+    pub fn attributed_decreased_value(self, value: AttributedString) -> Self {
+        self.set_alternate_value(value, false)
+    }
+
+    fn set_alternate_value(mut self, value: AttributedString, increased: bool) -> Self {
+        let (text, attributes) = value.into_parts();
+        if increased {
+            self.state.increased_value = Some(text);
+        } else {
+            self.state.decreased_value = Some(text);
+        }
+        if !attributes.is_empty() || self.state.text_attributes.is_some() {
+            let data = Arc::make_mut(self.state.text_attributes.get_or_insert_with(Arc::default));
+            if increased {
+                data.increased_value = attributes;
+            } else {
+                data.decreased_value = attributes;
+            }
+            if data.is_empty() {
+                self.state.text_attributes = None;
+            }
+        }
         self
     }
 
@@ -972,13 +1003,16 @@ impl Semantics {
             item.as_ref()
                 .map_or_else(Vec::new, |item| item.attributes().to_vec())
         };
-        let attributes = SemanticTextAttributes {
-            label: attributes(&self.label),
-            value: attributes(&self.value),
-            hint: attributes(&self.description),
-        };
         let mut state = self.state.clone();
-        state.text_attributes = (!attributes.is_empty()).then(|| Arc::new(attributes));
+        let mut configured_attributes =
+            state.text_attributes.take().map_or_else(SemanticTextAttributes::default, |data| {
+                Arc::unwrap_or_clone(data)
+            });
+        configured_attributes.label = attributes(&self.label);
+        configured_attributes.value = attributes(&self.value);
+        configured_attributes.hint = attributes(&self.description);
+        state.text_attributes =
+            (!configured_attributes.is_empty()).then(|| Arc::new(configured_attributes));
         let mut explicit = crate::ExplicitSemantics::new(role)
             .state(state)
             .actions(self.actions.iter().map(SemanticAction::kind));

@@ -213,12 +213,20 @@ pub struct SemanticTextAttributes {
     pub value: Vec<StringAttribute>,
     /// Attributes of the description or hint.
     pub hint: Vec<StringAttribute>,
+    /// Attributes of the value an increment would produce.
+    pub increased_value: Vec<StringAttribute>,
+    /// Attributes of the value a decrement would produce.
+    pub decreased_value: Vec<StringAttribute>,
 }
 
 impl SemanticTextAttributes {
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.label.is_empty() && self.value.is_empty() && self.hint.is_empty()
+        self.label.is_empty()
+            && self.value.is_empty()
+            && self.hint.is_empty()
+            && self.increased_value.is_empty()
+            && self.decreased_value.is_empty()
     }
 }
 

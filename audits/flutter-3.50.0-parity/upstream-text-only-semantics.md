@@ -9,6 +9,11 @@ The current value and hint additionally preserve the typed UTF-16
 pronunciation span in the right attribute field. All 11 focused
 semantic string and locale tests passed.
 
-Attributed alternate values (:756 and :772) are separate from these
-cases: retaining their plain strings alone would not verify their
-pronunciation attributes.
+Pinned attributed alternate value originals (:756 and :772) also
+passed. Native runtime tests mount each value alone without a label
+and verify inherited RTL direction and the matching typed UTF-16
+span. With both values present, replacing one value with plain text
+clears only its own spans; replacing both clears both without
+recreating the node. These checks cover the retained semantics tree,
+not pronunciation in a live screen reader. All 14 focused native
+tests passed across the two semantic targets.

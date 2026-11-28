@@ -3529,6 +3529,11 @@ fn merge_enabled_state(first: Option<bool>, second: Option<bool>) -> Option<bool
 /// Overlays the fields `overlay` sets (differs from the default) onto `base`.
 /// Used when a role-less Semantics wrapper annotates a widget with its own role.
 fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
+    let old_alternates = if base.increased_value.is_some() || base.decreased_value.is_some() {
+        base.text_attributes.clone()
+    } else {
+        None
+    };
     let default = SemanticState::default();
     if let Some(enabled) = overlay.enabled_state() {
         base.set_enabled_state(Some(enabled));
@@ -3584,6 +3589,33 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
         increased_value,
         decreased_value,
     );
+    let alternate_attributes = |replace: bool| {
+        if replace {
+            overlay.text_attributes.as_deref()
+        } else {
+            old_alternates.as_deref()
+        }
+    };
+    for (increased, attributes) in [
+        (true, alternate_attributes(overlay.increased_value.is_some())),
+        (false, alternate_attributes(overlay.decreased_value.is_some())),
+    ] {
+        let selected = attributes.map_or(&[][..], |data| {
+            if increased { data.increased_value.as_slice() } else { data.decreased_value.as_slice() }
+        });
+        let current = base.text_attributes.as_deref().map_or(&[][..], |data| {
+            if increased { data.increased_value.as_slice() } else { data.decreased_value.as_slice() }
+        });
+        if selected != current {
+            let data = Arc::make_mut(base.text_attributes.get_or_insert_with(Arc::default));
+            let destination = if increased { &mut data.increased_value } else { &mut data.decreased_value };
+            destination.clear();
+            destination.extend_from_slice(selected);
+            if data.is_empty() {
+                base.text_attributes = None;
+            }
+        }
+    }
 }
 
 fn is_attached(attached: &[SemanticNodeId], id: SemanticNodeId) -> bool {

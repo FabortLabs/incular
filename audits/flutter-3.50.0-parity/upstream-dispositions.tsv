@@ -4030,3 +4030,5 @@ packages/flutter/test/widgets/basic_test.dart	740	Semantics with attributedValue
 packages/flutter/test/widgets/basic_test.dart	788	Semantics with decreasedValue should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
 packages/flutter/test/widgets/basic_test.dart	801	Semantics with increasedValue should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
 packages/flutter/test/widgets/basic_test.dart	814	Semantics with attributedHint should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
+packages/flutter/test/widgets/basic_test.dart	756	Semantics with attributedDecreasedValue should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md
+packages/flutter/test/widgets/basic_test.dart	772	Semantics with attributedIncreasedValue should be recognized as containing text and not fail	paired-match	upstream-text-only-semantics.md

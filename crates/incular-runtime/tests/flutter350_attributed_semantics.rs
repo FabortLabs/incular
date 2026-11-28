@@ -31,6 +31,7 @@ fn typed_label_value_and_hint_keep_attributes_in_each_retained_mobile_field() {
         label: vec![label],
         value: vec![value],
         hint: vec![hint],
+        ..Default::default()
     };
     assert_eq!(explicit.state.text_attributes.as_deref(), Some(&expected));
     let intermediate = props.clone().label("plain label").explicit().unwrap();
@@ -143,4 +144,85 @@ fn merged_label_offsets_count_newlines_direction_marks_and_utf16() {
             .label,
         [StringAttribute::locale(3..5, "ar")]
     );
+}
+
+#[test]
+fn attributed_alternate_values_keep_their_own_utf16_spans_and_clear_on_plain_update() {
+    let up = StringAttribute::spell_out(0..2);
+    let down = StringAttribute::locale(0..2, "he");
+    let props = Semantics::new(Placeholder::new())
+        .attributed_increased_value(annotated("😀 up", up.clone()))
+        .attributed_decreased_value(annotated("אב down", down.clone()));
+    let view = |semantics| Directionality::new(TextDirection::Rtl, semantics).into();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    for increased in [false, true] {
+        let plain = Semantics::new(Placeholder::new());
+        let instance = if increased {
+            plain.attributed_increased_value(annotated("test value", up.clone()))
+        } else {
+            plain.attributed_decreased_value(annotated("test value", down.clone()))
+        };
+        let mut runtime = Runtime::new(view(instance)).unwrap();
+        runtime.run_frame(bounds).unwrap();
+        let tree = runtime.tree().semantics();
+        let [id] = tree.roots() else {
+            panic!("one standalone alternate value");
+        };
+        let node = tree.node(*id).unwrap();
+        let attrs = node.state.text_attributes.as_ref().unwrap();
+        assert!(node.label.is_none() && node.value.is_none());
+        assert_eq!(node.state.text_direction, Some(TextDirection::Rtl));
+        if increased {
+            assert_eq!(node.state.increased_value.as_deref(), Some("test value"));
+            assert_eq!(attrs.increased_value, [up.clone()]);
+            assert!(attrs.decreased_value.is_empty());
+        } else {
+            assert_eq!(node.state.decreased_value.as_deref(), Some("test value"));
+            assert_eq!(attrs.decreased_value, [down.clone()]);
+            assert!(attrs.increased_value.is_empty());
+        }
+    }
+
+    let mut runtime = Runtime::new(view(props.clone())).unwrap();
+    let root = runtime.tree().root().unwrap();
+    let mut retained = None;
+
+    for (semantics, values, spans) in [
+        (
+            props.clone(),
+            ["😀 up", "אב down"],
+            [vec![up], vec![down.clone()]],
+        ),
+        (
+            props.clone().increased_value("up"),
+            ["up", "אב down"],
+            [vec![], vec![down]],
+        ),
+        (
+            props.increased_value("up").decreased_value("down"),
+            ["up", "down"],
+            [vec![], vec![]],
+        ),
+    ] {
+        runtime.schedule_update(root, view(semantics)).unwrap();
+        runtime.run_frame(bounds).unwrap();
+        let tree = runtime.tree().semantics();
+        let [id] = tree.roots() else {
+            panic!("only the alternate-value annotation");
+        };
+        assert_eq!(*id, *retained.get_or_insert(*id));
+        let node = tree.node(*id).unwrap();
+        assert!(node.label.is_none() && node.value.is_none());
+        assert_eq!(node.state.text_direction, Some(TextDirection::Rtl));
+        assert_eq!(node.state.increased_value.as_deref(), Some(values[0]));
+        assert_eq!(node.state.decreased_value.as_deref(), Some(values[1]));
+        if spans.iter().all(Vec::is_empty) {
+            assert!(node.state.text_attributes.is_none());
+        } else {
+            let attributes = node.state.text_attributes.as_ref().unwrap();
+            assert_eq!(attributes.increased_value, spans[0]);
+            assert_eq!(attributes.decreased_value, spans[1]);
+            assert!(attributes.label.is_empty() && attributes.value.is_empty());
+        }
+    }
 }
