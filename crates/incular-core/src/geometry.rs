@@ -631,6 +631,22 @@ impl Transform {
         Self(self.0 * other.0)
     }
 
+    /// True if the affine can map a local area to drawable coordinates.
+    /// Zero-area and non-finite transforms short-circuit paint before their
+    /// bounds are projected or their child painters are called.
+    #[must_use]
+    pub fn has_drawable_area(self) -> bool {
+        let [a, b, c, d, e, f] = self.coefficients();
+        if !e.is_finite() || !f.is_finite() {
+            return false;
+        }
+        if a == 1. && d == 1. && b == 0. && c == 0. {
+            return true; // Retained layer placements are usually translations.
+        }
+        let determinant = a * d - b * c;
+        determinant.is_finite() && determinant != 0.
+    }
+
     #[must_use]
     pub fn inverse(self) -> Option<Self> {
         let inverse = self.0.inverse();

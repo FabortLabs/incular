@@ -2262,6 +2262,13 @@ impl LayerTree {
         if let CullBounds::Known { bounds, cullable } = layer.cull {
             return (bounds, cullable);
         }
+        if matches!(&layer.kind, LayerKind::Transform { transform, .. } if !transform.has_drawable_area()) {
+            self.layers.get_mut(id.0).expect("live culling layer").cull = CullBounds::Known {
+                bounds: None,
+                cullable: true,
+            };
+            return (None, true);
+        }
         let own_cullable = layer.surface_partition.is_none()
             && !matches!(
                 layer.kind,
@@ -2413,6 +2420,10 @@ impl LayerTree {
                 transform: local,
                 sampling: Some(sampling),
             } => {
+                if !world_transform.then(local).has_drawable_area() {
+                    self.diagnostics.layers_culled += 1;
+                    return;
+                }
                 // Flutter `RenderTransform.paint` with a `filterQuality`: the
                 // child paints untransformed into an `ImageFilterLayer` whose
                 // `ImageFilter.matrix` resamples it.
@@ -2445,6 +2456,10 @@ impl LayerTree {
                 transform: local, ..
             } => {
                 let next = world_transform.then(local);
+                if !next.has_drawable_area() {
+                    self.diagnostics.layers_culled += 1;
+                    return;
+                }
                 self.visit_children(id, false, |tree, child| {
                     tree.flatten_layer(child, next, clip, out)
                 });
@@ -2835,6 +2850,9 @@ impl LayerTree {
             match &layer.kind {
                 LayerKind::Transform { transform, .. } => {
                     world = world.then(*transform);
+                    if !world.has_drawable_area() {
+                        return None;
+                    }
                 }
                 LayerKind::Leader { offset, .. } => {
                     world = leader_world_transform(world, *offset);
@@ -3181,13 +3199,17 @@ impl LayerTree {
         let layer = self.layers.get(id.0)?;
         match &layer.kind {
             LayerKind::Picture { bounds, .. } => Some(world_transform.transform_rect_bbox(*bounds)),
-            LayerKind::Transform {
-                transform: local, ..
-            } => layer
-                .children
-                .iter()
-                .filter_map(|child| self.subtree_bounds(*child, world_transform.then(*local)))
-                .reduce(union_rect),
+            LayerKind::Transform { transform: local, .. } => {
+                let world = world_transform.then(*local);
+                if !world.has_drawable_area() {
+                    return None;
+                }
+                layer
+                    .children
+                    .iter()
+                    .filter_map(|child| self.subtree_bounds(*child, world))
+                    .reduce(union_rect)
+            }
             LayerKind::ClipRect { rect, .. } => {
                 let world = world_transform.transform_rect_bbox(*rect);
                 layer
@@ -3261,9 +3283,13 @@ impl LayerTree {
         };
         match &layer.kind {
             LayerKind::Picture { bounds, .. } => Some(world_transform.transform_rect_bbox(*bounds)),
-            LayerKind::Transform {
-                transform: local, ..
-            } => child_bounds(self, world_transform.then(*local)),
+            LayerKind::Transform { transform: local, .. } => {
+                let world = world_transform.then(*local);
+                if !world.has_drawable_area() {
+                    return None;
+                }
+                child_bounds(self, world)
+            }
             LayerKind::ClipRect { rect, .. } => {
                 let world = world_transform.transform_rect_bbox(*rect);
                 child_bounds(self, world_transform).and_then(|bounds| bounds.intersection(world))
@@ -3323,6 +3349,10 @@ impl LayerTree {
             return;
         };
         let indent = "  ".repeat(depth);
+        if !world_transform.has_drawable_area() {
+            let _ = writeln!(out, "{indent}subtree skipped: non-drawable transform");
+            return;
+        }
         let kind = match &layer.kind {
             LayerKind::Picture { bounds, .. } => format!(
                 "Picture(local_bounds={bounds:?}, world_bounds={:?}, clip={clip:?})",

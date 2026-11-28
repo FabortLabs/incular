@@ -4015,3 +4015,8 @@ packages/flutter/test/semantics/semantics_test.dart	580	toStringDeep respects ch
 packages/flutter/test/widgets/fade_transition_test.dart	10	FadeTransition	paired-match	upstream-fade-transition.md
 packages/flutter/test/widgets/fade_transition_test.dart	35	No exception when calling markNeedsPaint during opacity changes	paired-match	upstream-fade-transition.md
 packages/flutter/test/widgets/fade_transition_test.dart	58	FadeTransition does not crash at zero area	paired-match	upstream-fade-transition.md
+packages/flutter/test/widgets/transform_test.dart	310	Transform with nan value short-circuits rendering	paired-match	upstream-transform-paint-culling.md
+packages/flutter/test/widgets/transform_test.dart	321	Transform with inf value short-circuits rendering	paired-match	upstream-transform-paint-culling.md
+packages/flutter/test/widgets/transform_test.dart	332	Transform with -inf value short-circuits rendering	paired-match	upstream-transform-paint-culling.md
+packages/flutter/test/widgets/transform_test.dart	343	Transform.rotate does not remove layers due to singular short-circuit	paired-match	upstream-transform-paint-culling.md
+packages/flutter/test/widgets/transform_test.dart	471	Transform.scale with 0.0 does not paint child layers	paired-match	upstream-transform-paint-culling.md

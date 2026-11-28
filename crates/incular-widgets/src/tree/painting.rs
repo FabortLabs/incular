@@ -911,6 +911,11 @@ impl WidgetTree {
                     controller.as_ref().map_or(*alpha, OpacityController::opacity)
                 ))
             || (matches!(kind, RenderKind::FittedBox { .. }) && !self.fitted_content_is_visible(id))
+            || (matches!(
+                kind,
+                RenderKind::Transform { .. } | RenderKind::Affine { .. }
+                    | RenderKind::Scale { .. } | RenderKind::Rotation { .. }
+            ) && self.content_transform(id).is_some_and(|transform| !transform.has_drawable_area()))
     }
 
     /// Whether a render object paints the given direct child at its
