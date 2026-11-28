@@ -484,6 +484,12 @@ pub(crate) enum SliverKeyboardDismissal {
 }
 
 impl SliverViewportConfig {
+    /// The retained viewport's configured clip, even if its content fits.
+    #[must_use]
+    pub const fn clip_behavior(&self) -> Clip {
+        self.clip_behavior
+    }
+
     /// The sliver's overlap-adjusted clip, if it differs from the viewport bounds.
     pub(crate) fn overlap_paint_clip(
         &self,

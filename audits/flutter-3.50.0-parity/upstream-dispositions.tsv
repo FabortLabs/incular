@@ -3956,3 +3956,10 @@ packages/flutter/test/widgets/scroll_view_test.dart	258	ListView.custom dismiss 
 packages/flutter/test/widgets/scroll_view_test.dart	499	GridView.custom dismiss keyboard onDrag test	paired-match	upstream-scroll-keyboard-dismissal.md#custom-child-delegates
 packages/flutter/test/widgets/scroll_view_test.dart	616	ListView.custom dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#custom-child-delegates
 packages/flutter/test/widgets/scroll_view_test.dart	851	GridView.custom dismiss keyboard manual test	paired-match	upstream-scroll-keyboard-dismissal.md#custom-child-delegates
+packages/flutter/test/widgets/grid_view_test.dart	751	GridView.custom respects clipBehavior	paired-match	upstream-list-grid-viewport-clips.md
+packages/flutter/test/widgets/grid_view_test.dart	769	GridView.count respects clipBehavior	paired-match	upstream-list-grid-viewport-clips.md
+packages/flutter/test/widgets/grid_view_test.dart	784	GridView.extent respects clipBehavior	paired-match	upstream-list-grid-viewport-clips.md
+packages/flutter/test/widgets/list_view_test.dart	890	ListView respects clipBehavior	paired-match	upstream-list-grid-viewport-clips.md
+packages/flutter/test/widgets/list_view_test.dart	925	ListView.builder respects clipBehavior	paired-match	upstream-list-grid-viewport-clips.md
+packages/flutter/test/widgets/list_view_test.dart	940	ListView.custom respects clipBehavior	paired-match	upstream-list-grid-viewport-clips.md
+packages/flutter/test/widgets/list_view_test.dart	957	ListView.separated respects clipBehavior	paired-match	upstream-list-grid-viewport-clips.md
