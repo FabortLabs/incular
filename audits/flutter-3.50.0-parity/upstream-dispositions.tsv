@@ -3847,3 +3847,8 @@ packages/flutter/test/widgets/form_test.dart	929	Does not auto-validate before v
 packages/flutter/test/widgets/form_test.dart	969	Does not auto-validate before value changes even when initialValue is empty and autovalidateMode is set to onUserInteractionIfError	paired-match	upstream-form-state.md#conditional-and-deferred-automatic-validation
 packages/flutter/test/widgets/form_test.dart	1180	Form with AutovalidateMode.onUserInteractionIfError only revalidates when user interacts after an error exists	paired-match	upstream-form-state.md#conditional-and-deferred-automatic-validation
 packages/flutter/test/widgets/form_test.dart	1767	AutovalidateMode.always should validate on second build	paired-match	upstream-form-state.md#conditional-and-deferred-automatic-validation
+packages/flutter/test/widgets/form_test.dart	1846	FormField adds validation result to the semantics of the child	paired-match	upstream-form-state.md#validation-semantics-and-zero-area-layouts
+packages/flutter/test/widgets/form_test.dart	1903	FormFieldState.build delegates semantics wrapping to wrapWithSemantics	paired-match	upstream-form-state.md#validation-semantics-and-zero-area-layouts
+packages/flutter/test/widgets/form_test.dart	1927	FormFieldState.build delegates onUnfocus wrapping to wrapWithFocus	paired-match	upstream-form-state.md#validation-semantics-and-zero-area-layouts
+packages/flutter/test/widgets/form_test.dart	1949	Form does not crash at zero area	paired-match	upstream-form-state.md#validation-semantics-and-zero-area-layouts
+packages/flutter/test/widgets/form_test.dart	1961	FormField does not crash at zero area	paired-match	upstream-form-state.md#validation-semantics-and-zero-area-layouts

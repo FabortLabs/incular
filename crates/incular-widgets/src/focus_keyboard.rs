@@ -346,6 +346,12 @@ impl Focus {
         self
     }
 
+    /// Whether this focus widget annotates its child for accessibility.
+    #[must_use]
+    pub const fn includes_semantics(&self) -> bool {
+        self.include_semantics
+    }
+
     /// Handles keys delivered to this node or bubbled from a focused child.
     #[must_use]
     pub fn on_key_event(

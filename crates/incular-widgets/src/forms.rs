@@ -12,6 +12,7 @@ use std::{
 };
 
 use incular_core::{RestorationKey, RestorationScope};
+use incular_semantics::{SemanticRole, SemanticValidationResult};
 
 use crate::Widget;
 use incular_text::{TextEditingController, TextEditingValue};
@@ -48,8 +49,8 @@ impl AutovalidateMode {
     }
 }
 
-#[derive(Clone, Copy)]
-struct FormValidationScope(AutovalidateMode);
+#[derive(Clone)]
+struct FormValidationScope(Form);
 
 type Validator = Rc<dyn Fn(&str) -> Option<String>>;
 type SubmitCallback = Rc<dyn Fn(String)>;
@@ -673,14 +674,19 @@ fn notify_form_listeners(form: &Rc<RefCell<FormRegistry>>) {
 }
 
 impl From<Form> for Widget {
-    fn from(value: Form) -> Self {
+    fn from(mut value: Form) -> Self {
         value.state.borrow_mut().autovalidate_mode = value.autovalidate_mode;
-        Widget::environment_scope(
-            FormValidationScope(value.autovalidate_mode),
-            value
-                .child
-                .unwrap_or_else(|| crate::SizedBox::shrink().into()),
-        )
+        let child = value
+            .child
+            .take()
+            .unwrap_or_else(|| crate::SizedBox::shrink().into());
+        // The mounted widget owns the registry even when the application
+        // has discarded its last controller handle.
+        crate::Semantics::new(Widget::environment_scope(FormValidationScope(value), child))
+        .role(SemanticRole::Form)
+        .container(true)
+        .explicit_child_nodes(true)
+        .into()
     }
 }
 
@@ -690,6 +696,26 @@ type GenericValidator<T> = Rc<dyn Fn(Option<&T>) -> Option<String>>;
 
 /// Save callback for a typed field; it runs only while a value is present.
 type GenericSaveCallback<T> = Rc<dyn Fn(T)>;
+
+type FormFieldSemanticsWrapper = Rc<dyn Fn(Widget, SemanticValidationResult) -> Widget>;
+type FormFieldFocusWrapper = Rc<dyn Fn(crate::Focus) -> Widget>;
+
+fn wrap_form_field_semantics(
+    wrapper: Option<&FormFieldSemanticsWrapper>,
+    child: Widget,
+    has_error: bool,
+) -> Widget {
+    let result = if has_error {
+        SemanticValidationResult::Invalid
+    } else {
+        SemanticValidationResult::Valid
+    };
+    if let Some(wrapper) = wrapper {
+        wrapper(child, result)
+    } else {
+        crate::Semantics::new(child).validation_result(result).into()
+    }
+}
 
 /// Generic FormField widget managing arbitrary typed form state and validation.
 ///
@@ -710,6 +736,9 @@ pub struct GenericFormField<T: Clone + 'static> {
     on_reset: Option<Rc<dyn Fn()>>,
     autovalidate_mode: Option<AutovalidateMode>,
     enabled: bool,
+    focus_includes_semantics: bool,
+    semantics_wrapper: Option<FormFieldSemanticsWrapper>,
+    focus_wrapper: Option<FormFieldFocusWrapper>,
     restoration_id: Option<String>,
     state: Option<FormFieldState<T>>,
     builder: Rc<dyn Fn(Option<&T>) -> Widget>,
@@ -729,6 +758,9 @@ impl<T: Clone + 'static> GenericFormField<T> {
             on_reset: None,
             autovalidate_mode: None,
             enabled: true,
+            focus_includes_semantics: true,
+            semantics_wrapper: None,
+            focus_wrapper: None,
             restoration_id: None,
             state: None,
             builder: Rc::new(move |val| builder(val).into()),
@@ -790,6 +822,35 @@ impl<T: Clone + 'static> GenericFormField<T> {
         self
     }
 
+    /// Configures the equivalent of Flutter's `focusIncludesSemantics`.
+    /// A field wrapping a sliver can disable the box focus annotation.
+    #[must_use]
+    pub fn focus_includes_semantics(mut self, include: bool) -> Self {
+        self.focus_includes_semantics = include;
+        self
+    }
+
+    /// Replaces the default semantics wrapper around the field's child.
+    #[must_use]
+    pub fn wrap_with_semantics<W: Into<Widget>>(
+        mut self,
+        wrapper: impl Fn(Widget, SemanticValidationResult) -> W + 'static,
+    ) -> Self {
+        self.semantics_wrapper = Some(Rc::new(move |child, result| wrapper(child, result).into()));
+        self
+    }
+
+    /// Customizes the focus wrapper installed for loss-of-focus validation.
+    /// The supplied focus boundary already observes and validates its child.
+    #[must_use]
+    pub fn wrap_with_focus<W: Into<Widget>>(
+        mut self,
+        wrapper: impl Fn(crate::Focus) -> W + 'static,
+    ) -> Self {
+        self.focus_wrapper = Some(Rc::new(move |focus| wrapper(focus).into()));
+        self
+    }
+
     #[must_use]
     pub fn restoration_id(mut self, id: impl Into<String>) -> Self {
         self.restoration_id = Some(id.into());
@@ -800,7 +861,12 @@ impl<T: Clone + 'static> GenericFormField<T> {
 impl<T: Clone + 'static> From<GenericFormField<T>> for Widget {
     fn from(value: GenericFormField<T>) -> Self {
         let Some(state) = value.state else {
-            return (value.builder)(value.initial_value.as_ref());
+            let child = (value.builder)(value.initial_value.as_ref());
+            return wrap_form_field_semantics(
+                value.semantics_wrapper.as_ref(),
+                child,
+                value.force_error_text.is_some(),
+            );
         };
         if let Some(validator) = value.validator {
             state.inner.validator.replace(Some(validator));
@@ -819,9 +885,15 @@ impl<T: Clone + 'static> From<GenericFormField<T>> for Widget {
         let last_inherited_mode = Cell::new(None);
         Widget::stateful_builder(state.inner.view_revision.clone(), move |context| {
             let current = state.value();
-            let child = (value.builder)(current.as_ref());
+            let child = wrap_form_field_semantics(
+                value.semantics_wrapper.as_ref(),
+                (value.builder)(current.as_ref()),
+                state.has_error(),
+            );
             let mode = state.inner.autovalidate_mode();
-            let inherited_mode = context.depend_on::<FormValidationScope>().map(|scope| scope.0);
+            let inherited_mode = context
+                .depend_on::<FormValidationScope>()
+                .map(|scope| scope.0.autovalidate_mode);
             if last_inherited_mode.replace(inherited_mode) != inherited_mode
                 && inherited_mode == Some(AutovalidateMode::Always)
                 && value.enabled
@@ -847,10 +919,11 @@ impl<T: Clone + 'static> From<GenericFormField<T>> for Widget {
                 || (inherited_blur && mode != AutovalidateMode::Always)
             {
                 let node = state.inner.blur_focus.get_or_init(crate::FocusNode::new);
-                crate::Focus::new(child)
+                let focus = crate::Focus::new(child)
                     .node(node.clone())
                     .can_request_focus(false)
                     .skip_traversal(true)
+                    .include_semantics(value.focus_includes_semantics)
                     .on_focus_change({
                         let state = state.clone();
                         move |focused| {
@@ -858,8 +931,12 @@ impl<T: Clone + 'static> From<GenericFormField<T>> for Widget {
                                 let _ = state.validate();
                             }
                         }
-                    })
-                    .into()
+                    });
+                if let Some(wrapper) = &value.focus_wrapper {
+                    wrapper(focus)
+                } else {
+                    focus.into()
+                }
             } else {
                 child
             }

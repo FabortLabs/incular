@@ -76,3 +76,20 @@ frame two, and the runtime requests that follow-up frame. The
 native control also reconfigures an existing field from conditional
 validation to Disabled and then back to the controller's policy.
 All 42 focused native cases passed.
+
+## Validation semantics and zero-area layouts
+
+Five more exact pinned registrations passed. In the :1846 native
+case, the same real, focusable editor exposes Valid, Invalid, then
+Valid as edits rerun its validator. Its semantic node identity
+does not change and its form is an explicit Form container.
+The mounted Form now retains the validation registry even if the
+application no longer holds a separate controller clone.
+
+At :1903 and :1927, native wrapper hooks preserve custom
+validation semantics and allow the blur focus boundary to omit
+its own box semantics without omitting the field's wrapper.
+At :1949 and :1961, both a form and a standalone field can
+lay out at exactly zero area. All 47 focused native form,
+editor-focus, and semantics tests passed. No OS screen-reader
+announcement behavior is claimed.

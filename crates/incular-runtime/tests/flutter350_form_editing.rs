@@ -427,3 +427,172 @@ fn inherited_always_mode_shows_initial_errors_on_the_second_frame() {
     assert!(runtime_shows(&runtime, "foo/error"));
     assert!(runtime_shows(&runtime, "bar/error"));
 }
+
+#[test]
+fn form_validation_updates_the_existing_focusable_editors_semantics() {
+    use incular_semantics::{SemanticRole, SemanticValidationResult};
+
+    let form = Form::new().autovalidate_mode(AutovalidateMode::Always);
+    let state = form.register_value(Some(String::new()));
+    let invalid = Rc::new(std::cell::Cell::new(false));
+    let editor = Widget::from(EditableText::new(TextEditingController::new()).on_changed({
+        let state = state.clone();
+        move |value| state.did_change(value.to_owned())
+    }))
+    .with_key("accessible editor");
+    let field = GenericFormField::new(move |_: Option<&String>| editor.clone())
+        .state(state.clone())
+        .validator({
+            let invalid = invalid.clone();
+            move |_| invalid.get().then(|| "Error".into())
+        });
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, form.child(field)).into()).unwrap();
+    form_frame(&mut runtime);
+    focus_form_input(&mut runtime, "accessible editor");
+
+    fn editor_semantics(runtime: &Runtime) -> &incular_semantics::SemanticNode {
+        runtime
+            .tree()
+            .semantics()
+            .iter()
+            .find_map(|(_, node)| (node.role == SemanticRole::TextField).then_some(node))
+            .expect("the real editor has a text field semantic role")
+    }
+
+    let mut original = None;
+    for (invalid_next, text, expected) in [
+        (false, "Hello", SemanticValidationResult::Valid),
+        (true, "Again", SemanticValidationResult::Invalid),
+        (false, "Fixed", SemanticValidationResult::Valid),
+    ] {
+        invalid.set(invalid_next);
+        assert!(
+            runtime.focused_element().is_some(),
+            "editing focus vanished before entering {text}"
+        );
+        let _ = runtime.handle_input(InputEvent::Text(text.into()));
+        assert!(
+            state.value().is_some_and(|value| value.contains(text)),
+            "editable callback did not deliver {text}; value={:?}",
+            state.value()
+        );
+        form_frame(&mut runtime);
+        assert_eq!(
+            state.has_error(),
+            invalid_next,
+            "validator ran after the live edit"
+        );
+        let semantics = editor_semantics(&runtime);
+        assert!(semantics.state.focusable);
+        assert_eq!(semantics.state.effective_validation_result(), expected);
+        assert_eq!(semantics.id, *original.get_or_insert(semantics.id));
+    }
+    assert!(
+        runtime
+            .tree()
+            .semantics()
+            .iter()
+            .any(|(_, node)| node.role == SemanticRole::Form)
+    );
+}
+
+#[test]
+fn field_semantics_wrapper_emits_its_custom_validation_result_without_a_focus_wrapper() {
+    use incular_semantics::SemanticValidationResult;
+    use incular_widgets::{FormFieldState, Semantics};
+
+    let state = FormFieldState::<String>::new(None);
+    let field = GenericFormField::new(|_: Option<&String>| Text::new("field"))
+        .state(state)
+        .wrap_with_semantics(|child, default_result| {
+            assert_eq!(default_result, SemanticValidationResult::Valid);
+            Widget::from(Semantics::new(child).validation_result(SemanticValidationResult::Invalid))
+                .with_key("semantics wrapper")
+        })
+        .wrap_with_focus(|focus| Widget::from(focus).with_key("focus wrapper"));
+    let root = Directionality::new(TextDirection::Ltr, Form::of_child(field));
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    form_frame(&mut runtime);
+    assert!(runtime_shows(&runtime, "semantics wrapper"));
+    assert!(!runtime_shows(&runtime, "focus wrapper"));
+    let node = runtime
+        .tree()
+        .semantics()
+        .iter()
+        .find_map(|(_, node)| (node.label.as_deref() == Some("field")).then_some(node))
+        .unwrap();
+    assert_eq!(
+        node.state.effective_validation_result(),
+        SemanticValidationResult::Invalid
+    );
+}
+
+#[test]
+fn blur_mode_calls_the_focus_wrapper_in_addition_to_the_semantics_wrapper() {
+    use incular_widgets::{FormFieldState, Semantics};
+
+    let state = FormFieldState::<String>::new(None);
+    let field = GenericFormField::new(|_: Option<&String>| Text::new("field"))
+        .state(state)
+        .wrap_with_semantics(|child, result| {
+            Widget::from(Semantics::new(child).validation_result(result))
+                .with_key("semantics wrapper")
+        })
+        .focus_includes_semantics(false)
+        .wrap_with_focus(|focus| {
+            assert!(!focus.includes_semantics());
+            Widget::from(focus).with_key("focus wrapper")
+        });
+    let root = Directionality::new(
+        TextDirection::Ltr,
+        Form::of_child(field).autovalidate_mode(AutovalidateMode::OnUnfocus),
+    );
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    form_frame(&mut runtime);
+    assert!(runtime_shows(&runtime, "semantics wrapper"));
+    assert!(runtime_shows(&runtime, "focus wrapper"));
+}
+
+#[test]
+fn an_empty_form_may_have_zero_area() {
+    use incular_widgets::{Center, SizedBox};
+
+    let form = Widget::from(Form::of_child(Text::new("X"))).with_key("zero form");
+    let root = Directionality::new(
+        TextDirection::Ltr,
+        Center::new(SizedBox::new().child(form).width(0.).height(0.)),
+    );
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    form_frame(&mut runtime);
+    let node = runtime
+        .tree()
+        .element_with_key(&Key::from("zero form"))
+        .unwrap();
+    assert_eq!(
+        runtime.tree().element_bounds(node).unwrap().size,
+        Size::ZERO
+    );
+}
+
+#[test]
+fn a_standalone_field_may_have_zero_area() {
+    use incular_widgets::{Center, SizedBox};
+
+    let field = Widget::from(GenericFormField::new(|_: Option<&String>| Text::new("X")))
+        .with_key("zero form field");
+    let root = Directionality::new(
+        TextDirection::Ltr,
+        Center::new(SizedBox::new().child(field).width(0.).height(0.)),
+    );
+    let mut runtime = Runtime::new(root.into()).unwrap();
+    form_frame(&mut runtime);
+    let node = runtime
+        .tree()
+        .element_with_key(&Key::from("zero form field"))
+        .unwrap();
+    assert_eq!(
+        runtime.tree().element_bounds(node).unwrap().size,
+        Size::ZERO
+    );
+}
