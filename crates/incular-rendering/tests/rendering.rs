@@ -273,7 +273,10 @@ fn path_bounds_are_tight_bezier_geometry_not_control_boxes() {
         Offset::new(10., -2.),
         Offset::new(5., 6.),
     );
-    let bounds = path.build().bounds().expect("curve has bounds");
+    let path = path.build();
+    let control_box = Rect::from_origin_size(Offset::new(-4., -2.), Size::new(14., 10.));
+    assert_eq!(path.bounds(), Some(control_box));
+    let bounds = path.tight_bounds().expect("curve has tight bounds");
     assert!(bounds.origin.x > -4. && bounds.origin.y > -2.);
     assert!(bounds.size.width < 14. && bounds.size.height < 10.);
 }
@@ -969,9 +972,13 @@ fn kurbo_provides_tight_bezier_bounds_and_winding() {
         .line_to(Offset::new(0., 0.))
         .close();
     let path = builder.build();
-    let bounds = path.bounds().expect("non-empty path");
-    // The control point reaches y=20, while the actual quadratic maximum
-    // is y=10. This guards against restoring the old control-point box.
+    assert_eq!(
+        path.bounds(),
+        Some(Rect::from_origin_size(Offset::ZERO, Size::new(20., 20.)))
+    );
+    let bounds = path.tight_bounds().expect("non-empty path");
+    // Public bounds include the control point at y=20. Culling uses the
+    // actual quadratic maximum at y=10 instead.
     assert!((bounds.size.height - 10.).abs() < 0.0001, "{bounds:?}");
     assert!(path.contains(Offset::new(10., 5.), FillRule::NonZero));
     assert!(!path.contains(Offset::new(10., 12.), FillRule::NonZero));

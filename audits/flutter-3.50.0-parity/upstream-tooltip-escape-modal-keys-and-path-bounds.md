@@ -192,3 +192,15 @@ hover from leaking behind the veil while allowing the front drag to
 compete in the same gesture arena. This is partial platform parity: the
 tests observe request dispatch, not audio, and first-party native host
 playback is not yet wired. Unsupported hosts never play a substitute.
+
+### Legacy curve regression backfill
+
+Two older rendering tests still called the public bounds API when
+asserting tight curve extrema. Both failed on the pre-detachment
+compositor as well as the updated compositor. Their fixtures now
+guard both contracts: the mixed-sign cubic's public box is
+(-4,-2,14,10) and the quadratic's public height is 20, while the
+corresponding tight checks and quadratic containment are preserved.
+All 72 cases in the focused rendering target, the dedicated native
+curve case, and both pinned Flutter curve probes passed. No
+production code or upstream registration count changed.
