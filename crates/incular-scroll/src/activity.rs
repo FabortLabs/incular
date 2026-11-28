@@ -276,12 +276,23 @@ impl ScrollController {
             state.activity_user_direction = if delta > 0. { 1 } else { -1 };
             (state.restoration.clone(), state.revision)
         };
+        self.notify_position_changed();
+        {
+            let state = self.state.borrow();
+            if state.revision != committed
+                || state.activity_active
+                || state.activity_generation != generation
+            {
+                drop(state);
+                return superseded();
+            }
+        }
         let sample = self.start_owned_activity(ActivityOrigin::Wheel);
         if self.revision() == committed {
             persist_scroll_offset(persistence, result.position);
         }
         if sample.is_current() && self.revision() == committed {
-            self.dispatch_notification(ScrollNotificationType::Update, result.consumed, 0.);
+            self.dispatch_scroll_notification(ScrollNotificationType::Update, result.consumed, 0.);
         }
         sample.finish();
         ScrollDelta {

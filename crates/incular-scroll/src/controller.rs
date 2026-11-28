@@ -215,6 +215,7 @@ pub(crate) struct ScrollState {
     /// viewport that drives this controller.
     pub(crate) pending_animation: Option<PendingScrollAnimation>,
     pub(crate) notification_listeners: Rc<RefCell<Vec<(u64, ScrollNotificationListener)>>>,
+    pub(crate) position_changes: Option<incular_core::ChangeNotifier>,
     /// The drag driving the current update, for notifications.
     pub(crate) drag_position: Option<incular_core::Offset>,
     pub(crate) next_notification_listener: u64,
@@ -733,10 +734,11 @@ impl ScrollController {
         if moved {
             self.imply_velocity(delta);
             persist_scroll_offset(persistence, value);
+            self.notify_position_changed();
             if !bracket_open {
                 self.dispatch_notification(ScrollNotificationType::Start, 0., 0.);
             }
-            self.dispatch_notification(ScrollNotificationType::Update, delta, 0.);
+            self.dispatch_scroll_notification(ScrollNotificationType::Update, delta, 0.);
             if !bracket_open {
                 self.dispatch_notification(ScrollNotificationType::End, 0., 0.);
             }
@@ -832,7 +834,7 @@ impl ScrollController {
         };
         if moved {
             persist_scroll_offset(persistence, self.state.borrow().offset);
-            self.dispatch_notification(ScrollNotificationType::Update, delta, 0.);
+            self.dispatch_scroll_notification(ScrollNotificationType::Update, delta, 0.);
         }
         moved
     }

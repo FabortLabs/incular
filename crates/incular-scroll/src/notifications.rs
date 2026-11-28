@@ -63,6 +63,23 @@ impl Drop for ScrollNotificationSubscription {
 }
 
 impl ScrollController {
+    /// Observes a published position change once. Unlike a scroll
+    /// notification listener, this does not receive activity boundaries,
+    /// direction, metrics, or a repeated jump to the current offset.
+    #[must_use]
+    pub fn add_position_listener(
+        &self,
+        listener: impl Fn() + 'static,
+    ) -> incular_core::ChangeNotifierSubscription {
+        let notifier = self
+            .state
+            .borrow_mut()
+            .position_changes
+            .get_or_insert_with(incular_core::ChangeNotifier::new)
+            .clone();
+        notifier.add_listener(listener)
+    }
+
     /// Subscribes to normalized scroll notifications. The returned handle
     /// removes the listener when dropped. Returning `true` stops dispatch to
     /// later listeners for the same scroll activity, matching Flutter's
@@ -141,6 +158,27 @@ impl ScrollController {
 
 impl ScrollController {
     pub(crate) fn dispatch_notification(
+        &self,
+        kind: ScrollNotificationType,
+        delta: f32,
+        overscroll: f32,
+    ) {
+        if kind == ScrollNotificationType::Update && delta != 0. {
+            self.notify_position_changed();
+        }
+        self.dispatch_scroll_notification(kind, delta, overscroll);
+    }
+
+    pub(crate) fn notify_position_changed(&self) {
+        let notifier = self.state.borrow().position_changes.clone();
+        if let Some(notifier) = notifier {
+            notifier.notify_listeners();
+        }
+    }
+
+    /// Sends only the bubbling lifecycle event when the position has
+    /// already been published, or was corrected silently during layout.
+    pub(crate) fn dispatch_scroll_notification(
         &self,
         kind: ScrollNotificationType,
         delta: f32,

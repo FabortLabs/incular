@@ -3971,3 +3971,6 @@ packages/flutter/test/widgets/grid_view_test.dart	875	SliverGridDelegateWithMaxC
 packages/flutter/test/widgets/grid_view_test.dart	903	SliverGridDelegateWithMaxCrossAxisExtent throws assertion error when maxCrossAxisExtent is 0	paired-match	upstream-grid-extents.md
 packages/flutter/test/widgets/grid_view_test.dart	961	SliverGridDelegate mainAxisExtent add assert	paired-match	upstream-grid-extents.md
 packages/flutter/test/widgets/grid_view_test.dart	346	SliverGridRegularTileLayout - can handle close to zero mainAxisStride	paired-match	upstream-grid-extents.md#regular-tile-geometry-and-scroll-boundaries
+packages/flutter/test/widgets/scroll_position_test.dart	142	ScrollPosition jumpTo() doesn't call notifyListeners twice	paired-match	upstream-scroll-position-observers.md
+packages/flutter/test/widgets/scroll_position_test.dart	173	scroll alignment is honored by ensureVisible	paired-match	upstream-scroll-position-observers.md
+packages/flutter/test/widgets/scroll_position_test.dart	249	jumpTo recommends deferred loading	partial-match	upstream-scroll-position-observers.md
