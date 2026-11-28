@@ -1537,6 +1537,8 @@ struct InputState {
     /// on stream teardown, member loss, fling transfer, and unmount;
     /// tree drop aborts any remainder silently through the tokens.
     scroll_brackets: HashMap<GestureArenaKey, ScrollBracket>,
+    /// Scroll updates requesting blur, drained after retained input completes.
+    keyboard_dismissals: Option<Rc<RefCell<Vec<ElementId>>>>,
     scroll_contact_groups: HashMap<(u64, u64), scroll_contacts::ScrollContactGroup>,
     scroll_drag_frame_time: Option<Instant>,
     /// Live ballistic tenures pumped once per frame by the runtime

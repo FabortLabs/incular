@@ -13,6 +13,17 @@ use crate::scrolling::SliverKeepAliveSource;
 
 /// Semantics-only reactive sources use the same retained render consumer,
 /// so neither rebuild nor measurement is scheduled when an inset changes.
+fn keyboard_dismiss_controller(kind: &RenderKind) -> Option<&ScrollController> {
+    match kind {
+        RenderKind::Scroll { controller, behavior, .. }
+            if behavior.keyboard_dismiss == crate::ScrollViewKeyboardDismissBehavior::OnDrag =>
+        {
+            Some(controller)
+        }
+        _ => None,
+    }
+}
+
 fn render_configuration(
     widget: &Widget,
     context: &DependencyContext,
@@ -474,6 +485,7 @@ impl WidgetTree {
             }
             let (new_kind, insets) =
                 render_context.build(|context| render_configuration(&widget, context));
+            self.check_keyboard_dismiss_listener_change(render, &new_kind);
             self.update_semantic_bounds_insets(render, insets);
             let invalidation = self
                 .render_live_mut(render, "rebound render must remain live")
@@ -932,6 +944,7 @@ impl WidgetTree {
                     };
                     let (new_kind, insets) =
                         context.build(|context| render_configuration(&widget, context));
+                    self.check_keyboard_dismiss_listener_change(render, &new_kind);
                     self.update_semantic_bounds_insets(render, insets);
                     let invalidation = self
                         .render_live_mut(render, "inherited render must remain live")
@@ -1200,6 +1213,7 @@ impl WidgetTree {
             .shared_kind();
         let (new_kind, insets) =
             render_context.build(|context| render_configuration(widget, context));
+        self.check_keyboard_dismiss_listener_change(render, &new_kind);
         self.update_semantic_bounds_insets(render, insets);
         carry_replaced_transition(&old_kind, &new_kind);
         // A rebuilt viewport descriptor starts with fresh sliver estimates.
@@ -2366,6 +2380,16 @@ impl WidgetTree {
         }
     }
 
+    fn check_keyboard_dismiss_listener_change(&mut self, render: RenderObjectId, next: &RenderKind) {
+        let previous = self
+            .render_live(render, "updated render must remain live")
+            .object
+            .kind();
+        if keyboard_dismiss_controller(previous) != keyboard_dismiss_controller(next) {
+            self.tracked.notification_subscriptions_dirty = true;
+        }
+    }
+
     /// Refreshes notification subscriptions when their inputs changed. A
     /// sliver viewport owns its materialized children, so installing these
     /// subscriptions after materialization lets an ancestor listener observe
@@ -2390,6 +2414,40 @@ impl WidgetTree {
                 Some((id, callback.clone(), self.element_depth(id)))
             })
             .collect::<Vec<_>>();
+
+        for &owner in &self.tracked.scroll_views {
+            let Some(render) = self.render_id(owner) else {
+                continue;
+            };
+            if self
+                .renders
+                .get(render.0)
+                .and_then(|node| keyboard_dismiss_controller(node.object.kind()))
+                .is_none()
+            {
+                continue;
+            }
+            let depth = self.element_depth(owner);
+            let requests = self
+                .input
+                .keyboard_dismissals
+                .get_or_insert_with(Rc::default)
+                .clone();
+            let listen: Rc<dyn Fn(ScrollNotification) -> bool> = Rc::new(move |notification| {
+                // Neither a pure overscroll nor a wheel, jump or ballistic
+                // update supplies the pointer drag's details.
+                if notification.kind == incular_scroll::ScrollNotificationType::Update
+                    && notification.drag_position.is_some()
+                {
+                    let mut pending = requests.borrow_mut();
+                    if pending.last() != Some(&owner) {
+                        pending.push(owner);
+                    }
+                }
+                false
+            });
+            listeners.push((owner, listen, depth));
+        }
 
         // Drop old registrations first. This also removes listeners for
         // children that left a lazy cache window.

@@ -2235,6 +2235,7 @@ impl Runtime {
         );
         let previous_clock = self.input_clock.replace(event.time);
         let result = self.handle_pointer_input(event, true, measured_delta);
+        self.settle_drag_keyboard_dismissal();
         self.input_clock = previous_clock;
         self.pending_event_processing_us = self
             .pending_event_processing_us
@@ -2259,10 +2260,25 @@ impl Runtime {
         let started = incular_core::time::Instant::now();
         self.advance_text_history_clock(self.input_now());
         let target = self.handle_input_inner(event);
+        self.settle_drag_keyboard_dismissal();
         self.pending_event_processing_us = self
             .pending_event_processing_us
             .saturating_add(us_since_instant(started));
         target
+    }
+
+    fn settle_drag_keyboard_dismissal(&mut self) {
+        let focused = self.focused;
+        if !self.tree.take_drag_keyboard_dismissal(focused) {
+            return;
+        }
+        if let Some(node) = focused.and_then(|id| self.tree.focus_node_at(id)) {
+            node.unfocus();
+            self.adopt_external_focus_change();
+        }
+        if self.focused == focused {
+            self.set_focus(None);
+        }
     }
 
     /// Associates subsequent frame work with a higher-level command such as a

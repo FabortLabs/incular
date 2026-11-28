@@ -253,6 +253,7 @@ impl ScrollBehavior {
             horizontal_scrollbar: self.horizontal_scrollbars,
             velocity_tracker: self.velocity_tracker(),
             multitouch_drag_strategy: self.get_multitouch_drag_strategy(),
+            keyboard_dismiss: self.get_keyboard_dismiss_behavior(),
             overscroll: match self.overscroll_indicator() {
                 None => OverscrollStyle::None,
                 Some(AndroidOverscrollIndicator::Stretch) => OverscrollStyle::Stretch,
@@ -287,6 +288,7 @@ pub struct ResolvedScrollBehavior {
     pub(crate) horizontal_scrollbar: bool,
     pub(crate) velocity_tracker: VelocityTrackerKind,
     pub(crate) multitouch_drag_strategy: MultitouchDragStrategy,
+    pub(crate) keyboard_dismiss: ScrollViewKeyboardDismissBehavior,
     /// The overscroll indicator painted by the view, if any.
     pub(crate) overscroll: OverscrollStyle,
 }

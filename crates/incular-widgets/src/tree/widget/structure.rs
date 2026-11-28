@@ -1382,6 +1382,7 @@ impl PartialEq for WidgetKind {
                     physics: g,
                     increment_calculator: ga,
                     inherit_physics: r,
+                    keyboard_dismiss: dismiss_a,
                     clip_behavior: k,
                     drag_start_behavior: m,
                     hit_test_behavior: o,
@@ -1394,6 +1395,7 @@ impl PartialEq for WidgetKind {
                     physics: j,
                     increment_calculator: ja,
                     inherit_physics: t,
+                    keyboard_dismiss: dismiss_b,
                     clip_behavior: l,
                     drag_start_behavior: n,
                     hit_test_behavior: q,
@@ -1406,6 +1408,7 @@ impl PartialEq for WidgetKind {
                     && g == j
                     && ga == ja
                     && r == t
+                    && dismiss_a == dismiss_b
                     && k == l
                     && m == n
                     && o == q

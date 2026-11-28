@@ -1774,6 +1774,29 @@ impl WidgetTree {
         }
     }
 
+    /// Whether input just produced a user scroll update in a viewport that
+    /// opts into keyboard dismissal and contains the current focus scope.
+    #[doc(hidden)]
+    pub fn take_drag_keyboard_dismissal(&mut self, focused: Option<ElementId>) -> bool {
+        let Some(requests) = self.input.keyboard_dismissals.as_ref() else {
+            return false;
+        };
+        let mut owners = requests.borrow_mut();
+        let dismiss = focused.is_some_and(|focused| {
+            owners.iter().copied().any(|owner| {
+                if !self.elements.contains(owner.0) {
+                    return false;
+                }
+                let scope = crate::FocusScope::maybe_of(self, owner);
+                scope.is_none_or(|scope| {
+                    !scope.has_primary_focus() && self.is_in_focus_scope(focused, &scope)
+                })
+            })
+        });
+        owners.clear();
+        dismiss
+    }
+
     fn is_in_focus_scope(
         &self,
         element: ElementId,

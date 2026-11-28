@@ -8,6 +8,7 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
             reverse,
             physics,
             inherit_physics,
+            keyboard_dismiss,
             clip_behavior,
             drag_start_behavior,
             ..
@@ -17,6 +18,10 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
             // then applies the caller's reverse flag.
             let rtl = *axis == Axis::Horizontal
                 && context.depend::<TextDirection>() == Some(TextDirection::Rtl);
+            let mut resolved = behavior.resolve();
+            if let Some(dismiss) = keyboard_dismiss {
+                resolved.keyboard_dismiss = *dismiss;
+            }
             RenderKind::Scroll {
                 controller: controller.clone(),
                 axis: *axis,
@@ -25,7 +30,7 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
                     .map_or(*physics, |page| inherited_physics(&behavior, page)),
                 clip_behavior: *clip_behavior,
                 drag_start_behavior: *drag_start_behavior,
-                behavior: behavior.resolve(),
+                behavior: resolved,
             }
         }
         WidgetKind::RawScrollbar {

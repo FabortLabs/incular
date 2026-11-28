@@ -24,6 +24,10 @@ pub struct SingleChildScrollView {
     /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
     #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
     clip_behavior: Clip,
+    /// Flutter `keyboardDismissBehavior`; when unset, inherits the nearest
+    /// `ScrollConfiguration` (manual by default).
+    #[builder(default, setter(strip_option))]
+    keyboard_dismiss_behavior: Option<crate::ScrollViewKeyboardDismissBehavior>,
     /// Flutter `dragStartBehavior`; defaults to `DragStartBehavior.start`.
     #[builder(default)]
     drag_start_behavior: DragStartBehavior,
@@ -48,6 +52,7 @@ impl SingleChildScrollView {
             controller: None,
             physics: None,
             clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            keyboard_dismiss_behavior: None,
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
@@ -115,6 +120,16 @@ impl SingleChildScrollView {
         self
     }
 
+    /// Whether a user-driven scroll update dismisses the keyboard.
+    #[must_use]
+    pub fn keyboard_dismiss_behavior(
+        mut self,
+        behavior: crate::ScrollViewKeyboardDismissBehavior,
+    ) -> Self {
+        self.keyboard_dismiss_behavior = Some(behavior);
+        self
+    }
+
     /// Sets where a scroll drag measures its start from (Flutter
     /// `dragStartBehavior`).
     #[must_use]
@@ -178,7 +193,7 @@ fn single_child_scroll_view_widget(value: SingleChildScrollView) -> Widget {
         value.child
     };
     let controller = value.controller.unwrap_or_default();
-    Widget::scroll_view_with_options(
+    let mut viewport = Widget::scroll_view_with_options(
         controller,
         child,
         value.scroll_direction,
@@ -187,7 +202,11 @@ fn single_child_scroll_view_widget(value: SingleChildScrollView) -> Widget {
         value.clip_behavior,
         value.drag_start_behavior,
         value.hit_test_behavior,
-    )
+    );
+    if let WidgetKind::Scroll { keyboard_dismiss, .. } = viewport.kind_mut() {
+        *keyboard_dismiss = value.keyboard_dismiss_behavior;
+    }
+    viewport
 }
 
 /// Delegate governing two-dimensional grid layout.

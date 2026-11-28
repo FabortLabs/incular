@@ -1461,6 +1461,7 @@ impl Widget {
                 physics,
                 increment_calculator: None,
                 inherit_physics: None,
+                keyboard_dismiss: None,
                 clip_behavior,
                 drag_start_behavior,
                 hit_test_behavior,

@@ -3936,3 +3936,4 @@ packages/flutter/test/widgets/custom_scroll_view_test.dart	169	CustomScrollView 
 packages/flutter/test/widgets/list_view_test.dart	1178	ListView does not crash at zero area	paired-match	upstream-scroll-zero-area.md
 packages/flutter/test/widgets/grid_view_test.dart	483	GridView in zero context	paired-match	upstream-scroll-zero-area.md
 packages/flutter/test/widgets/shrink_wrapping_viewport_test.dart	60	ShrinkWrappingViewport does not crash at zero area	paired-match	upstream-scroll-zero-area.md
+packages/flutter/test/widgets/single_child_scroll_view_test.dart	1038	keyboardDismissBehavior tests	paired-match	upstream-scroll-keyboard-dismissal.md
