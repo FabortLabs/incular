@@ -349,3 +349,34 @@ fn style_snapshot_replays_for_a_new_control_and_never_for_a_stale_client() {
     assert!(controls.publish_style(new, style).unwrap());
     assert_eq!(*observed.borrow(), 2);
 }
+
+#[test]
+fn a_web_custom_control_keeps_multiline_while_disabling_the_platform_keyboard() {
+    for (input_type, multiline) in [
+        (TextInputType::Multiline, true),
+        (TextInputType::Text, false),
+    ] {
+        let (mut controls, observed, _) = controls(true);
+        let requested = original(input_type);
+        let client = controls.attach(requested.clone(), |_| {});
+        assert_eq!(client.get(), 1);
+        let callbacks = observed.borrow();
+        let [
+            Update::Attach {
+                client: actual,
+                configuration,
+            },
+        ] = callbacks.as_slice()
+        else {
+            panic!("expected the single attach callback, got {callbacks:?}");
+        };
+        assert_eq!(*actual, client);
+        assert_eq!(configuration, &requested);
+        let mut expected = original(TextInputType::None).to_json();
+        expected.get_mut("inputType").unwrap()["isMultiline"] = json!(multiline);
+        assert_eq!(
+            controls.take_platform_calls(),
+            [wire("TextInput.setClient", json!([1, expected]))],
+        );
+    }
+}

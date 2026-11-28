@@ -28,3 +28,27 @@ successful requests report nothing. Finalizing autofill does not
 require an editor to remain attached. The style-specific failure
 was already verified separately. Twelve native error tests and
 seven existing control tests passed.
+
+## Browser keyboard type keeps the multiline flag
+
+The web-only original at `services/text_input_test.dart:1497` now ran and
+passed in headless Chromium against the pinned Flutter Web SDK. The
+browser runner copies only the unchanged test and its local helpers
+into the isolated fixture package; its reporter must show exactly the
+selected case.
+
+The native protocol test compares the entire `TextInput.setClient`
+message. The custom control receives the unmodified multiline
+configuration, while the platform sees type `none` and
+`isMultiline: true`. The single-line control sends false. All ten native
+control tests passed. This checks the browser protocol message, not
+browser rendering or the native host's keyboard UI.
+
+To reproduce the pinned original on Linux with an installed Chromium
+binary available via `CHROME_EXECUTABLE`:
+
+```sh
+bash audits/flutter-3.50.0-parity/run-reference-linux.sh web-text-input \
+  services/text_input_test.dart \
+  'TextInputControl the platform input control receives isMultiline true on attach'
+```
