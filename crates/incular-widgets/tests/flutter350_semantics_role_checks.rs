@@ -443,3 +443,81 @@ fn checkable_menu_items_need_an_explicit_checked_state_and_menu_ancestor() {
         }
     }
 }
+
+#[test]
+fn radio_group_counts_only_checked_mutually_exclusive_children_and_stops_at_nested_groups() {
+    use incular_widgets::{RadioGroup, RawRadio};
+    let flag = |checked, exclusive| {
+        Semantics::new(SizedBox::square(1.))
+            .checked(checked)
+            .in_mutually_exclusive_group(exclusive)
+    };
+    let group = |child: Widget| {
+        Semantics::new(child)
+            .role(Role::RadioGroup)
+            .explicit_child_nodes(true)
+    };
+    assert!(issues(group(flag(false, false).into())).is_empty());
+    assert_eq!(
+        issues(group(
+            Column::new([flag(true, true), flag(true, true)]).into()
+        )),
+        [(
+            Role::RadioGroup,
+            Issue::RadioGroupWithMultipleCheckedChildren
+        )],
+    );
+    assert!(
+        issues(group(
+            Column::new([flag(false, true), flag(true, true)]).into()
+        ))
+        .is_empty()
+    );
+    assert!(
+        issues(group(
+            Column::new([
+                Semantics::new(flag(false, true)).label("Option A"),
+                Semantics::new(flag(true, true)).label("Option B"),
+            ])
+            .into()
+        ))
+        .is_empty()
+    );
+    assert!(
+        issues(group(
+            Semantics::new(SizedBox::square(1.)).toggled(true).into()
+        ))
+        .is_empty()
+    );
+
+    let actual_radio = |value| Widget::from(RawRadio::new(value, None));
+    let checkbox = Semantics::new(SizedBox::square(1.))
+        .role(Role::Checkbox)
+        .checked(false);
+    let with_checkbox = RadioGroup::<u32>::new(Column::new([
+        checkbox.into(),
+        actual_radio(0),
+        actual_radio(1),
+    ]));
+    let tree = mount(with_checkbox);
+    assert!(tree.debug_semantic_role_issues().is_empty());
+    let root = tree
+        .semantics()
+        .node(tree.semantics().root().unwrap())
+        .unwrap();
+    assert_eq!(root.role, Role::RadioGroup);
+    assert_eq!(root.children.len(), 3);
+
+    let nested = RadioGroup::<&str>::new(RawRadio::new("string", None)).value(Some("string"));
+    assert!(
+        issues(
+            RadioGroup::<u32>::new(Column::new([
+                nested.into(),
+                actual_radio(0),
+                actual_radio(1),
+            ]))
+            .value(Some(1))
+        )
+        .is_empty()
+    );
+}

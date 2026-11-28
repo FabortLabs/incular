@@ -1875,6 +1875,7 @@ fn semantic_role_name(role: SemanticRole) -> &'static str {
         SemanticRole::GenericContainer => "container",
         SemanticRole::Checkbox => "checkbox",
         SemanticRole::Radio => "radio",
+        SemanticRole::RadioGroup => "radio group",
         SemanticRole::Switch => "switch",
         SemanticRole::Slider => "slider",
         SemanticRole::Menu => "menu",

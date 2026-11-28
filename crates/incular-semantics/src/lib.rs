@@ -86,6 +86,7 @@ pub enum Role {
     GenericContainer,
     Checkbox,
     Radio,
+    RadioGroup,
     /// A two-state toggle distinct from a momentary button.
     Switch,
     Slider,

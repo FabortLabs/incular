@@ -4502,3 +4502,12 @@ packages/flutter/test/widgets/semantics_role_checks_test.dart	537	failure case, 
 packages/flutter/test/widgets/semantics_role_checks_test.dart	554	Success case with menu as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
 packages/flutter/test/widgets/semantics_role_checks_test.dart	573	Success case with menuBar as an ancester	paired-match	upstream-semantics-role-checks.md#menu-bars-and-checkable-menu-items
 packages/flutter/test/widgets/selectable_region_test.dart	6603	Multiple selectables on a single line should be in screen order	paired-match	upstream-selection-screen-order.md#inline-widgetspan-copy
+packages/flutter/test/widgets/semantics_role_checks_test.dart	145	success case, child is not mutually exclusive	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	164	failure case, multiple checked children	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	194	success case	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	221	success case, radio buttons with labels	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	254	success case, radio group with no checkable children	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	270	success case, radio group can have checkbox children	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	294	success case, radio group can nest	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	652	success case, radio buttons with labels	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/semantics_role_checks_test.dart	685	success case, radio group with no checkable children	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules

@@ -61,3 +61,25 @@ not claimed by this native test slice.
 
 All 11 selected originals, 11 focused native widget tests, and 6
 AccessKit flag tests passed.
+
+## Radio group boundaries and checked-state rules
+
+Nine pinned originals (145, 164, 194, 221, 254, 270, 294, 652, 685)
+are paired. Only checked descendants marked mutually exclusive
+count toward one group; a nested RadioGroup owns its own set. Labels,
+non-radio checks, unchecked radios and toggled-but-not-checkable
+children do not cause a false duplicate. The two additional
+registrations in the alert/status group repeat the labelled-radio and
+non-checkable shapes and both ran explicitly.
+
+The native runtime probe also mounts real raw controls in a typed
+controlled group. Pointer selection updates both rendered and semantic
+state, Space clears a toggleable selected radio, a disabled radio
+does not activate, and the focused radio keeps its node through the
+controlled value update. The first native run exposed stale checked
+state because the group lookup was nonreactive; the read now binds
+the dependent raw radio to the mounted inherited registry.
+
+Twelve targeted widget tests and one targeted runtime test passed.
+Arrow wrap, tab-entry policy, and platform-specific accessibility hints
+are separate coverage.

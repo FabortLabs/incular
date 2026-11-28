@@ -381,7 +381,7 @@ pub use platform_widgets::{
 pub use provider_image::{
     ImageErrorBuilder, ImageFrameBuilder, ImageLoadingBuilder, ProviderImage,
 };
-pub use radio_selection::{RadioGroup, RawRadio, SelectableRegion};
+pub use radio_selection::{RadioGroup, RadioGroupRegistry, RawRadio, RawRadioState, SelectableRegion};
 pub use raw_input::{
     EditableTextTapOutsideIntent, EditableTextTapUpOutsideIntent, ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers, Listener,

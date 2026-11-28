@@ -1,6 +1,8 @@
 use std::{collections::HashSet, fmt};
 
-use crate::{Role, SemanticActionKind, SemanticNode, SemanticNodeId, SemanticsTree};
+use crate::{
+    Role, SemanticActionKind, SemanticAnnotationFlag, SemanticNode, SemanticNodeId, SemanticsTree,
+};
 
 /// The accessibility contract violated by a finished semantic node.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,6 +19,7 @@ pub enum SemanticRoleIssueKind {
     MenuItemCheckboxOutsideMenu,
     MenuItemRadioWithoutCheckedState,
     MenuItemRadioOutsideMenu,
+    RadioGroupWithMultipleCheckedChildren,
     LiveAlertOrStatus,
     ProgressBarMissingValueOrBounds,
     SliderMissingValue,
@@ -47,6 +50,9 @@ impl fmt::Display for SemanticRoleIssueKind {
                 "A menu item radio must be a child of a menu or a menu bar"
             }
             Self::MenuItemOutsideMenu => "A menu item must be a child of a menu or a menu bar",
+            Self::RadioGroupWithMultipleCheckedChildren => {
+                "Radio groups must not have multiple checked children"
+            }
             Self::LiveAlertOrStatus => "An alert or status node cannot also be a live region",
             Self::ProgressBarMissingValueOrBounds => {
                 "A progress bar must have a value, a minValue, a maxValue."
@@ -130,6 +136,9 @@ impl SemanticsTree {
                     Some(MenuItemRadioWithoutCheckedState)
                 }
                 Role::MenuItemRadio if !has_menu => Some(MenuItemRadioOutsideMenu),
+                Role::RadioGroup if self.radio_group_has_multiple_checked_children(node) => {
+                    Some(RadioGroupWithMultipleCheckedChildren)
+                }
                 Role::Alert | Role::Status if node.state.live_region => Some(LiveAlertOrStatus),
                 Role::Slider | Role::ProgressBar => range_issue(node),
                 _ => None,
@@ -150,6 +159,36 @@ impl SemanticsTree {
             );
         }
         reports
+    }
+    fn radio_group_has_multiple_checked_children(&self, group: &SemanticNode) -> bool {
+        let mut seen = HashSet::from([group.id]);
+        let mut work = group.children.clone();
+        let mut checked = false;
+        while let Some(id) = work.pop() {
+            let Some(child) = self.node(id).filter(|_| seen.insert(id)) else {
+                continue;
+            };
+            if child.role == Role::RadioGroup {
+                // A nested group owns its own checked children.
+                continue;
+            }
+            if child
+                .state
+                .annotation_flags
+                .get(SemanticAnnotationFlag::MutuallyExclusiveGroup)
+                == Some(true)
+            {
+                if child.state.checked.is_some_and(|state| state.is_checked()) {
+                    if checked {
+                        return true;
+                    }
+                    checked = true;
+                }
+            } else {
+                work.extend(&child.children);
+            }
+        }
+        false
     }
 }
 

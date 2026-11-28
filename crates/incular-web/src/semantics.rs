@@ -647,6 +647,7 @@ fn element_kind(role: Role, labelled: bool) -> (&'static str, Option<&'static st
         Role::GenericContainer => ("div", labelled.then_some("group")),
         Role::Checkbox => ("div", Some("checkbox")),
         Role::Radio => ("div", Some("radio")),
+        Role::RadioGroup => ("div", Some("radiogroup")),
         Role::Switch => ("div", Some("switch")),
         Role::Slider => ("div", Some("slider")),
         Role::Menu => ("div", Some("menu")),

@@ -1302,6 +1302,7 @@ fn map_role(role: Role, obscured: bool, input_type: SemanticsInputType) -> Acces
         Role::GenericContainer => AccessKitRole::GenericContainer,
         Role::Checkbox => AccessKitRole::CheckBox,
         Role::Radio => AccessKitRole::RadioButton,
+        Role::RadioGroup => AccessKitRole::RadioGroup,
         Role::Switch => AccessKitRole::Switch,
         Role::Slider => AccessKitRole::Slider,
         Role::Menu => AccessKitRole::Menu,
