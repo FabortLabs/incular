@@ -3915,3 +3915,6 @@ packages/flutter/test/widgets/shape_decoration_test.dart	88	TestBorder and Direc
 packages/flutter/test/widgets/shape_decoration_test.dart	108	Does not crash with directional gradient	paired-match	upstream-shape-decoration-hit-and-clip.md#mounted-shape-paint-order-and-image-clip
 packages/flutter/test/widgets/shape_decoration_test.dart	64	ShapeDecoration with BorderDirectional	paired-match	upstream-shape-decoration-hit-and-clip.md#unresolved-directional-padding
 packages/flutter/test/widgets/shape_decoration_test.dart	132	ShapeDecoration equality	paired-match	upstream-shape-decoration-hit-and-clip.md#shape-decoration-value-comparison
+packages/flutter/test/painting/text_span_test.dart	13	TextSpan equals	paired-match	upstream-text-span-diagnostics.md
+packages/flutter/test/painting/text_span_test.dart	49	TextSpan toStringDeep	paired-match	upstream-text-span-diagnostics.md
+packages/flutter/test/painting/text_span_test.dart	75	TextSpan toStringDeep for mouse	paired-match	upstream-text-span-diagnostics.md

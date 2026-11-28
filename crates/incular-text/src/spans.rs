@@ -9,6 +9,8 @@ use incular_core::Size;
 use incular_gestures::{MouseCursor, RawPointerEvent};
 use std::{fmt, ops::Range, sync::Arc};
 
+mod diagnostics;
+
 /// A widget-independent inline child. The text crate stores a stable identity
 /// and measured size rather than depending on `incular-widgets`, which keeps
 /// the crate graph acyclic. Widgets can resolve the identity during layout.
