@@ -915,7 +915,27 @@ impl WidgetTree {
                 kind,
                 RenderKind::Transform { .. } | RenderKind::Affine { .. }
                     | RenderKind::Scale { .. } | RenderKind::Rotation { .. }
-            ) && self.content_transform(id).is_some_and(|transform| !transform.has_drawable_area()))
+            ) && self.hides_transform_paint(id))
+    }
+
+    fn hides_transform_paint(&self, id: RenderObjectId) -> bool {
+        let Some(transform) = self.content_transform(id) else {
+            return false;
+        };
+        if transform.has_drawable_area() {
+            return false;
+        }
+        if !transform.to_kurbo().is_finite() {
+            return true;
+        }
+        // A finite singular ImageFilter.matrix has no raster output, but
+        // Flutter still records its untransformed child in the filter layer.
+        !self.renders.get(id.0)
+            .and_then(|node| node.object.layers.content())
+            .and_then(|layer| self.compositor.layer(layer))
+            .is_some_and(|(kind, _)| matches!(
+                kind, incular_rendering::LayerKind::Transform { sampling: Some(_), .. }
+            ))
     }
 
     /// Whether a render object paints the given direct child at its

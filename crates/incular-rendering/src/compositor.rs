@@ -1468,7 +1468,8 @@ impl LayerTree {
             return false;
         };
         let LayerKind::Transform {
-            sampling: current, ..
+            transform,
+            sampling: current,
         } = &mut layer.kind
         else {
             return false;
@@ -1476,9 +1477,15 @@ impl LayerTree {
         if *current == sampling {
             return false;
         }
+        let changes_cull = current.is_some() != sampling.is_some()
+            && !transform.has_drawable_area()
+            && transform.to_kurbo().is_finite();
         *current = sampling;
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
+        if changes_cull {
+            self.reset_cull_bounds(id);
+        }
         true
     }
     pub fn update_clip(&mut self, id: LayerId, rect: Rect) -> bool {
@@ -2276,12 +2283,17 @@ impl LayerTree {
         if let CullBounds::Known { bounds, cullable } = layer.cull {
             return (bounds, cullable);
         }
-        if matches!(&layer.kind, LayerKind::Transform { transform, .. } if !transform.has_drawable_area()) {
+        if let LayerKind::Transform { transform, sampling } = &layer.kind
+            && !transform.has_drawable_area()
+        {
+            // A sampled finite singular transform still records its source
+            // stage. It has no visual bounds but cannot skip that recording.
+            let cullable = sampling.is_none() || !transform.to_kurbo().is_finite();
             self.layers.get_mut(id.0).expect("live culling layer").cull = CullBounds::Known {
                 bounds: None,
-                cullable: true,
+                cullable,
             };
-            return (None, true);
+            return (None, cullable);
         }
         let own_cullable = layer.surface_partition.is_none()
             && !matches!(
@@ -2449,7 +2461,7 @@ impl LayerTree {
                 transform: local,
                 sampling: Some(sampling),
             } => {
-                if !world_transform.then(local).has_drawable_area() {
+                if !world_transform.then(local).to_kurbo().is_finite() {
                     self.diagnostics.layers_culled += 1;
                     return;
                 }
@@ -2466,7 +2478,7 @@ impl LayerTree {
                 let Some(bounds) = source_bounds else {
                     return;
                 };
-                let filtered_bounds = self.subtree_bounds(id, world_transform).unwrap_or(bounds);
+                let filtered_bounds = self.subtree_bounds(id, world_transform).unwrap_or_default();
                 out.push(PaintCommand::PushMatrixFilter {
                     layer: id,
                     matrix: local,

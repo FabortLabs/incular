@@ -60,3 +60,21 @@ reappear when their transform returns to range.
 All 40 focused compositor, transform, annotation, and wgpu
 offscreen checks passed. These authored range cases do not add
 upstream registrations.
+
+## Finite singular matrices with explicit filter quality
+
+The authored pinned `singular_sampled_transform_test.dart` separates
+a finite singular unfiltered transform from the same matrix with low
+filter quality. Flutter calls the painter zero times without sampling,
+and once with sampling; the sampled case records an image-filter
+layer. The nonzero 0.25× control also records one stage.
+
+Incular had been rejecting the sampled source alongside the unsampled
+singular case. It now records the untransformed source and an empty
+filtered output. wgpu still rejects the non-invertible filter before
+allocating an offscreen source. The native tests prove the three
+modes under and without an ancestor clip, balanced filter commands,
+correct 30×20 source and 7.5×20 nonzero output, and correct invalidation
+when changing only the sampling option with an already cached clip.
+All 13 focused widget checks passed. This is distinct from original
+:471 (which had no filter quality) and adds no upstream count.

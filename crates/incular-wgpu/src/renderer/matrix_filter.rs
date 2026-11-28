@@ -9,8 +9,8 @@ use super::*;
 impl WgpuRenderer {
     /// Lowers a matrix filter group to the `Filtered` composite of its
     /// resampled source, clipped by `parent_clip`. A singular matrix or
-    /// stage draws nothing, as Flutter's `RenderTransform` paints nothing
-    /// for a singular transform.
+    /// stage has no raster output, even if the frontend recorded it.
+    /// Reject it before allocating an offscreen source.
     pub(super) fn lower_matrix_filter_group(
         &mut self,
         group: LayerGroup<'_>,
