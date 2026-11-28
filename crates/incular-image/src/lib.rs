@@ -489,6 +489,10 @@ pub enum ImageError {
     Io(String),
     #[error(transparent)]
     Asset(#[from] incular_assets::AssetError),
+    /// The source was readable but did not contain any bytes. This is
+    /// distinct from invalid image data and may succeed after a writer fills it.
+    #[error("{path} is empty and cannot be loaded as an image.")]
+    EmptyFile { path: PathBuf },
     #[error("image decode error: {0}")]
     Decode(String),
     #[error("invalid image dimensions")]
@@ -558,6 +562,9 @@ impl ImageHandle {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ImageError> {
         let path = path.as_ref();
         let bytes = std::fs::read(path).map_err(|error| ImageError::Io(error.to_string()))?;
+        if bytes.is_empty() {
+            return Err(ImageError::EmptyFile { path: path.to_owned() });
+        }
         Self::decode(&bytes, ImageSource::FileSystem(path.to_owned()))
     }
     pub fn from_rgba8(
