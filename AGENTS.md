@@ -82,7 +82,7 @@ plans and audits are input, not authority.
 - `incular-accessibility`: AccessKit and mobile semantic projections and action translation.
 - `incular-android`: Android embedder shell: JNI activity bridge, surfaces, touch, insets, lifecycle and semantics adapter.
 - `incular-animation`: Curves, interpolation, tweens and animation physics.
-- `incular-assets`: Font identities, shared font bytes and asset bundles.
+- `incular-assets`: Font identities, shared font bytes, asset bundles and manifest metadata.
 - `incular-config`: Shared constraints, alignment, insets, localization and application policies.
 - `incular-controls`: Themed Incular controls and visual slots over neutral widgets.
 - `incular-core`: Geometry, identity, input, interpolation and lower-level context values.

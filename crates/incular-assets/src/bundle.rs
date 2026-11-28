@@ -111,6 +111,26 @@ pub trait AssetBundle: Send + Sync + 'static {
 
     /// `AssetBundle.clear`: forgets everything cached.
     fn clear(&self) {}
+
+    /// Hot-reload invalidation for `key`: drops any cached assets so the
+    /// next load re-reads the source. Defaults to [`Self::evict`].
+    ///
+    /// Only compiled with the `hot-reload` feature; see
+    /// [`crate::hot_reload`]. Builds without it are unaffected.
+    #[cfg(feature = "hot-reload")]
+    fn hot_reload_invalidate(&self, key: &str) {
+        self.evict(key);
+    }
+
+    /// Hot-reload invalidation of everything cached. Defaults to
+    /// [`Self::clear`].
+    ///
+    /// Only compiled with the `hot-reload` feature; see
+    /// [`crate::hot_reload`].
+    #[cfg(feature = "hot-reload")]
+    fn hot_reload_invalidate_all(&self) {
+        self.clear();
+    }
 }
 
 fn decode(key: &str, bytes: &[u8]) -> Result<Arc<str>, AssetError> {
@@ -120,6 +140,49 @@ fn decode(key: &str, bytes: &[u8]) -> Result<Arc<str>, AssetError> {
 }
 
 impl dyn AssetBundle {
+    /// Loads and decodes a [`crate::TypedAsset`] synchronously.
+    ///
+    /// Byte and string APIs are unchanged; this is a typed layer over
+    /// [`AssetBundle::load`]. [Path overrides](crate::PathOverrides) still
+    /// apply.
+    ///
+    /// # Errors
+    /// As [`AssetBundle::load`], or a decode error from
+    /// [`TypedAsset::decode_asset`](crate::TypedAsset::decode_asset).
+    pub fn load_typed<T: crate::TypedAsset>(&self, key: &str) -> Result<T, AssetError> {
+        let bytes = self.load(key)?;
+        T::decode_asset(key, &bytes)
+    }
+
+    /// Starts a non-blocking typed load; `done` runs exactly once, possibly
+    /// before this returns or later on any thread. Routes through
+    /// [`AssetBundle::load_async`]; never blocks. The load reports clear
+    /// [`AssetLoadState`](crate::AssetLoadState)s: `Loading` until `done`,
+    /// then `Ready`/`Failed`.
+    pub fn load_typed_async<T: crate::TypedAsset>(
+        &self,
+        key: &str,
+        done: crate::TypedAssetLoadCallback<T>,
+    ) {
+        let owned_key = key.to_owned();
+        self.load_async(
+            key,
+            Box::new(move |bytes| {
+                let result = bytes.and_then(|bytes| T::decode_asset(&owned_key, &bytes));
+                done(result);
+            }),
+        );
+    }
+
+    /// Starts a non-blocking typed load as a [`crate::AssetFuture`].
+    ///
+    /// No async runtime is required. A bundle that completes synchronously
+    /// yields an already-ready future; a slow bundle completes it later,
+    /// from any thread.
+    pub fn load_typed_future<T: crate::TypedAsset>(&self, key: &str) -> crate::AssetFuture<T> {
+        crate::AssetFuture::start(|done| self.load_typed_async::<T>(key, done))
+    }
+
     /// `AssetBundle.loadStructuredData`: the asset's string parsed by
     /// `parser`. Bundles do not cache parsed values; a
     /// [`CachingAssetBundle`] does through its own method.

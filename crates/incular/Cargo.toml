@@ -292,6 +292,7 @@ hot-reload = [
     "incular-windows?/hot-reload",
     "incular-macos?/hot-reload",
     "incular-runtime/hot-reload",
+    "incular-assets/hot-reload",
 ]
 default = ["desktop", "controls", "material"]
 # Only the adapter for the compilation target contributes its backend.

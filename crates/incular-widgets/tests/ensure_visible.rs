@@ -90,14 +90,14 @@ fn keep_visible_policies_only_move_toward_their_edge() {
     let start =
         EnsureVisible::new().alignment_policy(ScrollPositionAlignmentPolicy::KeepVisibleAtStart);
     // keepVisibleAtEnd reveals row 10 at the bottom edge (alignment 1.0).
-    Scrollable::ensure_visible(&tree, row(&tree, 10), end);
+    Scrollable::ensure_visible(&tree, row(&tree, 10), end.clone());
     assert_eq!(controller.offset(), 350.);
     tree.layout(Constraints::tight(VIEWPORT)).expect("layout");
     // A row above the viewport would need a smaller offset, which
     // keepVisibleAtEnd never takes.
     assert_eq!(Scrollable::ensure_visible(&tree, row(&tree, 2), end), 0);
     // keepVisibleAtStart reveals it at the top edge instead.
-    Scrollable::ensure_visible(&tree, row(&tree, 2), start);
+    Scrollable::ensure_visible(&tree, row(&tree, 2), start.clone());
     assert_eq!(controller.offset(), 100.);
     tree.layout(Constraints::tight(VIEWPORT)).expect("layout");
     // And never moves forward.

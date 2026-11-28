@@ -258,7 +258,9 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
                     DebugValue::Enum(format!("{alignment:?}")),
                 )),
             }
-            summarize_child(&mut out, child);
+            if let Some(child) = child {
+                summarize_child(&mut out, child);
+            }
         }
         WidgetKind::Colored {
             color,

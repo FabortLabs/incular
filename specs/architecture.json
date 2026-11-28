@@ -661,6 +661,7 @@
         "incular-assets",
         "incular-config",
         "incular-core",
+        "incular-gestures",
         "incular-rendering"
       ],
       "path": "crates/incular-text",

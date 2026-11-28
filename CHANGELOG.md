@@ -41,6 +41,32 @@ a version and date when publishing.
 
 ### Added
 
+- **`incular-assets`:** typed asset loading. `AssetHandle<T>` (stable
+  `AssetId` + logical key), the `TypedAsset` trait, and
+  `load_typed` / `load_typed_async` / `load_typed_future` (`AssetFuture`,
+  no async runtime needed) with clear `AssetLoadState` `Loading` / `Ready`
+  / `Failed`. Built-in `FontAsset` (font source bytes + face/variation
+  metadata, convertible to `FontHandle` and accepted by `incular-text`'s
+  `FontLoader::add_font`) and `ShaderAsset` (source bytes +
+  `ShaderLanguage`). Existing byte and string bundle APIs are unchanged;
+  raster images stay in `incular-image`.
+
+- **`incular-assets`:** path overrides. `PathOverrides` (logical -> physical
+  key, applied once, no chains) and `PathOverrideBundle`, preserving byte,
+  string, typed, async, manifest and eviction APIs, re-keying errors to
+  the logical key.
+
+- **`incular-assets`:** new `hot-reload` feature (also enabled by
+  `incular`'s and `incular-runtime`'s `hot-reload`). `hot_reload` adds
+  `AssetBundle::hot_reload_invalidate` / `hot_reload_invalidate_all`,
+  an `AssetInvalidation` broadcast (`subscribe`, `invalidate_key`,
+  `invalidate_path`, `invalidate_all`), and `watch` to invalidate cached
+  assets automatically. Builds without `hot-reload` are unaffected.
+
+- **Fixed (`incular-widgets`):** `incular-widgets` with `devtools` no
+  longer fails to compile on `WidgetKind::Align`; optional child handling
+  matches the other variants.
+
 - Raw editable text exposes selection height and width styles. A configured
   selection highlight remains visible when the editor loses focus.
 
