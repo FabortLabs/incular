@@ -3924,3 +3924,4 @@ packages/flutter/test/painting/shape_border_test.dart	27	OutlinedBorder.lep iden
 packages/flutter/test/painting/border_radius_test.dart	159	BorderRadius.lerp identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity
 packages/flutter/test/painting/border_radius_test.dart	417	BorderRadiusDirectional.lerp identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity
 packages/flutter/test/painting/border_radius_test.dart	475	BorderRadiusGeometry.lerp identical a,b	paired-match	upstream-shape-border-lerp.md#borrowed-border-and-radius-identity
+packages/flutter/test/painting/gradient_test.dart	276	LinearGradient toString	paired-match	upstream-gradient-diagnostics.md

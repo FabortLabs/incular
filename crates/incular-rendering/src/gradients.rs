@@ -22,6 +22,7 @@ pub struct GradientStop {
 pub struct GradientStops {
     id: GradientId,
     stops: Arc<[GradientStop]>,
+    explicit_positions: bool,
 }
 impl PartialEq for GradientStops {
     fn eq(&self, other: &Self) -> bool {
@@ -145,6 +146,7 @@ impl GradientStops {
         Self {
             id: next_gradient_id(),
             stops: stops.into(),
+            explicit_positions: true,
         }
     }
     /// Pairs colors with optional stop positions, rejecting a mismatched list.
@@ -180,7 +182,7 @@ impl GradientStops {
     #[must_use]
     pub fn even(colors: &[Color]) -> Self {
         let denominator = colors.len().saturating_sub(1).max(1) as f32;
-        Self::new(
+        let mut value = Self::new(
             colors
                 .iter()
                 .enumerate()
@@ -189,7 +191,16 @@ impl GradientStops {
                     color,
                 })
                 .collect(),
-        )
+        );
+        value.explicit_positions = false;
+        value
+    }
+
+    /// Whether the stop positions were supplied rather than inferred.
+    /// This affects descriptions but not renderer equality or cache keys.
+    #[must_use]
+    pub const fn has_explicit_positions(&self) -> bool {
+        self.explicit_positions
     }
 
     /// Fades opacity without changing stop positions or RGB.
@@ -228,6 +239,7 @@ impl GradientStops {
                     color: map(stop.color),
                 })
                 .collect(),
+            explicit_positions: self.explicit_positions,
         }
     }
 
@@ -273,6 +285,7 @@ impl GradientStops {
         Self {
             id: next_gradient_id(),
             stops: output.into(),
+            explicit_positions: true,
         }
     }
 

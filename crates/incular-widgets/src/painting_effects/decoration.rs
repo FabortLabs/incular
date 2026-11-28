@@ -1,7 +1,7 @@
 //! Box decoration primitives and their painting data.
 
 use incular_config::TextDirection;
-use incular_core::{Color, Lerp, Offset, Rect};
+use incular_core::{Color, DiagnosticValue, Lerp, Offset, Rect, debug_format_double};
 use incular_image::ImageHandle;
 use incular_rendering::{
     BlendMode, Brush, ColorFilter, FilterQuality, GradientStops, LinearGradient, Paint, RadialGradient,
@@ -19,6 +19,7 @@ use crate::{
 };
 use std::{
     borrow::Cow,
+    fmt,
     hash::{Hash, Hasher},
     rc::Rc,
     sync::Arc,
@@ -1089,6 +1090,52 @@ fn lerp_gradient_ref<'a, T: Clone + Lerp>(
     }
 }
 
+fn describe_gradient_colors(
+    formatter: &mut fmt::Formatter<'_>,
+    stops: &GradientStops,
+    mode: TileMode,
+) -> fmt::Result {
+    formatter.write_str(", colors: [")?;
+    for (index, stop) in stops.as_slice().iter().enumerate() {
+        if index != 0 {
+            formatter.write_str(", ")?;
+        }
+        formatter.write_str(&stop.color.diagnostic_text())?;
+    }
+    formatter.write_str("]")?;
+    if stops.has_explicit_positions() {
+        formatter.write_str(", stops: [")?;
+        for (index, stop) in stops.as_slice().iter().enumerate() {
+            if index != 0 {
+                formatter.write_str(", ")?;
+            }
+            write!(formatter, "{:?}", stop.offset)?;
+        }
+        formatter.write_str("]")?;
+    }
+    let mode = match mode {
+        TileMode::Clamp => "clamp",
+        TileMode::Repeated => "repeated",
+        TileMode::Mirror => "mirror",
+        TileMode::Decal => "decal",
+    };
+    write!(formatter, ", tileMode: TileMode.{mode}")
+}
+
+fn describe_gradient_rotation(
+    formatter: &mut fmt::Formatter<'_>,
+    radians: Option<f32>,
+) -> fmt::Result {
+    if let Some(radians) = radians {
+        write!(
+            formatter,
+            ", transform: GradientRotation(radians: {})",
+            debug_format_double(Some(f64::from(radians))),
+        )?;
+    }
+    formatter.write_str(")")
+}
+
 /// Linear gradient with endpoints relative to the painted box. Unlike a
 /// renderer brush in logical pixels, an endpoint can follow text direction.
 #[derive(Clone, Debug, PartialEq)]
@@ -1099,6 +1146,14 @@ pub struct BoxLinearGradient {
     pub tile_mode: TileMode,
     /// A clockwise shader rotation about the paint bounds.
     pub rotation: Option<f32>,
+}
+
+impl fmt::Display for BoxLinearGradient {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "LinearGradient(begin: {}, end: {}", self.begin, self.end)?;
+        describe_gradient_colors(formatter, &self.stops, self.tile_mode)?;
+        describe_gradient_rotation(formatter, self.rotation)
+    }
 }
 
 impl BoxLinearGradient {
@@ -1249,6 +1304,22 @@ pub struct BoxRadialGradient {
     pub stops: GradientStops,
     pub tile_mode: TileMode,
     pub rotation: Option<f32>,
+}
+
+impl fmt::Display for BoxRadialGradient {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "RadialGradient(center: {}, radius: {}",
+            self.center, debug_format_double(Some(f64::from(self.radius))),
+        )?;
+        describe_gradient_colors(formatter, &self.stops, self.tile_mode)?;
+        if let Some(focal) = self.focal {
+            write!(formatter, ", focal: {focal}")?;
+        }
+        write!(formatter, ", focalRadius: {}", debug_format_double(Some(f64::from(self.focal_radius))))?;
+        describe_gradient_rotation(formatter, self.rotation)
+    }
 }
 
 impl BoxRadialGradient {
@@ -1420,6 +1491,19 @@ pub struct BoxSweepGradient {
     pub stops: GradientStops,
     pub tile_mode: TileMode,
     pub rotation: Option<f32>,
+}
+
+impl fmt::Display for BoxSweepGradient {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "SweepGradient(center: {}, startAngle: {}, endAngle: {}",
+            self.center, debug_format_double(Some(f64::from(self.start_angle))),
+            debug_format_double(Some(f64::from(self.end_angle))),
+        )?;
+        describe_gradient_colors(formatter, &self.stops, self.tile_mode)?;
+        describe_gradient_rotation(formatter, self.rotation)
+    }
 }
 
 impl BoxSweepGradient {
