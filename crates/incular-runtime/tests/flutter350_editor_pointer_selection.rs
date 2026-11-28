@@ -438,15 +438,24 @@ fn a_mobile_shift_tap_uses_the_modifiers_captured_at_press() {
         let mut runtime = Runtime::new(editor.into()).unwrap();
         runtime.set_text_shortcut_platform(platform);
         let now = Instant::now();
-        runtime.run_frame_at(Constraints::loose(Size::new(800., 100.)), now).unwrap();
-        let mut shift = KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Shift), Code::ShiftLeft);
+        runtime
+            .run_frame_at(Constraints::loose(Size::new(800., 100.)), now)
+            .unwrap();
+        let mut shift =
+            KeyboardEvent::key_down(KeyboardKey::Named(NamedKey::Shift), Code::ShiftLeft);
         let _ = runtime.handle_input_at(InputEvent::Key(shift.clone()), now);
 
         let _ = runtime.handle_raw_pointer_event(
             RawPointerEvent::new(
-                1, 2, PointerDeviceKind::Touch, PRIMARY_POINTER_BUTTON,
-                Offset::new(16., 7.), PointerPhase::Down, now,
-            ).with_button(Some(PRIMARY_POINTER_BUTTON)),
+                1,
+                2,
+                PointerDeviceKind::Touch,
+                PRIMARY_POINTER_BUTTON,
+                Offset::new(16., 7.),
+                PointerPhase::Down,
+                now,
+            )
+            .with_button(Some(PRIMARY_POINTER_BUTTON)),
         );
         assert_eq!(controller.selection(), initial, "{platform:?} pressed");
         assert!(changes.borrow().is_empty(), "{platform:?} pressed");
@@ -455,9 +464,15 @@ fn a_mobile_shift_tap_uses_the_modifiers_captured_at_press() {
         let _ = runtime.handle_input_at(InputEvent::Key(shift), now + Duration::from_millis(60));
         let _ = runtime.handle_raw_pointer_event(
             RawPointerEvent::new(
-                1, 2, PointerDeviceKind::Touch, 0, Offset::new(16., 7.),
-                PointerPhase::Up, now + Duration::from_millis(80),
-            ).with_button(Some(PRIMARY_POINTER_BUTTON)),
+                1,
+                2,
+                PointerDeviceKind::Touch,
+                0,
+                Offset::new(16., 7.),
+                PointerPhase::Up,
+                now + Duration::from_millis(80),
+            )
+            .with_button(Some(PRIMARY_POINTER_BUTTON)),
         );
         let expected = TextSelection::new(anchor, 1);
         assert_eq!(controller.selection(), expected, "{platform:?} released");
@@ -489,13 +504,21 @@ fn ios_mouse_places_a_precise_caret_only_after_a_confirmed_tap() {
     let mut runtime = Runtime::new(editor.into()).unwrap();
     runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
     let now = Instant::now();
-    runtime.run_frame_at(Constraints::loose(Size::new(800., 100.)), now).unwrap();
+    runtime
+        .run_frame_at(Constraints::loose(Size::new(800., 100.)), now)
+        .unwrap();
     let mut button = |id, phase, ms| {
         let _ = runtime.handle_raw_pointer_event(
             RawPointerEvent::new(
-                id, 3, PointerDeviceKind::Mouse, u32::from(phase == PointerPhase::Down),
-                Offset::new(58., 7.), phase, now + Duration::from_millis(ms),
-            ).with_button(Some(PRIMARY_POINTER_BUTTON)),
+                id,
+                3,
+                PointerDeviceKind::Mouse,
+                u32::from(phase == PointerPhase::Down),
+                Offset::new(58., 7.),
+                phase,
+                now + Duration::from_millis(ms),
+            )
+            .with_button(Some(PRIMARY_POINTER_BUTTON)),
         );
     };
     button(1, PointerPhase::Down, 0);
@@ -510,5 +533,181 @@ fn ios_mouse_places_a_precise_caret_only_after_a_confirmed_tap() {
     button(2, PointerPhase::Up, 780);
     let caret = TextSelection::collapsed(4);
     assert_eq!(controller.selection(), caret);
-    assert_eq!(changes.borrow().as_slice(), &[(caret, SelectionChangedCause::Tap)]);
+    assert_eq!(
+        changes.borrow().as_slice(),
+        &[(caret, SelectionChangedCause::Tap)]
+    );
+}
+
+#[test]
+fn long_press_uses_platform_focus_and_opens_the_toolbar_only_on_release() {
+    use SelectionChangedCause::{LongPress, Tap};
+    use incular_config::TargetPlatform;
+
+    let Some(style) = ahem_style() else {
+        return;
+    };
+    let constraints = Constraints::tight(Size::new(300., 50.));
+    for (platform, initially_focused) in [
+        (TargetPlatform::Ios, true),
+        (TargetPlatform::MacOs, true),
+        (TargetPlatform::Ios, false),
+        (TargetPlatform::Android, false),
+        (TargetPlatform::Fuchsia, false),
+        (TargetPlatform::Linux, false),
+        (TargetPlatform::Windows, false),
+    ] {
+        let controller = TextEditingController::with_text("alpha beta gamma");
+        let changes = Rc::new(RefCell::new(Vec::new()));
+        let editor = EditableText::new(controller.clone())
+            .platform_tap_selection(true)
+            .autofocus(initially_focused)
+            .text_direction(TextDirection::Ltr)
+            .style(style.clone())
+            .context_menu_builder(|_, _| SizedBox::square(10.).into())
+            .on_selection_changed({
+                let changes = changes.clone();
+                move |selection, cause| changes.borrow_mut().push((selection, cause))
+            });
+        let mut runtime = Runtime::new(editor.into()).unwrap();
+        runtime.set_text_target_platform(platform);
+        let start = Instant::now();
+        runtime.run_frame_at(constraints, start).unwrap();
+        controller.set_selection(TextSelection::collapsed(0));
+        runtime
+            .run_frame_at(constraints, start + Duration::from_millis(1))
+            .unwrap();
+        assert_eq!(
+            runtime.focused_element().is_some(),
+            initially_focused,
+            "{platform:?}"
+        );
+        changes.borrow_mut().clear();
+
+        let send = |runtime: &mut Runtime, phase, milliseconds| {
+            let _ = runtime.handle_raw_pointer_event(
+                RawPointerEvent::new(
+                    1,
+                    1,
+                    PointerDeviceKind::Touch,
+                    u32::from(phase == PointerPhase::Down),
+                    Offset::new(100., 7.),
+                    phase,
+                    start + Duration::from_millis(milliseconds),
+                )
+                .with_button(Some(PRIMARY_POINTER_BUTTON)),
+            );
+        };
+        send(&mut runtime, PointerPhase::Down, 10);
+        runtime
+            .run_frame_at(constraints, start + Duration::from_millis(509))
+            .unwrap();
+        let caret_at_press = TextSelection::collapsed(7);
+        let desktop = matches!(
+            platform,
+            TargetPlatform::MacOs | TargetPlatform::Linux | TargetPlatform::Windows
+        );
+        if desktop {
+            // The desktop builder places a precise caret via tap-down.
+            assert_eq!(*changes.borrow(), [(caret_at_press, Tap)], "{platform:?}");
+        } else {
+            assert!(changes.borrow().is_empty(), "{platform:?}");
+        }
+        if platform == TargetPlatform::MacOs {
+            // Move the caret before the long-press deadline so the subsequent
+            // selectPositionAt is observable even though it uses the same point.
+            controller.set_selection(TextSelection::collapsed(0));
+        }
+        changes.borrow_mut().clear();
+        runtime
+            .run_frame_at(constraints, start + Duration::from_millis(510))
+            .unwrap();
+        let field = runtime.focused_element().unwrap();
+        let menu = runtime.tree().text_field_context_menu(field).unwrap();
+        assert!(!menu.is_showing(), "{platform:?}");
+        let selection = if initially_focused {
+            TextSelection::collapsed(7)
+        } else {
+            TextSelection::new(6, 10)
+        };
+        assert_eq!(controller.selection(), selection, "{platform:?}");
+        assert_eq!(*changes.borrow(), [(selection, LongPress)], "{platform:?}");
+        send(&mut runtime, PointerPhase::Up, 2010);
+        assert!(menu.is_showing(), "{platform:?}");
+        assert_eq!(*changes.borrow(), [(selection, LongPress)], "{platform:?}");
+    }
+}
+
+#[test]
+fn scrolling_out_a_pending_ios_long_press_disposes_its_editor() {
+    use incular_widgets::{Directionality, ListView, ScrollController, Widget, internal::Key};
+
+    let scroll = ScrollController::new();
+    let key = Key::from(501_u64);
+    let controller = TextEditingController::with_text("alpha beta gamma");
+    let view = ListView::builder(200, {
+        let key = key.clone();
+        let controller = controller.clone();
+        move |index| {
+            if index == 0 {
+                Widget::from(
+                    EditableText::new(controller.clone())
+                        .platform_tap_selection(true)
+                        .text_direction(TextDirection::Ltr)
+                        .context_menu_builder(|_, _| SizedBox::square(12.).into()),
+                )
+                .with_key(key.clone())
+            } else {
+                SizedBox::new().height(50.).into()
+            }
+        }
+    })
+    .add_automatic_keep_alives(false)
+    .cache_extent(0.)
+    .item_extent(50.)
+    .controller(scroll.clone());
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, view).into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    let bounds = Constraints::tight(Size::new(300., 120.));
+    let start = Instant::now();
+    runtime.run_frame_at(bounds, start).unwrap();
+    let field = runtime
+        .tree()
+        .text_field_at(Offset::new(100., 25.))
+        .unwrap();
+    let row = runtime.tree().element_with_key(&key).unwrap();
+    let menu = runtime.tree().text_field_context_menu(field).unwrap();
+    let initial = controller.selection();
+    let send = |runtime: &mut Runtime, phase, milliseconds| {
+        let _ = runtime.handle_raw_pointer_event(
+            RawPointerEvent::new(
+                1,
+                1,
+                PointerDeviceKind::Touch,
+                u32::from(phase == PointerPhase::Down),
+                Offset::new(100., 25.),
+                phase,
+                start + Duration::from_millis(milliseconds),
+            )
+            .with_button(Some(PRIMARY_POINTER_BUTTON)),
+        );
+    };
+    send(&mut runtime, PointerPhase::Down, 1);
+    runtime
+        .run_frame_at(bounds, start + Duration::from_millis(201))
+        .unwrap();
+    assert_eq!(controller.selection(), initial);
+    assert!(scroll.jump_to(8000.));
+    runtime
+        .run_frame_at(bounds, start + Duration::from_millis(202))
+        .unwrap();
+    assert!(!runtime.tree().element_exists(row));
+    assert!(!runtime.tree().element_exists(field));
+    runtime
+        .run_frame_at(bounds, start + Duration::from_millis(601))
+        .unwrap();
+    send(&mut runtime, PointerPhase::Up, 602);
+    assert!(runtime.focused_element().is_none());
+    assert_eq!(controller.selection(), initial);
+    assert!(!menu.is_showing());
 }

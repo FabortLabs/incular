@@ -4658,3 +4658,7 @@ packages/flutter/test/widgets/text_selection_test.dart	405	a long press from a m
 packages/flutter/test/widgets/text_selection_test.dart	423	a touch drag is recognized for text selection	paired-match	upstream-text-selection-gestures.md
 packages/flutter/test/widgets/text_selection_test.dart	445	a mouse drag is recognized for text selection	paired-match	upstream-text-selection-gestures.md
 packages/flutter/test/widgets/text_selection_test.dart	470	a slow mouse drag is still recognized for text selection	paired-match	upstream-text-selection-gestures.md
+packages/flutter/test/widgets/text_selection_test.dart	497	test TextSelectionGestureDetectorBuilder long press on Apple Platforms - focused renderEditable	paired-match	upstream-text-selection-gestures.md#long-press-in-a-mounted-editor
+packages/flutter/test/widgets/text_selection_test.dart	520	test TextSelectionGestureDetectorBuilder long press on iOS - renderEditable not focused	paired-match	upstream-text-selection-gestures.md#long-press-in-a-mounted-editor
+packages/flutter/test/widgets/text_selection_test.dart	538	test TextSelectionGestureDetectorBuilder long press on non-Apple Platforms	paired-match	upstream-text-selection-gestures.md#long-press-in-a-mounted-editor
+packages/flutter/test/widgets/text_selection_test.dart	558	does not crash when long press is cancelled after unmounting	paired-match	upstream-text-selection-gestures.md#long-press-in-a-mounted-editor

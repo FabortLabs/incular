@@ -33,3 +33,21 @@ and still allows the normal tap. The mounted native regression covers
 both branches. The raw arena remembers the first eager acceptance while
 other Down contenders join, then settles it before later samples. This
 probe adds behavior coverage without incrementing the upstream case count.
+
+## Long press in a mounted editor
+
+Pinned registrations :497, :520, :538, and :558 passed all eight Flutter
+variants. In the mounted native counterpart, focused iOS and macOS select
+the precise caret; an unfocused iOS editor and the Android, Fuchsia,
+Linux, and Windows variants select the word. The test waits across the
+500 ms recognition boundary, observes the selection cause, and verifies
+that the toolbar opens on release, not while the finger is still down.
+Desktop tap-down's prior selection is distinct from the hold. The macOS
+case moves that caret before the recognition deadline so the long-press
+selection is observable even when the original press coordinate does not move.
+
+For :558, a touch Down remains below the deadline while the scroll
+controller jumps to 8,000 logical pixels. Both the first row and its
+editor are disposed. Crossing the former deadline and releasing the
+contact leaves focus, the editing value, and the old toolbar unchanged.
+The comparison covers framework behavior, not OS toolbar presentation.
