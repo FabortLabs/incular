@@ -882,3 +882,53 @@ fn repeating_a_host_value_after_blur_does_not_reopen_the_keyboard_or_refocus() {
     assert!(controls.take_platform_calls().is_empty());
     assert_eq!(controller.text(), "a");
 }
+
+#[test]
+fn persian_keyboard_updates_move_the_rtl_caret_left_even_after_trailing_space() {
+    let text = TextEditingController::new();
+    let node = FocusNode::new();
+    let bounds = Constraints::tight(Size::new(800., 600.));
+    let mut runtime = Runtime::new(
+        EditableText::new(text.clone())
+            .focus_node(node.clone())
+            .text_direction(TextDirection::Rtl)
+            .autofocus(true)
+            .into(),
+    )
+    .unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    runtime.run_frame(bounds).unwrap();
+    let client = attached(&mut runtime);
+    let editor = runtime.focused_element().unwrap();
+    let mut positions = Vec::new();
+    for content in ["گ", "گی", "گیگ", "گیگ "] {
+        let utf16 = content.encode_utf16().count();
+        let editing = json!({
+            "text": content,
+            "selectionBase": utf16,
+            "selectionExtent": utf16,
+            "selectionAffinity": "TextAffinity.downstream",
+            "composingBase": -1,
+            "composingExtent": -1,
+        });
+        assert_eq!(
+            runtime
+                .handle_flutter_text_input_editing_call(&update(json!(client.get()), editing))
+                .unwrap(),
+            Some(true)
+        );
+        runtime.run_frame(bounds).unwrap();
+        assert!(node.has_primary_focus());
+        assert_eq!(text.selection(), TextSelection::collapsed(content.len()));
+        let caret = runtime
+            .tree()
+            .editable_local_caret_rect(editor, text.selection().extent, text.caret_affinity())
+            .unwrap();
+        positions.push(caret.origin.x);
+    }
+    assert_eq!(text.text(), "گیگ ");
+    assert!(
+        positions.windows(2).all(|edge| edge[1] < edge[0]),
+        "{positions:?}"
+    );
+}

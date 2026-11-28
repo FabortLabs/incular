@@ -79,3 +79,15 @@ now apply the same wrapped horizontal bound. The single-line path
 still allows horizontal scrolling. All 30 focused native cases
 passed, including the Ahem-backed IME geometry beforehand and after
 the retained cursor change.
+
+## Persian IME input and trailing space
+
+Pinned `widgets/editable_text_test.dart:586` passed. The native
+runtime accepts the same four updates on a mounted RTL Android
+editor, through its TextInputClient channel with UTF-16 offsets
+1, 2, 3 and 4. Each resulting local painted caret position is
+strictly left of the previous one, including the final space.
+Focus is retained and the controller preserves the full `گیگ `
+value. The test compares direction of motion, not particular
+glyph advances across renderers. Sixteen channel tests and two
+native caret geometry checks with the pinned Ahem font passed.
