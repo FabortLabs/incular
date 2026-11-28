@@ -111,7 +111,16 @@ impl HardwareKeyboardState {
     }
 }
 
-type Handler = Rc<dyn Fn(&KeyboardEvent) -> bool>;
+/// Whether a hardware callback observes supplied input or a missing
+/// modifier transition reconstructed from an explicitly raw-only packet.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HardwareKeyOrigin {
+    #[default]
+    Supplied,
+    LegacyModifierReconciliation,
+}
+
+type Handler = Rc<dyn Fn(&KeyboardEvent, HardwareKeyOrigin) -> bool>;
 
 #[derive(Default)]
 struct HandlerRegistry {
@@ -142,6 +151,14 @@ impl HardwareKeyHandlers {
         &self,
         handler: impl Fn(&KeyboardEvent) -> bool + 'static,
     ) -> HardwareKeySubscription {
+        self.add_with_origin(move |event, _| handler(event))
+    }
+
+    /// Adds a callback that can distinguish supplied from reconstructed keys.
+    pub fn add_with_origin(
+        &self,
+        handler: impl Fn(&KeyboardEvent, HardwareKeyOrigin) -> bool + 'static,
+    ) -> HardwareKeySubscription {
         let mut registry = self.registry.borrow_mut();
         let sequence = registry.sequence;
         registry.sequence = sequence
@@ -157,10 +174,19 @@ impl HardwareKeyHandlers {
     /// Dispatches over a snapshot without holding a borrow during callbacks.
     #[must_use]
     pub fn dispatch(&self, event: &KeyboardEvent) -> HardwareKeyDispatch {
+        self.dispatch_with_origin(event, HardwareKeyOrigin::Supplied)
+    }
+
+    #[must_use]
+    pub fn dispatch_with_origin(
+        &self,
+        event: &KeyboardEvent,
+        origin: HardwareKeyOrigin,
+    ) -> HardwareKeyDispatch {
         let snapshot = self.registry.borrow().handlers.clone();
         let mut report = HardwareKeyDispatch::default();
         for (_, handler) in snapshot.iter() {
-            match catch_unwind(AssertUnwindSafe(|| handler(event))) {
+            match catch_unwind(AssertUnwindSafe(|| handler(event, origin))) {
                 Ok(handled) => report.handled |= handled,
                 Err(payload) => report.failures.push(payload),
             }

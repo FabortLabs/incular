@@ -134,7 +134,7 @@ fn windows_reconciles_exact_sides_or_both_for_a_generic_only_mask() {
         .into()
     );
     assert!(
-        !runtime
+        runtime
             .hardware_keyboard()
             .is_physical_key_pressed(Code::ShiftLeft)
     );

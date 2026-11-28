@@ -6,7 +6,10 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use incular_core::{KeyboardEvent, LogicalKeyboardKey, PhysicalKeyboardKey};
+use incular_core::{
+    Code, HardwareKeyboardState, KeyState, KeyboardEvent, KeyboardKey, Location,
+    LogicalKeyboardKey, NamedKey, PhysicalKeyboardKey,
+};
 use incular_widgets::{
     RawKeyDelivery, RawKeyEvent, RawKeyPlatformData, RawKeyboardListenerError, RawKeyboardModifier,
     RawKeyboardSide,
@@ -238,6 +241,36 @@ impl LegacyRawKeyboardState {
         }
     }
 
+    /// Project only known modifiers: unfamiliar legacy physical IDs
+    /// cannot be represented faithfully by one portable Unidentified code.
+    pub(crate) fn modifier_corrections(
+        &self,
+        hardware: &HardwareKeyboardState,
+        main: &KeyboardEvent,
+    ) -> Vec<KeyboardEvent> {
+        let mut corrections = Vec::new();
+        for state in [KeyState::Up, KeyState::Down] {
+            for &(physical, code, key, location) in MODIFIER_PROJECTION {
+                if code == main.code {
+                    continue;
+                }
+                let wanted = self.pressed.contains_key(&usb(physical));
+                if wanted == state.is_down() && hardware.is_physical_key_pressed(code) != wanted {
+                    corrections.push(KeyboardEvent {
+                        key: KeyboardKey::Named(key),
+                        code,
+                        location,
+                        state,
+                        modifiers: main.modifiers,
+                        repeat: false,
+                        is_composing: false,
+                    });
+                }
+            }
+        }
+        corrections
+    }
+
     fn set_modifier(&mut self, (physical, logical): (u64, LogicalKeyboardKey), down: bool) {
         if down {
             self.pressed.insert(physical, logical);
@@ -250,3 +283,73 @@ impl LegacyRawKeyboardState {
 const fn usb(key: PhysicalKeyboardKey) -> u64 {
     key.usb_hid_usage() as u64
 }
+
+use PhysicalKeyboardKey as Physical;
+const MODIFIER_PROJECTION: &[(Physical, Code, NamedKey, Location)] = &[
+    (
+        Physical::SHIFT_LEFT,
+        Code::ShiftLeft,
+        NamedKey::Shift,
+        Location::Left,
+    ),
+    (
+        Physical::SHIFT_RIGHT,
+        Code::ShiftRight,
+        NamedKey::Shift,
+        Location::Right,
+    ),
+    (
+        Physical::CONTROL_LEFT,
+        Code::ControlLeft,
+        NamedKey::Control,
+        Location::Left,
+    ),
+    (
+        Physical::CONTROL_RIGHT,
+        Code::ControlRight,
+        NamedKey::Control,
+        Location::Right,
+    ),
+    (
+        Physical::ALT_LEFT,
+        Code::AltLeft,
+        NamedKey::Alt,
+        Location::Left,
+    ),
+    (
+        Physical::ALT_RIGHT,
+        Code::AltRight,
+        NamedKey::Alt,
+        Location::Right,
+    ),
+    (
+        Physical::META_LEFT,
+        Code::MetaLeft,
+        NamedKey::Meta,
+        Location::Left,
+    ),
+    (
+        Physical::META_RIGHT,
+        Code::MetaRight,
+        NamedKey::Meta,
+        Location::Right,
+    ),
+    (
+        Physical::CAPS_LOCK,
+        Code::CapsLock,
+        NamedKey::CapsLock,
+        Location::Standard,
+    ),
+    (
+        Physical::NUM_LOCK,
+        Code::NumLock,
+        NamedKey::NumLock,
+        Location::Numpad,
+    ),
+    (
+        Physical::SCROLL_LOCK,
+        Code::ScrollLock,
+        NamedKey::ScrollLock,
+        Location::Standard,
+    ),
+];

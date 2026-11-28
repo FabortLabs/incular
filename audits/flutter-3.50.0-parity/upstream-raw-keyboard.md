@@ -43,10 +43,31 @@ Fuchsia specifies the exact side(s). A Web mask with no known side
 defaults to left but preserves a right side already present.
 Release uses the physical identity even if the logical layout
 changes. The reconciled state is visible separately from modern
-hardware state; no synthetic hardware key presses are sent.
+hardware state. Paired messages retain their independently supplied
+modern events (see the raw-only projection below).
 
 Adjacent native controls cover right Alt reported as AltGraph and
 CapsLock remapped to a regular logical key. The original
 browser-only registrations for those scenarios are not counted here.
 This check replays framework packets rather than using Fuchsia or
 browser hardware.
+
+## Raw-only modifier projection into hardware callbacks
+
+The pinned `hardware_keyboard_test.dart:139` passes on Linux
+using its Android packet branch. The independent
+`raw_keyboard_manager_modifiers_test.dart` probe exercises
+both raw-only and typed-then-raw Web packets on the pinned
+framework. The native tests use the same Web fields and
+distinguish the origin of each modern callback. Only raw-only
+input emits ShiftLeft before A and the corresponding ShiftLeft
+release before A's release. Passive raw listeners get only the
+actual A packet. Paired input uses the supplied typed A and
+does not infer another hardware key from its legacy flags.
+
+The original registration is partial, not counted as paired:
+the exact Android branch ran only on the reference, and the Web
+branch is verified through an authored packet replay, not via a
+browser test runner. The reconstructed events in this step reach
+global hardware handlers; focus batch delivery is tracked
+separately.

@@ -46,7 +46,7 @@ fn fuchsia_pressed_keys_adopt_and_clear_sided_packet_modifiers() {
         Some(L::SHIFT_LEFT)
     );
     assert!(
-        !runtime
+        runtime
             .hardware_keyboard()
             .is_physical_key_pressed(Code::ShiftLeft)
     );

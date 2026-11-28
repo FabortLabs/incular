@@ -74,7 +74,7 @@ pub use geometry::{
     Transform, finite_non_negative, finite_or_zero,
 };
 pub use hardware_keyboard::{
-    HardwareKeyDispatch, HardwareKeyHandlers, HardwareKeySubscription, HardwareKeyboardState,
+    HardwareKeyDispatch, HardwareKeyHandlers, HardwareKeyOrigin, HardwareKeySubscription, HardwareKeyboardState,
     IrregularKeyEvent,
 };
 pub use id::IdGenerator;

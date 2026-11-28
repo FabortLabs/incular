@@ -29,4 +29,5 @@ the IME down or its ordinary virtual-key release, and confirms the
 claimed handled result. Suppression is tracked by physical scan
 identity rather than logical key, and does not ignore unrelated keys
 or an actually delivered typed packet. Duplicate raw downs report
-repeat until release; no extra hardware modifier events are emitted.
+repeat until release. Only explicitly raw-only packets can reconstruct
+missing modifier transitions; independently supplied typed packets do not.

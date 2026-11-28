@@ -26,7 +26,7 @@ use incular_config::{Constraints, RuntimeEnvironment, TargetPlatform};
 use incular_core::IdGenerator;
 use incular_core::time::Instant;
 use incular_core::{
-    Code, ImeEvent, InputEvent, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
+    Code, HardwareKeyOrigin, ImeEvent, InputEvent, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
     PointerSampleMetadata, Rect, Size,
 };
 use incular_platform::{
@@ -4199,6 +4199,16 @@ impl Runtime {
         self.hardware_key_handlers.add(handler)
     }
 
+    /// Adds a hardware handler receiving the origin of the key transition.
+    /// Raw-only packets can reconstruct missing modifier events; paired
+    /// and portable events retain their supplied origin.
+    pub fn add_hardware_key_handler_with_origin(
+        &self,
+        handler: impl Fn(&KeyboardEvent, HardwareKeyOrigin) -> bool + 'static,
+    ) -> incular_core::HardwareKeySubscription {
+        self.hardware_key_handlers.add_with_origin(handler)
+    }
+
     /// Reports caught hardware-key callback failures with their original
     /// panic payload and input event. Other callbacks and pressed-state
     /// bookkeeping continue. Without a reporter, failures are logged.
@@ -4365,22 +4375,14 @@ impl Runtime {
         self.dispatch_keyboard_event_parts(event, source, KeyMessageSource::Portable)
     }
 
-    fn dispatch_keyboard_event_parts(
-        &mut self,
-        event: KeyboardEvent,
-        source: KeyboardInputSource,
-        message_source: KeyMessageSource<'_>,
-    ) -> bool {
-        if source == KeyboardInputSource::Physical {
-            FocusHighlightManager::new().note_keyboard_input();
-        }
+    fn observe_hardware_key_state(&mut self, event: &KeyboardEvent) {
         if let Some(debug) = &self.keyboard_event_debug_listener {
             debug(&format!("KEYBOARD: Key event received: {event:?}"));
             debug(&format!(
                 "KEYBOARD: Pressed state before processing the event: {:?}",
                 self.hardware_keyboard
             ));
-            let irregularity = self.hardware_keyboard.observe_checked(&event);
+            let irregularity = self.hardware_keyboard.observe_checked(event);
             if let Some(irregularity) = irregularity {
                 debug(&format!("KEYBOARD: ERROR: {irregularity:?}: {event:?}"));
             }
@@ -4389,9 +4391,9 @@ impl Runtime {
                 self.hardware_keyboard
             ));
         } else {
-            self.hardware_keyboard.observe(&event);
+            self.hardware_keyboard.observe(event);
         }
-        self.track_keyboard_modifiers(&event);
+        self.track_keyboard_modifiers(event);
         // Widgets that show held modifiers (menu accelerator underlines)
         // rebuild when one is pressed or released.
         if matches!(
@@ -4412,6 +4414,44 @@ impl Runtime {
         } else {
             self.editing_diagnostics.key_up_received += 1;
         }
+    }
+
+    fn dispatch_hardware_callbacks(&self, event: &KeyboardEvent, origin: HardwareKeyOrigin) -> bool {
+        let hardware = self.hardware_key_handlers.dispatch_with_origin(event, origin);
+        for failure in hardware.failures {
+            if let Some(handler) = &self.hardware_key_error_handler {
+                handler(HardwareKeyHandlerError {
+                    event: event.clone(),
+                    payload: failure,
+                });
+                continue;
+            }
+            let message = failure
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| failure.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("non-string hardware key handler panic");
+            tracing::error!(?event, %message, "hardware key handler failed");
+        }
+        hardware.handled
+    }
+
+    fn dispatch_keyboard_event_parts(
+        &mut self,
+        event: KeyboardEvent,
+        source: KeyboardInputSource,
+        message_source: KeyMessageSource<'_>,
+    ) -> bool {
+        if source == KeyboardInputSource::Physical {
+            FocusHighlightManager::new().note_keyboard_input();
+        }
+        let raw_platform_only = matches!(
+            message_source,
+            KeyMessageSource::Raw(raw) if raw.data().is_some()
+        );
+        if !raw_platform_only {
+            self.observe_hardware_key_state(&event);
+        }
 
         // A FocusNode may be requested by application code or a FocusScopeNode
         // without going through runtime pointer/Tab handling. Adopt that
@@ -4428,24 +4468,19 @@ impl Runtime {
             self.report_raw_keyboard_error(error);
         });
 
-        let hardware = self.hardware_key_handlers.dispatch(&event);
-        for failure in hardware.failures {
-            if let Some(handler) = &self.hardware_key_error_handler {
-                handler(HardwareKeyHandlerError {
-                    event: event.clone(),
-                    payload: failure,
-                });
-                continue;
+        let mut hardware_handled = false;
+        if raw_platform_only {
+            for correction in self.legacy_raw_keyboard.modifier_corrections(&self.hardware_keyboard, &event) {
+                self.observe_hardware_key_state(&correction);
+                hardware_handled |= self.dispatch_hardware_callbacks(
+                    &correction, HardwareKeyOrigin::LegacyModifierReconciliation,
+                );
             }
-            let message = failure
-                .downcast_ref::<&str>()
-                .copied()
-                .or_else(|| failure.downcast_ref::<String>().map(String::as_str))
-                .unwrap_or("non-string hardware key handler panic");
-            tracing::error!(?event, %message, "hardware key handler failed");
+            self.observe_hardware_key_state(&event);
         }
+        hardware_handled |= self.dispatch_hardware_callbacks(&event, HardwareKeyOrigin::Supplied);
         if !matches!(self.key_message_route, KeyMessageRoute::Focus) {
-            let mut handled = hardware.handled;
+            let mut handled = hardware_handled;
             if let KeyMessageRoute::Custom(callback) = &self.key_message_route {
                 let message = message_source.into_message(event);
                 match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(&message))) {
@@ -4508,7 +4543,7 @@ impl Runtime {
             }
             None => {}
         }
-        if hardware.handled
+        if hardware_handled
             || focus_result == KeyEventResult::Handled
             || late_result == KeyEventResult::Handled
         {
