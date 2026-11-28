@@ -49,3 +49,14 @@ bubbling delta from the original offset after synchronous callbacks.
 The native baseline failed the second delta; all ten focused native
 checks passed after the repair. The authored case adds no upstream
 registration.
+
+## Scroll controller lifetime events
+
+Pinned `widgets/scroll_controller_test.dart:412` passed. Each
+debug-mode controller now publishes one creation and one final
+disposal with the same identity. Cloning and dropping one of its
+handles do not create or dispose a second object; a later controller
+has a different identity. The tracking field is absent in release
+builds. The native baseline had emitted no ScrollController event;
+all 33 focused native allocation, attachment and activity checks
+passed after adding lifetime tracking.

@@ -132,6 +132,11 @@ impl Default for ScrollController {
         let state = ScrollState {
             scrollbar_thumb_visibility: false,
             keep_scroll_offset: true,
+            #[cfg(debug_assertions)]
+            _allocation: Some(incular_core::memory::allocations::ObjectLifetime::new(
+                "widgets",
+                "ScrollController",
+            )),
             ..ScrollState::default()
         };
         Self::from_shared_position(
@@ -250,6 +255,8 @@ pub(crate) struct ScrollState {
     /// A ballistic velocity handed to this position by a delegate, started
     /// by the owning viewport on its next frame.
     pub(crate) pending_ballistic: Option<(f32, crate::physics::ScrollPhysics)>,
+    #[cfg(debug_assertions)]
+    _allocation: Option<incular_core::memory::allocations::ObjectLifetime>,
 }
 
 impl ScrollState {
