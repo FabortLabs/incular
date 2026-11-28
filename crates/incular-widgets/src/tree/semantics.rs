@@ -3209,7 +3209,7 @@ impl WidgetTree {
         let semantic = self.semantics.node(node)?;
         // Test the world AABB before reconstructing the local coordinates.
         if !semantic.bounds.contains(position) {
-            return None;
+            return self.semantic_portal_children_at(semantic, position, action);
         }
         let Some(element) = self.element_for_semantic_node(node) else {
             // A synthetic semantics-only container has no local render box
@@ -3231,7 +3231,7 @@ impl WidgetTree {
             && local.y >= bounds.origin.y
             && local.y < bounds.origin.y + bounds.size.height)
         {
-            return None;
+            return self.semantic_portal_children_at(semantic, position, action);
         }
 
         if let Some(child) =
@@ -3249,6 +3249,18 @@ impl WidgetTree {
                 .then_some(node),
             _ => Some(node),
         }
+    }
+
+    fn semantic_portal_children_at(
+        &self,
+        semantic: &SemanticNode,
+        position: Offset,
+        action: &SemanticAction,
+    ) -> Option<SemanticNodeId> {
+        if !semantic.state.hit_test_children_outside_bounds {
+            return None;
+        }
+        self.semantic_action_in_children(Some(semantic.id), &semantic.children, position, action)
     }
 
     fn fitted_children_have_no_semantic_geometry(&self, entry: &Element) -> bool {

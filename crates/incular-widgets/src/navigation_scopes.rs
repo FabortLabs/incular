@@ -238,9 +238,17 @@ impl From<OverlayPortal> for Widget {
                 .fit(incular_config::StackFit::Passthrough)
                 .clip_behavior(incular_config::Clip::None)
                 .into();
-            stack.semantics(crate::internal::ExplicitSemantics::new(
-                incular_semantics::SemanticRole::GenericContainer,
-            ))
+            stack.semantics(
+                crate::internal::ExplicitSemantics::new(
+                    incular_semantics::SemanticRole::GenericContainer,
+                )
+                .state(incular_semantics::SemanticState {
+                    // The Stack sizes to the anchor, but the overlay is
+                    // placed in the owning view and can extend beyond it.
+                    hit_test_children_outside_bounds: true,
+                    ..Default::default()
+                }),
+            )
         } else {
             marker = TransientPortalMarker {
                 role: value.role,

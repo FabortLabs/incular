@@ -681,3 +681,189 @@ fn duplicate_targets_and_cycles_cannot_create_detached_native_roots() {
     assert_eq!(semantic.iter().count(), 2);
     assert!(semantic.iter().all(|(_, node)| node.children.is_empty()));
 }
+
+#[test]
+fn nested_portals_publish_world_bounds_and_dispatch_at_both_visual_positions() {
+    use incular_config::Alignment;
+    use incular_core::{Offset, Rect};
+    use incular_widgets::{Align, Positioned, Stack};
+
+    let calls = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let build = |b: Offset| {
+        let calls = calls.clone();
+        let button = move |label: &'static str| {
+            let calls = calls.clone();
+            Semantics::new(SizedBox::from_size(Size::new(8., 6.)))
+                .role(Role::Button)
+                .label(label)
+                .on_tap(move || calls.borrow_mut().push(label))
+        };
+        let second = button.clone();
+        scene(Align::new(
+            Alignment::TOP_LEFT,
+            OverlayPortal::new(button("a"))
+                .presentation(TransientPresentation::Overlay)
+                .show(true)
+                .overlay_child_layout_builder(move |_, _| {
+                    let child = second.clone();
+                    let nested = OverlayPortal::new(second("b"))
+                        .presentation(TransientPresentation::Overlay)
+                        .show(true)
+                        .overlay_child_layout_builder(move |_, _| {
+                            Stack::new([Widget::from(
+                                Positioned::new(child("c")).left(110.).top(211.),
+                            )])
+                            .into()
+                        });
+                    Stack::new([Widget::from(Positioned::new(nested).left(b.x).top(b.y))]).into()
+                }),
+        ))
+    };
+    let mut runtime = Runtime::new(build(Offset::new(10., 11.))).unwrap();
+    frame(&mut runtime);
+    let ids = ["a", "b", "c"].map(|label| semantic_id(&runtime, label));
+
+    let mut accesskit = AccessKitProjection::new();
+    let mut mobile = MobileAccessibilityProjection::new();
+    let semantic = runtime.tree().semantics();
+    let desktop = accesskit.sync(semantic, 1.).unwrap().into_accesskit();
+    let consumer = Tree::new(desktop, true);
+    let mobile_nodes = mobile.sync(semantic).unwrap().nodes;
+    let points = [Offset::ZERO, Offset::new(10., 11.), Offset::new(110., 211.)];
+    for (id, point) in ids.into_iter().zip(points) {
+        let rect = Rect::from_origin_size(point, Size::new(8., 6.));
+        assert_eq!(semantic.node(id).unwrap().bounds, rect);
+        let desktop_node = consumer
+            .state()
+            .node_by_tree_local_id(NodeId(accesskit.native_node_id(id).unwrap()), TreeId::ROOT)
+            .unwrap();
+        let projected = desktop_node.bounding_box().unwrap();
+        let picked = consumer
+            .state()
+            .root()
+            .node_at_point(
+                accesskit::Point::new(f64::from(point.x + 1.), f64::from(point.y + 1.)),
+                &accesskit_consumer::common_filter_with_root_exception,
+            )
+            .unwrap();
+        assert_eq!(picked.id(), desktop_node.id());
+        assert_eq!(
+            (projected.x0, projected.y0, projected.x1, projected.y1),
+            (
+                f64::from(point.x),
+                f64::from(point.y),
+                f64::from(point.x + 8.),
+                f64::from(point.y + 6.),
+            )
+        );
+        let mobile_id = mobile.native_node_id(id).unwrap();
+        let mobile_node = mobile_nodes
+            .iter()
+            .find(|node| node.native_id == mobile_id)
+            .unwrap();
+        assert_eq!(mobile_node.semantic.bounds, rect);
+    }
+
+    for point in points {
+        assert!(
+            runtime
+                .dispatch_semantic_action_at(point + Offset::new(1., 1.), SemanticAction::Activate),
+            "point {point:?}: {}",
+            runtime.tree().semantics_debug_dump()
+        );
+    }
+    assert_eq!(*calls.borrow(), ["a", "b", "c"]);
+
+    patch(&mut runtime, build(Offset::new(45., 62.)));
+    assert_eq!(
+        ["a", "b", "c"].map(|label| semantic_id(&runtime, label)),
+        ids
+    );
+    assert_eq!(
+        runtime
+            .tree()
+            .semantics()
+            .node(ids[1])
+            .unwrap()
+            .bounds
+            .origin,
+        Offset::new(45., 62.)
+    );
+    assert_eq!(
+        runtime
+            .tree()
+            .semantics()
+            .node(ids[2])
+            .unwrap()
+            .bounds
+            .origin,
+        points[2]
+    );
+    assert!(
+        !runtime
+            .dispatch_semantic_action_at(points[1] + Offset::new(1., 1.), SemanticAction::Activate)
+    );
+    assert!(
+        runtime
+            .dispatch_semantic_action_at(points[2] + Offset::new(1., 1.), SemanticAction::Activate)
+    );
+    assert_eq!(*calls.borrow(), ["a", "b", "c", "c"]);
+
+    let semantic = runtime.tree().semantics();
+    let desktop = accesskit.sync(semantic, 1.).unwrap().into_accesskit();
+    let b_native = NodeId(accesskit.native_node_id(ids[1]).unwrap());
+    let c_native = NodeId(accesskit.native_node_id(ids[2]).unwrap());
+    let moved = desktop
+        .nodes
+        .iter()
+        .find(|(id, _)| *id == b_native)
+        .unwrap();
+    assert_eq!(
+        moved.1.bounds().unwrap(),
+        accesskit::Rect::new(45., 62., 53., 68.)
+    );
+    assert!(desktop.nodes.iter().all(|(id, _)| *id != c_native));
+    let mobile_update = mobile.sync(semantic).unwrap();
+    assert!(mobile_update.nodes.iter().any(|node| {
+        node.semantic.id == ids[1] && node.semantic.bounds.origin == Offset::new(45., 62.)
+    }));
+    assert!(
+        mobile_update
+            .nodes
+            .iter()
+            .all(|node| node.semantic.id != ids[2])
+    );
+}
+
+#[test]
+fn an_ordinary_semantic_parent_still_masks_point_actions_outside_its_bounds() {
+    use incular_config::{Alignment, Clip};
+    use incular_core::Offset;
+    use incular_widgets::{Align, Positioned, Stack};
+
+    let calls = Rc::new(Cell::new(0));
+    let child = Semantics::new(SizedBox::from_size(Size::new(8., 6.)))
+        .label("outside")
+        .on_tap({
+            let calls = calls.clone();
+            move || calls.set(calls.get() + 1)
+        });
+    let layout = Stack::new([
+        SizedBox::from_size(Size::new(8., 6.)).into(),
+        Widget::from(Positioned::new(child).left(110.).top(211.)),
+    ])
+    .clip_behavior(Clip::None);
+    let ordinary = Semantics::new(layout)
+        .label("ordinary parent")
+        .container(true)
+        .explicit_child_nodes(true);
+    let mut runtime = Runtime::new(scene(Align::new(Alignment::TOP_LEFT, ordinary))).unwrap();
+    frame(&mut runtime);
+    let target = semantic_id(&runtime, "outside");
+    assert!(
+        !runtime.dispatch_semantic_action_at(Offset::new(111., 212.), SemanticAction::Activate)
+    );
+    assert_eq!(calls.get(), 0);
+    assert!(runtime.dispatch_semantic_action(target, SemanticAction::Activate));
+    assert_eq!(calls.get(), 1);
+}

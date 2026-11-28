@@ -19,8 +19,8 @@ Four pinned Flutter cases have equivalent retained comparisons in
   update, replacing one named custom action dirties only that node, keeps
   its native identity, and rejects the old action in both adapters.
 
-The engine traversal matrices for nested portals (:194) still have
-no paired native wire comparison. Attributed speech spans (:95) are
+Nested overlay world bounds and point routing (:194) are covered below.
+The engine traversal matrix wire format is not paired. Attributed speech spans (:95) are
 tracked separately. The unresolved traversal parent (:271) is now
 paired below. This slice validates update data and the real
 AccessKit consumer, not native assistive-technology speech.
@@ -71,6 +71,22 @@ last named link restores ordinary ancestry. A cycle or duplicate
 target name cannot create orphaned native roots. Ordinary trees do
 not run the named traversal pass.
 
-The nested OverlayPortal matrix original (:194) passed on pinned
-Flutter but remains unpaired. The Incular adapters publish world bounds
-rather than that engine's per-node traversal matrix.
+## Point actions in nested overlays
+
+The pinned :194 matrix original passed, as did the authored
+`nested_overlay_semantic_points_test.dart`. Flutter routes taps to the
+three controls at view positions (0,0), (10,11), and (110,211).
+
+Incular's native projections already reported the right world bounds,
+but its point-action lookup clipped both popup branches to the small
+anchor rectangles. A portal's semantic group can now traverse its
+out-of-anchor children without changing clipping for an ordinary
+semantic parent. A round trip through the AccessKit consumer resolves
+the same controls, and the Runtime dispatches their real callbacks.
+Moving the middle anchor keeps all three semantic IDs, moves only the
+middle control's exported geometry, and leaves the nested content
+activatable at its fixed view position.
+
+This remains partial for :194: Incular exports world bounds rather
+than per-node Flutter engine traversal matrices. The authored point
+probe does not add an upstream registration.

@@ -621,6 +621,10 @@ pub struct SemanticState {
     pub blocked_user_actions: BlockedSemanticActions,
     /// Preferred hit policy for platforms supporting semantic overlays.
     pub hit_test_behavior: SemanticsHitTestBehavior,
+    /// Lets a layout-only semantic group traverse its popup descendants
+    /// outside its anchor geometry. Ordinary semantic parents still clip
+    /// point-action lookup to their own box.
+    pub hit_test_children_outside_bounds: bool,
     pub selected: bool,
     /// Whether selection was explicitly reported, even when false.
     pub has_selected_state: bool,
@@ -834,6 +838,7 @@ impl Default for SemanticState {
             accessibility_focus_block_type: AccessibilityFocusBlockType::None,
             blocked_user_actions: BlockedSemanticActions::default(),
             hit_test_behavior: SemanticsHitTestBehavior::Defer,
+            hit_test_children_outside_bounds: false,
             selected: false,
             has_selected_state: false,
             checked: None,

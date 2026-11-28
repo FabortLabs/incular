@@ -1096,7 +1096,7 @@ packages/flutter/test/semantics/semantics_test.dart	1345	Unicode characters in c
 packages/flutter/test/semantics/semantics_test.dart	466	updateWith marks node as dirty when customSemanticsActions changes	paired-match	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_update_test.dart	29	Semantics update does not send update for merged nodes.	paired-match	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_update_test.dart	95	Semantics update receives attributed text	partial-match	upstream-attributed-semantics.md#retained-speech-span-metadata
-packages/flutter/test/semantics/semantics_update_test.dart	194	Semantics update receives correct traversal transform with nested OverlayPortals	reference-ran-incular-open	upstream-semantic-native-updates.md
+packages/flutter/test/semantics/semantics_update_test.dart	194	Semantics update receives correct traversal transform with nested OverlayPortals	partial-match	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_update_test.dart	271	Semantics update does not leak nodes to hit-test order when traversal parent is missing	paired-match	upstream-semantic-native-updates.md#named-traversal-parents-and-missing-nodes
 packages/flutter/test/semantics/semantics_update_test.dart	308	Semantics update removes detached OverlayPortal traversal child	paired-match	upstream-semantic-native-updates.md
 packages/flutter/test/semantics/semantics_service_test.dart	12	Semantic announcement	paired-match	upstream-semantics-messages.md
