@@ -4304,7 +4304,7 @@ packages/flutter/test/widgets/interactive_viewer_test.dart	1648	trackpad pointer
 packages/flutter/test/widgets/interactive_viewer_test.dart	874	Scaling amount is equal forth and back with a mouse scroll	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom
 packages/flutter/test/widgets/interactive_viewer_test.dart	906	onInteraction can be used to get scene point	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom
 packages/flutter/test/widgets/interactive_viewer_test.dart	1579	discrete scale pointer event	paired-match	upstream-interactive-viewer-signals.md#discrete-scale-and-anchored-wheel-zoom
-packages/flutter/test/services/hardware_keyboard_test.dart	139	KeyboardManager synthesizes modifier keys in rawKeyData mode	partial-match	upstream-raw-keyboard.md#raw-only-modifier-projection-into-hardware-callbacks
+packages/flutter/test/services/hardware_keyboard_test.dart	139	KeyboardManager synthesizes modifier keys in rawKeyData mode	paired-match	upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard
 packages/flutter/test/services/raw_keyboard_test.dart	1171	modifier keys are recognized individually	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
 packages/flutter/test/services/raw_keyboard_test.dart	1204	modifier keys are recognized when combined	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
 packages/flutter/test/services/raw_keyboard_test.dart	1249	Printable keyboard keys are correctly translated	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
@@ -4317,3 +4317,7 @@ packages/flutter/test/services/raw_keyboard_test.dart	1356	Device id is read fro
 packages/flutter/test/services/raw_keyboard_test.dart	1372	Repeat count is passed correctly	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
 packages/flutter/test/services/raw_keyboard_test.dart	1436	data.toString	partial-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
 packages/flutter/test/services/raw_keyboard_test.dart	1458	data.equality	paired-match	upstream-android-raw-keyboard.md#packet-identity-modifiers-and-character-fields
+packages/flutter/test/services/raw_keyboard_test.dart	307	keysPressed modifiers are synchronized with key events on android	paired-match	upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard
+packages/flutter/test/services/raw_keyboard_test.dart	591	sided modifiers without a side set return all sides on Android	paired-match	upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard
+packages/flutter/test/services/raw_keyboard_test.dart	929	Allows inconsistent modifier for Android	paired-match	upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard
+packages/flutter/test/services/raw_keyboard_test.dart	1389	Key events are responded to correctly.	paired-match	upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard

@@ -65,11 +65,11 @@ release before A's release. Passive raw listeners get only the
 actual A packet. Paired input uses the supplied typed A and
 does not infer another hardware key from its legacy flags.
 
-The original registration is partial, not counted as paired:
-the exact Android branch ran only on the reference, and the Web
-branch is verified through an authored packet replay, not via a
-browser test runner. Reconstructed events reach global hardware
-handlers and the focus routing described below.
+The original initially remained partial while only the authored
+Web variant had a native replay. The exact Android packet now
+also pairs on Linux; see [Android dispatch](upstream-android-raw-keyboard.md#mounted-responses-held-modifiers-and-soft-keyboard).
+Reconstructed events reach global hardware handlers and the
+focus routing described below.
 
 ## One raw packet is one focus batch
 

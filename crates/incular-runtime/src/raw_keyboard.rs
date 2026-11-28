@@ -111,24 +111,28 @@ impl LegacyRawKeyboardState {
         self.pressed.clear();
     }
 
-    /// Windows sends IME-handled down events with VK_PROCESSKEY, but may
-    /// send their release with an ordinary virtual key. Pair by scan code.
-    pub(crate) fn prepare_windows(&mut self, raw: &mut RawKeyEvent) -> bool {
-        let Some(RawKeyPlatformData::Windows(data)) = raw.data() else {
-            return true;
-        };
-        let key = data.flutter_physical_key_id();
-        if raw.is_key_down() {
-            if !data.should_dispatch_key_down() {
-                self.skipped_windows.insert(key);
-                return false;
+    /// Prepares repeat from the previous physical pressed state. Windows
+    /// IME-only downs also suppress their matching physical release.
+    pub(crate) fn prepare_raw(&mut self, raw: &mut RawKeyEvent) -> bool {
+        let key = match raw.data() {
+            Some(RawKeyPlatformData::Windows(data)) => {
+                let key = data.flutter_physical_key_id();
+                if raw.is_key_down() {
+                    if !data.should_dispatch_key_down() {
+                        self.skipped_windows.insert(key);
+                        return false;
+                    }
+                    self.skipped_windows.remove(&key);
+                } else if self.skipped_windows.remove(&key) {
+                    return false;
+                }
+                key
             }
-            self.skipped_windows.remove(&key);
-            raw.set_repeat(self.pressed.contains_key(&key));
-            true
-        } else {
-            !self.skipped_windows.remove(&key)
-        }
+            Some(RawKeyPlatformData::Android(data)) => data.flutter_physical_key_id(),
+            _ => return true,
+        };
+        raw.set_repeat(raw.is_key_down() && self.pressed.contains_key(&key));
+        true
     }
 
     pub(crate) fn observe(&mut self, event: &RawKeyEvent) {
@@ -138,6 +142,9 @@ impl LegacyRawKeyboardState {
         use RawKeyboardSide as S;
         let Some(data) = event.data() else { return };
         let (physical, logical) = match data {
+            RawKeyPlatformData::Android(data) => {
+                (data.flutter_physical_key_id(), data.flutter_logical_key())
+            }
             RawKeyPlatformData::Fuchsia(data) => {
                 (data.flutter_physical_key_id(), data.flutter_logical_key())
             }
@@ -154,6 +161,7 @@ impl LegacyRawKeyboardState {
         } else {
             self.pressed.remove(&physical);
         }
+        let mut primary_modifier = None;
         for (modifier, left, right) in [
             (
                 M::Shift,
@@ -178,7 +186,16 @@ impl LegacyRawKeyboardState {
         ] {
             let left = (usb(left.0), left.1);
             let right = (usb(right.0), right.1);
+            if let Some((_, default)) = [left, right].into_iter().find(|c| c.0 == physical) {
+                primary_modifier = Some(default);
+            }
             match data {
+                RawKeyPlatformData::Android(data) => {
+                    let side = data.pressed_modifier_side(modifier);
+                    self.set_modifier(left, matches!(side, Some(S::Left | S::All)));
+                    self.set_modifier(right, matches!(side, Some(S::Right | S::All)));
+                }
+
                 RawKeyPlatformData::Fuchsia(data) => {
                     self.set_modifier(left, data.is_modifier_pressed(modifier, S::Left));
                     self.set_modifier(right, data.is_modifier_pressed(modifier, S::Right));
@@ -208,7 +225,14 @@ impl LegacyRawKeyboardState {
             (M::ScrollLock, P::SCROLL_LOCK, L::SCROLL_LOCK),
         ] {
             let key = usb(key);
+            if key == physical {
+                primary_modifier = Some(default);
+            }
             match data {
+                RawKeyPlatformData::Android(data) => {
+                    self.set_modifier((key, default), data.is_modifier_pressed(modifier, S::Any));
+                }
+
                 RawKeyPlatformData::Fuchsia(data) => {
                     self.set_modifier((key, default), data.is_modifier_pressed(modifier, S::Any));
                 }
@@ -229,8 +253,24 @@ impl LegacyRawKeyboardState {
                 _ => unreachable!("unsupported raw packets returned before modifier processing"),
             }
         }
-        if !matches!(data, RawKeyPlatformData::Fuchsia(_)) {
-            self.pressed.remove(&usb(P::FN));
+        match data {
+            RawKeyPlatformData::Android(data) => {
+                self.set_modifier(
+                    (usb(P::FN), L::FN),
+                    data.is_modifier_pressed(M::Function, S::Any),
+                );
+                // Android can omit the event's own modifier flag even on
+                // a genuine press. The physical transition remains valid.
+                if event.is_key_down()
+                    && let Some(default) = primary_modifier
+                {
+                    self.pressed.entry(physical).or_insert(default);
+                }
+            }
+            RawKeyPlatformData::Fuchsia(_) => {}
+            _ => {
+                self.pressed.remove(&usb(P::FN));
+            }
         }
         if matches!(data, RawKeyPlatformData::Web(_)) {
             // Real AltRight may represent browser AltGraph even if the
@@ -286,6 +326,7 @@ const fn usb(key: PhysicalKeyboardKey) -> u64 {
 
 use PhysicalKeyboardKey as Physical;
 const MODIFIER_PROJECTION: &[(Physical, Code, NamedKey, Location)] = &[
+    (Physical::FN, Code::Fn, NamedKey::Fn, Location::Standard),
     (
         Physical::SHIFT_LEFT,
         Code::ShiftLeft,

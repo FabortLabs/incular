@@ -4348,7 +4348,7 @@ impl Runtime {
                 self.dispatch_keyboard_event_parts(event, source, KeyMessageSource::Typed)
             }
             KeyMessage::Raw(mut raw) => {
-                !self.legacy_raw_keyboard.prepare_windows(&mut raw)
+                !self.legacy_raw_keyboard.prepare_raw(&mut raw)
                     || self.dispatch_keyboard_event_parts(
                         raw.portable().clone(),
                         source,
@@ -4356,7 +4356,7 @@ impl Runtime {
                     )
             }
             KeyMessage::TypedAndRaw { typed, mut raw } => {
-                let message_source = if self.legacy_raw_keyboard.prepare_windows(&mut raw) {
+                let message_source = if self.legacy_raw_keyboard.prepare_raw(&mut raw) {
                     KeyMessageSource::Paired(&raw)
                 } else {
                     // The independently supplied modern packet remains valid.
@@ -4442,7 +4442,14 @@ impl Runtime {
         source: KeyboardInputSource,
         message_source: KeyMessageSource<'_>,
     ) -> bool {
-        if source == KeyboardInputSource::Physical {
+        use incular_widgets::{RawKeyDelivery, RawKeyPlatformData};
+        let raw_delivery = message_source.raw_delivery();
+        let virtual_android = matches!(
+            raw_delivery,
+            RawKeyDelivery::Supplied(raw)
+                if matches!(raw.data(), Some(RawKeyPlatformData::Android(data)) if data.is_virtual_keyboard())
+        );
+        if source == KeyboardInputSource::Physical && !virtual_android {
             FocusHighlightManager::new().note_keyboard_input();
         }
         let raw_platform_only = matches!(
@@ -4457,8 +4464,7 @@ impl Runtime {
         // without going through runtime pointer/Tab handling. Adopt that
         // external selection before routing the event through retained parents.
         self.adopt_external_focus_change();
-        let raw_delivery = message_source.raw_delivery();
-        if let incular_widgets::RawKeyDelivery::Supplied(raw) = raw_delivery {
+        if let RawKeyDelivery::Supplied(raw) = raw_delivery {
             self.legacy_raw_keyboard.observe(raw);
         }
         self.tree.notify_raw_keyboard_observers_with_report(
