@@ -308,3 +308,14 @@ and the two rendered preview headers match the pinned light and dark
 labels exactly. The snapshot composition is separate from package
 scanning, HTTP serving, and automatic source discovery. All three
 gallery tests and nine composition tests passed.
+
+## Explicit full previewer restart
+
+Pinned `hot_restart_test.dart:11` passed. The neutral
+`previewer_restart_button` exposes Flutter's tooltip and queues
+`PreviewExecutionKind::HotRestart` through the host callback, rather than
+replacing just one preview. The mounted native test activates by pointer and
+accessibility and checks the real execution queue. Nothing is queued at mount
+or pointer down, and each activation is consumed once. This does not claim
+wire compatibility with Dart Tooling Daemon or that a real process restarted;
+Flutter uses a fake DTD endpoint for this scaffold case.

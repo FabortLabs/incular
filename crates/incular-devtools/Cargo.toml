@@ -38,6 +38,13 @@ toml = "1.1.5"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_ProcessStatus", "Win32_System_Threading"] }
 
+[dev-dependencies]
+incular-config = { workspace = true }
+incular-controls = { workspace = true }
+incular-core = { workspace = true }
+incular-semantics = { workspace = true }
+incular-widgets = { workspace = true }
+
 [features]
 default = []
 preview-watch = ["dep:notify"]

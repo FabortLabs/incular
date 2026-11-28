@@ -130,6 +130,20 @@ impl From<PreviewZoomControls> for Widget {
     }
 }
 
+/// Requests a full previewer restart through the host-provided callback.
+///
+/// This is separate from restarting an individual mounted preview and does
+/// not itself own or launch a preview process.
+#[must_use]
+pub fn previewer_restart_button(request_hot_restart: impl Fn() + 'static) -> Widget {
+    button(
+        "Restart the Widget Previewer",
+        "preview.restart.host",
+        true,
+        request_hot_restart,
+    )
+}
+
 /// A selected-file filter toggle. Without an Editor service it occupies no
 /// space; a failed preference write leaves the setting and previews intact.
 pub fn preview_file_filter_toggle<T: 'static, E: 'static>(
