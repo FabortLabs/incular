@@ -16,12 +16,16 @@ pub use windows::WindowsRawKeyData;
 #[path = "raw_key_android.rs"]
 mod android;
 pub use android::AndroidRawKeyData;
+#[path = "raw_key_linux.rs"]
+mod linux;
+pub use linux::{LinuxKeyToolkit, LinuxRawKeyData};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RawKeyPlatformData {
     Android(AndroidRawKeyData),
     Fuchsia(FuchsiaRawKeyData),
+    Linux(LinuxRawKeyData),
     Web(WebRawKeyData),
     Windows(WindowsRawKeyData),
 }

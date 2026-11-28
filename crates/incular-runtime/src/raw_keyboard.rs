@@ -144,6 +144,7 @@ impl LegacyRawKeyboardState {
         let key = match raw.data() {
             Some(RawKeyPlatformData::Windows(data)) => data.flutter_physical_key_id(),
             Some(RawKeyPlatformData::Android(data)) => data.flutter_physical_key_id(),
+            Some(RawKeyPlatformData::Linux(data)) => data.flutter_physical_key_id(),
             _ => return true,
         };
         raw.set_repeat(raw.is_key_down() && self.pressed.contains_key(&key));
@@ -161,6 +162,9 @@ impl LegacyRawKeyboardState {
                 (data.flutter_physical_key_id(), data.flutter_logical_key())
             }
             RawKeyPlatformData::Fuchsia(data) => {
+                (data.flutter_physical_key_id(), data.flutter_logical_key())
+            }
+            RawKeyPlatformData::Linux(data) => {
                 (data.flutter_physical_key_id(), data.flutter_logical_key())
             }
             RawKeyPlatformData::Web(data) => {
@@ -219,6 +223,11 @@ impl LegacyRawKeyboardState {
                     self.set_modifier(left, data.is_modifier_pressed(modifier, S::Left));
                     self.set_modifier(right, data.is_modifier_pressed(modifier, S::Right));
                 }
+                RawKeyPlatformData::Linux(data) => {
+                    let pressed = data.is_modifier_pressed(modifier, S::Any);
+                    self.set_modifier(left, pressed);
+                    self.set_modifier(right, pressed);
+                }
                 RawKeyPlatformData::Web(data) => {
                     if data.is_modifier_pressed(modifier, S::Any) {
                         if !self.pressed.contains_key(&left.0)
@@ -254,6 +263,17 @@ impl LegacyRawKeyboardState {
                 RawKeyPlatformData::Windows(data) => {
                     self.set_modifier((key, default), data.is_modifier_pressed(modifier, S::Any));
                 }
+                RawKeyPlatformData::Linux(data) => {
+                    let pressed = data.is_modifier_pressed(modifier, S::Any);
+                    let remapped_caps = modifier == M::CapsLock
+                        && self
+                            .pressed
+                            .get(&key)
+                            .is_some_and(|logical| *logical != default);
+                    if pressed || !remapped_caps {
+                        self.set_modifier((key, default), pressed);
+                    }
+                }
                 RawKeyPlatformData::Web(data) => {
                     let remapped_caps = modifier == M::CapsLock
                         && self
@@ -286,6 +306,13 @@ impl LegacyRawKeyboardState {
             _ => {
                 self.pressed.remove(&usb(P::FN));
             }
+        }
+        if matches!(data, RawKeyPlatformData::Linux(_))
+            && event.is_key_down()
+            && physical == usb(P::ALT_RIGHT)
+        {
+            // GTK can press AltRight with an ISO Level3 code and no Alt bit.
+            self.pressed.entry(physical).or_insert(L::ALT_RIGHT);
         }
         if matches!(data, RawKeyPlatformData::Web(_)) {
             // Real AltRight may represent browser AltGraph even if the
@@ -336,10 +363,13 @@ impl LegacyRawKeyboardState {
         if !main.state.is_down()
             || !matches!(
                 raw.data(),
-                Some(RawKeyPlatformData::Android(_)
-                    | RawKeyPlatformData::Fuchsia(_)
-                    | RawKeyPlatformData::Web(_)
-                    | RawKeyPlatformData::Windows(_))
+                Some(
+                    RawKeyPlatformData::Android(_)
+                        | RawKeyPlatformData::Fuchsia(_)
+                        | RawKeyPlatformData::Linux(_)
+                        | RawKeyPlatformData::Web(_)
+                        | RawKeyPlatformData::Windows(_)
+                )
             )
         {
             return None;

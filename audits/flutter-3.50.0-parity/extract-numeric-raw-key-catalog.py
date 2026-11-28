@@ -8,7 +8,7 @@ import sys
 
 REVISION = "ab2912035e160d9cad6306df307576da6128ebdb"
 platform = sys.argv[1]
-assert platform in ("Android", "Windows"), platform
+assert platform in ("Android", "Linux", "Windows"), platform
 root, output = map(Path, sys.argv[2:])
 
 
@@ -21,17 +21,32 @@ def pinned(name):
 
 maps = pinned("keyboard_maps.g.dart")
 keys = pinned("keyboard_key.g.dart")
+script = (
+    "extract-numeric-raw-key-catalog.py Linux"
+    if platform == "Linux"
+    else f"extract-{platform.lower()}-raw-key-catalog.py"
+)
 rows = [
     "// Copyright 2014 The Flutter Authors. All rights reserved.",
     "// Use of this source code is governed by the BSD-style license in raw_key_fuchsia.LICENSE.",
-    f"// Generated from Flutter 3.50.0 by extract-{platform.lower()}-raw-key-catalog.py. Do not hand edit.",
+    f"// Generated from Flutter 3.50.0 by {script}. Do not hand edit.",
     "",
 ]
-for name, kind, constant, rust_type in (
+tables = (
     (f"k{platform}ToPhysicalKey", "PhysicalKeyboardKey", "PHYSICAL", "u32"),
     (f"k{platform}ToLogicalKey", "LogicalKeyboardKey", "LOGICAL", "(u64, &str)"),
     (f"k{platform}NumPadMap", "LogicalKeyboardKey", "NUM_PAD", "u64"),
-):
+)
+if platform == "Linux":
+    tables = (tables[0],) + tuple(
+        (name, "LogicalKeyboardKey", f"{toolkit.upper()}_{constant}", rust_type)
+        for toolkit in ("Gtk", "Glfw")
+        for name, constant, rust_type in (
+            (f"k{toolkit}ToLogicalKey", "LOGICAL", "(u64, &str)"),
+            (f"k{toolkit}NumpadMap", "NUM_PAD", "u64"),
+        )
+    )
+for name, kind, constant, rust_type in tables:
     ids = {
         identifier: int(value, 16)
         for identifier, value in re.findall(
@@ -48,7 +63,7 @@ for name, kind, constant, rust_type in (
     rows.extend(["#[rustfmt::skip]", f"pub(super) const {constant}: &[(u32, {rust_type})] = &["])
     for code, value, identifier in sorted(entries):
         right = f"{value:#x}"
-        if constant == "LOGICAL":
+        if rust_type == "(u64, &str)":
             right = f'({right}, "{identifier[0].upper()}{identifier[1:]}")'
         rows.append(f"    ({code:#x}, {right}),")
     rows.extend(["];", ""])

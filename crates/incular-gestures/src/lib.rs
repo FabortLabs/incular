@@ -118,7 +118,10 @@ pub use pointer_router::{
     PointerRouteError, PointerRouteErrorHandler, PointerRouteId, PointerRouter, RoutedPointerEvent,
     WeakPointerRouter,
 };
-pub use raw_key_data::{AndroidRawKeyData, FuchsiaRawKeyData, RawKeyPlatformData, RawKeyboardModifier, RawKeyboardSide, WebRawKeyData, WindowsRawKeyData};
+pub use raw_key_data::{
+    AndroidRawKeyData, FuchsiaRawKeyData, LinuxKeyToolkit, LinuxRawKeyData, RawKeyPlatformData,
+    RawKeyboardModifier, RawKeyboardSide, WebRawKeyData, WindowsRawKeyData,
+};
 pub use raw::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers,

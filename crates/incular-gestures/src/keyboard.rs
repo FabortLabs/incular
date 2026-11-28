@@ -96,6 +96,9 @@ impl RawKeyEvent {
             Some(crate::RawKeyPlatformData::Fuchsia(data)) => {
                 data.key_label().map(|ch| Cow::Owned(ch.to_string()))
             }
+            Some(crate::RawKeyPlatformData::Linux(data)) => {
+                data.key_label().map(|ch| Cow::Owned(ch.to_string()))
+            }
             Some(crate::RawKeyPlatformData::Windows(data)) => {
                 data.key_label().map(|ch| Cow::Owned(ch.to_string()))
             }
