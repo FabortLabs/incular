@@ -311,3 +311,91 @@ fn resized_rewrapped_clipped_and_scrolled_editor_updates_the_same_client() {
         vertical(5., -14., 5),
     );
 }
+
+#[test]
+fn scribble_waits_for_the_editors_touch_scroll_to_end_before_publishing_bounds() {
+    use incular_core::{
+        InputEvent, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase, PointerSampleMetadata,
+    };
+    use std::time::{Duration, Instant};
+
+    if !register_test_font() {
+        return;
+    }
+    let controller = TextEditingController::with_text("Text1\nText2\nText3\nText4\nText5\nText6");
+    let focus = FocusNode::new();
+    let editor = configured_editor(
+        &controller,
+        &focus,
+        (Some(200.), Some(50.)),
+        TextAlign::Start,
+        None,
+        true,
+    );
+    let mut runtime = Runtime::new(editor).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    focus.request_focus();
+    frame(&mut runtime);
+    let field = runtime.focused_element().unwrap();
+    let mut controls = FlutterTextInputControls::new(false);
+    let client = show(&runtime, &mut controls);
+    let initial = selection_rects(&mut controls);
+    assert_eq!(initial.len(), 1);
+
+    let bounds = runtime.tree().element_bounds(field).unwrap();
+    let center =
+        bounds.origin + incular_core::Offset::new(bounds.size.width / 2., bounds.size.height / 2.);
+    let moved = center - incular_core::Offset::new(0., 40.);
+    let now = Instant::now();
+    let send = |runtime: &mut Runtime, phase, position, millis| {
+        let _ = runtime.handle_input_at(
+            InputEvent::PointerWithMetadata {
+                pointer: 1,
+                device: 3,
+                kind: PointerDeviceKind::Touch,
+                buttons: if phase == PointerPhase::Up {
+                    0
+                } else {
+                    PRIMARY_POINTER_BUTTON
+                },
+                button: (phase != PointerPhase::Move).then_some(PRIMARY_POINTER_BUTTON),
+                phase,
+                position,
+                sample: PointerSampleMetadata::default(),
+            },
+            now + Duration::from_millis(millis),
+        );
+    };
+    send(&mut runtime, PointerPhase::Down, center, 0);
+    send(&mut runtime, PointerPhase::Move, moved, 25);
+    frame(&mut runtime);
+    assert!(runtime.tree().text_field_scroll_offset(field).unwrap().y > 0.);
+    let _ = runtime
+        .publish_flutter_text_input_rects(&mut controls)
+        .unwrap();
+    assert!(selection_rects(&mut controls).is_empty());
+
+    send(&mut runtime, PointerPhase::Up, moved, 55);
+    frame(&mut runtime);
+    assert_eq!(
+        runtime.flutter_text_input_configuration().unwrap().0,
+        client
+    );
+    assert!(
+        runtime
+            .publish_flutter_text_input_rects(&mut controls)
+            .unwrap()
+    );
+    let updated = selection_rects(&mut controls);
+    assert_eq!(updated.len(), 1);
+    assert_ne!(updated, initial);
+    assert!(updated[0][0][4].as_u64().unwrap() > initial[0][0][4].as_u64().unwrap());
+
+    frame(&mut runtime);
+    assert!(
+        !runtime
+            .publish_flutter_text_input_rects(&mut controls)
+            .unwrap()
+    );
+    assert!(selection_rects(&mut controls).is_empty());
+}

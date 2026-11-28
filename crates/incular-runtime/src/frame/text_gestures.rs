@@ -1861,6 +1861,10 @@ impl Runtime {
         true
     }
 
+    pub(super) fn editable_scroll_drag_active(&self, field: ElementId) -> bool {
+        self.editable_scroll_drag.is_some_and(|drag| drag.field == field && drag.started)
+    }
+
     pub(super) fn finish_editable_scroll_drag(&mut self) -> bool {
         let Some(drag) = self.editable_scroll_drag.take().filter(|drag| drag.started) else {
             return false;

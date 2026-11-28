@@ -163,6 +163,7 @@ impl Runtime {
         if self.text_shortcut_platform() != crate::TextShortcutPlatform::Ios
             || cfg!(target_arch = "wasm32")
             || controls.is_web_protocol()
+            || self.editable_scroll_drag_active(field)
         {
             return Ok(false);
         }

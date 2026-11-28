@@ -74,3 +74,15 @@ geometry and before keyboard show, consistent with Flutter's first
 geometry pass. Explicit registry clients remain supported. Eleven
 focused native tests passed across binding, geometry, and keyboard
 ordering. Handwriting text placeholders remain open (:327 and :410).
+
+## Bounds pause during a user drag
+
+A pinned authored iOS probe drives the inner editor with a real
+touch scroll. While Flutter reports a non-idle user scroll direction,
+no selection rectangles are sent. On release, the next reported
+snapshot starts farther into the text. The mounted native script
+likewise receives no handwriting boxes while the editor's own finger
+drag is active, then sees the changed boxes on the same client and
+no repeat on the settled frame. Caret and composing updates are
+separate from this gate. Five native handwriting and four toolbar
+scroll tests passed. Fling direction remains outside this check.
