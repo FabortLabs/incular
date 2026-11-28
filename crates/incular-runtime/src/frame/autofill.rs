@@ -190,6 +190,25 @@ impl Runtime {
         (marked, caret)
     }
 
+    /// Applies related editor changes as one outbound Flutter editing-state
+    /// update. Nested calls publish only after the outer scope closes.
+    /// Local values remain readable immediately, and moving focus retires
+    /// the old attachment without sending that attachment's final value.
+    pub fn batch_flutter_text_input_updates<T>(
+        &mut self,
+        controls: &mut FlutterTextInputControls,
+        edit: impl FnOnce(&mut Self, &mut FlutterTextInputControls) -> T,
+    ) -> Result<T, FlutterTextInputControlsError> {
+        let Some(client) = self.active_flutter_text_input_client().filter(|id| controls.is_attached(*id)) else {
+            return Ok(edit(self, controls));
+        };
+        let result = controls.with_editing_batch(client, |controls| edit(self, controls));
+        if self.active_flutter_text_input_client() == Some(client) && !controls.is_editing_batched(client) {
+            self.publish_flutter_text_input_snapshot(controls)?;
+        }
+        Ok(result)
+    }
+
     /// Publishes the active laid-out editor to an opt-in Flutter host.
     ///
     /// The host must attach the runtime's client ID with
@@ -212,9 +231,13 @@ impl Runtime {
         let Some(controller) = self.tree.text_controller(field) else {
             return Ok(false);
         };
-        let editing =
-            controller.with_value(|value| editor_wire(&controller, &value.text, value.composing));
-        let editing_changed = controls.publish_editing_state(connection.client, editing)?;
+        let editing_changed = if controls.is_editing_batched(connection.client) {
+            false
+        } else {
+            let editing =
+                controller.with_value(|value| editor_wire(&controller, &value.text, value.composing));
+            controls.publish_editing_state(connection.client, editing)?
+        };
         let [a, b, c, d, x, y] = transform.coefficients();
         let geometry_changed = controls.update(
             connection.client,

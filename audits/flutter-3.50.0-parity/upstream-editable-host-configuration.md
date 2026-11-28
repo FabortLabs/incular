@@ -40,3 +40,20 @@ The matching native checks reuse the actual focused editor, host controls,
 wire encoder and inbound editing handler in
 `flutter350_full_text_input_channel`. No Android IME driver or physical
 mobile device is implied by the comparison.
+
+## Nested batches do not leak intermediate text to the host
+
+Pinned **10174** passes. The native test samples the real wire publisher
+after each local edit and after the inner batch closes. Local reads show
+`new change 1`, `new change 2`, and `new change 3` in order, the wire stays
+silent through all three samples, and closing the outer scope publishes
+exactly one `TextInput.setEditingState` for `new change 3`. Geometry and
+incoming editing packets are not blocked. A separate native test switches
+editors mid-batch: the next attachment remains independent and receives
+only its own value.
+
+Pinned **10218** and **10238** check Dart debug assertions for unmatched
+begin/end calls. Incular intentionally uses a lexical Rust scope, not a
+public begin/end pair; retiring an attachment during the scope is safe
+and does not reproduce Dart's disposal assertion. Those two differences
+are not counted as paired.

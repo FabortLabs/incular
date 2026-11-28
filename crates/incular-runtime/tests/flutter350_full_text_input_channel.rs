@@ -1151,3 +1151,123 @@ fn the_first_keyboard_show_follows_initial_text_and_only_local_follow_ups_are_pu
     assert!(focus.has_primary_focus());
     assert!(controls.is_attached(id));
 }
+
+#[test]
+fn nested_wire_batches_leave_all_local_edits_visible_but_send_only_the_last_value() {
+    use incular_platform::FlutterTextInputControls;
+
+    let editor = TextEditingController::new();
+    let focus = FocusNode::new();
+    let mut runtime = Runtime::new(field(&editor, &focus, true).into()).unwrap();
+    frame(&mut runtime);
+    let (client, config) = runtime.flutter_text_input_configuration().unwrap();
+    let mut controls = FlutterTextInputControls::new(false);
+    assert!(controls.attach_existing(client, config, |_| {}));
+    runtime
+        .publish_flutter_text_input_snapshot(&mut controls)
+        .unwrap();
+
+    let incoming = update(
+        json!(client.get()),
+        json!({
+            "text":"remote value", "selectionBase":12, "selectionExtent":12,
+            "selectionAffinity":"TextAffinity.downstream", "selectionIsDirectional":false,
+            "composingBase":-1, "composingExtent":-1,
+        }),
+    );
+    assert_eq!(
+        controls.handle_platform_edit(&incoming).unwrap(),
+        Some(true)
+    );
+    assert_eq!(
+        runtime
+            .handle_flutter_text_input_editing_call(&incoming)
+            .unwrap(),
+        Some(true)
+    );
+    assert_eq!(editor.text(), "remote value");
+    controls.take_platform_calls();
+
+    let silent = |runtime: &Runtime, controls: &mut FlutterTextInputControls| {
+        assert!(
+            !runtime
+                .publish_flutter_text_input_snapshot(controls)
+                .unwrap()
+        );
+        assert!(controls.take_platform_calls().is_empty());
+    };
+    runtime
+        .batch_flutter_text_input_updates(&mut controls, |runtime, controls| {
+            editor.set_text("new change 1");
+            assert_eq!(editor.text(), "new change 1");
+            silent(runtime, controls);
+
+            runtime
+                .batch_flutter_text_input_updates(controls, |runtime, controls| {
+                    editor.set_text("new change 2");
+                    assert_eq!(editor.text(), "new change 2");
+                    silent(runtime, controls);
+                })
+                .unwrap();
+            assert!(controls.take_platform_calls().is_empty());
+            silent(runtime, controls);
+
+            editor.set_text("new change 3");
+            assert_eq!(editor.text(), "new change 3");
+            silent(runtime, controls);
+        })
+        .unwrap();
+    let calls = controls.take_platform_calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].method, "TextInput.setEditingState");
+    assert_eq!(calls[0].arguments["text"], "new change 3");
+    silent(&runtime, &mut controls);
+}
+
+#[test]
+fn a_batch_lease_cannot_suppress_a_different_editors_input_connection() {
+    use incular_platform::FlutterTextInputControls;
+
+    let [old_text, new_text] = ["old", "new"].map(TextEditingController::with_text);
+    let [old_focus, new_focus] = [FocusNode::new(), FocusNode::new()];
+    let mut runtime = Runtime::new(
+        Column::new([
+            field(&old_text, &old_focus, true),
+            field(&new_text, &new_focus, false),
+        ])
+        .into(),
+    )
+    .unwrap();
+    frame(&mut runtime);
+    let (old, config) = runtime.flutter_text_input_configuration().unwrap();
+    let mut controls = FlutterTextInputControls::new(false);
+    assert!(controls.attach_existing(old, config, |_| {}));
+    runtime
+        .publish_flutter_text_input_snapshot(&mut controls)
+        .unwrap();
+    controls.take_platform_calls();
+
+    runtime
+        .batch_flutter_text_input_updates(&mut controls, |runtime, controls| {
+            old_text.set_text("must not reach the next connection");
+            new_focus.request_focus();
+            frame(runtime);
+            let (new, config) = runtime.flutter_text_input_configuration().unwrap();
+            assert_ne!(old, new);
+            assert!(controls.close(old));
+            assert!(controls.attach_existing(new, config, |_| {}));
+            assert!(
+                runtime
+                    .publish_flutter_text_input_snapshot(controls)
+                    .unwrap()
+            );
+            let calls = controls.take_platform_calls();
+            assert_eq!(calls[2].method, "TextInput.setEditingState");
+            assert_eq!(calls[2].arguments["text"], "new");
+            assert!(!controls.is_editing_batched(new));
+        })
+        .unwrap();
+    assert!(controls.take_platform_calls().is_empty());
+    assert!(!old_focus.has_primary_focus());
+    assert!(new_focus.has_primary_focus());
+}

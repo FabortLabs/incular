@@ -1,6 +1,6 @@
 //! The Flutter text-input attachment and custom-control forwarding protocol.
 
-use std::rc::Rc;
+use std::{cell::Cell, rc::Rc};
 
 use incular_config::TextDirection;
 use incular_core::{Rect, Size};
@@ -167,8 +167,17 @@ struct Attachment {
     configuration: FlutterTextInputConfiguration,
     geometry: GeometryCache,
     editing: Option<AutofillEditingValue>,
+    editing_batch_depth: Option<Rc<Cell<usize>>>,
     style: Option<FlutterTextInputStyle>,
     shown: bool,
+}
+
+struct EditingBatch(Rc<Cell<usize>>);
+
+impl Drop for EditingBatch {
+    fn drop(&mut self) {
+        self.0.set(self.0.get() - 1);
+    }
 }
 
 #[derive(Default)]
@@ -281,6 +290,7 @@ impl FlutterTextInputControls {
             configuration: configuration.clone(),
             geometry: GeometryCache::default(),
             editing: None,
+            editing_batch_depth: None,
             style: None,
             shown: false,
         });
@@ -382,8 +392,33 @@ impl FlutterTextInputControls {
         self.update(id, FlutterTextInputControlUpdate::SelectionRects(rects.to_vec()))
     }
 
-    /// Publishes a mounted editor snapshot only when the value changed.
-    /// Use [Self::update] to deliberately resend an editing state.
+    /// Runs a scoped batch on this attachment. A batch suppresses ordinary
+    /// state publication, not local edits, incoming packets, or geometry.
+    /// The caller can publish the final editor value after the scope closes.
+    pub fn with_editing_batch<T>(
+        &mut self,
+        id: TextInputClientId,
+        edit: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let _batch = self.attached.as_mut().filter(|attached| attached.id == id).map(|attachment| {
+            let depth = Rc::clone(attachment.editing_batch_depth.get_or_insert_with(Rc::default));
+            depth.set(depth.get().checked_add(1).expect("text editing batch depth exhausted"));
+            EditingBatch(depth)
+        });
+        edit(self)
+    }
+
+    #[must_use]
+    pub fn is_editing_batched(&self, id: TextInputClientId) -> bool {
+        self.attached.as_ref().is_some_and(|attachment| {
+            attachment.id == id
+                && attachment.editing_batch_depth.as_ref().is_some_and(|depth| depth.get() != 0)
+        })
+    }
+
+    /// Publishes a mounted editor snapshot only when the value changed and
+    /// the attachment is not batched. Use [Self::update] to deliberately
+    /// resend an editing state.
     pub fn publish_editing_state(
         &mut self,
         id: TextInputClientId,
@@ -396,7 +431,7 @@ impl FlutterTextInputControls {
         else {
             return Ok(false);
         };
-        if attachment.editing.as_ref() == Some(&value) {
+        if self.is_editing_batched(id) || attachment.editing.as_ref() == Some(&value) {
             return Ok(false);
         }
         self.update(id, FlutterTextInputControlUpdate::EditingState(value))
