@@ -639,6 +639,8 @@ pub struct SemanticState {
     pub obscured: bool,
     pub multiline: bool,
     pub selection: Option<TextSelection>,
+    /// Zero-based index supplied by a logical collection, including when the
+    /// node has not been attached to a tree yet.
     pub item_index: Option<usize>,
     pub set_size: Option<usize>,
     /// Indicates that the node's value is still being produced.
@@ -912,6 +914,16 @@ impl SemanticNode {
     #[must_use]
     pub fn is_tagged(&self, tag: &SemanticsTag) -> bool {
         self.tags().contains(tag)
+    }
+}
+
+impl std::fmt::Display for SemanticNode {
+    fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(output, "{:?}#{:?}", self.role, self.id)?;
+        if let Some(index) = self.state.item_index {
+            write!(output, " indexInParent: {index}")?;
+        }
+        Ok(())
     }
 }
 
@@ -1345,7 +1357,7 @@ impl SemanticsTree {
                 node.bounds.origin.x, node.bounds.origin.y, node.bounds.size.width,
                 node.bounds.size.height, node.state.focused, node.actions,
             );
-            if let Some(index) = index_in_parent {
+            if let Some(index) = node.state.item_index.or(index_in_parent) {
                 let _ = write!(output, " indexInParent: {index}");
             }
             output.push('\n');

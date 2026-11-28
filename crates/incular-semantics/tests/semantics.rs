@@ -529,3 +529,27 @@ fn a_replacement_node_cannot_change_the_retained_identity_of_its_slot() {
         [(original, original)]
     );
 }
+
+#[test]
+fn an_explicit_index_is_visible_even_when_the_node_has_no_parent() {
+    let mut detached = node(placeholder());
+    assert!(!detached.to_string().contains("indexInParent:"));
+    detached.state.item_index = Some(10);
+    assert!(detached.to_string().contains("indexInParent: 10"));
+
+    let mut tree = SemanticsTree::new();
+    let child = tree.insert(detached);
+    assert!(tree.debug_dump().contains("indexInParent: 10"));
+    let parent = tree.insert(SemanticNode {
+        children: vec![child],
+        ..node(placeholder())
+    });
+    tree.set_root(Some(parent));
+    assert!(tree.debug_dump().contains("indexInParent: 10"));
+
+    let mut child_descriptor = tree.node(child).unwrap().clone();
+    child_descriptor.state.item_index = None;
+    assert!(tree.update(child, child_descriptor));
+    assert!(tree.debug_dump().contains("indexInParent: 0"));
+    assert!(!tree.debug_dump().contains("indexInParent: 10"));
+}
