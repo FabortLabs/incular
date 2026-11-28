@@ -129,3 +129,58 @@ fn a_widget_request_after_the_directional_event_takes_precedence() {
     host.frame();
     assert_eq!(host.focused(), Some(1));
 }
+
+#[test]
+fn view_focus_restores_the_editor_range_in_a_fresh_text_input_session() {
+    use incular_platform::TextInputCommand;
+    use incular_text::{TextEditingController, TextSelection};
+    use incular_widgets::EditableText;
+
+    let focus = FocusNode::new();
+    let controller = TextEditingController::with_text("abcdef");
+    let root = Widget::from(
+        EditableText::new(controller.clone())
+            .focus_node(focus.clone())
+            .text_direction(TextDirection::Ltr),
+    );
+    let app = Application::new(move |_| root.clone()).unwrap();
+    let view = app.primary_window();
+    let mut host = Host {
+        app,
+        view,
+        nodes: vec![focus.clone()],
+    };
+    host.frame();
+    focus.request_focus();
+    host.frame();
+    let selection = TextSelection::new(4, 1);
+    controller.set_selection(selection);
+    host.frame();
+
+    let initial_client = host
+        .app
+        .take_window_text_input_commands(view)
+        .into_iter()
+        .find_map(|command| match command {
+            TextInputCommand::SetClient { configuration, .. } => Some(configuration.client),
+            _ => None,
+        })
+        .expect("initial native text-input client");
+
+    host.notify(false, Direction::Undefined);
+    assert!(!focus.has_primary_focus());
+    assert!(
+        host.app
+            .take_window_text_input_commands(view)
+            .iter()
+            .any(|command| {
+                matches!(command, TextInputCommand::Hide { client } if *client == initial_client)
+            })
+    );
+    host.notify(true, Direction::Undefined);
+    assert!(focus.has_primary_focus());
+    assert_eq!(controller.selection(), selection);
+    assert!(host.app.take_window_text_input_commands(view).iter().any(|command| {
+        matches!(command, TextInputCommand::SetClient { configuration, .. } if configuration.client != initial_client)
+    }));
+}

@@ -38,3 +38,10 @@ eligible widget request does. The latter order is pinned in an
 authored Flutter probe. All 24 focused native focus, window and
 routing tests passed. No automatic native window raise or nested
 engine ViewAnchor focus request is claimed.
+
+The pinned authored editor probe and nine focused native checks also
+verify a reverse selection (base 4, extent 1). Exiting via undefined
+view focus retires the old native text-input client. Undefined
+re-entry restores this editor and the same directional selection
+using a fresh client. This is an additional authored scenario, not
+another original registration.
