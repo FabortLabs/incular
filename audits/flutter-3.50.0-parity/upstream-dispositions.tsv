@@ -4243,3 +4243,5 @@ packages/flutter/test/widgets/editable_text_test.dart	3492	returns empty array w
 packages/flutter/test/widgets/editable_text_test.dart	3519	returns only selectAll button when only selectAll is selected in toolbarOptions and selectAll is enabled	paired-match	upstream-editable-scroll-toolbar.md#explicit-toolbar-action-options
 packages/flutter/test/painting/box_painter_test.dart	343	BoxShadow BoxStyle.outer.wide_radius	partial-match	upstream-box-shadow-edges.md
 packages/flutter/test/painting/box_painter_test.dart	424	BoxShadow BoxStyle.inner.wide_radius	partial-match	upstream-box-shadow-edges.md
+packages/flutter/test/widgets/editable_text_test.dart	12307	can change behavior by overriding text editing shortcuts	paired-match	upstream-editable-directional-shortcuts.md#character-movement-shortcut-and-action-overrides
+packages/flutter/test/widgets/editable_text_test.dart	13053	can change text editing behavior by overriding actions	paired-match	upstream-editable-directional-shortcuts.md#character-movement-shortcut-and-action-overrides

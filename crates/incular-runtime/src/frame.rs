@@ -4388,7 +4388,7 @@ impl Runtime {
             return true;
         }
         let lock_modes = event.modifiers | self.hardware_keyboard.lock_modes_enabled();
-        let (focus_result, directional_intent) = self.tree.route_keyboard_with_focus_intent_and_state(
+        let (focus_result, runtime_intent) = self.tree.route_keyboard_with_runtime_intent(
             self.focused,
             event.clone(),
             lock_modes,
@@ -4400,8 +4400,14 @@ impl Runtime {
         } else {
             KeyEventResult::Ignored
         };
-        if let Some(intent) = directional_intent {
-            self.invoke_directional_focus(intent);
+        match runtime_intent {
+            Some(incular_widgets::RuntimeKeyIntent::DirectionalFocus(intent)) => {
+                self.invoke_directional_focus(intent);
+            }
+            Some(incular_widgets::RuntimeKeyIntent::ExtendSelectionByCharacter(intent)) => {
+                self.run_focused_character_intent(intent);
+            }
+            None => {}
         }
         if hardware.handled
             || focus_result == KeyEventResult::Handled
@@ -4491,8 +4497,22 @@ impl Runtime {
         let Some(controller) = self.tree.text_controller(field) else {
             return false;
         };
-        // Flutter's `DefaultTextEditingShortcuts` pick the intent for the
-        // chord on the target platform and the field's actions run it.
+        // Flutter's default character-movement action is overridable from
+        // the focused context, whether the key binding is custom or built-in.
+        if let Some(TextIntent::ExtendByCharacter { forward, collapse }) =
+            crate::text_shortcuts::resolve(self.text_shortcut_platform, event.code, lock_modes)
+        {
+            let intent = incular_widgets::ExtendSelectionByCharacterIntent::new(forward, collapse);
+            match self.tree.dispatch_default_keyboard_intent(field, intent) {
+                KeyEventResult::Handled => {
+                    self.frame_requested = true;
+                    return true;
+                }
+                KeyEventResult::SkipRemainingHandlers => return false,
+                KeyEventResult::Ignored => {}
+            }
+        }
+        // The platform's default shortcut resolves to the focused editor.
         let previous = self.observed_editor_selection(field);
         let _notifications = previous
             .is_some()

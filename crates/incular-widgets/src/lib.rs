@@ -232,7 +232,7 @@ pub use focus_keyboard::{
     ActivateIntent, ButtonActivateIntent,
     Action, ActionContext, ActionDispatchInvocation, ActionDispatcher, ActionInvocationPhase, ActionListener,
     ActionLookupError, ActionOutput, ActionResult, ActionScope, Actions, CallbackAction, CallbackShortcuts,
-    Command, CommandId, CustomFocusTraversalPolicy, DirectionalFocusIntent, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
+    Command, CommandId, CustomFocusTraversalPolicy, DirectionalFocusIntent, ExcludeFocus, ExcludeFocusTraversal, ExtendSelectionByCharacterIntent, Focus, FocusManager, FocusNode,
     FocusOrder, FocusScope, FocusScopeNode, FocusScopeSubscription, FocusTraversalCandidate, FocusTraversalGroup,
     FocusTraversalOrder, FocusTraversalPolicy, FocusTraversalPolicyKind, FocusTraversalRequest, FocusableActionDetector,
     Intent, KeyEventResult, KeyboardListener, LockState, LogicalKeySet, LogicalShortcutKey,
@@ -243,6 +243,8 @@ pub use focus_keyboard::{
     WidgetOrderTraversalPolicy,
     UnfocusDisposition,
 };
+#[doc(hidden)]
+pub use focus_keyboard::RuntimeKeyIntent;
 pub use forms::{
     AutocompleteFieldViewBuilder, AutocompleteHighlightedOption, AutocompleteOnSelected,
     AutocompleteOptionsBuilder, AutocompleteOptionsViewBuilder, AutofillGroup, AutovalidateMode,

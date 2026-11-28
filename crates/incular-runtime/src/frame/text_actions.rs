@@ -379,6 +379,30 @@ impl Runtime {
         true
     }
 
+    pub(super) fn run_focused_character_intent(
+        &mut self,
+        intent: incular_widgets::ExtendSelectionByCharacterIntent,
+    ) {
+        let Some(field) = self.focused else {
+            return;
+        };
+        let Some(controller) = self.tree.text_controller(field) else {
+            return;
+        };
+        let previous = self.observed_editor_selection(field);
+        let editable = self.tree.text_field_is_editable(field);
+        let command = TextIntent::ExtendByCharacter {
+            forward: intent.forward,
+            collapse: intent.collapse_selection,
+        };
+        if self.run_text_shortcut_intent(field, &controller, command, editable).is_some() {
+            self.report_editor_selection_delta(field, previous, SelectionChangedCause::Keyboard);
+            self.hide_text_field_overlays(field);
+            controller.reset_caret(self.input_now());
+            self.frame_requested = true;
+        }
+    }
+
     /// Runs the text-editing intent that `event` is bound to on the focused
     /// field. A handled shortcut returns its overlay policy; the caller
     /// resets the caret blink and requests a frame.

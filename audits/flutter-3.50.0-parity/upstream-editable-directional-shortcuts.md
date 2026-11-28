@@ -41,3 +41,17 @@ UTF-16 caret positions match the pinned 8 and 10 positions. The
 macOS host sends selector packets that move across the newline in
 order, reaching 9, 5, and finally 0. All four focused native tests
 passed, along with 19 adjacent editing shortcut checks.
+
+## Character-movement shortcut and action overrides
+
+Pinned **12307** and **13053** passed. A typed shortcut maps five real
+Linux key sequences (Left and Control+X/C/V/A) to one forward character,
+while the unbound Right arrow still uses the default. All six land at
+offset one without changing document contents.
+
+A separate mounted override handles the built-in Right arrow's
+`ExtendSelectionByCharacterIntent` exactly once and leaves the caret
+at offset zero. The kind of movement and whether it collapses the
+selection are carried by the intent; ordinary uncustomized controls
+keep the same platform editing logic. Twelve focused native tests
+passed, including default navigation and logical RTL movement.

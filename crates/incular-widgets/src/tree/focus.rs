@@ -1342,9 +1342,55 @@ impl WidgetTree {
     ) -> (KeyEventResult, Option<crate::DirectionalFocusIntent>) {
         let mut intent = None;
         let result = self.dispatch_keyboard_where(
-            focused, event, lock_modes, raw_delivery, keyboard, |_| true, Some(&mut intent),
+            focused, event, lock_modes, raw_delivery, keyboard, |_| true, Some((&mut intent, false)),
+        );
+        (result, intent.and_then(|intent| match intent {
+            crate::RuntimeKeyIntent::DirectionalFocus(intent) => Some(intent),
+            _ => None,
+        }))
+    }
+
+    /// Routes explicit typed shortcut intents backed by runtime actions.
+    #[doc(hidden)]
+    pub fn route_keyboard_with_runtime_intent(
+        &self,
+        focused: Option<ElementId>,
+        event: KeyboardEvent,
+        lock_modes: incular_core::Modifiers,
+        raw_delivery: incular_gestures::RawKeyDelivery<'_>,
+        keyboard: Option<&incular_core::HardwareKeyboardState>,
+    ) -> (KeyEventResult, Option<crate::RuntimeKeyIntent>) {
+        let mut intent = None;
+        let result = self.dispatch_keyboard_where(
+            focused, event, lock_modes, raw_delivery, keyboard, |_| true, Some((&mut intent, true)),
         );
         (result, intent)
+    }
+
+    /// Routes a default keyboard intent through the actual focused context,
+    /// including its scoped dispatcher, before using the runtime fallback.
+    #[doc(hidden)]
+    pub fn dispatch_default_keyboard_intent<C: incular_gestures::CommandId>(
+        &self,
+        focused: ElementId,
+        command: C,
+    ) -> KeyEventResult {
+        // Most editors have no application action scopes. Do not allocate
+        // an erased command for their ordinary arrow keys.
+        let mut current = Some(focused);
+        while let Some(id) = current {
+            let Some(entry) = self.elements.get(id.0) else {
+                break;
+            };
+            if matches!(entry.widget.kind(), WidgetKind::Gesture { callbacks, .. } if callbacks.action_scope.is_some()) {
+                let intent = incular_gestures::ErasedIntent::from_intent(
+                    &incular_gestures::Intent::<C>::new(command),
+                );
+                return self.dispatch_shortcut_action(focused, &intent);
+            }
+            current = entry.parent;
+        }
+        KeyEventResult::Ignored
     }
 
     /// Shared ancestor walk behind keyboard dispatch. The `serve`
@@ -1362,7 +1408,7 @@ impl WidgetTree {
         raw_delivery: incular_gestures::RawKeyDelivery<'_>,
         keyboard: Option<&incular_core::HardwareKeyboardState>,
         mut serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
-        mut directional_intent: Option<&mut Option<crate::DirectionalFocusIntent>>,
+        mut runtime_intent: Option<(&mut Option<crate::RuntimeKeyIntent>, bool)>,
     ) -> KeyEventResult {
         self.notify_key_observers(focused, &event);
         let menu_escape = event.key == KeyboardKey::Named(NamedKey::Escape)
@@ -1423,13 +1469,22 @@ impl WidgetTree {
                 if result != KeyEventResult::Ignored {
                     return result;
                 }
-                if let Some(slot) = directional_intent.as_deref_mut()
+                if let Some((slot, editing)) = runtime_intent.as_mut()
                     && let Some(incular_gestures::ShortcutMatch::Intent(matched)) =
                         retained_match.unwrap_or_else(find_shortcut)
-                    && let Some(intent) = matched.downcast_command::<crate::DirectionalFocusIntent>()
                 {
-                    *slot = Some(*intent);
-                    return KeyEventResult::Handled;
+                    use crate::RuntimeKeyIntent;
+                    if let Some(intent) = matched.downcast_command::<crate::DirectionalFocusIntent>() {
+                        **slot = Some(RuntimeKeyIntent::DirectionalFocus(*intent));
+                        return KeyEventResult::Handled;
+                    }
+                    if *editing
+                        && focused.is_some_and(|field| self.is_text_field(field))
+                        && let Some(intent) = matched.downcast_command::<crate::ExtendSelectionByCharacterIntent>()
+                    {
+                        **slot = Some(RuntimeKeyIntent::ExtendSelectionByCharacter(*intent));
+                        return KeyEventResult::Handled;
+                    }
                 }
             }
             if menu_escape

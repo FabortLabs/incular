@@ -911,6 +911,29 @@ impl DirectionalFocusIntent {
     }
 }
 
+/// Moves the caret by one character, or extends the current range by one.
+/// The direction is logical, not reversed by right-to-left text.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ExtendSelectionByCharacterIntent {
+    pub forward: bool,
+    pub collapse_selection: bool,
+}
+
+impl ExtendSelectionByCharacterIntent {
+    #[must_use]
+    pub const fn new(forward: bool, collapse_selection: bool) -> Self {
+        Self { forward, collapse_selection }
+    }
+}
+
+/// Built-in typed actions whose default implementation needs the runtime.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RuntimeKeyIntent {
+    DirectionalFocus(DirectionalFocusIntent),
+    ExtendSelectionByCharacter(ExtendSelectionByCharacterIntent),
+}
+
 /// A widget that listens for keyboard events routed from platform input.
 #[derive(Clone)]
 pub struct KeyboardListener {
