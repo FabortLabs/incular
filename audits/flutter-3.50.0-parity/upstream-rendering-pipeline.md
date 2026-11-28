@@ -52,3 +52,20 @@ An independently held window request stays effective without waking
 that view. A reentrant release listener can restore app-wide demand
 without sending stale or duplicate state to other listeners. All ten
 focused native tests passed.
+
+## Layout dirtiness wakes the native scheduler
+
+Flutter's pinned `rendering/binding_pipeline_manifold_test.dart:22`
+passed. Marking a clean render object in an adopted pipeline as
+needing layout calls the binding's visual-update callback once.
+
+Incular's public layout delegate can change without a widget rebuild.
+Before this fix its retained child view reported frame demand but
+never woke an idle native host (0 wakes instead of 1). Its first
+dirty dependency now wakes the scheduler without enqueueing a
+no-op UI message. Two changes before the frame produce one wake
+and paint the latest of the two exact requested sizes. An independent
+window stays clean, the root builder runs only once, another change
+after painting wakes again, and the detached delegate no longer
+wakes the host. The focused pipeline, task wake, and semantics
+activation targets passed all 14 tests.

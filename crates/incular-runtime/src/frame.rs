@@ -555,6 +555,7 @@ impl Runtime {
         };
         Self::set_focus_highlight_platform_default(highlight_platform);
         let mut tree = WidgetTree::new();
+        tree.install_visual_update_notifier(scheduler.borrow().visual_update_notifier());
         let system_sound = incular_platform::SystemSound::default();
         tree.install_system_sound(system_sound.clone());
         let image_spawner = window_id.map_or_else(

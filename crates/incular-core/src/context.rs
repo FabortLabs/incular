@@ -7,7 +7,7 @@
 use crate::IdGenerator;
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, RefCell},
+    cell::{Cell, OnceCell, RefCell},
     collections::HashMap,
     fmt,
     rc::{Rc, Weak},
@@ -95,6 +95,7 @@ struct TrackerInner {
     /// only the sources it observed instead of scanning all of them.
     source_keys: RefCell<FastHashMap<u64, DependencyKey>>,
     dirty: RefCell<FastHashSet<ConsumerId>>,
+    on_first_dirty: OnceCell<Box<dyn Fn()>>,
     owners: RefCell<FastHashMap<ConsumerId, Weak<ConsumerOwner>>>,
 }
 impl TrackerInner {
@@ -157,7 +158,7 @@ impl TrackerInner {
             if next != current.replace(next)
                 && let Some(tracker) = weak.upgrade()
             {
-                tracker.dirty.borrow_mut().insert(consumer);
+                tracker.mark_dirty(consumer);
             }
         });
         let mut sources = ObservedSources::Few(smallvec::SmallVec::new());
@@ -174,7 +175,7 @@ impl TrackerInner {
             ConsumerSubscriptions {
                 observer: SubscriptionObserver::new(consumer, move || {
                     if let Some(tracker) = weak.upgrade() {
-                        tracker.dirty.borrow_mut().insert(consumer);
+                        tracker.mark_dirty(consumer);
                     }
                 }),
                 sources: ObservedSources::Few(smallvec::SmallVec::new()),
@@ -262,6 +263,18 @@ impl TrackerInner {
                     groups.iter().map(|(_, group)| group.sources.len()).sum()
                 })
     }
+    fn mark_dirty(&self, consumer: ConsumerId) {
+        let first = {
+            let mut dirty = self.dirty.borrow_mut();
+            let first = dirty.is_empty();
+            dirty.insert(consumer);
+            first
+        };
+        if first && let Some(notify) = self.on_first_dirty.get() {
+            notify();
+        }
+    }
+
     fn is_dirty(&self, consumer: ConsumerId) -> bool {
         self.dirty.borrow().contains(&consumer)
     }
@@ -806,6 +819,17 @@ impl BuildContext {
     /// Takes and clears this consumer's invalidation bit.
     pub fn take_dirty(&self) -> bool {
         self.tracker.take_dirty(self.consumer)
+    }
+
+    /// Registers the retained host's optional notification before mounting
+    /// consumers. Notifies on an empty-to-dirty transition, without draining
+    /// the pending identities or holding the dirty queue across the callback.
+    #[doc(hidden)]
+    pub fn install_dirty_notifier(&self, notify: impl Fn() + 'static) {
+        assert!(
+            self.tracker.on_first_dirty.set(Box::new(notify)).is_ok(),
+            "a retained tracker can only be installed in one host",
+        );
     }
 
     /// Drains all dirty consumers that share this retained dependency tracker.

@@ -122,6 +122,13 @@ impl WidgetTree {
         self.dependency_root.insert(loader);
     }
 
+    /// Bridges this retained root's dependency queue into its host's frame
+    /// scheduler. Standalone trees can still drain changes explicitly.
+    #[doc(hidden)]
+    pub fn install_visual_update_notifier(&self, notify: impl Fn() + 'static) {
+        self.dependency_root.install_dirty_notifier(notify);
+    }
+
     /// Whether a value a build read (an inherited value or another tracked
     /// dependency such as a `UiFuture`) changed since the last layout or
     /// mounted automatic keep-alive parent data needs to be applied.

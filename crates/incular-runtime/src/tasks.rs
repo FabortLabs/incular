@@ -551,7 +551,7 @@ impl RuntimeBridge {
 
     fn set_wake(&self, wake: Arc<dyn RuntimeWake>) {
         *self.wake.lock().expect("runtime wake mutex") = Some(wake.clone());
-        if self.queued.load(Ordering::Acquire) > 0 {
+        if self.wake_pending.load(Ordering::Acquire) || self.queued.load(Ordering::Acquire) > 0 {
             self.wakes.fetch_add(1, Ordering::Relaxed);
             wake.wake();
         }
@@ -933,6 +933,19 @@ impl TaskScheduler {
                 None
             }
             None => None,
+        }
+    }
+
+    /// Wakes the native scheduler to inspect retained frame demand. The
+    /// render root already stores the work, so no UI message is necessary.
+    pub(crate) fn visual_update_notifier(&self) -> impl Fn() + 'static + use<> {
+        let bridge = Arc::downgrade(&self.bridge);
+        move || {
+            if let Some(bridge) = bridge.upgrade()
+                && bridge.accepting.load(Ordering::Acquire)
+            {
+                bridge.request_wake();
+            }
         }
     }
 
