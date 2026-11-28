@@ -972,3 +972,80 @@ fn a_read_only_mouse_drag_leaves_mobile_handles_and_toolbar_hidden() {
     assert!(!handles.is_showing());
     assert!(!menu.is_showing());
 }
+
+#[test]
+fn an_ios_selection_handle_does_not_steal_taps_outside_its_local_hit_box() {
+    use incular_widgets::{Column, GestureDetector, HitTestBehavior, TextSelectionHandleLayout};
+    use std::{cell::Cell, rc::Rc};
+
+    let handle_taps = Rc::new(Cell::new(0));
+    let sibling_taps = Rc::new(Cell::new(0));
+    let editor = TextEditingController::with_text("a");
+    let layout = TextSelectionHandleLayout::new(Size::new(20., 20.), Offset::new(10., 0.));
+    let field = EditableText::new(editor.clone())
+        .autofocus(true)
+        .size(Size::new(200., 80.))
+        .text_direction(TextDirection::Ltr)
+        .selection_handles_builder(|_, _| SizedBox::square(20.).into())
+        .collapsed_selection_handle_layout(layout)
+        .on_selection_handle_tapped({
+            let taps = handle_taps.clone();
+            move || taps.set(taps.get() + 1)
+        });
+    let sibling = GestureDetector::new(SizedBox::new().width(200.).height(40.))
+        .behavior(HitTestBehavior::Opaque)
+        .on_tap({
+            let taps = sibling_taps.clone();
+            move || taps.set(taps.get() + 1)
+        });
+    let mut runtime =
+        Runtime::new(Column::new([Widget::from(field), sibling.into()]).into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Ios);
+    let constraints = Constraints::tight(Size::new(400., 200.));
+    runtime.run_frame(constraints).unwrap();
+    let focused = runtime.focused_element().expect("autofocused editor");
+    let field_bounds = runtime.tree().element_bounds(focused).unwrap();
+    let point = field_bounds.origin + Offset::new(6., 7.);
+    let start = Instant::now();
+    pointer(
+        &mut runtime,
+        PointerPhase::Down,
+        point,
+        PointerDeviceKind::Touch,
+        start,
+    );
+    let held = start + Duration::from_millis(520);
+    runtime.run_frame_at(constraints, held).unwrap();
+    pointer(
+        &mut runtime,
+        PointerPhase::Up,
+        point,
+        PointerDeviceKind::Touch,
+        held,
+    );
+    runtime.run_frame_at(constraints, held).unwrap();
+
+    let state = runtime
+        .tree()
+        .text_field_selection_handles(focused)
+        .unwrap();
+    let handles = state.handles().expect("long press shows a handle");
+    assert!(handles.end.is_none());
+    let hit = layout.interactive_rect(handles.start.anchor);
+    assert!(hit.size.width <= field_bounds.size.width);
+    assert!(hit.size.height <= field_bounds.size.height);
+    assert_eq!(hit.size, Size::new(48., 48.));
+    let inside = knob_centre(handles.start);
+    let outside = Offset::new(200., field_bounds.origin.y + field_bounds.size.height + 20.);
+    assert!(state.hit_test(inside).is_some());
+    assert!(state.hit_test(outside).is_none());
+    for (point, elapsed) in [(inside, 700), (outside, 1050)] {
+        for (phase, extra) in [(PointerPhase::Down, 0), (PointerPhase::Up, 40)] {
+            let time = start + Duration::from_millis(elapsed + extra);
+            pointer(&mut runtime, phase, point, PointerDeviceKind::Touch, time);
+            runtime.run_frame_at(constraints, time).unwrap();
+        }
+    }
+    assert_eq!(handle_taps.get(), 1);
+    assert_eq!(sibling_taps.get(), 1);
+}

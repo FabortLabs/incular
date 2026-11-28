@@ -91,3 +91,18 @@ The runtime now captures the initial point in content coordinates once
 the word drag starts and resolves that point against live text layout.
 This preserves the anchor without freezing the current pointer, and
 without caching a byte offset that could be invalidated by text changes.
+
+## Selection overlay hit area and menu
+
+The exact iOS variant at :1246 and the non-web context menu case :2051
+pass on the pin. The mounted native regressions exercise hit routing, not
+just visual geometry. A focused iOS editor shows one collapsed handle;
+its 48 × 48 logical-pixel hit region fits inside the field dimensions.
+A physical touch on the knob triggers its callback, while an outside touch
+reaches the sibling's tap handler without invoking the handle again.
+
+On Android, the caller's actual context-menu widget is absent before
+the click at text offset 0, then mounted in the overlay after a real
+secondary-button tap. Its bounded child has the expected dimensions
+and the editor remains focused. This does not compare the browser's
+native context menu or any design-system appearance.

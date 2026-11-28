@@ -713,3 +713,40 @@ fn paste_button_replaces_selection_closes_the_live_toolbar_and_keeps_focus() {
     assert_eq!(runtime.focused_element(), Some(field));
     assert_eq!(runtime.tree().render_id(field), render);
 }
+
+#[test]
+fn right_click_mounts_the_supplied_context_menu_widget() {
+    use incular_widgets::{Align, Alignment, TextSelectionGestureDetectorBuilder, internal::Key};
+
+    let controller = TextEditingController::with_text("You make wine from sour grapes");
+    let key = Key::from("compiled editor toolbar");
+    let field = EditableText::new(controller.clone())
+        .text_direction(TextDirection::Ltr)
+        .context_menu_builder({
+            let key = key.clone();
+            move |_, _| {
+                Align::new(
+                    Alignment::TOP_LEFT,
+                    Widget::from(SizedBox::square(24.)).with_key(key.clone()),
+                )
+                .into()
+            }
+        });
+    let field = TextSelectionGestureDetectorBuilder::new().build_gesture_detector(field);
+    let mut runtime = Runtime::new(field.into()).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    runtime.run_frame(bounds()).unwrap();
+    let field = runtime.tree().text_field_at(Offset::new(1., 7.)).unwrap();
+    let origin = runtime.tree().element_bounds(field).unwrap().origin;
+    assert!(runtime.tree().element_with_key(&key).is_none());
+    secondary_click(&mut runtime, origin + Offset::new(0., 7.));
+    let overlay = runtime
+        .tree()
+        .element_with_key(&key)
+        .expect("the actual menu widget mounted");
+    assert_eq!(
+        runtime.tree().element_bounds(overlay).unwrap().size,
+        Size::new(24., 24.)
+    );
+    assert_eq!(runtime.focused_element(), Some(field));
+}
