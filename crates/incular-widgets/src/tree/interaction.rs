@@ -2925,6 +2925,16 @@ impl WidgetTree {
             _ => None,
         }
     }
+    pub(super) fn detach_drag_target(&mut self, element: ElementId) {
+        for drag in self.input.active_drags.values_mut() {
+            if drag.target.as_ref().is_some_and(|(target, _)| *target == element) {
+                drag.target = None;
+            }
+            // A detached DragTarget no longer receives onLeave or updates.
+            // The source keeps the drag and can enter a new live target.
+            drag.entered.retain(|(target, _)| *target != element);
+        }
+    }
     /// Flutter `_DragAvatar.updateDrag`. Entered targets are the innermost
     /// targets on the path up to the first one that accepts the payload. A
     /// rejected target stays entered: it still receives `update` and `leave`

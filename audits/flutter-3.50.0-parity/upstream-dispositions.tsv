@@ -4123,3 +4123,7 @@ packages/flutter/test/widgets/draggable_test.dart	1179	Vertical axis draggable d
 packages/flutter/test/widgets/draggable_test.dart	1248	Null axis onDragUpdate called only if draggable moves in any direction	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis
 packages/flutter/test/widgets/draggable_test.dart	1285	Vertical axis onDragUpdate only called if draggable moves vertical	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis
 packages/flutter/test/widgets/draggable_test.dart	1322	Horizontal axis onDragUpdate only called if draggable moves horizontal	paired-match	upstream-draggable-target-path.md#feedback-positions-and-update-callbacks-by-axis
+packages/flutter/test/widgets/draggable_test.dart	2173	DragTarget does not call onDragEnd when remove from the tree	paired-match	upstream-draggable-target-path.md#detaching-an-entered-target-while-dragging
+packages/flutter/test/widgets/draggable_test.dart	2514	Drag and drop - maxSimultaneousDrags	reference-ran-incular-open	upstream-draggable-target-path.md#detaching-an-entered-target-while-dragging
+packages/flutter/test/widgets/draggable_test.dart	2789	DragTarget does not set state when remove from the tree	paired-match	upstream-draggable-target-path.md#detaching-an-entered-target-while-dragging
+packages/flutter/test/widgets/draggable_test.dart	2849	Drag and drop - remove draggable	reference-ran-incular-open	upstream-draggable-target-path.md#detaching-an-entered-target-while-dragging

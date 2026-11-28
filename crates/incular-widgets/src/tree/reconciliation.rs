@@ -3017,6 +3017,7 @@ impl WidgetTree {
                             controller.set_registered_child_count(0);
                             controller.clear_selection();
                         }
+                        WidgetKind::DragTarget { .. } => self.detach_drag_target(id),
                         _ => {}
                     }
                     self.detach_gesture_member(id);

@@ -33,3 +33,25 @@ movement the down-created feedback sends no update. The free drag
 reports (10,10) once; vertical and horizontal locks report only
 (0,10) or (10,0). Zero and suppressed-axis movement and release
 do not add callbacks. Both focused native matrix tests passed.
+
+## Detaching an entered target while dragging
+
+Pinned :2173 and :2789 passed. The mounted native comparison first lets
+a control tap finish one drag. It then moves a second drag onto an
+accepting target and removes the target while the pointer is held.
+Removal does not end the source or deliver a drop. The release ends
+the still-active source but does not call the detached target.
+
+Previously the removed target remained in the active drag and failed
+the retained-tree invariant with a dead element ID. Unmount now
+silently drops both accepted and rejected target records for that
+element. The native fixture also verifies that no stale leave is
+delivered and checks tree invariants between removal and release.
+All 27 focused native tests passed.
+
+Separate pinned registrations :2849 and :2514 confirm that Flutter
+keeps an established avatar alive when only its source disappears and
+can present two independent avatars from one source. Incular's
+separate mouse-source removal check currently cancels its local
+avatar, and the typed context still exposes a single feedback slot.
+Those are open lifecycle differences, not additional paired cases.

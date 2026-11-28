@@ -808,7 +808,7 @@ impl WidgetTree {
             .input
             .active_drags
             .values()
-            .filter_map(|drag| drag.target.as_ref())
+            .flat_map(|drag| drag.target.iter().chain(&drag.entered))
             .find(|(element, _)| !live(element))
         {
             return Err(Self::invariant_error(
