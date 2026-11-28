@@ -322,3 +322,15 @@ dismiss the replacement, and re-showing the same attachment does
 not replay its initial geometry or style. This is a real retained
 runtime and mock Flutter host, not an Android keyboard driver run.
 The focused runtime channel, style and lifecycle targets passed.
+
+### Editor size and transform at keyboard show
+
+Pinned :6174, :6216 and :6344 passed. A tightly constrained editor
+sends 800×600 and the identity matrix. Switching from a 14 px editor
+to a ten-line 140 px editor at y=214 and back sends each client its
+own exact size and matrix. A retained editor translated by (10,20)
+sends the updated matrix without repeating its editing state.
+
+The 14/140 px fixtures use the extracted pinned FlutterTest font,
+not the host's default metrics; all 18 focused geometry, style and
+platform control tests ran with that font.

@@ -4149,3 +4149,6 @@ packages/flutter/test/widgets/editable_text_test.dart	3815	Sends "updateConfig" 
 packages/flutter/test/widgets/editable_text_test.dart	6396	text styling info is sent on show keyboard	paired-match	upstream-editable-defaults.md#live-keyboard-configuration-and-initial-style-wire-fields
 packages/flutter/test/widgets/editable_text_test.dart	6439	text styling info is sent on show keyboard (bold override)	paired-match	upstream-editable-defaults.md#live-keyboard-configuration-and-initial-style-wire-fields
 packages/flutter/test/widgets/editable_text_test.dart	10466	keyboard is requested after setEditingState after switching to a new text field	paired-match	upstream-text-input-reattach.md#keyboard-show-after-the-next-editors-initial-state
+packages/flutter/test/widgets/editable_text_test.dart	6174	location of widget is sent on show keyboard	paired-match	upstream-text-input-reattach.md#editor-size-and-transform-at-keyboard-show
+packages/flutter/test/widgets/editable_text_test.dart	6216	transform and size is reset when text connection opens	paired-match	upstream-text-input-reattach.md#editor-size-and-transform-at-keyboard-show
+packages/flutter/test/widgets/editable_text_test.dart	6344	size and transform are sent when they change	paired-match	upstream-text-input-reattach.md#editor-size-and-transform-at-keyboard-show
