@@ -600,6 +600,26 @@ impl Semantics {
     pub fn numeric_range(mut self, minimum: f64, maximum: f64) -> Self {
         self.state.numeric_min = minimum.is_finite().then_some(minimum);
         self.state.numeric_max = maximum.is_finite().then_some(maximum);
+        self.state.value_bounds_text = None;
+        self
+    }
+
+    /// Announces a textual lower bound and publishes its numeric value to
+    /// native adapters when it represents a finite number.
+    #[must_use]
+    pub fn min_value(mut self, value: impl Into<String>) -> Self {
+        let value = value.into();
+        self.state.numeric_min = value.trim().parse::<f64>().ok().filter(|number| number.is_finite());
+        Arc::make_mut(self.state.value_bounds_text.get_or_insert_with(Arc::default)).min = Some(value);
+        self
+    }
+
+    /// Announces a textual upper bound, preserving the original declaration.
+    #[must_use]
+    pub fn max_value(mut self, value: impl Into<String>) -> Self {
+        let value = value.into();
+        self.state.numeric_max = value.trim().parse::<f64>().ok().filter(|number| number.is_finite());
+        Arc::make_mut(self.state.value_bounds_text.get_or_insert_with(Arc::default)).max = Some(value);
         self
     }
 

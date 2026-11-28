@@ -196,3 +196,188 @@ fn replacing_a_bad_node_recomputes_the_report_without_leftover_errors() {
     pump(&mut tree);
     assert!(tree.debug_semantic_role_issues().is_empty());
 }
+
+type RangeCase = (
+    usize,
+    Option<&'static str>,
+    Option<&'static str>,
+    Option<&'static str>,
+    Option<Issue>,
+);
+
+fn check_ranges(role: Role, cases: &[RangeCase]) {
+    for &(line, value, min, max, expected) in cases {
+        let mut widget = Semantics::new(SizedBox::shrink()).role(role);
+        if let Some(value) = value {
+            widget = widget.value(value);
+        }
+        if let Some(min) = min {
+            widget = widget.min_value(min);
+        }
+        if let Some(max) = max {
+            widget = widget.max_value(max);
+        }
+        assert_eq!(
+            issues(widget),
+            expected
+                .into_iter()
+                .map(|issue| (role, issue))
+                .collect::<Vec<_>>(),
+            "Flutter registration at line {line}"
+        );
+    }
+}
+
+#[test]
+fn progress_bar_needs_value_and_bounds_and_validates_its_range() {
+    use Issue::*;
+    check_ranges(
+        Role::ProgressBar,
+        &[
+            (
+                1082,
+                None,
+                None,
+                None,
+                Some(ProgressBarMissingValueOrBounds),
+            ),
+            (
+                1095,
+                None,
+                Some("0"),
+                Some("10"),
+                Some(ProgressBarMissingValueOrBounds),
+            ),
+            (
+                1113,
+                Some("5"),
+                None,
+                None,
+                Some(ProgressBarMissingValueOrBounds),
+            ),
+            (
+                1126,
+                Some("invalid"),
+                Some("0"),
+                Some("10"),
+                Some(InvalidRangeNumber),
+            ),
+            (
+                1149,
+                Some("invalid"),
+                Some("0%"),
+                Some("100%"),
+                Some(InvalidRangeNumber),
+            ),
+            (
+                1174,
+                Some("invalid"),
+                Some("invalid"),
+                Some("invalid"),
+                Some(InvalidRangeNumber),
+            ),
+            (
+                1197,
+                Some("5"),
+                Some("10"),
+                Some("0"),
+                Some(InvertedValueRange),
+            ),
+            (
+                1216,
+                Some("20"),
+                Some("0"),
+                Some("10"),
+                Some(ValueOutsideRange),
+            ),
+            (
+                1238,
+                Some("150%"),
+                Some("0"),
+                Some("10"),
+                Some(PercentageOutsideRange),
+            ),
+            (1257, Some("5"), Some("0"), Some("10"), None),
+            (1273, Some("50%"), Some("0"), Some("10"), None),
+        ],
+    );
+}
+
+#[test]
+fn slider_needs_each_bound_and_compares_numbers_and_percentages_separately() {
+    use Issue::*;
+    check_ranges(
+        Role::Slider,
+        &[
+            (1291, None, None, None, Some(SliderMissingValue)),
+            (1304, Some("50"), None, None, Some(SliderMissingMinValue)),
+            (
+                1321,
+                Some("50"),
+                Some("0"),
+                None,
+                Some(SliderMissingMaxValue),
+            ),
+            (
+                1339,
+                Some("150"),
+                Some("0"),
+                Some("100"),
+                Some(ValueOutsideRange),
+            ),
+            (
+                1358,
+                Some("50"),
+                Some("100"),
+                Some("0"),
+                Some(InvertedValueRange),
+            ),
+            (
+                1377,
+                Some("not-a-number"),
+                Some("0"),
+                Some("100"),
+                Some(InvalidRangeNumber),
+            ),
+            (1396, Some("50"), Some("0"), Some("100"), None),
+            (1412, Some("50%"), Some("0"), Some("100"), None),
+            (
+                1428,
+                Some("150%"),
+                Some("0"),
+                Some("100"),
+                Some(PercentageOutsideRange),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn textual_bounds_keep_the_original_annotation_and_project_valid_numeric_limits() {
+    let tree = mount(
+        Semantics::new(SizedBox::shrink())
+            .role(Role::Slider)
+            .value("45%")
+            .min_value(" 1.5 ")
+            .max_value("6.50"),
+    );
+    assert!(tree.debug_semantic_role_issues().is_empty());
+    let node = tree
+        .semantics()
+        .node(tree.semantics().root().unwrap())
+        .unwrap();
+    assert_eq!(node.value.as_deref(), Some("45%"));
+    assert_eq!(node.state.numeric_min, Some(1.5));
+    assert_eq!(node.state.numeric_max, Some(6.50));
+    let text = node.state.value_bounds_text.as_ref().unwrap();
+    assert_eq!(text.min.as_deref(), Some(" 1.5 "));
+    assert_eq!(text.max.as_deref(), Some("6.50"));
+
+    let typed = mount(
+        Semantics::new(SizedBox::shrink())
+            .role(Role::ProgressBar)
+            .numeric_range(2., 6.)
+            .numeric_value(2.),
+    );
+    assert!(typed.debug_semantic_role_issues().is_empty());
+}

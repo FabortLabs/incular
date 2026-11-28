@@ -3692,6 +3692,27 @@ fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
         increased_value,
         decreased_value,
     );
+    // Textual declarations override the corresponding base limit, even
+    // when blank or invalid. The other bound stays inherited.
+    if overlay.value_bounds_text.is_some() || base.value_bounds_text.is_some() {
+        let overlay_bounds = overlay.value_bounds_text.as_deref();
+        let bounds = Arc::make_mut(base.value_bounds_text.get_or_insert_with(Arc::default));
+        if let Some(min) = overlay_bounds.and_then(|bounds| bounds.min.as_ref()) {
+            bounds.min = Some(min.clone());
+            base.numeric_min = overlay.numeric_min;
+        } else if overlay.numeric_min.is_some() {
+            bounds.min = None;
+        }
+        if let Some(max) = overlay_bounds.and_then(|bounds| bounds.max.as_ref()) {
+            bounds.max = Some(max.clone());
+            base.numeric_max = overlay.numeric_max;
+        } else if overlay.numeric_max.is_some() {
+            bounds.max = None;
+        }
+        if bounds.min.is_none() && bounds.max.is_none() {
+            base.value_bounds_text = None;
+        }
+    }
     let alternate_attributes = |replace: bool| {
         if replace {
             overlay.text_attributes.as_deref()

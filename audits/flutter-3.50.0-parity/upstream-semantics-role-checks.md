@@ -31,3 +31,19 @@ tab test verifies disabled and action-blocked exceptions, and the
 native suite verifies correction clears an old diagnosis.
 Six role tests, 24 adjacent semantics regressions and five root
 regressions passed.
+
+## Slider and progress range data
+
+The 20 originals at lines 1082–1428 compare missing fields,
+malformed values and bounds, inverted bounds, ordinary values
+outside the declared range, and percentage values outside 0–100%.
+Valid percentages use their own scale even when the declared numeric
+bounds are 0–10. The tests also verify permissive valid values on
+the boundaries. Textual min/max annotations retain their declaration
+and publish finite typed limits for existing native bridges. Incular's
+typed numeric API continues to validate without requiring duplicate
+strings. Non-finite values are not published as numeric bounds.
+
+All 20 selected originals and 33 targeted native tests passed.
+The typed report's language-specific diagnostics are not compared
+as string snapshots.

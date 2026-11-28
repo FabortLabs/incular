@@ -4470,3 +4470,23 @@ packages/flutter/test/widgets/semantics_role_checks_test.dart	410	Success case w
 packages/flutter/test/widgets/semantics_role_checks_test.dart	594	failure case, alert and live region	paired-match	upstream-semantics-role-checks.md
 packages/flutter/test/widgets/semantics_role_checks_test.dart	614	failure case, status and live region	paired-match	upstream-semantics-role-checks.md
 packages/flutter/test/widgets/semantics_role_checks_test.dart	634	success case	paired-match	upstream-semantics-role-checks.md
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1082	failure case, missing value, min, and max	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1095	failure case, has min and max but not value	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1113	failure case, has value but not min and max	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1126	failure case, valid min and max but invalid value	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1149	failure case, min and max are percentages, invalid value	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1174	failure case, invalid numbers	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1197	failure case, min >= max	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1216	failure case, value out of range (number)	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1238	failure case, value out of range (percentage)	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1257	success case, value is a valid number	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1273	success case, value is a valid percentage	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1291	failure case, missing value	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1304	failure case, missing minValue	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1321	failure case, missing maxValue	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1339	failure case, value out of range	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1358	failure case, min > max	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1377	failure case, invalid value	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1396	success case	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1412	success case with percentage format	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1428	failure case, percentage value out of range	paired-match	upstream-semantics-role-checks.md#slider-and-progress-range-data
