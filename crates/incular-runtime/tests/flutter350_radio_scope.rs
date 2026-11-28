@@ -126,3 +126,133 @@ fn controlled_radios_select_toggle_and_retain_focus_without_duplicate_callbacks(
     assert_eq!(*calls.borrow(), [Some(2), None]);
     assert!(!focus[2].has_focus());
 }
+
+fn radio_key(runtime: &mut Runtime, code: Code, shift: bool) {
+    use incular_core::Modifiers;
+    let named = if code == Code::Tab {
+        NamedKey::Tab
+    } else {
+        NamedKey::Unidentified
+    };
+    let mut event = KeyboardEvent::key_down(KeyboardKey::Named(named), code);
+    if shift {
+        event.modifiers = Modifiers::SHIFT;
+    }
+    let _ = runtime.handle_input(InputEvent::Key(event));
+    pump(runtime);
+}
+
+fn pick(runtime: &mut Runtime, key: u64) {
+    let element = runtime.tree().element_with_key(&key.into()).unwrap();
+    let bounds = runtime.tree().element_bounds(element).unwrap();
+    let center = bounds.origin + Offset::new(bounds.size.width / 2., bounds.size.height / 2.);
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        let _ = runtime.handle_input(InputEvent::Pointer {
+            phase,
+            position: center,
+        });
+    }
+    pump(runtime);
+}
+
+fn keyboard_scene(
+    disabled: Option<u32>,
+    surround: bool,
+) -> (Runtime, Signal<Option<u32>>, [FocusNode; 3], [FocusNode; 2]) {
+    use incular_widgets::{EditableText, TextDirection};
+    let selected = Signal::new(None);
+    let nodes = [FocusNode::new(), FocusNode::new(), FocusNode::new()];
+    let fields = [FocusNode::new(), FocusNode::new()];
+    let radio_items: Widget = Column::new(nodes.iter().enumerate().map(|(index, node)| {
+        let value = index as u32;
+        Widget::from(
+            RawRadio::new(value, None)
+                .enabled(disabled != Some(value))
+                .focus_node(node.clone())
+                .builder(|_| Widget::box_(Size::new(20., 16.), Color::WHITE)),
+        )
+        .with_key(1 + u64::from(value))
+    }))
+    .into();
+    let field = |node: &FocusNode| -> Widget {
+        EditableText::new(incular_text::TextEditingController::new())
+            .text_direction(TextDirection::Ltr)
+            .focus_node(node.clone())
+            .into()
+    };
+    let field_widgets = surround.then(|| [field(&fields[0]), field(&fields[1])]);
+    let mut runtime = Runtime::new(
+        Builder::new({
+            let selected = selected.clone();
+            move |_| {
+                let notify = selected.clone();
+                let group: Widget = RadioGroup::new(radio_items.clone())
+                    .value(selected.get())
+                    .on_changed_optional(move |value| {
+                        notify.set(value);
+                    })
+                    .into();
+                if let Some([before, after]) = &field_widgets {
+                    Column::new([before.clone(), group, after.clone()]).into()
+                } else {
+                    group
+                }
+            }
+        })
+        .into(),
+    )
+    .unwrap();
+    pump(&mut runtime);
+    (runtime, selected, nodes, fields)
+}
+
+#[test]
+fn arrow_keys_wrap_in_reading_order_and_skip_disabled_radios() {
+    for disabled in [None, Some(1)] {
+        let (mut runtime, selected, focus, _) = keyboard_scene(disabled, false);
+        pick(&mut runtime, 1);
+        assert_eq!(selected.get(), Some(0));
+        assert!(focus[0].has_focus());
+        let expected = if disabled.is_none() {
+            [1, 2, 0, 2, 1]
+        } else {
+            [2, 0, 2, 0, 2]
+        };
+        for (code, index) in [
+            Code::ArrowDown,
+            Code::ArrowRight,
+            Code::ArrowRight,
+            Code::ArrowLeft,
+            Code::ArrowUp,
+        ]
+        .into_iter()
+        .zip(expected)
+        {
+            radio_key(&mut runtime, code, false);
+            assert_eq!(selected.get(), Some(index));
+            assert!(focus[index as usize].has_focus());
+        }
+    }
+}
+
+#[test]
+fn tab_visits_only_the_first_or_selected_radio_between_editable_neighbors() {
+    let (mut runtime, selected, focus, fields) = keyboard_scene(None, true);
+    fields[0].request_focus();
+    pump(&mut runtime);
+    assert!(fields[0].has_focus());
+    radio_key(&mut runtime, Code::Tab, false);
+    assert!(focus[0].has_focus());
+    radio_key(&mut runtime, Code::Tab, false);
+    assert!(!focus[0].has_focus() && !focus[1].has_focus());
+    assert!(fields[1].has_focus());
+
+    pick(&mut runtime, 2);
+    assert_eq!(selected.get(), Some(1));
+    fields[1].request_focus();
+    pump(&mut runtime);
+    assert!(fields[1].has_focus());
+    radio_key(&mut runtime, Code::Tab, true);
+    assert!(focus[1].has_focus());
+    assert!(!focus[0].has_focus() && !fields[1].has_focus());
+}

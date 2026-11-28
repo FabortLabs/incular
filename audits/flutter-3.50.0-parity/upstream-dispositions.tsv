@@ -4511,3 +4511,6 @@ packages/flutter/test/widgets/semantics_role_checks_test.dart	270	success case, 
 packages/flutter/test/widgets/semantics_role_checks_test.dart	294	success case, radio group can nest	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
 packages/flutter/test/widgets/semantics_role_checks_test.dart	652	success case, radio buttons with labels	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
 packages/flutter/test/widgets/semantics_role_checks_test.dart	685	success case, radio group with no checkable children	paired-match	upstream-semantics-role-checks.md#radio-group-boundaries-and-checked-state-rules
+packages/flutter/test/widgets/radio_group_test.dart	128	Radio group can use arrow key	paired-match	upstream-radio-group-keyboard.md
+packages/flutter/test/widgets/radio_group_test.dart	182	Radio group arrow key skips disabled radio	paired-match	upstream-radio-group-keyboard.md
+packages/flutter/test/widgets/radio_group_test.dart	235	Radio group can tab in and out	paired-match	upstream-radio-group-keyboard.md

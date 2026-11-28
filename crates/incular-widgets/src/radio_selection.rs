@@ -2,12 +2,18 @@
 
 use crate::selection::SelectionAreaController;
 use crate::{
-    BuildContext, EditableTextContextMenuBuilder, Focus, FocusNode, GestureDetector,
-    KeyEventResult, MouseCursor, MouseRegion, Semantics, Text, TextContextMenu, Widget,
+    BuildContext, CustomFocusTraversalPolicy, EditableTextContextMenuBuilder, Focus, FocusNode,
+    FocusTraversalGroup, GestureDetector, KeyEventResult, MouseCursor, MouseRegion, Semantics,
+    Text, TextContextMenu, Widget,
 };
-use incular_core::{Code, KeyState, Modifiers};
+use incular_core::{Code, KeyState, Modifiers, Rect};
+use incular_gestures::reading_order_by;
 use incular_semantics::Role;
-use std::{fmt, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    fmt,
+    rc::{Rc, Weak},
+};
 
 type RadioChange<T> = Rc<dyn Fn(Option<T>)>;
 
@@ -16,6 +22,34 @@ type RadioChange<T> = Rc<dyn Fn(Option<T>)>;
 pub struct RadioGroupRegistry<T> {
     value: Option<T>,
     change: Option<RadioChange<T>>,
+    clients: Option<Rc<RadioClients<T>>>,
+    rtl: bool,
+}
+
+struct RadioClient<T> {
+    node: FocusNode,
+    value: T,
+}
+
+struct RadioClients<T>(RefCell<Vec<Weak<RadioClient<T>>>>);
+
+impl<T> RadioClients<T> {
+    fn live(&self) -> Vec<Rc<RadioClient<T>>> {
+        let mut clients = self.0.borrow_mut();
+        clients.retain(|client| client.strong_count() != 0);
+        clients.iter().filter_map(Weak::upgrade).collect()
+    }
+}
+
+impl<T: 'static> crate::tree::RetainedState for RadioClients<T> {
+    fn rebind_revision(&self, _revision: Rc<Cell<u64>>) {}
+}
+
+fn radio_order_rect(mut rect: Rect, rtl: bool) -> Rect {
+    if rtl {
+        rect.origin.x = -rect.origin.x - rect.size.width;
+    }
+    rect
 }
 
 impl<T> RadioGroupRegistry<T> {
@@ -35,6 +69,72 @@ impl<T> RadioGroupRegistry<T> {
     }
 }
 
+impl<T: Clone + PartialEq + 'static> RadioGroupRegistry<T> {
+    fn move_selection(&self, current: &FocusNode, forward: bool) -> bool {
+        let Some(clients) = &self.clients else {
+            return false;
+        };
+        let active = clients.live();
+        if !active.iter().any(|entry| &entry.node == current) {
+            return false;
+        }
+        if active.len() < 2 {
+            return true;
+        }
+        let sorted = reading_order_by(active, |entry| {
+            radio_order_rect(entry.node.bounds(), self.rtl)
+        });
+        let Some(index) = sorted.iter().position(|entry| &entry.node == current) else {
+            return false;
+        };
+        let next = if forward {
+            (index + 1) % sorted.len()
+        } else if index == 0 {
+            sorted.len() - 1
+        } else {
+            index - 1
+        };
+        let picked = &sorted[next];
+        self.request_value(Some(picked.value.clone()));
+        picked.node.request_focus();
+        true
+    }
+
+    fn focus_policy(&self) -> CustomFocusTraversalPolicy {
+        let registry = self.clone();
+        CustomFocusTraversalPolicy::new(move |candidates, current| {
+            let order = reading_order_by((0..candidates.len()).collect(), |&index| {
+                radio_order_rect(candidates[index].bounds, registry.rtl)
+            });
+            let Some(clients) = &registry.clients else {
+                return order;
+            };
+            let active = clients.live();
+            let is_radio = |node: &FocusNode| active.iter().any(|client| &client.node == node);
+            let selected = active
+                .iter()
+                .find(|client| Some(&client.value) == registry.value.as_ref())
+                .map(|client| &client.node)
+                .or_else(|| {
+                    order.iter().find_map(|&index| {
+                        candidates[index]
+                            .node
+                            .as_ref()
+                            .filter(|node| is_radio(node))
+                    })
+                });
+            order
+                .into_iter()
+                .filter(|&index| {
+                    candidates[index].node.as_ref().is_none_or(|node| {
+                        !is_radio(node) || selected == Some(node) || current == Some(node)
+                    })
+                })
+                .collect()
+        })
+    }
+}
+
 /// Coordinates mutually exclusive selection for a group of radio buttons.
 #[derive(Clone)]
 pub struct RadioGroup<T: Clone + PartialEq + 'static> {
@@ -49,6 +149,8 @@ impl<T: Clone + PartialEq + 'static> RadioGroup<T> {
             registry: RadioGroupRegistry {
                 value: None,
                 change: None,
+                clients: None,
+                rtl: false,
             },
             child: child.into(),
         }
@@ -90,11 +192,21 @@ impl<T: Clone + PartialEq + 'static> RadioGroup<T> {
 
 impl<T: Clone + PartialEq + 'static> From<RadioGroup<T>> for Widget {
     fn from(value: RadioGroup<T>) -> Self {
-        Semantics::new(Widget::environment_scope(value.registry, value.child))
-            .role(Role::RadioGroup)
-            .container(true)
-            .explicit_child_nodes(true)
-            .into()
+        Widget::mount_scoped_builder(
+            |_| RadioClients::<T>(RefCell::new(Vec::new())),
+            move |clients, context| {
+                let mut registry = value.registry.clone();
+                registry.clients = Some(clients.clone());
+                registry.rtl = context.text_direction() == Some(incular_config::TextDirection::Rtl);
+                let policy = registry.focus_policy();
+                let content = Widget::environment_scope(registry, value.child.clone());
+                Semantics::new(FocusTraversalGroup::new(content).custom_policy(policy))
+                    .role(Role::RadioGroup)
+                    .container(true)
+                    .explicit_child_nodes(true)
+                    .into()
+            },
+        )
     }
 }
 
@@ -197,15 +309,26 @@ impl<T: Clone + PartialEq + 'static> RawRadio<T> {
     }
 }
 
-struct RawRadioMount(FocusNode);
-impl crate::tree::RetainedState for RawRadioMount {
-    fn rebind_revision(&self, _revision: Rc<std::cell::Cell<u64>>) {}
+struct RawRadioMount<T> {
+    node: FocusNode,
+    registration: RefCell<Option<Rc<RadioClient<T>>>>,
+}
+
+impl<T: 'static> crate::tree::RetainedState for RawRadioMount<T> {
+    const DISPOSE_ON_UNMOUNT: bool = true;
+    fn rebind_revision(&self, _revision: Rc<Cell<u64>>) {}
+    fn dispose(&self) {
+        self.registration.borrow_mut().take();
+    }
 }
 
 impl<T: Clone + PartialEq + 'static> From<RawRadio<T>> for Widget {
     fn from(value: RawRadio<T>) -> Self {
         Widget::mount_scoped_builder(
-            |_| RawRadioMount(FocusNode::new()),
+            |_| RawRadioMount::<T> {
+                node: FocusNode::new(),
+                registration: RefCell::new(None),
+            },
             move |mount, context| {
                 let registry = value
                     .registry
@@ -219,7 +342,22 @@ impl<T: Clone + PartialEq + 'static> From<RawRadio<T>> for Widget {
                     .as_ref()
                     .and_then(|group| group.change.clone())
                     .or_else(|| value.on_changed.clone());
-                let focus_node = value.focus_node.as_ref().unwrap_or(&mount.0);
+                let focus_node = value.focus_node.as_ref().unwrap_or(&mount.node);
+                mount.registration.borrow_mut().take();
+                if value.enabled
+                    && let Some(clients) = registry
+                        .as_ref()
+                        .and_then(|registry| registry.clients.as_ref())
+                {
+                    let client = Rc::new(RadioClient {
+                        node: focus_node.clone(),
+                        value: value.value.clone(),
+                    });
+                    let mut live = clients.0.borrow_mut();
+                    live.retain(|entry| entry.strong_count() != 0);
+                    live.push(Rc::downgrade(&client));
+                    *mount.registration.borrow_mut() = Some(client);
+                }
                 let activate = change.filter(|_| value.enabled).map(|change| {
                     let selected_value = value.value.clone();
                     let toggleable = value.toggleable;
@@ -256,17 +394,32 @@ impl<T: Clone + PartialEq + 'static> From<RawRadio<T>> for Widget {
                     .autofocus(value.enabled && value.autofocus);
                 if let Some(activate) = &activate {
                     let activate = activate.clone();
-                    focus = focus.on_key_event(move |_, event| {
-                        if event.code == Code::Space
-                            && event.state == KeyState::Down
-                            && !event.modifiers.intersects(
+                    let registry = registry.clone();
+                    focus = focus.on_key_event(move |node, event| {
+                        if event.state != KeyState::Down
+                            || event.modifiers.intersects(
                                 Modifiers::CONTROL
                                     | Modifiers::SHIFT
                                     | Modifiers::ALT
                                     | Modifiers::META,
                             )
                         {
-                            activate();
+                            return KeyEventResult::Ignored;
+                        }
+                        let handled = match event.code {
+                            Code::Space => {
+                                activate();
+                                true
+                            }
+                            Code::ArrowDown | Code::ArrowRight => registry
+                                .as_ref()
+                                .is_some_and(|registry| registry.move_selection(node, true)),
+                            Code::ArrowUp | Code::ArrowLeft => registry
+                                .as_ref()
+                                .is_some_and(|registry| registry.move_selection(node, false)),
+                            _ => false,
+                        };
+                        if handled {
                             KeyEventResult::Handled
                         } else {
                             KeyEventResult::Ignored
