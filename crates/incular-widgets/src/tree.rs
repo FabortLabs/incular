@@ -922,6 +922,7 @@ pub enum RenderKind {
     RawScrollbar {
         controller: ScrollController,
         style: RawScrollbarStyle,
+        shape: Option<crate::advanced_scrolling::raw_scrollbar::ScrollbarThumbShape>,
         text_direction: TextDirection,
     },
     ListWheelScrollView {

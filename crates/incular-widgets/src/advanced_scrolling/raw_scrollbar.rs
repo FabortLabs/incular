@@ -16,7 +16,7 @@ use incular_scroll::{ActivityOrigin, OwnedActivity, ScrollController};
 use smart_default::SmartDefault;
 
 use crate::gestures::PointerDeviceKind;
-use crate::{MouseCursor, Radius};
+use crate::{MouseCursor, Radius, ShapeBorder};
 
 /// Flutter `_kScrollbarFadeDuration` (`widgets/scrollbar.dart:43`).
 pub(crate) const SCROLLBAR_FADE_DURATION: Duration = Duration::from_millis(300);
@@ -417,6 +417,22 @@ impl ScrollbarCursor {
     }
 }
 
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct ScrollbarThumbShape(pub(crate) Rc<dyn ShapeBorder>);
+
+impl PartialEq for ScrollbarThumbShape {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.as_ref() == other.0.as_ref()
+    }
+}
+
+impl fmt::Debug for ScrollbarThumbShape {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ScrollbarThumbShape").finish_non_exhaustive()
+    }
+}
+
 /// A stateful raw scrollbar overlay attached to an existing scroll controller.
 ///
 /// Pointer methods use viewport coordinates and preserve Flutter's thumb
@@ -434,6 +450,7 @@ impl ScrollbarCursor {
 pub struct RawScrollbar {
     controller: ScrollController,
     cursor: Option<ScrollbarCursor>,
+    shape: Option<ScrollbarThumbShape>,
     style: RawScrollbarStyle,
     text_direction: TextDirection,
     drag: Option<ThumbDrag>,
@@ -453,6 +470,7 @@ impl Clone for RawScrollbar {
         Self {
             controller: self.controller.clone(),
             cursor: self.cursor.clone(),
+            shape: self.shape.clone(),
             style: self.style,
             text_direction: self.text_direction,
             drag: None,
@@ -471,6 +489,7 @@ impl RawScrollbar {
         Self {
             controller,
             cursor: None,
+            shape: None,
             style: RawScrollbarStyle::default(),
             text_direction: TextDirection::Ltr,
             drag: None,
@@ -583,8 +602,28 @@ impl RawScrollbar {
     /// Sets the rounded corners of the thumb.
     #[must_use]
     pub fn radius(mut self, radius: Radius) -> Self {
+        debug_assert!(
+            self.shape.is_none(),
+            "a scrollbar thumb cannot have both a shape and radius",
+        );
         self.style.radius = Some(radius);
         self
+    }
+
+    /// Sets the thumb outline and optionally paints the shape's own border.
+    /// This is mutually exclusive with a separately configured thumb radius.
+    #[must_use]
+    pub fn shape(mut self, shape: impl ShapeBorder + 'static) -> Self {
+        debug_assert!(
+            self.style.radius.is_none(),
+            "a scrollbar thumb cannot have both a shape and radius",
+        );
+        self.shape = Some(ScrollbarThumbShape(Rc::new(shape)));
+        self
+    }
+
+    pub(crate) fn thumb_shape(&self) -> Option<ScrollbarThumbShape> {
+        self.shape.clone()
     }
 
     pub(crate) fn track_paint_colors(&self) -> (Color, Color) {
@@ -729,6 +768,10 @@ impl RawScrollbar {
     /// silent here.
     pub fn set_style(&mut self, style: RawScrollbarStyle) {
         style.assert_valid_visibility();
+        debug_assert!(
+            style.radius.is_none() || self.shape.is_none(),
+            "a scrollbar thumb cannot have both a shape and radius",
+        );
         self.end_drag_activity();
         self.style = style.normalized();
         self.fade

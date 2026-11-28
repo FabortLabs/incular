@@ -33,7 +33,7 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
                 behavior: resolved,
             }
         }
-        WidgetKind::RawScrollbar { controller, style, .. } => {
+        WidgetKind::RawScrollbar { controller, style, shape, .. } => {
             let text_direction = context.depend::<TextDirection>().unwrap_or(TextDirection::Ltr);
             let mut style = *style;
             if style.padding.is_none() {
@@ -41,7 +41,12 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
                     .map_or(EdgeInsets::ZERO, |padding| padding.0);
                 style.padding = Some(insets.into());
             }
-            RenderKind::RawScrollbar { controller: controller.clone(), style, text_direction }
+            RenderKind::RawScrollbar {
+                controller: controller.clone(),
+                style,
+                shape: shape.clone(),
+                text_direction,
+            }
         }
         WidgetKind::ListWheelScrollView { config } => RenderKind::ListWheelScrollView {
             config: config.clone(),

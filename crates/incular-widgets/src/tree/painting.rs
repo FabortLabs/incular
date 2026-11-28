@@ -1137,8 +1137,13 @@ impl WidgetTree {
                 border.paint(&mut canvas, rect, &geometry.rows, &geometry.columns);
                 picture.extend_from(&canvas.finish());
                 foreground_bounds = painted_bounds(picture.commands(), size);
-            } else if matches!(&*kind, RenderKind::RawScrollbar { .. }) {
-                self.paint_explicit_scrollbar(id, size, &mut picture);
+            } else if let RenderKind::RawScrollbar { shape, .. } = &*kind {
+                self.paint_explicit_scrollbar(
+                    id,
+                    size,
+                    shape.as_ref().map(|shape| shape.0.as_ref()),
+                    &mut picture,
+                );
                 foreground_bounds = painted_bounds(picture.commands(), size);
             } else if let Some(focus_ring) = focus_ring.filter(|color| color.alpha > 0) {
                 let inset = 1.0;
@@ -1381,7 +1386,13 @@ impl WidgetTree {
         }
     }
 
-    fn paint_explicit_scrollbar(&self, id: RenderObjectId, size: Size, cache: &mut DisplayList) {
+    fn paint_explicit_scrollbar(
+        &self,
+        id: RenderObjectId,
+        size: Size,
+        shape: Option<&dyn crate::ShapeBorder>,
+        cache: &mut DisplayList,
+    ) {
         let Some(scrollbar) = self
             .renders
             .get(id.0)
@@ -1434,7 +1445,25 @@ impl WidgetTree {
                 stroke: Stroke::default(),
             });
         }
-        paint_fill(cache, geometry.thumb, style.radius, style.thumb_color);
+        if let Some(shape) = shape.filter(|_| style.radius.is_none()) {
+            let mut canvas = incular_rendering::Canvas::default();
+            let fill = faded(style.thumb_color);
+            if fill.alpha > 0 {
+                let paint = incular_rendering::Paint::default().color(fill);
+                if shape.prefer_paint_interior() {
+                    shape.paint_interior(&mut canvas, geometry.thumb, &paint, None);
+                } else {
+                    let path = Arc::new(shape.outer_path(geometry.thumb));
+                    canvas.draw_path(path, &paint, FillRule::NonZero);
+                }
+            }
+            // Flutter fades the fill, but leaves a configured side unchanged
+            // while the scrollbar is visible.
+            shape.paint(&mut canvas, geometry.thumb);
+            cache.extend_from(&canvas.finish());
+        } else {
+            paint_fill(cache, geometry.thumb, style.radius, style.thumb_color);
+        }
     }
     pub(super) fn hit_test_render(
         &self,

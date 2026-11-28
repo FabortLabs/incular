@@ -503,3 +503,213 @@ fn a_visible_track_rejects_an_explicitly_hidden_thumb_in_either_builder_order() 
     let accepted = accepted.thumb_visibility(true);
     assert_eq!(accepted.style().thumb_visibility, Some(true));
 }
+
+fn shaped_overlay(controller: &ScrollController, thickness: f32) -> RawScrollbar {
+    let mut bar = visible_raw(controller);
+    bar.set_style(RawScrollbarStyle {
+        thickness,
+        ..bar.style()
+    });
+    bar
+}
+
+fn shape_child(controller: &ScrollController) -> Widget {
+    ScrollConfiguration::new(
+        SingleChildScrollView::new(Widget::box_(Size::new(800., 1000.), Color::WHITE))
+            .controller(controller.clone()),
+    )
+    .behavior(ScrollBehavior::new().scrollbars(false))
+    .into()
+}
+
+fn shape_frame() -> (WidgetTree, ScrollController, Size, Instant) {
+    (
+        WidgetTree::new(),
+        ScrollController::new(),
+        Size::new(800., 600.),
+        Instant::now(),
+    )
+}
+
+#[test]
+fn shaped_scrollbar_fills_beveled_thumb_without_an_unsolicited_border() {
+    use incular_widgets::{BeveledRectangleBorder, BorderRadius, BorderSide, Radius};
+
+    let (mut tree, controller, viewport, now) = shape_frame();
+    tree.mount(
+        shaped_overlay(&controller, 6.)
+            .shape(BeveledRectangleBorder::new(
+                BorderSide::NONE,
+                BorderRadius::all(Radius::circular(8.)),
+            ))
+            .with_child(shape_child(&controller)),
+    )
+    .unwrap();
+    settle(&mut tree, viewport, now);
+    let list = tree.paint();
+    let (path, rule) = list
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            PaintCommand::FillPath {
+                path,
+                brush,
+                fill_rule,
+            } if *brush == RAW_INK.into() => Some((path, *fill_rule)),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        path.tight_bounds(),
+        Some(Rect::from_origin_size(
+            Offset::new(794., 0.),
+            Size::new(6., 360.),
+        ))
+    );
+    for (x, y, inside) in [
+        (797., 0., true),
+        (797., 18., true),
+        (796., 0., false),
+        (798., 0., false),
+    ] {
+        assert_eq!(
+            path.contains(Offset::new(x, y), rule),
+            inside,
+            "point ({x}, {y})"
+        );
+    }
+    assert!(!list.commands().iter().any(|command| matches!(
+        command,
+        PaintCommand::StrokePath { .. } | PaintCommand::Border { .. }
+    )));
+}
+
+#[test]
+fn shaped_scrollbar_circle_fills_then_strokes_the_exact_inset_circle() {
+    use incular_widgets::{BorderSide, CircleBorder};
+
+    let (mut tree, controller, viewport, now) = shape_frame();
+    let child = shape_child(&controller);
+    let bar = shaped_overlay(&controller, 36.);
+    let root = tree
+        .mount(
+            bar.clone()
+                .shape(CircleBorder::new(BorderSide::solid(Color::BLACK, 2.)))
+                .with_child(child.clone()),
+        )
+        .unwrap();
+    settle(&mut tree, viewport, now);
+    let list = tree.paint();
+    let paths = list
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            PaintCommand::FillPath { path, brush, .. } if *brush == RAW_INK.into() => {
+                Some((path.tight_bounds().unwrap(), None))
+            }
+            PaintCommand::StrokePath {
+                path,
+                brush,
+                stroke,
+            } if *brush == Color::BLACK.into() => {
+                Some((path.tight_bounds().unwrap(), Some(stroke.width)))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let rect =
+        |x, y, diameter| Rect::from_origin_size(Offset::new(x, y), Size::new(diameter, diameter));
+    assert_eq!(
+        paths,
+        vec![
+            (rect(764., 162., 36.), None),
+            (rect(765., 163., 34.), Some(2.))
+        ]
+    );
+
+    // Removing only the shape invalidates the retained picture and leaves a
+    // regular square thumb, without an old circle or outline behind it.
+    tree.update(root, bar.with_child(child)).unwrap();
+    assert_eq!(
+        settle(&mut tree, viewport, now + Duration::from_secs(1)),
+        Some(Rect::from_origin_size(
+            Offset::new(764., 0.),
+            Size::new(36., 360.)
+        ),)
+    );
+    assert!(!tree.paint().commands().iter().any(|command| matches!(
+        command,
+        PaintCommand::FillPath { .. } | PaintCommand::StrokePath { .. }
+    )));
+}
+
+#[test]
+fn shaped_scrollbar_independently_rounds_only_the_requested_corner() {
+    use incular_widgets::{BorderRadius, BorderSide, Radius, RoundedRectangleBorder};
+
+    let (mut tree, controller, viewport, now) = shape_frame();
+    let border = RoundedRectangleBorder::new(
+        BorderSide::NONE,
+        BorderRadius {
+            top_left: Radius::circular(8.),
+            ..BorderRadius::ZERO
+        },
+    );
+    tree.mount(
+        shaped_overlay(&controller, 20.)
+            .shape(border)
+            .with_child(shape_child(&controller)),
+    )
+    .unwrap();
+    settle(&mut tree, viewport, now);
+    let list = tree.paint();
+    let (path, rule) = list
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            PaintCommand::FillPath {
+                path,
+                brush,
+                fill_rule,
+            } if *brush == RAW_INK.into() => Some((path, *fill_rule)),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        path.tight_bounds(),
+        Some(Rect::from_origin_size(
+            Offset::new(780., 0.),
+            Size::new(20., 360.),
+        ))
+    );
+    assert!(!path.contains(Offset::new(781., 1.), rule));
+    assert!(path.contains(Offset::new(788., 1.), rule));
+    assert!(path.contains(Offset::new(799., 1.), rule));
+    assert!(path.contains(Offset::new(781., 359.), rule));
+    assert!(!list.commands().iter().any(|command| matches!(
+        command,
+        PaintCommand::StrokePath { .. } | PaintCommand::Border { .. }
+    )));
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn either_builder_order_guards_a_thumb_shape_and_radius_combination() {
+    use incular_widgets::{CircleBorder, Radius};
+
+    for shape_first in [false, true] {
+        assert!(
+            std::panic::catch_unwind(|| {
+                let bar = RawScrollbar::new(ScrollController::new());
+                if shape_first {
+                    bar.shape(CircleBorder::default())
+                        .radius(Radius::circular(4.))
+                } else {
+                    bar.radius(Radius::circular(4.))
+                        .shape(CircleBorder::default())
+                }
+            })
+            .is_err()
+        );
+    }
+}

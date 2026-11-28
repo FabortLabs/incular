@@ -1108,6 +1108,7 @@ pub(crate) enum WidgetKind {
         controller: ScrollController,
         style: RawScrollbarStyle,
         cursor: Option<crate::advanced_scrolling::ScrollbarCursor>,
+        shape: Option<crate::advanced_scrolling::raw_scrollbar::ScrollbarThumbShape>,
         child: Widget,
     },
     ListWheelScrollView {

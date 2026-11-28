@@ -4546,3 +4546,6 @@ packages/flutter/test/widgets/scrollbar_test.dart	2538	Scrollbar asserts that a 
 packages/flutter/test/widgets/scrollbar_test.dart	522	should scroll towards the right direction	paired-match	upstream-scrollbar-padding.md#thumb-minimum-inheritance-and-viewport-cap
 packages/flutter/test/widgets/scrollbar_test.dart	1749	minThumbLength property of RawScrollbar is respected	paired-match	upstream-scrollbar-padding.md#thumb-minimum-inheritance-and-viewport-cap
 packages/flutter/test/widgets/scrollbar_test.dart	1884	minOverscrollLength property of RawScrollbar is respected	paired-match	upstream-scrollbar-padding.md#thumb-minimum-inheritance-and-viewport-cap
+packages/flutter/test/widgets/scrollbar_test.dart	1713	shape property of RawScrollbar can draw a BeveledRectangleBorder	paired-match	upstream-raw-scrollbar-paint.md#custom-thumb-shapes
+packages/flutter/test/widgets/scrollbar_test.dart	1779	shape property of RawScrollbar can draw a CircleBorder	paired-match	upstream-raw-scrollbar-paint.md#custom-thumb-shapes
+packages/flutter/test/widgets/scrollbar_test.dart	1843	shape property of RawScrollbar can draw a RoundedRectangleBorder	paired-match	upstream-raw-scrollbar-paint.md#custom-thumb-shapes
