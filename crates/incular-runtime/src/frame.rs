@@ -1945,7 +1945,13 @@ impl Runtime {
         environment.physical_width = metrics.physical_size.width;
         environment.physical_height = metrics.physical_size.height;
         environment.scale_factor = metrics.scale_factor;
-        self.set_environment(environment)
+        let changed = self.set_environment(environment);
+        if changed {
+            // Constraints and physical presentation belong to the view, even
+            // when no widget depends on the ambient metrics.
+            self.request_frame();
+        }
+        changed
     }
     pub fn register_builder(
         &mut self,

@@ -69,3 +69,21 @@ window stays clean, the root builder runs only once, another change
 after painting wakes again, and the detached delegate no longer
 wakes the host. The focused pipeline, task wake, and semantics
 activation targets passed all 14 tests.
+
+## View metrics request presentation without widget subscribers
+
+Flutter's pinned `rendering/binding_test.dart:13` passed. Before the
+Incular fix, new native metrics could leave a mounted view idle if no
+widget read the ambient environment. Its physical view configuration
+and layout constraints still changed, so the runtime now requests
+presentation independently of those subscriptions. The window fixture
+checks the semantic bounds changing from 200×150 to 400×300 logical
+pixels, a scale change leaving the logical size alone, unrelated and
+unknown windows staying idle, and an identical payload being ignored.
+All ten focused pipeline, constraint, and multi-view tests passed.
+
+This is partial against the original registration. Flutter's binding
+can register a RenderView without a child and forces a frame for a
+global metrics callback with a mounted child even if the new values
+are identical. Incular registers mounted roots and coalesces duplicate
+per-window metric payloads.

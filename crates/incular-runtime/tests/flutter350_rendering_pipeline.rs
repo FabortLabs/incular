@@ -137,3 +137,70 @@ fn a_mounted_child_view_layout_invalidation_wakes_the_host_once() {
     assert_eq!(wakes.0.load(Ordering::Relaxed), wakes_after_close);
     assert!(!app.frame_requested(primary));
 }
+
+#[test]
+fn changed_host_metrics_force_a_frame_even_without_environment_subscribers() {
+    use incular_accessibility::MobileAccessibilityProjection;
+    use incular_platform::{PhysicalSize, PlatformEvent, WindowEvent, WindowId, WindowMetrics};
+    use incular_widgets::Semantics;
+
+    let mut app = Application::new(|_| {
+        Semantics::new(SizedBox::expand())
+            .label("window root")
+            .into()
+    })
+    .unwrap();
+    let live = app.primary_window();
+    let neighbor = app
+        .open_window(WindowOptions::default(), SizedBox::expand().into())
+        .unwrap()
+        .id();
+    let missing = WindowId::from_parts(999, 1);
+    let first = WindowMetrics::new(PhysicalSize::new(200, 150), 1.);
+    let second = WindowMetrics::new(PhysicalSize::new(800, 600), 2.);
+    let metrics = |id, value| WindowEvent::platform(id, PlatformEvent::Metrics(value));
+    app.handle_window_event(metrics(live, first));
+    for window in [live, neighbor] {
+        app.run_window_frame_at(
+            window,
+            Constraints::tight(first.logical_size()),
+            Instant::now(),
+        )
+        .unwrap();
+        assert!(!app.frame_requested(window));
+    }
+    let mut projection = MobileAccessibilityProjection::new();
+    let view = app
+        .sync_semantics_projection(live, &mut projection)
+        .unwrap();
+    assert_eq!(view.nodes[0].semantic.bounds.size, Size::new(200., 150.));
+
+    app.handle_window_event(metrics(missing, second));
+    app.handle_window_event(metrics(live, first));
+    assert!(!app.frame_requested(live));
+    assert!(!app.frame_requested(neighbor));
+    assert!(!app.frame_requested(missing));
+
+    app.handle_window_event(metrics(live, second));
+    assert!(app.frame_requested(live));
+    assert!(!app.frame_requested(neighbor));
+    app.run_window_frame_at(
+        live,
+        Constraints::tight(second.logical_size()),
+        Instant::now(),
+    )
+    .unwrap();
+    let resized = app
+        .sync_semantics_projection(live, &mut projection)
+        .unwrap();
+    assert_eq!(resized.nodes[0].semantic.bounds.size, Size::new(400., 300.));
+    assert!(!app.frame_requested(live));
+
+    // Logical dimensions stay unchanged, but device pixels still change.
+    app.handle_window_event(metrics(
+        live,
+        WindowMetrics::new(PhysicalSize::new(400, 300), 1.),
+    ));
+    assert!(app.frame_requested(live));
+    assert!(!app.frame_requested(neighbor));
+}
