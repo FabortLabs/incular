@@ -4148,3 +4148,4 @@ packages/flutter/test/widgets/draggable_test.dart	3248	long-press draggable can 
 packages/flutter/test/widgets/editable_text_test.dart	3815	Sends "updateConfig" when keyboardType is changed	paired-match	upstream-editable-defaults.md#live-keyboard-configuration-and-initial-style-wire-fields
 packages/flutter/test/widgets/editable_text_test.dart	6396	text styling info is sent on show keyboard	paired-match	upstream-editable-defaults.md#live-keyboard-configuration-and-initial-style-wire-fields
 packages/flutter/test/widgets/editable_text_test.dart	6439	text styling info is sent on show keyboard (bold override)	paired-match	upstream-editable-defaults.md#live-keyboard-configuration-and-initial-style-wire-fields
+packages/flutter/test/widgets/editable_text_test.dart	10466	keyboard is requested after setEditingState after switching to a new text field	paired-match	upstream-text-input-reattach.md#keyboard-show-after-the-next-editors-initial-state

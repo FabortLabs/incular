@@ -304,3 +304,21 @@ does not echo; closing the retired client sends Flutter's clear then
 deferred hide. Repeating the value after blur emits nothing and does not
 reopen the keyboard or reacquire focus. All 15 focused native input
 checks passed.
+
+## Keyboard show after the next editor's initial state
+
+Pinned `widgets/editable_text_test.dart:10466` passed. Two mounted
+native editors are actually tapped in sequence. The new client
+carries its own editing value before the native Show command.
+The optional Flutter host now has a single ordered show operation:
+after closing and attaching the new client, it publishes editor
+size and transform, marked-text rectangle, style, and editing
+state before Show, then requests eligible autofill and sends
+the caret rectangle. The native test checks the exact nine-method
+wire sequence and confirms the second field's text is not the first.
+
+An old client cannot request a show, the delayed hide cannot
+dismiss the replacement, and re-showing the same attachment does
+not replay its initial geometry or style. This is a real retained
+runtime and mock Flutter host, not an Android keyboard driver run.
+The focused runtime channel, style and lifecycle targets passed.

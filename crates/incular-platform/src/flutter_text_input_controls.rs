@@ -167,6 +167,7 @@ struct Attachment {
     geometry: GeometryCache,
     editing: Option<AutofillEditingValue>,
     style: Option<FlutterTextInputStyle>,
+    shown: bool,
 }
 
 #[derive(Default)]
@@ -273,6 +274,7 @@ impl FlutterTextInputControls {
             geometry: GeometryCache::default(),
             editing: None,
             style: None,
+            shown: false,
         });
         let arguments = json!([id.get(), self.platform_configuration(&configuration)]);
         self.forward(
@@ -330,6 +332,7 @@ impl FlutterTextInputControls {
                 attachment.editing = Some(value.clone())
             }
             FlutterTextInputControlUpdate::Style(style) => attachment.style = Some(style.clone()),
+            FlutterTextInputControlUpdate::Show => attachment.shown = true,
             _ => {}
         }
         self.forward(update, (method, arguments));
@@ -422,6 +425,14 @@ impl FlutterTextInputControls {
         self.attached
             .as_ref()
             .is_some_and(|attachment| attachment.id == id)
+    }
+
+    /// Whether this attachment has sent its first keyboard-show request.
+    #[must_use]
+    pub fn has_shown(&self, id: TextInputClientId) -> bool {
+        self.attached
+            .as_ref()
+            .is_some_and(|attachment| attachment.id == id && attachment.shown)
     }
 
     fn forward(

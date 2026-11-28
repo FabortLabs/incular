@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use incular_platform::{
     FlutterTextInputConfiguration, FlutterTextInputControlUpdate, FlutterTextInputControls,
-    FlutterTextInputControlsError, TextInputState,
+    FlutterTextInputControlsError, TextInputClientId, TextInputState,
     autofill::{
         AutofillConfiguration, AutofillEditingValue, AutofillFieldConfiguration,
         AutofillMessageError, AutofillSelectionAffinity, FlutterAutofillScope,
@@ -27,6 +27,68 @@ impl Runtime {
             return None;
         }
         Some((focused, self.tree.autofill_scope(focused)?))
+    }
+
+    /// Handles a native keyboard-show command for an attached Flutter host.
+    /// Call after layout. The first show publishes geometry, style and the
+    /// current editing state before the keyboard request. A show on a stale
+    /// client is ignored. Hosts still own client attachment and closing.
+    pub fn show_flutter_text_input(
+        &self,
+        client: TextInputClientId,
+        controls: &mut FlutterTextInputControls,
+    ) -> Result<bool, FlutterTextInputControlsError> {
+        use FlutterTextInputControlUpdate as Update;
+
+        let Some(connection) = self.text_input_client.filter(|connection| {
+            connection.client == client
+                && self.focused == Some(connection.target)
+                && controls.is_attached(client)
+        }) else {
+            return Ok(false);
+        };
+        if controls.has_shown(client) {
+            return controls.update(client, Update::Show);
+        }
+        let field = connection.target;
+        let (Some((size, transform)), Some(controller), Some(style)) = (
+            self.tree.flutter_editable_size_and_transform(field),
+            self.tree.text_controller(field),
+            self.tree.flutter_text_field_style(field),
+        ) else {
+            return Ok(false);
+        };
+        let (editing, composing) = controller.with_value(|value| {
+            (editor_wire(&controller, &value.text, value.composing), value.composing)
+        });
+        let local_caret = |offset| {
+            self.tree.editable_local_caret_rect(field, offset, TextAffinity::Downstream)
+        };
+        let marked = composing
+            .and_then(|range| self.tree.editable_composing_rect(field, range))
+            .or_else(|| local_caret(composing.map_or(0, |range| range.start)));
+        let caret = controller.selection_if_set()
+            .and_then(|selection| local_caret(selection.range().start));
+        let [a, b, c, d, x, y] = transform.coefficients();
+        controls.update(client, Update::EditableSizeAndTransform {
+            size,
+            transform: [a, b, 0., 0., c, d, 0., 0., 0., 0., 1., 0., x, y, 0., 1.],
+        })?;
+        if let Some(marked) = marked {
+            controls.update(client, Update::ComposingRect(marked))?;
+        }
+        controls.publish_style(client, style)?;
+        controls.publish_editing_state(client, editing)?;
+        let shown = controls.update(client, Update::Show)?;
+        if shown && self.text_input_configuration.as_ref().is_some_and(|config| {
+            config.client == client && config.traits.autofill_hints.is_some()
+        }) {
+            controls.update(client, Update::RequestAutofill)?;
+        }
+        if let Some(caret) = caret {
+            controls.update(client, Update::CaretRect(caret))?;
+        }
+        Ok(shown)
     }
 
     /// Publishes the active laid-out editor to an opt-in Flutter host.
