@@ -844,6 +844,7 @@ impl WidgetTree {
         if let Some(insets) = insets {
             self.semantic_bounds_insets.insert(RenderObjectId(render), insets);
         }
+        self.update_content_sensitivity_registration(None, environment_override.as_ref());
         let id = ElementId(self.elements.insert(Element {
             parent,
             children: Vec::new(),
@@ -1336,6 +1337,10 @@ impl WidgetTree {
         {
             self.mark_render_semantics(parent, SemanticsDirty::Subtree);
         }
+        self.update_content_sensitivity_registration(
+            old_override.as_ref(),
+            new_override.as_ref(),
+        );
         {
             let element = self.element_live_mut(id, "retained element must remain live");
             element.widget = widget.clone();
@@ -2954,6 +2959,10 @@ impl WidgetTree {
                     let Some(mut element) = self.elements.remove(id.0) else {
                         continue;
                     };
+                    self.update_content_sensitivity_registration(
+                        element.environment_override.as_ref(),
+                        None,
+                    );
                     if let Some(layers) = element.scrolling_state.as_mut()
                         .and_then(|state| state.sliver_layer_scopes.take())
                     {

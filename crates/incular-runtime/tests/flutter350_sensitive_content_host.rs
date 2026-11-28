@@ -241,3 +241,86 @@ fn unscoped_application_does_not_overwrite_a_manual_capture_setting() {
         S,
     );
 }
+
+#[test]
+fn keyed_policy_updates_respect_the_unchanged_sibling_without_duplicates() {
+    type Case = (
+        usize,
+        Policy,
+        Policy,
+        Policy,
+        Policy,
+        &'static [Policy],
+        Policy,
+        &'static [Policy],
+    );
+    // line, changing policy before/after, sibling, initial effective,
+    // initial command(s), remaining effective, subsequent command(s).
+    let cases: &[Case] = &[
+        (1343, S, A, S, S, &[S], S, &[]),
+        (1379, S, N, S, S, &[S], S, &[]),
+        (1415, S, A, A, S, &[S], A, &[A]),
+        (1454, S, N, A, S, &[S], A, &[A]),
+        (1493, S, A, N, S, &[S], A, &[A]),
+        (1532, S, N, N, S, &[S], N, &[N]),
+        (1571, A, S, S, S, &[S], S, &[]),
+        (1607, A, N, S, S, &[S], S, &[]),
+        (1643, A, S, A, A, &[], S, &[S]),
+        (1679, A, N, A, A, &[], A, &[]),
+        (1715, A, S, N, A, &[], S, &[S]),
+        (1751, A, N, N, A, &[], N, &[N]),
+        // The staged registration in Flutter emits N and then S or A on
+        // these initial mounts. Incular emits only the resolved protection.
+        (1787, N, S, S, S, &[S], S, &[]),
+        (1829, N, A, S, S, &[S], S, &[]),
+        (1871, N, S, A, A, &[], S, &[S]),
+        (1914, N, A, A, A, &[], A, &[]),
+        (1956, N, S, N, N, &[N], S, &[S]),
+        (1995, N, A, N, N, &[N], A, &[A]),
+    ];
+    for &(line, old, new, sibling, initial, first, end, after) in cases {
+        let signal = Signal::new(vec![(1, old), (2, sibling)]);
+        let mut application = scene(signal.clone());
+        let mut backend = baseline(&mut application);
+        assert_frame(&mut application, &mut backend, line, initial, first);
+        signal.set(vec![(1, new), (2, sibling)]);
+        assert_frame(&mut application, &mut backend, line, end, after);
+    }
+}
+
+#[test]
+fn moving_a_retained_global_key_and_replacing_a_scope_do_not_leak_registrations() {
+    use incular_widgets::{GlobalKey, internal::WidgetTree};
+    let key = GlobalKey::new();
+    let capture_layer =
+        || Widget::from(SensitiveContent::with_sensitivity(S, leaf())).with_key(key.clone());
+    let build = |capture_on_left: bool, include: bool| -> Widget {
+        let left = Column::new((capture_on_left && include).then(capture_layer));
+        let right = Column::new((!capture_on_left && include).then(capture_layer));
+        Column::new([
+            Widget::from(left).with_key(1_u64),
+            Widget::from(right).with_key(2_u64),
+        ])
+        .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(true, true)).unwrap();
+    let limits = Constraints::tight(Size::new(200., 120.));
+    tree.layout(limits).unwrap();
+    assert_eq!(tree.calculated_content_sensitivity(), Some(S));
+    let original = tree.element_with_key(&key.clone().into()).unwrap();
+    tree.update(root, build(false, true)).unwrap();
+    tree.layout(limits).unwrap();
+    assert_eq!(tree.element_with_key(&key.clone().into()), Some(original));
+    assert_eq!(tree.calculated_content_sensitivity(), Some(S));
+    tree.update(root, build(false, false)).unwrap();
+    tree.layout(limits).unwrap();
+    assert_eq!(tree.calculated_content_sensitivity(), None);
+    let root = tree.mount(Widget::environment_scope(A, leaf())).unwrap();
+    tree.layout(limits).unwrap();
+    assert_eq!(tree.calculated_content_sensitivity(), Some(A));
+    tree.update(root, Widget::environment_scope(123_u32, leaf()))
+        .unwrap();
+    tree.layout(limits).unwrap();
+    assert_eq!(tree.calculated_content_sensitivity(), None);
+}

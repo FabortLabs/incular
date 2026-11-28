@@ -1580,6 +1580,8 @@ pub struct WidgetTree {
     text_editing_callback_errors: Rc<RefCell<Vec<TextEditingCallbackError>>>,
     autofill_registry: Option<Box<autofill::AutofillRegistry>>,
     autofill_context_completions: Vec<incular_platform::autofill::AutofillContextAction>,
+    /// Window-wide capture policy counted at element mutation boundaries.
+    content_sensitivity_host: crate::SensitiveContentHost,
     /// Live elements keyed by a [`GlobalKey`], those parked for a move,
     /// and the keys claimed by the running reconciliation.
     global_keys: global_keys::GlobalKeyRegistry,

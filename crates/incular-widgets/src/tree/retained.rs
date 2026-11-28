@@ -45,6 +45,7 @@ impl WidgetTree {
             text_editing_callback_errors: Rc::new(RefCell::new(Vec::new())),
             autofill_registry: None,
             autofill_context_completions: Vec::new(),
+            content_sensitivity_host: SensitiveContentHost::new(),
             global_keys: super::global_keys::GlobalKeyRegistry::default(),
             departures: super::departing::Departures::default(),
             view_transitions: Vec::new(),
@@ -176,23 +177,34 @@ impl WidgetTree {
             .collect()
     }
 
-    /// Returns the highest-priority capture policy contributed by all mounted
-    /// [`SensitiveContent`](crate::SensitiveContent) scopes. The calculation
-    /// intentionally counts registrations rather than using nearest-ancestor
-    /// lookup, matching the window-wide Flutter host policy.
+    /// Updates the window-wide capture policy at element mount, update, or
+    /// unmount. Reparenting a retained element adds no second request.
+    pub(super) fn update_content_sensitivity_registration(
+        &mut self,
+        before: Option<&InheritedScopeValue>,
+        after: Option<&InheritedScopeValue>,
+    ) {
+        let value = |scope: Option<&InheritedScopeValue>| {
+            scope.and_then(|value| value.value.downcast_ref::<ContentSensitivity>().copied())
+        };
+        let (before, after) = (value(before), value(after));
+        if before == after {
+            return;
+        }
+        if let Some(before) = before {
+            let existed = self.content_sensitivity_host.unregister(before);
+            debug_assert!(existed, "mounted sensitive policy must have a registration");
+        }
+        if let Some(after) = after {
+            self.content_sensitivity_host.register(after);
+        }
+    }
+
+    /// Highest-priority capture policy from all mounted sensitivity scopes.
+    /// This is a constant-time window lookup, not an arena scan on each frame.
     #[must_use]
     pub fn calculated_content_sensitivity(&self) -> Option<ContentSensitivity> {
-        let mut host = SensitiveContentHost::new();
-        for (_, element) in self.elements.iter() {
-            if let Some(sensitivity) = element
-                .environment_override
-                .as_ref()
-                .and_then(|value| value.value.downcast_ref::<ContentSensitivity>())
-            {
-                host.register(*sensitivity);
-            }
-        }
-        host.calculated_content_sensitivity()
+        self.content_sensitivity_host.calculated_content_sensitivity()
     }
 
     /// Returns the normalized policy emitted at the platform window boundary.

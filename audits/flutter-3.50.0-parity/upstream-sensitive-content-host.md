@@ -28,3 +28,19 @@ value the application did not request, or overwrites a manual host setting on
 subsequent frames. The backend may report its pre-existing policy explicitly.
 Seven adjacent operation-bridge tests passed, including typed native
 unsupported responses for explicitly requested operations.
+
+## Multiple retained registrations
+
+The second original-matrix run covers all 18 keyed changes at lines
+1343–1995, with one unchanged sibling in each mounted case. Four cases
+(1787, 1829, 1871, 1914) are partial because Flutter briefly emits its
+first weaker registration on initial mount, whereas Incular sends only
+the final window policy. The other 14 were paired, checking both the
+resulting policy and the complete command sequence.
+
+Incular now maintains policy counts at mount, update, and unmount instead
+of scanning every live element during frame submission. A focused regression
+moves a live global key between parents without remounting, removes it,
+then replaces a sensitivity scope with an unrelated environment value.
+The six sensitivity tests, seven adjacent native-operations tests, and two
+autofill-lifecycle neighbors passed.
