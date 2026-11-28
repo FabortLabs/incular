@@ -59,7 +59,7 @@ default = []
 devtools = ["incular-widgets/devtools", "dep:incular-devtools-protocol"]
 # Development-only: root builders resolve patched code and windows can be
 # reassembled after a patch. Has no effect without debug assertions.
-hot-reload = ["incular-core/hot-reload"]
+hot-reload = ["incular-core/hot-reload", "incular-assets/hot-reload"]
 
 [dev-dependencies]
 accesskit = { workspace = true }

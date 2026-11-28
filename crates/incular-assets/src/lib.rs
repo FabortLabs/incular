@@ -8,10 +8,15 @@ use std::{fmt, sync::Arc};
 
 mod bundle;
 mod consolidate_response;
+/// Hot-reload asset invalidation hooks; only with `hot-reload`.
+#[cfg(feature = "hot-reload")]
+pub mod hot_reload;
 mod manifest;
 mod network;
 pub mod notices;
+mod path_overrides;
 mod root_bundle;
+mod typed;
 pub use bundle::{
     AssetBundle, AssetError, CachingAssetBundle, DirectoryAssetBundle, MemoryAssetBundle,
 };
@@ -25,8 +30,13 @@ pub use network::{
     resolve_url,
 };
 pub use notices::{LicenseNoticeFormat, load_license_notices, register_license_notices};
+pub use path_overrides::{PathOverrideBundle, PathOverrides};
 
 pub use root_bundle::{configured_root_asset_bundle, replace_root_asset_bundle, root_asset_bundle};
+pub use typed::{
+    AssetFuture, AssetHandle, AssetId, AssetLoadState, FontAsset, ShaderAsset, ShaderLanguage,
+    TypedAsset, TypedAssetLoadCallback,
+};
 
 /// Stable renderer-independent identity for a loaded font asset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
