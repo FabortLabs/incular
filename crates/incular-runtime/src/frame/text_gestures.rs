@@ -164,7 +164,7 @@ impl Runtime {
         if let Some(menu) = self.tree.text_field_context_menu(field) {
             if show {
                 let items = self.text_field_context_menu_items(field);
-                menu.show(TextSelectionToolbarAnchors::at(press.position), items);
+                menu.show_editable(TextSelectionToolbarAnchors::at(press.position), items);
             } else {
                 menu.hide();
             }
@@ -1716,7 +1716,7 @@ impl Runtime {
             return false;
         };
         let anchors = self.text_field_menu_anchors(field, snapshot.caret_rect.origin);
-        let shown = menu.show(anchors, self.text_field_context_menu_items(field));
+        let shown = menu.show_editable(anchors, self.text_field_context_menu_items(field));
         self.frame_requested |= shown;
         shown
     }
@@ -1727,7 +1727,7 @@ impl Runtime {
         if let Some(menu) = self.tree.text_field_context_menu(field) {
             let items = self.text_field_context_menu_items(field);
             let anchors = self.text_field_menu_anchors(field, position);
-            menu.show(anchors, items);
+            menu.show_editable(anchors, items);
         }
     }
 

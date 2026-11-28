@@ -4192,3 +4192,6 @@ packages/flutter/test/widgets/editable_text_test.dart	18773	Does not crash when 
 packages/flutter/test/widgets/editable_text_test.dart	18846	toolbar should not reappear when editing value changes during a scroll	paired-match	upstream-editable-scroll-toolbar.md#editing-value-invalidation-and-returning-to-view
 packages/flutter/test/widgets/editable_text_test.dart	15932	dragStartBehavior can be updated	paired-match	upstream-editable-scroll-toolbar.md#live-drag-origin
 packages/flutter/test/widgets/editable_text_test.dart	15866	onSelectionHandleTapped can be updated	paired-match	upstream-editable-scroll-toolbar.md#live-selection-handle-tap-callback
+packages/flutter/test/widgets/editable_text_test.dart	15633	contextMenuBuilder is used in place of the default text selection toolbar	paired-match	upstream-editable-scroll-toolbar.md#custom-builders-and-retained-menu-content
+packages/flutter/test/widgets/editable_text_test.dart	15679	contextMenuBuilder can be updated to display a new menu	paired-match	upstream-editable-scroll-toolbar.md#custom-builders-and-retained-menu-content
+packages/flutter/test/widgets/editable_text_test.dart	15746	contextMenuBuilder can be updated with inline lambda without crash	paired-match	upstream-editable-scroll-toolbar.md#custom-builders-and-retained-menu-content

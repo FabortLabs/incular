@@ -66,3 +66,19 @@ retained rebuild supplies one; the next tap invokes it once without
 recreating the editor or refocusing it. A drag does not invoke the tap
 callback. Removing the callback stops notifications without replacing
 the handle. All seven focused editor tests and 19 handle tests passed.
+
+## Custom builders and retained menu content
+
+Pinned `widgets/editable_text_test.dart:15633,15679,15746` all passed.
+The native editor initially rejected an empty default action list even
+though its custom builder supplied its own toolbar. It now opens this
+builder on a real long press or a host show request, and an updated
+builder can replace the menu's keyed child without refocusing the field.
+An inline builder refresh keeps the same stateful menu and original live
+state setter while replacing its current child.
+
+A separate pinned authored probe confirms the bare custom builder
+receives full overlay constraints, even when it returns a smaller
+SizedBox directly. The native case matches this default; a builder can
+position its own content inside that full viewport. Nine focused editor
+tests and 14 existing context menu tests passed.

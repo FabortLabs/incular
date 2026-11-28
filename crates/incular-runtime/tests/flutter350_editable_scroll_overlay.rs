@@ -517,3 +517,165 @@ fn a_retained_handle_uses_the_latest_tap_callback_without_treating_a_drag_as_a_t
     assert_eq!(count.get(), 1);
     assert!(focus.has_primary_focus());
 }
+
+#[test]
+fn a_custom_toolbar_only_mounts_when_shown_and_uses_its_updated_builder() {
+    use incular_config::Alignment;
+    use incular_widgets::{Align, FocusNode};
+
+    let controller = TextEditingController::new();
+    let focus = FocusNode::new();
+    let build = |key| {
+        Widget::from(Align::new(
+            Alignment::TOP_LEFT,
+            EditableText::new(controller.clone())
+                .focus_node(focus.clone())
+                .autofocus(true)
+                .text_direction(TextDirection::Ltr)
+                .size(Size::new(400., 100.))
+                .context_menu_builder(move |_, _| {
+                    Widget::from(SizedBox::new().width(10.).height(10.)).with_key(key)
+                }),
+        ))
+    };
+    let mut runtime = Runtime::new(build("old toolbar")).unwrap();
+    runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+    let start = Instant::now();
+    let at = |ms| start + Duration::from_millis(ms);
+    frame(&mut runtime, at(0));
+    let field = runtime.focused_element().unwrap();
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("old toolbar"))
+            .is_none()
+    );
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("new toolbar"))
+            .is_none()
+    );
+
+    let point = Offset::new(200., 40.);
+    pointer(&mut runtime, PointerPhase::Down, point, at(10));
+    frame(&mut runtime, at(510));
+    pointer(&mut runtime, PointerPhase::Up, point, at(530));
+    frame(&mut runtime, at(530));
+    let old = runtime
+        .tree()
+        .element_with_key(&Key::from("old toolbar"))
+        .unwrap();
+    assert_eq!(
+        runtime.tree().element_layout_size(old),
+        Some(Size::new(400., 200.))
+    );
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("new toolbar"))
+            .is_none()
+    );
+
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, build("new toolbar")).unwrap();
+    frame(&mut runtime, at(560));
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("old toolbar"))
+            .is_none()
+    );
+    let new = runtime
+        .tree()
+        .element_with_key(&Key::from("new toolbar"))
+        .unwrap();
+    assert_eq!(
+        runtime.tree().element_layout_size(new),
+        Some(Size::new(400., 200.))
+    );
+    assert_eq!(runtime.focused_element(), Some(field));
+}
+
+#[test]
+fn an_inline_menu_builder_update_preserves_the_open_menu_child_state() {
+    use incular_config::Alignment;
+    use incular_widgets::{Align, FocusNode, StateSetter, StatefulBuilder};
+    use serde_json::json;
+    use std::{cell::RefCell, rc::Rc};
+
+    let controller = TextEditingController::new();
+    let focus = FocusNode::new();
+    let first_setter = Rc::new(RefCell::new(None::<StateSetter>));
+    let build = |current| {
+        let first_setter = first_setter.clone();
+        Widget::from(Align::new(
+            Alignment::TOP_LEFT,
+            EditableText::new(controller.clone())
+                .focus_node(focus.clone())
+                .autofocus(true)
+                .text_direction(TextDirection::Ltr)
+                .context_menu_builder(move |_, _| {
+                    let first_setter = first_setter.clone();
+                    Widget::from(StatefulBuilder::new(move |_, setter| {
+                        let mut first = first_setter.borrow_mut();
+                        if first.is_none() {
+                            *first = Some(setter);
+                        }
+                        Widget::from(SizedBox::shrink()).with_key(current)
+                    }))
+                    .with_key("stable stateful menu")
+                }),
+        ))
+    };
+    let mut runtime = Runtime::new(build("current 1")).unwrap();
+    let start = Instant::now();
+    frame(&mut runtime, start);
+    let field = runtime.focused_element().unwrap();
+    let client = runtime.flutter_text_input_configuration().unwrap().0.get();
+    let show = serde_json::to_vec(&json!({"method":"TextInputClient.showToolbar","args":[client]}))
+        .unwrap();
+    assert_eq!(
+        runtime.handle_flutter_text_toolbar_call(&show).unwrap(),
+        Some(true)
+    );
+    frame(&mut runtime, start + Duration::from_millis(20));
+    let first = first_setter.borrow().as_ref().unwrap().clone();
+    let menu = runtime
+        .tree()
+        .element_with_key(&Key::from("stable stateful menu"))
+        .unwrap();
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("current 1"))
+            .is_some()
+    );
+
+    let root = runtime.tree().root().unwrap();
+    runtime.schedule_update(root, build("current 2")).unwrap();
+    frame(&mut runtime, start + Duration::from_millis(40));
+    assert_eq!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("stable stateful menu")),
+        Some(menu)
+    );
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("current 1"))
+            .is_none()
+    );
+    assert!(
+        runtime
+            .tree()
+            .element_with_key(&Key::from("current 2"))
+            .is_some()
+    );
+    assert!(
+        first.set_state(|| {}),
+        "the original state is still mounted"
+    );
+    assert_eq!(runtime.focused_element(), Some(field));
+}
