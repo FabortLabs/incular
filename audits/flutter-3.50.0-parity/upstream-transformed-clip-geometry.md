@@ -43,3 +43,18 @@ These registrations remain partial. This Dot host could not start a
 local display to capture an Incular presentation. The wgpu path-clip
 lowering still uses stencil coverage for transformed paths, so default
 antialiasing and save-layer edges need separate verification and work.
+
+## Rect, oval and beveled path geometry under rotation
+
+Native counterparts now also cover the output structure of
+`widgets/clip_test.dart:376,478,511`: the same 100×100 child inside
+100 logical pixels of padding and rotated by one radian. Every scene
+paints the white background before the clip, then the red and white
+fills and the centered black repaint-boundary child inside it, with
+one matching clip exit and no decoration border. Sampled world-space
+path containment distinguishes the hard-edged rotated square from
+its bounding box, preserves the oval's center and cuts off its
+corners, and measures the bevel against the specified 20-pixel
+cutoff. Rect requests hard-edge coverage; oval and bevel request
+antialiasing. All seven transformed clip tests passed. The three
+originals remain partial pending native pixel comparison.

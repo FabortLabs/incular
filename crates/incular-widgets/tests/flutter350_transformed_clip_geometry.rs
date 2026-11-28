@@ -1,10 +1,11 @@
 //! Retained geometry counterparts to Flutter's rotated clip goldens.
 use incular_config::{Clip, Constraints};
 use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
-use incular_rendering::{ClipCoverage, FillRule, LayerId, LayerKind, PaintCommand};
+use incular_rendering::{ClipCoverage, DisplayList, FillRule, LayerId, LayerKind, PaintCommand};
 use incular_widgets::{
-    BorderRadius, Center, ClipRRect, ClipRect, ColoredBox, Padding, Positioned, Radius,
-    RepaintBoundary, SizedBox, Stack, Transform, Widget, internal::WidgetTree,
+    BeveledRectangleBorder, BorderRadius, BorderSide, Center, ClipOval, ClipPath, ClipRRect,
+    ClipRect, ColoredBox, Padding, Positioned, Radius, RepaintBoundary, SizedBox, Stack, Transform,
+    Widget, internal::WidgetTree,
 };
 
 const RED: Color = Color::rgba(255, 0, 0, 255);
@@ -78,28 +79,19 @@ fn overlay_sibling_is_not_painted_under_the_previous_rect_clip() {
     assert_eq!(red.3.transform_point(local_center), Offset::new(100., 100.));
 }
 
-#[test]
-fn a_rotated_rrect_preserves_both_axes_of_each_corner() {
+fn rotated_frame(wrap: impl FnOnce(Widget) -> Widget) -> DisplayList {
+    let content = ColoredBox::new(
+        RED,
+        ColoredBox::new(
+            Color::WHITE,
+            RepaintBoundary::new(Center::new(Widget::box_(Size::new(10., 10.), Color::BLACK))),
+        ),
+    );
     let scene = Center::new(RepaintBoundary::new(ColoredBox::new(
         Color::WHITE,
         Padding::new(
             incular_config::EdgeInsets::all(100.),
-            SizedBox::square(100.).child(Transform::rotation(
-                1.,
-                ClipRRect::new(
-                    corner_radii(),
-                    ColoredBox::new(
-                        RED,
-                        ColoredBox::new(
-                            Color::WHITE,
-                            RepaintBoundary::new(Center::new(Widget::box_(
-                                Size::new(10., 10.),
-                                Color::BLACK,
-                            ))),
-                        ),
-                    ),
-                ),
-            )),
+            SizedBox::square(100.).child(Transform::rotation(1., wrap(content.into()))),
         ),
     )));
     let mut tree = WidgetTree::new();
@@ -107,6 +99,37 @@ fn a_rotated_rrect_preserves_both_axes_of_each_corner() {
     tree.layout(Constraints::tight(Size::new(800., 600.)))
         .unwrap();
     let display = tree.try_paint().unwrap();
+    let mut depth = 0;
+    let mut draws = Vec::new();
+    for op in display.commands() {
+        match op {
+            PaintCommand::PushClipPath { .. } => depth += 1,
+            PaintCommand::PopClip => depth -= 1,
+            PaintCommand::Rect { color, .. } | PaintCommand::HardEdgeRect { color, .. } => {
+                draws.push((*color, depth));
+            }
+            PaintCommand::PushTransform { .. } | PaintCommand::PopTransform => {}
+            other => panic!("unexpected operation in the rotated clip scene: {other:?}"),
+        }
+    }
+    assert_eq!(depth, 0);
+    assert_eq!(
+        draws,
+        [
+            (Color::WHITE, 0),
+            (RED, 1),
+            (Color::WHITE, 1),
+            (Color::BLACK, 1)
+        ]
+    );
+    display
+}
+
+fn assert_rotated_path(
+    display: &DisplayList,
+    expected_coverage: ClipCoverage,
+    samples: &[(f32, f32, bool)],
+) {
     let Some((path, rule, coverage)) = display.commands().iter().find_map(|op| match op {
         PaintCommand::PushClipPath {
             path,
@@ -115,25 +138,89 @@ fn a_rotated_rrect_preserves_both_axes_of_each_corner() {
         } => Some((path, *fill_rule, *coverage)),
         _ => None,
     }) else {
-        panic!("the transformed rounded clip must use its shape, not its bounding box");
+        panic!("the transformed clip must use its shape, not its bounding box");
     };
     assert_eq!(rule, FillRule::NonZero);
-    assert_eq!(coverage, ClipCoverage::AntiAlias);
+    assert_eq!(coverage, expected_coverage);
     let world = CoreTransform::translation(Offset::new(400., 300.))
         .then(CoreTransform::rotation(1.))
         .then(CoreTransform::translation(Offset::new(-50., -50.)));
-    for (x, y, inside) in [
-        (3., 3., false),
-        (2.75, 4.25, false),
-        (5., 5., true),
-        (98., 2., false),
-        (97., 10., true),
-        (50., 0.5, true),
-        (50., 50., true),
-    ] {
+    for &(x, y, inside) in samples {
         let point = world.transform_point(Offset::new(x, y));
         assert_eq!(path.contains(point, rule), inside, "local point ({x}, {y})");
     }
+}
+
+#[test]
+fn a_rotated_rrect_preserves_both_axes_of_each_corner() {
+    let display = rotated_frame(|content| ClipRRect::new(corner_radii(), content).into());
+    assert_rotated_path(
+        &display,
+        ClipCoverage::AntiAlias,
+        &[
+            (3., 3., false),
+            (2.75, 4.25, false),
+            (5., 5., true),
+            (98., 2., false),
+            (97., 10., true),
+            (50., 0.5, true),
+            (50., 50., true),
+        ],
+    );
+}
+
+#[test]
+fn rotated_rect_keeps_hard_coverage_and_does_not_expand_to_its_bounding_box() {
+    let display = rotated_frame(|content| ClipRect::new(content).into());
+    assert_rotated_path(
+        &display,
+        ClipCoverage::HardEdge,
+        &[
+            (0.5, 0.5, true),
+            (99.5, 99.5, true),
+            (-10., 50., false),
+            (110., 50., false),
+        ],
+    );
+}
+
+#[test]
+fn a_rotated_oval_does_not_show_the_square_child_at_its_corners() {
+    let display = rotated_frame(|content| ClipOval::new(content).into());
+    assert_rotated_path(
+        &display,
+        ClipCoverage::AntiAlias,
+        &[
+            (5., 5., false),
+            (95., 5., false),
+            (20., 20., true),
+            (50., 0.5, true),
+            (0.5, 50., true),
+            (50., 50., true),
+        ],
+    );
+}
+
+#[test]
+fn a_rotated_beveled_outline_clips_the_child_but_draws_no_decoration_border() {
+    let display = rotated_frame(|content| {
+        ClipPath::shape(
+            BeveledRectangleBorder::new(BorderSide::NONE, BorderRadius::circular(20.)),
+            content,
+        )
+    });
+    assert_rotated_path(
+        &display,
+        ClipCoverage::AntiAlias,
+        &[
+            (5., 5., false),
+            (95., 5., false),
+            (10., 15., true),
+            (90., 15., true),
+            (50., 0.5, true),
+            (50., 50., true),
+        ],
+    );
 }
 
 fn retained_clip(tree: &WidgetTree) -> LayerId {
