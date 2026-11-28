@@ -305,3 +305,46 @@ fn an_undo_immediately_after_focus_does_not_discard_the_initial_value() {
         assert!(focus.has_primary_focus());
     }
 }
+
+#[test]
+fn immediate_undo_after_first_insertion_restores_the_focused_value_without_a_stale_caret() {
+    use incular_platform::{PlatformEvent, TextInputState};
+
+    for platform in HISTORY_PLATFORMS {
+        let (mut editor, focus) = unfocused_history_editor("A", platform);
+        focus.request_focus();
+        editor.advance(0);
+        editor.advance(500);
+        let expected = if matches!(
+            platform,
+            TextShortcutPlatform::Linux
+                | TextShortcutPlatform::MacOs
+                | TextShortcutPlatform::Windows
+        ) {
+            TextSelection::new(0, 1)
+        } else {
+            TextSelection::collapsed(1)
+        };
+        assert_eq!(editor.controller.text(), "A");
+        assert_eq!(editor.controller.selection_if_set(), Some(expected));
+        let _ = editor
+            .runtime
+            .handle_platform_event(PlatformEvent::TextEditingState(TextInputState {
+                text: "AB".into(),
+                selection_start: 2,
+                selection_end: 2,
+                composing: None,
+            }));
+        editor.advance(0);
+        assert_eq!(editor.controller.text(), "AB");
+        assert_eq!(
+            editor.controller.selection_if_set(),
+            Some(TextSelection::collapsed(2))
+        );
+
+        history_shortcut(&mut editor, platform, false);
+        assert_eq!(editor.controller.text(), "A");
+        assert_eq!(editor.controller.selection_if_set(), Some(expected));
+        assert!(focus.has_primary_focus());
+    }
+}

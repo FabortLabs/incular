@@ -165,3 +165,12 @@ undoes it. The original `A` and its platform selection are restored:
 selected on desktop, collapsed at the end on mobile. This uses the
 real shortcut path and a deterministic frame clock. All seven
 focused undo tests passed.
+
+## Immediate undo after the first insertion
+
+All six target variants of pinned `widgets/editable_text_test.dart:14154`
+passed. The mounted native editor first records its focus-time selection
+at 500 ms, then receives `AB` through the text-input path and immediately
+receives the real platform undo chord. It restores `A` and the original
+selection without moving focus: selection 0–1 on desktop and a collapsed
+caret at 1 on mobile. All eight focused native undo tests passed.
