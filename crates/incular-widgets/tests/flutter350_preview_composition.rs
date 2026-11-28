@@ -447,3 +447,82 @@ fn multi_preview_transforms_members_before_its_shared_outer_wrapper() {
     assert_eq!(painted_colors(fresh[0].wrap(leaf())), [INNER, LEAF]);
     assert_eq!(result[0].name(), Some("Pair Light"));
 }
+
+#[test]
+fn rebuilding_a_preview_updates_its_explicit_locale_and_retains_both_catalog_languages() {
+    use incular_config::{Locale, LocalizationCatalog};
+    use incular_widgets::internal::Key;
+    use incular_widgets::{Localizations, widget_previews::PreviewLocalizationsData};
+
+    struct Messages([Locale; 2]);
+    impl LocalizationCatalog for Messages {
+        fn supported_locales(&self) -> &[Locale] {
+            &self.0
+        }
+        fn message(&self, locale: &Locale, key: &str) -> Option<&str> {
+            if key != "greeting" {
+                return None;
+            }
+            if locale == &self.0[0] {
+                Some("Hello")
+            } else if locale == &self.0[1] {
+                Some("Hola")
+            } else {
+                None
+            }
+        }
+    }
+
+    let languages = ["en", "es"].map(|name| name.parse::<Locale>().unwrap());
+    let resources: Rc<dyn LocalizationCatalog> = Rc::new(Messages(languages.clone()));
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let content = Key::from("localized preview content");
+    let scene = |explicit: Locale| {
+        let mut builder = PreviewBuilder::new();
+        builder.localizations = Some(Rc::new({
+            let resources = resources.clone();
+            let languages = languages.clone();
+            move || PreviewLocalizationsData {
+                locale: Some(explicit.clone()),
+                supported_locales: languages.to_vec(),
+                catalog: Some(resources.clone()),
+                ..Default::default()
+            }
+        }));
+        let child = Builder::new({
+            let seen = seen.clone();
+            let content = content.clone();
+            let expected_resources = resources.clone();
+            move |context| {
+                let locale = Localizations::locale_of(context);
+                let (_, current) = context
+                    .depend_on::<(Locale, Rc<dyn LocalizationCatalog>)>()
+                    .unwrap();
+                assert!(Rc::ptr_eq(&current, &expected_resources));
+                let greeting = current.message(&locale, "greeting").unwrap();
+                seen.borrow_mut()
+                    .push((locale.to_string(), greeting.to_owned()));
+                Widget::from(incular_widgets::Text::new(greeting)).with_key(content.clone())
+            }
+        });
+        builder.build().compose(child)
+    };
+    let mut tree = WidgetTree::new();
+    let constraints = Constraints::loose(Size::new(180., 70.));
+    let root = tree.mount(scene(languages[0].clone())).unwrap();
+    tree.layout(constraints).unwrap();
+    let original = tree.element_with_key(&content).unwrap();
+    assert_eq!(
+        seen.borrow().last(),
+        Some(&("en".to_owned(), "Hello".to_owned()))
+    );
+
+    tree.update(root, scene(languages[1].clone())).unwrap();
+    tree.layout(constraints).unwrap();
+    assert_eq!(tree.element_with_key(&content), Some(original));
+    assert_eq!(
+        seen.borrow().last(),
+        Some(&("es".to_owned(), "Hola".to_owned()))
+    );
+    assert_eq!(resources.supported_locales(), &languages);
+}

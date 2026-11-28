@@ -4631,3 +4631,4 @@ packages/flutter/test/rendering/editable_test.dart	1132	repaints when its Render
 packages/flutter/test/rendering/editable_test.dart	1148	correct coordinate space	paired-match	upstream-editable-custom-painters.md
 packages/flutter/test/widgets/focus_manager_test.dart	2093	'$FocusManager dispatches object creation in constructor'	paired-match	upstream-allocation-events.md#focus-allocation-identities
 packages/flutter/test/widgets/focus_manager_test.dart	2100	'$FocusNode dispatches object creation in constructor'	paired-match	upstream-allocation-events.md#focus-allocation-identities
+dev/integration_tests/widget_preview_scaffold/test/localizations_test.dart	49	Localization data is correctly propagated down to the previewed widget	paired-match	upstream-widget-previews-runtime.md#reconfigured-preview-localization

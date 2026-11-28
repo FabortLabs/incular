@@ -280,3 +280,14 @@ connection and shutdown signals from its host; it is not a browser
 launcher or a DTD implementation.
 
 Four direct and 15 adjacent native preview tests passed.
+
+### Reconfigured preview localization
+
+Pinned `widget_preview_scaffold/test/localizations_test.dart:49` passed.
+The real Incular preview initially mounts an explicitly English
+configuration, then rebuilds the descriptor with Spanish while retaining
+the content element and the same two-language catalog. The previewed
+widget itself reads the active locale and localized greeting, switching
+from Hello to Hola without falling back to the application's locale.
+The catalog is the Rust equivalent of Flutter's delegate configuration.
+All nine focused composition tests passed.
