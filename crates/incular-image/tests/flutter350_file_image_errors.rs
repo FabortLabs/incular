@@ -280,6 +280,7 @@ fn a_hosted_resize_preserves_the_empty_file_failure_without_storing_pixels() {
     );
     assert_eq!(file.cache_status(), Default::default());
     assert!(queue.borrow().is_empty());
+    incular_animation::scheduler::flush_frame_microtasks();
 
     fs::write(&path, PNG).unwrap();
     let retry = provider.resolve(&cfg);
@@ -289,4 +290,84 @@ fn a_hosted_resize_preserves_the_empty_file_failure_without_storing_pixels() {
         panic!("{retry:?}")
     };
     assert_eq!((image.decoded().width(), image.decoded().height()), (4, 4));
+}
+
+#[test]
+fn failed_resized_decode_is_evicted_after_observers_without_touching_the_raw_key() {
+    use incular_animation::scheduler::flush_frame_microtasks;
+
+    let fixture = Fixture::new();
+    let path = fixture.path();
+    fs::write(&path, b"not a raster image").unwrap();
+    let file = FileImage::new(&path);
+    let provider = ResizeImage::new(file.clone(), Some(4), Some(4));
+    let cfg = ImageConfiguration::empty();
+    let (worker, queue) = held_worker();
+    let _scope = worker.enter();
+
+    let raw = file.resolve(&cfg);
+    complete_next_file_job(&queue);
+    assert!(matches!(
+        raw.state(),
+        ImageLoadState::Failed(ImageError::Decode(_))
+    ));
+    assert!(file.cache_status().pending);
+
+    let first = provider.resolve(&cfg);
+    let saw_original_in_callback = Rc::new(std::cell::Cell::new(false));
+    let listener = first.listen(
+        ImageStreamListener::new(Rc::new(|_, _| panic!("corrupt file has no image"))).on_error({
+            let seen = saw_original_in_callback.clone();
+            let provider = provider.clone();
+            let first = first.clone();
+            let cfg = cfg.clone();
+            Rc::new(move |_| seen.set(provider.resolve(&cfg) == first))
+        }),
+    );
+    complete_next_file_job(&queue);
+    assert!(saw_original_in_callback.get());
+    assert_eq!(provider.resolve(&cfg), first);
+    drop(listener);
+    flush_frame_microtasks();
+
+    fs::write(&path, PNG).unwrap();
+    let second = provider.resolve(&cfg);
+    assert_ne!(second, first);
+    complete_next_file_job(&queue);
+    let ImageLoadState::Ready(image) = second.state() else {
+        panic!("{second:?}")
+    };
+    assert_eq!((image.decoded().width(), image.decoded().height()), (4, 4));
+    assert!(file.cache_status().pending);
+    assert_eq!(file.resolve(&cfg), raw);
+}
+
+#[test]
+fn a_stale_resize_failure_cannot_evict_the_replacement_pending_job() {
+    use incular_animation::scheduler::flush_frame_microtasks;
+    use incular_image::shared_bundle_image_cache;
+
+    let fixture = Fixture::new();
+    let path = fixture.path();
+    fs::write(&path, b"invalid raster").unwrap();
+    let provider = ResizeImage::new(FileImage::new(&path), Some(4), Some(4));
+    let cfg = ImageConfiguration::empty();
+    let (worker, queue) = held_worker();
+    let _scope = worker.enter();
+
+    let old = provider.resolve(&cfg);
+    complete_next_file_job(&queue);
+    assert!(matches!(
+        old.state(),
+        ImageLoadState::Failed(ImageError::Decode(_))
+    ));
+    drop(old);
+    shared_bundle_image_cache().clear();
+    fs::write(&path, PNG).unwrap();
+    let replacement = provider.resolve(&cfg);
+    assert!(matches!(replacement.state(), ImageLoadState::Loading(_)));
+    flush_frame_microtasks();
+    assert_eq!(provider.resolve(&cfg), replacement);
+    complete_next_file_job(&queue);
+    assert!(matches!(replacement.state(), ImageLoadState::Ready(_)));
 }

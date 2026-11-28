@@ -67,11 +67,22 @@ impl PendingStreamMemo {
     }
 }
 
-fn stream_for_pending(job: &Pending) -> ImageStream {
+fn stream_for_pending(
+    cache: &BundleImageCache,
+    key: &BundleDecodeKey,
+    job: &Pending,
+) -> ImageStream {
     if let Some(stream) = PENDING_STREAMS.with(|memo| memo.borrow().get(job)) {
         return stream;
     }
-    let stream = ImageStream::from_load_callback(|done| attach(job, done));
+    let (send, result) = futures_channel::oneshot::channel();
+    attach(
+        job,
+        Box::new(move |outcome| {
+            let _ = send.send(outcome);
+        }),
+    );
+    let stream = cache.stream_for_result(key, Some(job), result);
     PENDING_STREAMS.with(|memo| memo.borrow_mut().remember(job, &stream));
     stream
 }
@@ -533,7 +544,7 @@ impl BundleImageCache {
             (ready, pending)
         };
         if let Some(pending) = pending {
-            let stream = stream_for_pending(&pending);
+            let stream = stream_for_pending(self, key, &pending);
             live_streams::remember(self, key, &stream, Some(&pending));
             return Some(stream);
         }
@@ -625,23 +636,67 @@ impl BundleImageCache {
     }
 
     fn start_stream(&self, key: BundleDecodeKey) -> ImageStream {
-        let mut pending = None;
-        let mut stream = ImageStream::from_load_callback(|done| {
-            pending = self.start_async_with_key(key.clone(), true, done);
+        let (send, result) = futures_channel::oneshot::channel();
+        let pending = self.start_async_with_key(
+            key.clone(),
+            true,
+            Box::new(move |outcome| {
+                let _ = send.send(outcome);
+            }),
+        );
+        let existing = pending.as_ref().and_then(|pending| {
+            PENDING_STREAMS.with(|memo| memo.borrow().get(pending))
         });
-        if let Some(pending) = &pending {
-            // A reentrant provider can resolve the same key while it
-            // starts. Use the already-published view rather than replacing
-            // the view another caller has received.
-            let existing = PENDING_STREAMS.with(|memo| memo.borrow().get(pending));
-            if let Some(existing) = existing {
-                stream = existing;
-            } else {
+        // A reentrant provider can resolve the same key while it starts.
+        // Keep the already-published view instead of replacing it.
+        let stream = existing.unwrap_or_else(|| {
+            let stream = self.stream_for_result(&key, pending.as_ref(), result);
+            if let Some(pending) = &pending {
                 PENDING_STREAMS.with(|memo| memo.borrow_mut().remember(pending, &stream));
             }
-        }
+            stream
+        });
         live_streams::remember(self, &key, &stream, pending.as_ref());
         stream
+    }
+
+    fn stream_for_result(
+        &self,
+        key: &BundleDecodeKey,
+        pending: Option<&Pending>,
+        result: futures_channel::oneshot::Receiver<Result<ImageHandle, ImageError>>,
+    ) -> ImageStream {
+        let cleanup = pending.filter(|_| key.resize.is_some()).map(|ticket| {
+            let ticket = Arc::downgrade(ticket);
+            let cache = Arc::downgrade(&self.0);
+            let key = key.clone();
+            Box::new(move || {
+                // ResizeImage schedules eviction after the error listener.
+                // Match the job as well as the key so reentrant replacement
+                // cannot be removed by an old failure.
+                incular_animation::scheduler::schedule_frame_microtask(move || {
+                    let Some(cache) = cache.upgrade().map(Self) else {
+                        return;
+                    };
+                    let removed = {
+                        let mut state = cache.0.lock().unwrap_or_else(PoisonError::into_inner);
+                        if state
+                            .pending
+                            .get(&key)
+                            .is_some_and(|active| Arc::as_ptr(active) == ticket.as_ptr())
+                        {
+                            state.pending.remove_entry(&key)
+                        } else {
+                            None
+                        }
+                    };
+                    if removed.is_some() {
+                        live_streams::remove(&cache, &key);
+                    }
+                });
+            }) as Box<dyn FnOnce()>
+        });
+        ImageStream::from_load_receiver_with_failure(result, cleanup)
     }
 
     pub(crate) fn prepare_stream(
@@ -666,7 +721,7 @@ impl BundleImageCache {
         }) {
             existing
         } else {
-            let stream = ImageStream::from_load_receiver(result);
+            let stream = self.stream_for_result(&key, pending.as_ref(), result);
             if let Some(pending) = &pending {
                 PENDING_STREAMS.with(|memo| memo.borrow_mut().remember(pending, &stream));
             }
@@ -755,11 +810,12 @@ impl BundleImageCache {
             let mut detached = None;
             if let Some(cache) = cache.upgrade() {
                 let mut state = cache.lock().unwrap_or_else(PoisonError::into_inner);
-                // Flutter keeps a failed decoder stream pending until its
-                // listener evicts it. Transport failure, inline errors and
-                // native output-budget rejection keep our existing retry
-                // behavior. Never restore an already detached job.
-                let keep_failed = matches!(result, Err(ImageError::Decode(_)))
+                // Plain deferred decoder failures persist until eviction.
+                // ResizeImage keeps its failed key only through delivery;
+                // its UI callback schedules a generation-specific eviction.
+                // Never restore an already detached job.
+                let keep_failed = (matches!(result, Err(ImageError::Decode(_)))
+                    || (completed.resize.is_some() && result.is_err()))
                     && pending.loader_returned.load(Ordering::Acquire)
                     && pending.retain_decode_error.load(Ordering::Acquire);
                 if !keep_failed

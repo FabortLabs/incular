@@ -43,3 +43,21 @@ Line 87 stays partial because Flutter's pluggable low-level decoder at
 headless file loads remain synchronous. The existing authored Flutter
 recovery probe, 52 focused image-crate tests, and five focused runtime
 tests provide the evidence. No renderer changes.
+
+## Failed ResizeImage keys retire after the observer
+
+The pinned implementation schedules an independent eviction of the full
+resize key after delivering the error. The authored Flutter probe proves
+the key is still pending inside the listener, is untracked on the next
+turn, and can decode the repaired file at 4x4. The same file's unwrapped
+corrupt key stays pending throughout.
+
+The native reproduction previously returned the same failed resized
+stream after that checkpoint. Resized entries now preserve failure
+delivery, then retire the exact pending generation at the UI microtask
+checkpoint. An already detached failure cannot evict a newer job.
+Focused native tests verify reentrant resolution inside the error
+listener, recovery after the checkpoint, preservation of the original
+file key, and a replacement job surviving stale cleanup. The authored
+Flutter probe and all 64 focused native image tests passed. This added
+behavior is not a separate upstream registration.
