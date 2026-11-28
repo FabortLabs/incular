@@ -1382,9 +1382,20 @@ impl WidgetTree {
             // Flutter's primary tap tracks later contacts without delivering
             // tap callbacks for them. Their presence still prevents a drag
             // from winning an uncontested press before it crosses slop.
+            // The editor's tap is routed by the runtime, so it is not in
+            // this retained member list. A scrollable above it is not
+            // uncontested and must wait for motion instead of swallowing
+            // the editor's release before it can place the caret.
+            let editor_tap_competes = scroll_only && primary
+                && self.text_field_ancestor(hit).is_some_and(|editor| {
+                    self.can_request_focus(editor)
+                        && (!self.text_field_renderer_ignores_pointer(editor)
+                            || self.text_field_has_selection_gesture_builder(editor))
+                });
             let sole_press = active.members.len() == 1
                 && !active.yields_taps
                 && !nested_scroll
+                && !editor_tap_competes
                 && active.quiet_taps.is_empty();
             self.input.active_gestures.insert(key, active);
             self.input.pointer_captures.insert(key, element);

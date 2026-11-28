@@ -817,3 +817,139 @@ fn check_drag_anchor_across_editor_scroll(word_drag: bool) {
     send(&mut runtime, PointerPhase::Up, last, 90);
     assert_eq!(controller.selection(), expected, "word_drag={word_drag}");
 }
+
+#[test]
+fn mouse_selection_reaches_document_end_and_reveals_outer_and_private_viewports() {
+    use incular_text::TextAffinity;
+    use incular_widgets::{
+        ScrollController, SingleChildScrollView, TextSelectionGestureDetectorBuilder,
+    };
+
+    let Some(style) = ahem_style() else {
+        return;
+    };
+    let text = "I love flutter!\n".repeat(8);
+    for capped in [false, true] {
+        let controller = TextEditingController::with_text(text.clone());
+        let scroll = ScrollController::new();
+        let editor = EditableText::new(controller.clone())
+            .text_direction(TextDirection::Ltr)
+            .style(style.clone().font_size(16.).height(Some(1.)))
+            .max_lines(capped.then_some(6));
+        let editor = TextSelectionGestureDetectorBuilder::new().build_gesture_detector(editor);
+        let view = SingleChildScrollView::new(editor).controller(scroll.clone());
+        let mut runtime = Runtime::new(view.into()).unwrap();
+        runtime.set_text_shortcut_platform(TextShortcutPlatform::Android);
+        let constraints = Constraints::tight(Size::new(400., 64.));
+        let start = Instant::now();
+        let run = |runtime: &mut Runtime, ms| {
+            runtime
+                .run_frame_at(constraints, start + Duration::from_millis(ms))
+                .unwrap();
+        };
+        run(&mut runtime, 0);
+        assert!(controller.selection_if_set().is_none(), "capped={capped}");
+        assert_eq!(scroll.offset(), 0.);
+        let editor = runtime.tree().text_field_at(Offset::new(10., 7.)).unwrap();
+        let point = |runtime: &Runtime, offset| {
+            let caret = runtime
+                .tree()
+                .text_field_offset_rect(editor, offset, TextAffinity::Downstream)
+                .unwrap();
+            Offset::new(caret.origin.x, caret.origin.y + caret.size.height / 2.)
+        };
+        let send = |runtime: &mut Runtime, kind, phase, at, ms| {
+            let _ = runtime.handle_raw_pointer_event(
+                RawPointerEvent::new(
+                    1,
+                    1,
+                    kind,
+                    if phase == PointerPhase::Up {
+                        0
+                    } else {
+                        PRIMARY_POINTER_BUTTON
+                    },
+                    at,
+                    phase,
+                    start + Duration::from_millis(ms),
+                )
+                .with_button((phase != PointerPhase::Move).then_some(PRIMARY_POINTER_BUTTON)),
+            );
+            run(runtime, ms);
+        };
+        let origin = point(&runtime, 4);
+        assert_eq!(
+            runtime
+                .tree()
+                .text_field_position_at(editor, origin)
+                .unwrap()
+                .0,
+            4,
+            "capped={capped}, origin={origin:?}, inner={:?}",
+            runtime.tree().text_field_scroll_offset(editor)
+        );
+        send(
+            &mut runtime,
+            PointerDeviceKind::Touch,
+            PointerPhase::Down,
+            origin,
+            10,
+        );
+        send(
+            &mut runtime,
+            PointerDeviceKind::Touch,
+            PointerPhase::Up,
+            origin,
+            50,
+        );
+        assert_eq!(
+            controller.selection(),
+            TextSelection::collapsed(4),
+            "capped={capped}, origin={origin:?}, focused={:?}, editor={editor:?}, outer={}, inner={:?}, current hit={:?}",
+            runtime.focused_element(),
+            scroll.offset(),
+            runtime.tree().text_field_scroll_offset(editor),
+            runtime.tree().text_field_position_at(editor, origin)
+        );
+        send(
+            &mut runtime,
+            PointerDeviceKind::Mouse,
+            PointerPhase::Down,
+            origin,
+            65,
+        );
+        let middle = point(&runtime, text.len() / 2);
+        send(
+            &mut runtime,
+            PointerDeviceKind::Mouse,
+            PointerPhase::Move,
+            middle,
+            82,
+        );
+        let end = point(&runtime, text.len());
+        send(
+            &mut runtime,
+            PointerDeviceKind::Mouse,
+            PointerPhase::Move,
+            end,
+            100,
+        );
+        send(
+            &mut runtime,
+            PointerDeviceKind::Mouse,
+            PointerPhase::Up,
+            end,
+            116,
+        );
+        run(&mut runtime, 316);
+        assert_eq!(
+            controller.selection(),
+            TextSelection::new(4, text.len()),
+            "capped={capped}"
+        );
+        assert!(scroll.max_offset() > 0., "capped={capped}");
+        assert_eq!(scroll.offset(), scroll.max_offset(), "capped={capped}");
+        let private = runtime.tree().text_field_scroll_offset(editor).unwrap().y;
+        assert_eq!(private > 0., capped, "capped={capped}");
+    }
+}

@@ -106,3 +106,19 @@ the click at text offset 0, then mounted in the overlay after a real
 secondary-button tap. Its bounded child has the expected dimensions
 and the editor remains focused. This does not compare the browser's
 native context menu or any design-system appearance.
+
+## Mouse selection scrolls to the document edge
+
+Pinned :1843 and :1917 both pass. The mounted native test starts with an
+unfocused editor and unset selection inside a 64 logical-pixel outer
+viewport. A finger tap focuses the editor and places the caret precisely at
+offset 4. A mouse drag then extends to the document end and moves the
+outer scroll controller to its maximum. The uncapped editor does not
+scroll privately; a six-line cap requires both outer and inner scrolling.
+
+Before the fix, the outer viewport eagerly won the ordinary pointer
+arena on a stationary press. That consumed the release, so the editor
+never received its confirmed tap and stayed unfocused. The retained
+scroll recognizer now keeps competing when a hit editor also has a
+runtime tap, rather than treating itself as the only contender. A drag
+can still take ownership after its normal movement threshold.

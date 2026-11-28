@@ -4671,3 +4671,5 @@ packages/flutter/test/widgets/text_selection_test.dart	1801	Clipboard API failur
 packages/flutter/test/widgets/text_selection_test.dart	1827	update sets value based on clipboard contents	paired-match	upstream-clipboard-status-notifier.md
 packages/flutter/test/widgets/text_selection_test.dart	1246	selection handle's GestureDetector should not cover the entire screen	paired-match	upstream-text-selection-gestures.md#selection-overlay-hit-area-and-menu
 packages/flutter/test/widgets/text_selection_test.dart	2051	Context menus	paired-match	upstream-text-selection-gestures.md#selection-overlay-hit-area-and-menu
+packages/flutter/test/widgets/text_selection_test.dart	1843	Mouse edge scrolling works in an outer scrollable	paired-match	upstream-text-selection-gestures.md#mouse-selection-scrolls-to-the-document-edge
+packages/flutter/test/widgets/text_selection_test.dart	1917	Mouse edge scrolling works with both an outer scrollable and scrolling in the EditableText	paired-match	upstream-text-selection-gestures.md#mouse-selection-scrolls-to-the-document-edge
