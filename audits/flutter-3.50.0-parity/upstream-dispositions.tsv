@@ -4337,3 +4337,20 @@ packages/flutter/test/widgets/interactive_viewer_test.dart	1091	viewport changes
 packages/flutter/test/widgets/interactive_viewer_test.dart	1279	Check if ClipRect is present in the tree	paired-match	upstream-interactive-viewer-signals.md#viewport-aware-builder-clip-retention-and-resize
 packages/flutter/test/widgets/interactive_viewer_test.dart	1309	builder can change widgets that are off-screen	paired-match	upstream-interactive-viewer-signals.md#viewport-aware-builder-clip-retention-and-resize
 packages/flutter/test/widgets/interactive_viewer_test.dart	1386	LayoutBuilder is only used for InteractiveViewer.builder	paired-match	upstream-interactive-viewer-signals.md#viewport-aware-builder-clip-retention-and-resize
+packages/flutter/test/widgets/interactive_viewer_test.dart	1764	does not modify parameters	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1777	simple example	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1785	closest to a	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1793	closest to b	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1801	point already on the line returns the point	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1809	real example	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1822	rectangle already axis aligned returns the rectangle	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1838	rectangle rotated by 45 degrees	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1854	rectangle rotated very slightly	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1870	example from hexagon board	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1888	inside	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1900	outside	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1912	on the edge	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1926	point already inside quad	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1940	axis aligned quad	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1954	not axis aligned quad	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout
+packages/flutter/test/widgets/interactive_viewer_test.dart	1970	InteractiveViewer does not crash at zero area	paired-match	upstream-interactive-viewer-signals.md#scene-space-geometry-and-empty-layout

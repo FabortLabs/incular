@@ -79,3 +79,16 @@ wrapper reads its already mounted child for intrinsic sizing;
 the test measures a 200px intrinsic width without executing
 a speculative builder. A fixed tight viewer also stays at its
 identity transform when dragged before and after resizing.
+
+## Scene-space geometry and empty layout
+
+All 16 pinned segment/quad geometry registrations and the
+zero-area mount registration (:1764–1970) passed. Native tests
+exercise the real public scene geometry used with builder
+viewports: immutable clamped segment projection, ordered
+axis-aligned bounds under rotation, inclusive inside/edge
+tests, and closest points for both aligned and tilted viewports.
+The rotated and skewed test coordinates use the original
+Flutter expectations. Added controls cover a zero-length
+segment and a collapsed quad. The mounted zero-area viewer
+keeps a zero layout size without crashing.

@@ -236,6 +236,14 @@ impl InteractiveViewerViewport {
     /// The smallest axis-aligned rectangle containing the viewport.
     #[must_use]
     pub fn bounds(self) -> Rect {
+        let [left, top, right, bottom] = self.extents();
+        Rect::from_origin_size(
+            Offset::new(left, top),
+            Size::new(right - left, bottom - top),
+        )
+    }
+
+    fn extents(self) -> [f32; 4] {
         let [first, rest @ ..] = self.corners;
         let (mut left, mut top, mut right, mut bottom) = (first.x, first.y, first.x, first.y);
         for corner in rest {
@@ -244,10 +252,14 @@ impl InteractiveViewerViewport {
             right = right.max(corner.x);
             bottom = bottom.max(corner.y);
         }
-        Rect::from_origin_size(
-            Offset::new(left, top),
-            Size::new(right - left, bottom - top),
-        )
+        [left, top, right, bottom]
+    }
+
+    fn edges(&self) -> impl Iterator<Item = (Offset, Offset)> + '_ {
+        self.corners
+            .iter()
+            .copied()
+            .zip(self.corners.iter().copied().cycle().skip(1))
     }
 
     fn from_transform(size: Size, transform: CoreTransform) -> Self {
@@ -334,6 +346,85 @@ impl InteractiveViewer {
             on_interaction_update: None,
             on_interaction_end: None,
         }
+    }
+
+    /// Finds the closest point on a finite line segment, including endpoints.
+    #[must_use]
+    pub fn nearest_point_on_line(point: Offset, start: Offset, end: Offset) -> Offset {
+        let dx = f64::from(end.x) - f64::from(start.x);
+        let dy = f64::from(end.y) - f64::from(start.y);
+        let squared = dx * dx + dy * dy;
+        if squared == 0. {
+            return start;
+        }
+        let x = f64::from(point.x) - f64::from(start.x);
+        let y = f64::from(point.y) - f64::from(start.y);
+        let fraction = ((x * dx + y * dy) / squared).clamp(0., 1.);
+        Offset::new(
+            (f64::from(start.x) + dx * fraction) as f32,
+            (f64::from(start.y) + dy * fraction) as f32,
+        )
+    }
+
+    /// Returns the bounding rectangle as a clockwise viewport quad.
+    #[must_use]
+    pub fn axis_aligned_bounding_box(quad: InteractiveViewerViewport) -> InteractiveViewerViewport {
+        let [left, top, right, bottom] = quad.extents();
+        InteractiveViewerViewport {
+            corners: [
+                Offset::new(left, top),
+                Offset::new(right, top),
+                Offset::new(right, bottom),
+                Offset::new(left, bottom),
+            ],
+        }
+    }
+
+    /// Tests a point against a convex viewport, including its edges.
+    /// Affine transforms may produce either winding or a skewed parallelogram.
+    #[must_use]
+    pub fn point_is_inside(point: Offset, quad: InteractiveViewerViewport) -> bool {
+        let mut positive = false;
+        let mut negative = false;
+        for (start, end) in quad.edges() {
+            let edge_x = f64::from(end.x) - f64::from(start.x);
+            let edge_y = f64::from(end.y) - f64::from(start.y);
+            let x = f64::from(point.x) - f64::from(start.x);
+            let y = f64::from(point.y) - f64::from(start.y);
+            let cross = edge_x * y - edge_y * x;
+            positive |= cross > 0.;
+            negative |= cross < 0.;
+            if positive && negative {
+                return false;
+            }
+        }
+        positive
+            || negative
+            || quad
+                .edges()
+                .any(|(a, b)| Self::nearest_point_on_line(point, a, b) == point)
+    }
+
+    /// Returns the nearest point in a convex viewport, leaving interior
+    /// and boundary points unchanged.
+    #[must_use]
+    pub fn nearest_point_inside(point: Offset, quad: InteractiveViewerViewport) -> Offset {
+        if Self::point_is_inside(point, quad) {
+            return point;
+        }
+        let mut best = quad.corners[0];
+        let mut min_squared = f64::INFINITY;
+        for (start, end) in quad.edges() {
+            let projected = Self::nearest_point_on_line(point, start, end);
+            let x = f64::from(projected.x) - f64::from(point.x);
+            let y = f64::from(projected.y) - f64::from(point.y);
+            let squared = x * x + y * y;
+            if squared < min_squared {
+                best = projected;
+                min_squared = squared;
+            }
+        }
+        best
     }
 
     /// Shares the transform with the application.
