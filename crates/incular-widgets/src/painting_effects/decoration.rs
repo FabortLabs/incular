@@ -719,8 +719,9 @@ impl std::fmt::Debug for DecorationImageErrorHandler {
     }
 }
 
-/// An image configuration drawn inside a box decoration.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+/// An image configuration drawn inside a box decoration. Equality is
+/// about the paint value; an error callback is a separate subscription.
+#[derive(Clone, Debug, TypedBuilder)]
 pub struct DecorationImage {
     #[builder(setter(into))]
     pub image: DecorationImageSource,
@@ -766,6 +767,42 @@ pub struct DecorationImage {
     #[builder(default, setter(skip))]
     pub(super) blend: Option<Rc<DecorationImageBlend>>,
 
+}
+
+impl PartialEq for DecorationImage {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            image,
+            placeholder,
+            on_error: _,
+            fit,
+            alignment,
+            alignment_geometry,
+            center_slice,
+            repeat,
+            match_text_direction,
+            scale,
+            opacity,
+            color_filter,
+            invert_colors,
+            filter_quality,
+            blend,
+        } = self;
+        image == &other.image
+            && placeholder == &other.placeholder
+            && fit == &other.fit
+            && alignment == &other.alignment
+            && alignment_geometry == &other.alignment_geometry
+            && center_slice == &other.center_slice
+            && repeat == &other.repeat
+            && match_text_direction == &other.match_text_direction
+            && scale == &other.scale
+            && opacity == &other.opacity
+            && color_filter == &other.color_filter
+            && invert_colors == &other.invert_colors
+            && filter_quality == &other.filter_quality
+            && blend == &other.blend
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

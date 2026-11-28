@@ -102,3 +102,20 @@ direction the native fixture reports a typed image-direction error
 before painting, but does not reproduce Flutter's four diagnostic
 nodes. These probes passed on pinned Flutter, and all 21 focused
 Rust tests passed.
+
+## Paint equality and pending error handlers
+
+Five authored pinned Flutter tests passed. Two images with the same
+provider and paint fields compare equal even with different error
+callbacks; changing opacity compares unequal. Their box and shape
+decorations follow the same value rule. Incular now excludes the error
+callback from paint equality as well.
+
+The held-failure comparisons reveal a deliberate lifecycle difference.
+After a callback-only rebuild, Flutter keeps the old painter and invokes
+its old callback. Incular preserves its existing live-handler behavior:
+a callback-only rebuild installs the current handler without resolving
+the provider again. A paint-changing rebuild also sends exactly one
+failure to the current handler. Both behavior paths were tested for
+mounted box and shape decorations, along with the older stale-stream
+and placeholder cases. All 18 targeted native tests passed.
