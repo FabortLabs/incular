@@ -5,7 +5,7 @@ use incular_core::{Color, Offset, Rect, Size, Transform};
 use incular_rendering::{Border, RRect};
 use wgpu::util::DeviceExt;
 
-use crate::built_in_shaders::{RRECT_SHADER, decode};
+use crate::built_in_shaders::{RRECT_SHADER, SQUARE_RECT_SHADER, decode};
 use crate::pipelines::{VertexStreams, stream_layouts};
 use crate::render_plan::border_instance;
 
@@ -14,6 +14,28 @@ const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 #[test]
 fn a_subpixel_rounded_border_does_not_leave_a_stronger_edge_than_flutter() {
+    check_shader(
+        RRECT_SHADER,
+        8.,
+        &[
+            (2., [0, 192, 255, 64, 0, 0]),
+            (0.03125, [2, 5, 0, 0, 0, 0]),
+            (0.001, [0, 0, 0, 0, 0, 0]),
+            (16., [0, 191, 255, 255, 255, 255]),
+        ],
+    );
+}
+
+#[test]
+fn the_subpixel_square_border_keeps_its_own_straight_edge_coverage() {
+    check_shader(
+        SQUARE_RECT_SHADER,
+        0.,
+        &[(2., [0, 192, 255, 64, 0, 0]), (0.03125, [0, 8, 0, 0, 0, 0])],
+    );
+}
+
+fn check_shader(shader: &'static [u8], radius: f32, cases: &[(f32, [u8; 6])]) {
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     let Ok(adapter) =
@@ -30,7 +52,7 @@ fn a_subpixel_rounded_border_does_not_leave_a_stronger_edge_than_flutter() {
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("production rounded border readback"),
-        source: decode(RRECT_SHADER),
+        source: decode(shader),
     });
     let targets = [Some(wgpu::ColorTargetState {
         format: FORMAT,
@@ -124,15 +146,10 @@ fn a_subpixel_rounded_border_does_not_leave_a_stronger_edge_than_flutter() {
         mapped_at_creation: false,
     });
     let bounds = Rect::from_origin_size(Offset::new(16.25, 16.25), Size::new(32., 32.));
-    let rrect = RRect::uniform(bounds, 8.);
+    let rrect = RRect::uniform(bounds, radius);
     // The pinned Flutter Canvas test gives these alpha ramps. R8 rounding
     // and Flutter antialias quantization need not choose the same last bit.
-    for (width, expected) in [
-        (2., [0u8, 192, 255, 64, 0, 0]),
-        (0.03125, [2, 5, 0, 0, 0, 0]),
-        (0.001, [0, 0, 0, 0, 0, 0]),
-        (16., [0, 191, 255, 255, 255, 255]),
-    ] {
+    for &(width, expected) in cases {
         let params = border_instance(
             rrect,
             Border::new(width, Color::BLACK),
@@ -194,7 +211,7 @@ fn a_subpixel_rounded_border_does_not_leave_a_stronger_edge_than_flutter() {
         let pixels = readback.slice(..).get_mapped_range().unwrap();
         let alpha = |x, y| pixels[((y * SIDE + x) * 4 + 3) as usize];
         let actual = [15, 16, 17, 18, 19, 32].map(|x| alpha(x, 32));
-        if width == 0.03125 {
+        if radius > 0. && width == 0.03125 {
             assert!(pixels.chunks_exact(4).all(|pixel| pixel[3] <= 12));
             // Stay close to Flutter on the curve too. The shader estimates
             // the normal from a pixel quad; Skia's curve AA uses a

@@ -3,7 +3,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Future<List<int>> edgeCoverage(double width, BorderStyle style) async {
+Future<List<int>> edgeCoverage(
+  double width,
+  BorderStyle style, {
+  double? radius = 8,
+}) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
   Border.fromBorderSide(
@@ -11,7 +15,7 @@ Future<List<int>> edgeCoverage(double width, BorderStyle style) async {
   ).paint(
     canvas,
     const Rect.fromLTWH(16.25, 16.25, 32, 32),
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: radius == null ? null : BorderRadius.circular(radius),
   );
   final picture = recorder.endRecording();
   final image = await picture.toImage(64, 64);
@@ -55,4 +59,22 @@ void main() {
     expect(thick[5], 0);
     expect(filled[5], 255);
   });
+  test(
+    'a thin square border keeps its own straight edge ramp',
+    () async {
+      final thin = await edgeCoverage(0.03125, BorderStyle.solid, radius: null);
+      final thick = await edgeCoverage(2, BorderStyle.solid, radius: null);
+      final omitted = await edgeCoverage(
+        0.03125,
+        BorderStyle.none,
+        radius: null,
+      );
+      print('square border alpha thin=$thin thick=$thick none=$omitted');
+      expect(omitted, everyElement(0));
+      expect(thin[1], inInclusiveRange(1, 16));
+      expect(thin.sublist(2, 6), everyElement(0));
+      expect(thick[2], 255);
+      expect(thick[5], 0);
+    },
+  );
 }

@@ -37,3 +37,9 @@ small curved coverage within three. The 2 px stroke stays hollow, a
 16 px stroke fills the center, and reducing the stroke to 0.001 px
 leaves no pixel above alpha 1. These authored cases add no upstream
 registrations and do not claim whole-image equality.
+
+The square variant is a separate control. Flutter distributes its
+0.03125 px square stroke as `[0,8]` across the same two edge
+pixels, not the rounded stroke's `[2,5]`. Reading the production
+square shader through wgpu matches that ramp within one alpha level.
+The rounded correction does not change the square rendering path.
