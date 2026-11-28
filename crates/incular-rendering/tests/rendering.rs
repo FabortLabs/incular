@@ -2162,3 +2162,86 @@ fn transparent_opacity_culls_retained_draws_and_visual_bounds_at_the_rounding_th
         ));
     }
 }
+
+#[test]
+fn offset_layer_image_recording_keeps_its_local_bounds_and_nested_effects() {
+    use std::{cell::Cell, rc::Rc};
+
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::IDENTITY);
+    let boundary = tree.create_transform(Transform::translation(Offset::new(90., 120.)));
+    let opacity = tree.create_opacity(0.5);
+    let white_offset = tree.create_transform(Transform::translation(Offset::new(10., 0.)));
+    let picture = |tree: &mut LayerTree, side, color| {
+        let bounds = Rect::from_origin_size(Offset::ZERO, Size::new(side, side));
+        let mut list = DisplayList::new();
+        list.push(PaintCommand::Rect {
+            rect: bounds,
+            color,
+        });
+        tree.create_picture(list, bounds)
+    };
+    let sibling = picture(&mut tree, 300., Color::rgba(255, 0, 0, 255));
+    let black = picture(&mut tree, 20., Color::BLACK);
+    let white = picture(&mut tree, 10., Color::WHITE);
+    tree.set_children(opacity, vec![black]);
+    tree.set_children(white_offset, vec![white]);
+    tree.set_children(boundary, vec![opacity, white_offset]);
+    tree.set_children(root, vec![sibling, boundary]);
+    tree.set_root(root);
+    let activations = Rc::new(Cell::new(0));
+    let _observer = tree.add_composition_callback(boundary, {
+        let activations = activations.clone();
+        move |_| activations.set(activations.get() + 1)
+    });
+    let original = tree.flatten();
+    let positions = tree.flattened_pictures().to_vec();
+    let diagnostics = tree.diagnostics();
+    let bounds = Rect::from_origin_size(Offset::new(-10., -10.), Size::new(30., 30.));
+    let scene = tree
+        .record_offset_layer_for_image(boundary, bounds, 2.)
+        .unwrap();
+    assert_eq!(scene.physical_size(), (60, 60));
+    assert_eq!(scene.pixel_ratio(), 2.);
+    let commands = scene.display_list().commands();
+    assert!(commands.iter().any(|command| matches!(command,
+        PaintCommand::PushOpacity { layer, alpha, .. }
+            if *layer == opacity && *alpha > 0.49 && *alpha < 0.51
+    )));
+    assert_eq!(
+        commands
+            .iter()
+            .filter(|command| matches!(command, PaintCommand::Rect { .. }))
+            .count(),
+        2
+    );
+    assert!(commands.iter().any(|command| matches!(command,
+        PaintCommand::PushTransform { transform }
+            if transform.transform_point(Offset::ZERO) == Offset::new(10., 10.)
+    )));
+    assert!(commands.iter().any(|command| matches!(command,
+        PaintCommand::PushTransform { transform }
+            if transform.transform_point(Offset::ZERO) == Offset::new(20., 10.)
+    )));
+    assert_eq!(tree.flattened_pictures(), positions);
+    assert_eq!(tree.diagnostics(), diagnostics);
+    assert_eq!(activations.get(), 1);
+    assert_eq!(tree.flatten().commands(), original.commands());
+    assert_eq!(activations.get(), 2);
+
+    let rounded = Rect::from_origin_size(Offset::ZERO, Size::new(20.1, 40.6));
+    assert_eq!(
+        tree.record_offset_layer_for_image(boundary, rounded, 2.)
+            .unwrap()
+            .physical_size(),
+        (41, 82)
+    );
+    assert!(
+        tree.record_offset_layer_for_image(boundary, rounded, f64::NAN)
+            .is_none()
+    );
+    assert!(
+        tree.record_offset_layer_for_image(sibling, rounded, 1.)
+            .is_none()
+    );
+}

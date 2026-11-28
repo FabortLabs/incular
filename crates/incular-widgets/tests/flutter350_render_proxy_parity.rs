@@ -382,3 +382,58 @@ fn empty_physical_layers_do_not_composite_a_shadow_at_any_elevation() {
         }
     }
 }
+
+#[test]
+fn a_repaint_boundary_records_only_painted_content_and_independent_image_dpr() {
+    use incular_widgets::RepaintBoundary;
+
+    let make = |color| RepaintBoundary::new(Widget::box_(Size::new(100., 200.), color)).into();
+    let mut tree = WidgetTree::new();
+    let boundary = tree.mount(make(Color::BLACK)).unwrap();
+    let constraints = Constraints::loose(Size::new(800., 600.));
+    assert!(
+        tree.record_repaint_boundary_for_image(boundary, 1.)
+            .is_none()
+    );
+    tree.layout(constraints).unwrap();
+    assert!(
+        tree.record_repaint_boundary_for_image(boundary, 1.)
+            .is_none()
+    );
+    let _ = tree.paint();
+    for (ratio, physical_size) in [(1., (100, 200)), (2., (200, 400))] {
+        let image = tree
+            .record_repaint_boundary_for_image(boundary, ratio)
+            .unwrap();
+        assert_eq!(image.physical_size(), physical_size);
+        assert!(
+            image
+                .display_list()
+                .commands()
+                .iter()
+                .any(|command| matches!(
+                    command, PaintCommand::Rect { color, .. } if *color == Color::BLACK
+                ))
+        );
+    }
+
+    tree.update(boundary, make(Color::WHITE)).unwrap();
+    tree.layout(constraints).unwrap();
+    assert!(
+        tree.record_repaint_boundary_for_image(boundary, 1.)
+            .is_none()
+    );
+    let _ = tree.paint();
+    let image = tree
+        .record_repaint_boundary_for_image(boundary, 1.)
+        .unwrap();
+    assert!(
+        image
+            .display_list()
+            .commands()
+            .iter()
+            .any(|command| matches!(
+                command, PaintCommand::Rect { color, .. } if *color == Color::WHITE
+            ))
+    );
+}

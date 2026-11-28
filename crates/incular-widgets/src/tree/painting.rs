@@ -321,6 +321,30 @@ impl WidgetTree {
         false
     }
 
+    /// Records a painted RepaintBoundary for image rasterization. The
+    /// default Flutter pixel ratio is 1, independent of the window scale.
+    /// An unpainted, invalidated, or unmounted boundary has no recording.
+    #[must_use]
+    pub fn record_repaint_boundary_for_image(
+        &mut self,
+        boundary: ElementId,
+        pixel_ratio: f64,
+    ) -> Option<incular_rendering::LayerImageScene> {
+        let render = self.render_id(boundary)?;
+        let node = self.renders.get(render.0)?;
+        if !matches!(node.object.kind(), RenderKind::RepaintBoundary)
+            || node.parked
+            || node.geometry.constraints.is_none()
+            || node.dirty.contains(DirtyFlags::LAYOUT)
+            || node.subtree_needs_paint
+        {
+            return None;
+        }
+        let layer = node.object.layers.root;
+        let bounds = Rect::from_origin_size(Offset::ZERO, node.size);
+        self.compositor.record_offset_layer_for_image(layer, bounds, pixel_ratio)
+    }
+
     #[must_use]
     pub fn paint(&mut self) -> DisplayList {
         let _phase_guard = self.guard_phase_root(FramePhase::Paint);

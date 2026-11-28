@@ -642,6 +642,32 @@ fn next_generation(counter: &mut u64) -> u64 {
     generation
 }
 
+/// A retained layer recording sized for a renderer-independent image request.
+/// Pixel rasterization and readback are owned by the renderer.
+pub struct LayerImageScene {
+    display_list: DisplayList,
+    width: u32,
+    height: u32,
+    pixel_ratio: f64,
+}
+
+impl LayerImageScene {
+    #[must_use]
+    pub fn display_list(&self) -> &DisplayList {
+        &self.display_list
+    }
+
+    #[must_use]
+    pub const fn physical_size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    #[must_use]
+    pub const fn pixel_ratio(&self) -> f64 {
+        self.pixel_ratio
+    }
+}
+
 /// Renderer-independent retained layer arena. Picture display lists are owned
 /// once and scene flattening only emits a transient linear command stream.
 /// This deliberately has no GPU resources or offscreen textures.
@@ -2121,6 +2147,51 @@ impl LayerTree {
                 local_position,
             })
             .collect()
+    }
+
+    /// Records the children of an offset layer in its local coordinates.
+    /// The layer's position in the window does not enter the image. Bounds
+    /// may begin outside the layer, leaving transparent space when rasterized.
+    /// This never displays a new frame or calls composition observers.
+    #[must_use]
+    pub fn record_offset_layer_for_image(
+        &mut self,
+        id: LayerId,
+        bounds: Rect,
+        pixel_ratio: f64,
+    ) -> Option<LayerImageScene> {
+        let (kind, _) = self.layer(id)?;
+        if !matches!(kind, LayerKind::Transform { transform, sampling: None }
+            if transform.is_translation())
+            || !bounds.origin.x.is_finite()
+            || !bounds.origin.y.is_finite()
+            || !pixel_ratio.is_finite()
+            || pixel_ratio <= 0.
+        {
+            return None;
+        }
+        let pixels = |extent: f32| {
+            let physical = (f64::from(extent) * pixel_ratio).ceil();
+            (physical > 0. && physical <= f64::from(u32::MAX)).then_some(physical as u32)
+        };
+        let width = pixels(bounds.size.width)?;
+        let height = pixels(bounds.size.height)?;
+
+        let translation = Transform::translation(Offset::new(-bounds.origin.x, -bounds.origin.y));
+        let image_bounds = Rect::from_origin_size(Offset::ZERO, bounds.size);
+        let mut display_list = DisplayList::new();
+        // Normal flattening's cached frame stays intact; the image has its
+        // own coordinates, picture placements and transient matrix stages.
+        let old_pictures = std::mem::take(&mut self.flattened_pictures);
+        let old_matrix_stages = std::mem::take(&mut self.matrix_stages);
+        let diagnostics = self.diagnostics;
+        self.visit_children(id, false, |tree, child| {
+            tree.flatten_layer(child, translation, Some(image_bounds), &mut display_list);
+        });
+        self.flattened_pictures = old_pictures;
+        self.matrix_stages = old_matrix_stages;
+        self.diagnostics = diagnostics;
+        Some(LayerImageScene { display_list, width, height, pixel_ratio })
     }
 
     #[must_use]

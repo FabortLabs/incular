@@ -22,9 +22,11 @@ pub use backdrop::{
 pub use color_space::{premultiplied_working_rgba, working_rgba};
 pub use composition_callbacks::CompositionCallbackSubscription;
 pub use compositor::{
-    Annotation, AnnotationEntry, AnnotationSearchOptions, CompositorDiagnostics, FlattenedAnnotation, FlattenedPicture, FollowerLayer,
-    LayerAnchor, LayerId, LayerKind, LayerLink, LayerTree, PublisherIdentity, RoundedClipGeometry, normalize_opacity,
-    flutter_layer_opacity, opacity_is_transparent, resolve_follower_target, resolve_linked_follower_world_transform,
+    Annotation, AnnotationEntry, AnnotationSearchOptions, CompositorDiagnostics,
+    FlattenedAnnotation, FlattenedPicture, FollowerLayer, LayerAnchor, LayerId, LayerImageScene,
+    LayerKind, LayerLink, LayerTree, PublisherIdentity, RoundedClipGeometry, flutter_layer_opacity,
+    normalize_opacity, opacity_is_transparent, resolve_follower_target,
+    resolve_linked_follower_world_transform,
 };
 pub use display_list::{
     BackdropKey, Canvas, ClipCoverage, ClipIsolation, DisplayList, ImageSampling, PaintCommand,
@@ -39,9 +41,9 @@ pub use effects::{
 pub use geometry::{CornerRadii, RRect};
 pub use glyphs::{GlyphPosition, GlyphRun};
 pub use gradients::{
-    Brush, FilterQuality, GradientId, GradientStop, GradientStops, GradientStopsError, LinearGradient,
-    RadialGradient, Shader, SweepGradient, TileMode, linear_gradient_t, radial_gradient_t,
-    sample_gradient_stops, sweep_gradient_t, two_point_conical_gradient_t,
+    Brush, FilterQuality, GradientId, GradientStop, GradientStops, GradientStopsError,
+    LinearGradient, RadialGradient, Shader, SweepGradient, TileMode, linear_gradient_t,
+    radial_gradient_t, sample_gradient_stops, sweep_gradient_t, two_point_conical_gradient_t,
 };
 pub use image_filter_config::{ImageFilterConfig, ImageFilterContext, SampledBlur};
 pub use paint::{
