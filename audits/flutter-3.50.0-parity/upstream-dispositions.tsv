@@ -4270,3 +4270,11 @@ packages/flutter/test/services/raw_keyboard_test.dart	3214	data.toString	partial
 packages/flutter/test/services/raw_keyboard_test.dart	3246	data.equality	paired-match	upstream-web-raw-keyboard.md#legacy-web-key-identity-and-location
 packages/flutter/test/services/raw_keyboard_test.dart	338	keysPressed modifiers are synchronized with key events on fuchsia	paired-match	upstream-raw-keyboard.md#pressed-key-reconciliation-from-raw-modifier-flags
 packages/flutter/test/services/raw_keyboard_test.dart	520	keysPressed modifiers are synchronized with key events on web	paired-match	upstream-raw-keyboard.md#pressed-key-reconciliation-from-raw-modifier-flags
+packages/flutter/test/services/raw_keyboard_test.dart	2247	modifier keys are recognized individually	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2277	modifier keys are recognized when combined	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2319	Printable keyboard keys are correctly translated	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2335	Control keyboard keys are correctly translated	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2350	Modifier keyboard keys are correctly translated	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2365	Unprintable keyboard keys are correctly translated	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2432	data.toString	partial-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers
+packages/flutter/test/services/raw_keyboard_test.dart	2448	data.equality	paired-match	upstream-windows-raw-keyboard.md#scan-codes-virtual-keys-and-modifiers

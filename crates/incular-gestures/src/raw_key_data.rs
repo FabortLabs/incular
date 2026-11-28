@@ -10,12 +10,16 @@ use crate::RawKeyEvent;
 mod fuchsia;
 #[path = "raw_key_web_catalog.rs"]
 mod web;
+#[path = "raw_key_windows.rs"]
+mod windows;
+pub use windows::WindowsRawKeyData;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RawKeyPlatformData {
     Fuchsia(FuchsiaRawKeyData),
     Web(WebRawKeyData),
+    Windows(WindowsRawKeyData),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
