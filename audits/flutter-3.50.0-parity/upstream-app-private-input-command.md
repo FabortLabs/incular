@@ -19,3 +19,11 @@ Native tests also cover malformed active messages, callback replacement on the
 same client and panic reporting that leaves the connection alive. The
 channel tests do not claim that the native Android launcher forwards an
 Android-specific callback into this Flutter JSON adapter.
+
+Pinned `widgets/editable_text_test.dart:930` also passed. An
+actual mounted editor with no private-command callback receives the
+original message after its controller is updated to `test`. The
+optional message succeeds without changing the editing value, focus
+or pending keyboard traffic. The focused native suite covers both
+the original debug-current sender and the actual attached client;
+all five checks passed.

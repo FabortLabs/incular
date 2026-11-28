@@ -210,3 +210,37 @@ fn listener_panic_is_reported_and_does_not_close_the_connection() {
     assert!(node.has_primary_focus());
     assert!(runtime.take_text_input_commands().is_empty());
 }
+
+#[test]
+fn private_keyboard_command_is_a_noop_when_the_mounted_editor_has_no_listener() {
+    let controller = TextEditingController::new();
+    let node = FocusNode::new();
+    let mut runtime = Runtime::new(field(&controller, &node, true).into()).unwrap();
+    frame(&mut runtime);
+    let client = attached(&mut runtime);
+    controller.set_text("test");
+    frame(&mut runtime);
+    runtime.take_text_input_commands();
+    let before = controller.with_value(Clone::clone);
+    let payload = json!({
+        "action": "actionCommand",
+        "data": {"input_context": "abcdefg"},
+    });
+
+    let debug_current = serde_json::to_vec(&json!({
+        "method": "TextInputClient.performPrivateCommand",
+        "args": [-1, payload.clone()],
+    }))
+    .unwrap();
+    assert!(
+        runtime
+            .handle_flutter_text_input_private_command_call(&debug_current)
+            .unwrap()
+            .is_some()
+    );
+    assert!(send(&runtime, client, payload).unwrap().is_some());
+    frame(&mut runtime);
+    assert_eq!(controller.with_value(Clone::clone), before);
+    assert!(node.has_primary_focus());
+    assert!(runtime.take_text_input_commands().is_empty());
+}
