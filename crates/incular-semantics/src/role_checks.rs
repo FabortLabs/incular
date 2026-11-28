@@ -21,6 +21,9 @@ pub enum SemanticRoleIssueKind {
     MenuItemRadioOutsideMenu,
     RadioGroupWithMultipleCheckedChildren,
     LiveAlertOrStatus,
+    NestedLandmark,
+    RepeatedLandmarkNeedsLabel,
+    RegionNeedsLabel,
     ProgressBarMissingValueOrBounds,
     SliderMissingValue,
     SliderMissingMinValue,
@@ -52,6 +55,11 @@ impl fmt::Display for SemanticRoleIssueKind {
             Self::MenuItemOutsideMenu => "A menu item must be a child of a menu or a menu bar",
             Self::RadioGroupWithMultipleCheckedChildren => {
                 "Radio groups must not have multiple checked children"
+            }
+            Self::NestedLandmark => "This landmark cannot be contained within another landmark",
+            Self::RepeatedLandmarkNeedsLabel => "Repeated landmarks need a label",
+            Self::RegionNeedsLabel => {
+                "A region role should include a label that describes the purpose of the content."
             }
             Self::LiveAlertOrStatus => "An alert or status node cannot also be a live region",
             Self::ProgressBarMissingValueOrBounds => {
@@ -95,16 +103,23 @@ impl SemanticsTree {
         use SemanticRoleIssueKind::*;
         let mut reports = Vec::new();
         let mut visited = HashSet::new();
+        let mut counts = [0usize; 4];
+        let mut unlabeled = Vec::new();
         let mut work: Vec<_> = self
             .roots()
             .iter()
             .rev()
-            .map(|&id| (id, None, false))
+            .map(|&id| (id, None, false, false))
             .collect();
-        while let Some((id, parent, has_menu)) = work.pop() {
+        while let Some((id, parent, has_menu, has_landmark)) = work.pop() {
             let Some(node) = self.node(id).filter(|_| visited.insert(id)) else {
                 continue;
             };
+            let repeating_landmark = repeatable_landmark_index(node.role);
+            if let Some(index) = repeating_landmark {
+                counts[index] += 1;
+            }
+            let has_label = node.label.as_deref().is_some_and(|label| !label.is_empty());
             let issue = match node.role {
                 Role::Tab if node.state.declared_selected().is_none() => {
                     Some(TabWithoutSelectedState)
@@ -140,6 +155,10 @@ impl SemanticsTree {
                     Some(RadioGroupWithMultipleCheckedChildren)
                 }
                 Role::Alert | Role::Status if node.state.live_region => Some(LiveAlertOrStatus),
+                Role::Complementary | Role::ContentInfo | Role::Main if has_landmark => {
+                    Some(NestedLandmark)
+                }
+                Role::Region if !has_label => Some(RegionNeedsLabel),
                 Role::Slider | Role::ProgressBar => range_issue(node),
                 _ => None,
             };
@@ -149,15 +168,35 @@ impl SemanticsTree {
                     role: node.role,
                     kind,
                 });
+            } else if let Some(index) = repeating_landmark
+                && !has_label
+            {
+                unlabeled.push((
+                    index,
+                    SemanticRoleIssue {
+                        node: id,
+                        role: node.role,
+                        kind: RepeatedLandmarkNeedsLabel,
+                    },
+                ));
             }
             let has_menu = has_menu || matches!(node.role, Role::Menu | Role::MenuBar);
+            let has_landmark =
+                has_landmark || repeating_landmark.is_some() || node.role == Role::Region;
             work.extend(
                 node.children
                     .iter()
                     .rev()
-                    .map(|&child| (child, Some(node.role), has_menu)),
+                    .map(|&child| (child, Some(node.role), has_menu, has_landmark)),
             );
         }
+        // Flutter requires a nonempty label when the role occurs again.
+        // Its debug check doesn't compare the text of the two labels.
+        reports.extend(
+            unlabeled
+                .into_iter()
+                .filter_map(|(index, issue)| (counts[index] > 1).then_some(issue)),
+        );
         reports
     }
     fn radio_group_has_multiple_checked_children(&self, group: &SemanticNode) -> bool {
@@ -189,6 +228,16 @@ impl SemanticsTree {
             }
         }
         false
+    }
+}
+
+fn repeatable_landmark_index(role: Role) -> Option<usize> {
+    match role {
+        Role::Complementary => Some(0),
+        Role::ContentInfo => Some(1),
+        Role::Main => Some(2),
+        Role::Navigation => Some(3),
+        _ => None,
     }
 }
 

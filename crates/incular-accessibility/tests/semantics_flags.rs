@@ -177,3 +177,17 @@ fn menu_bar_and_checkable_menu_items_keep_their_distinct_native_roles() {
         );
     }
 }
+
+#[test]
+fn landmark_roles_remain_distinct_in_native_accessibility() {
+    use accesskit::Role as NativeRole;
+    for (role, expected) in [
+        (Role::Complementary, NativeRole::Complementary),
+        (Role::ContentInfo, NativeRole::ContentInfo),
+        (Role::Main, NativeRole::Main),
+        (Role::Navigation, NativeRole::Navigation),
+        (Role::Region, NativeRole::Region),
+    ] {
+        assert_eq!(project(role, SemanticState::default()).role(), expected);
+    }
+}

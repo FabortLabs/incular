@@ -101,6 +101,11 @@ pub enum Role {
     Status,
     /// A region containing form controls.
     Form,
+    Complementary,
+    ContentInfo,
+    Main,
+    Navigation,
+    Region,
     Image,
     Heading,
     Link,

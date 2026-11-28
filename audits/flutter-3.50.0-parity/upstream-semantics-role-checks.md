@@ -83,3 +83,19 @@ the dependent raw radio to the mounted inherited registry.
 Twelve targeted widget tests and one targeted runtime test passed.
 Arrow wrap, tab-entry policy, and platform-specific accessibility hints
 are separate coverage.
+
+## Landmarks
+
+All 17 `landmarks` registrations (703–1070) ran against the pinned SDK
+and mounted native semantics. Complementary, content information and
+main landmarks cannot be inside another landmark. Repeated
+complementary/content information/main/navigation roles require a
+nonempty label on each instance, across independent retained
+parents. The pinned checker does not compare equal nonempty labels.
+A standalone navigation landmark needs no label, but even a single
+region does.
+
+AccessKit projection maps the five roles separately. Equivalent ARIA
+mappings are present without claiming browser execution. Fifteen
+focused role tests, five semantic-root regressions and seven AccessKit
+flag/projection tests passed.

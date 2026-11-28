@@ -4521,3 +4521,20 @@ packages/flutter/test/widgets/radio_group_test.dart	308	Radio group throws on mu
 packages/flutter/test/widgets/radio_group_test.dart	341	Radio group does not throw when number of children decreases	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
 packages/flutter/test/widgets/radio_group_test.dart	385	Radio group does not intercept key events when no radio is focused	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
 packages/flutter/test/widgets/radio_group_test.dart	497	RadioGroup does not crash at zero area	paired-match	upstream-radio-group-keyboard.md#focused-shortcuts-and-registration-lifetime
+packages/flutter/test/widgets/semantics_role_checks_test.dart	703	failure case, complementary role is contained by other landmark roles	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	728	failure case, multiple nodes have the same complementary role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	764	Success case, complementary role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	774	Success case, complementary role is used more than once	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	799	failure case, multiple nodes have the same contentInfo role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	835	failure case, contentInfo role is contained by other landmark roles	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	860	Success case, contentInfo role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	870	Success case, contentInfo role is used more than once	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	895	failure case, multiple nodes have the same main role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	928	failure case, main role is contained by other landmark roles	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	951	Success case, main role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	961	Success case, main role is used more than once	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	984	failure case, multiple nodes have the same navigation role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1017	Success case, navigation role	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1027	Success case, navigation role is used more than once	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1052	failure case, region role without label	paired-match	upstream-semantics-role-checks.md#landmarks
+packages/flutter/test/widgets/semantics_role_checks_test.dart	1070	Success case, region role	paired-match	upstream-semantics-role-checks.md#landmarks

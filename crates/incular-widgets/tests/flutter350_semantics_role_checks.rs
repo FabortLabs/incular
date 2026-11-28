@@ -521,3 +521,83 @@ fn radio_group_counts_only_checked_mutually_exclusive_children_and_stops_at_nest
         .is_empty()
     );
 }
+
+#[test]
+fn complementary_content_info_and_main_cannot_be_nested_inside_another_landmark() {
+    for (parent, child) in [
+        (Role::Main, Role::Complementary),
+        (Role::Complementary, Role::ContentInfo),
+        (Role::ContentInfo, Role::Main),
+    ] {
+        assert_eq!(
+            issues(
+                Semantics::new(SizedBox::new().child(Semantics::new(label()).role(child)))
+                    .role(parent)
+            ),
+            [(child, Issue::NestedLandmark)]
+        );
+    }
+    assert!(
+        issues(
+            Semantics::new(SizedBox::new().child(Semantics::new(label()).role(Role::Navigation)))
+                .role(Role::Main)
+        )
+        .is_empty()
+    );
+}
+
+#[test]
+fn repeated_landmarks_need_nonempty_labels_across_retained_semantic_parents() {
+    for role in [
+        Role::Complementary,
+        Role::ContentInfo,
+        Role::Main,
+        Role::Navigation,
+    ] {
+        let landmark = || Semantics::new(SizedBox::square(1.)).role(role);
+        assert!(issues(landmark()).is_empty());
+        let wrapper = |widget: Widget| {
+            Widget::from(Semantics::new(SizedBox::new().child(widget)).container(true))
+        };
+        assert_eq!(
+            issues(Column::new([
+                Widget::from(landmark()),
+                wrapper(landmark().into())
+            ])),
+            [(role, Issue::RepeatedLandmarkNeedsLabel); 2],
+        );
+        assert!(
+            issues(Column::new([
+                Widget::from(landmark().label("First")),
+                wrapper(landmark().label("Second").into()),
+            ]))
+            .is_empty()
+        );
+
+        // Match the actual pinned check: it requires a nonempty label on
+        // each repeated landmark, but doesn't compare the label strings.
+        assert!(
+            issues(Column::new([
+                Widget::from(landmark().label("Named")),
+                wrapper(landmark().label("Named").into()),
+            ]))
+            .is_empty()
+        );
+    }
+}
+
+#[test]
+fn even_one_region_needs_a_label_describing_its_contents() {
+    assert_eq!(
+        issues(Semantics::new(SizedBox::shrink()).role(Role::Region)),
+        [(Role::Region, Issue::RegionNeedsLabel)]
+    );
+    assert!(
+        issues(
+            Semantics::new(SizedBox::shrink())
+                .label("Header 1")
+                .role(Role::Region)
+        )
+        .is_empty()
+    );
+}
